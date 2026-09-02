@@ -48,7 +48,15 @@ Also evaluate the following 7 Practical Pursue subscores (each 1-5):
 | cultural_signals | 5 = promising signals in the JD's own language; 3 = mixed; 1 = concerning signals |
 | posting_legitimacy_score | 5 = posting looks real, active, and worth energy; 3 = ambiguous but plausible; 1 = likely stale, generic, or suspicious |
 
-Also identify any **hard_blockers** -- explicit, non-negotiable disqualifiers stated or clearly implied in the JD (e.g., "onsite required, no remote option," a required degree the candidate doesn't hold, a required certification, citizenship/clearance requirement they can't meet). Compare these against the candidate's explicit `deal_breakers` list. If any deal-breaker is triggered, include its literal text or description in the list. Leave the list empty if there are none.
+Also identify any **hard_blockers** -- explicit, non-negotiable disqualifiers stated or clearly implied in the JD (e.g., "onsite required, no remote option," a required degree the candidate doesn't hold, a required certification, citizenship/clearance requirement they can't meet, a minimum years-of-experience threshold the candidate's history doesn't meet). Compare these against the candidate's explicit `deal_breakers` list. Each entry is an object with `text` (the literal disqualifier text or description) and `category`, one of:
+- `years_experience` -- a stated minimum years-in-role/years-in-industry the candidate's history doesn't meet
+- `degree` -- a required degree or field of study the candidate doesn't hold
+- `certification` -- a required license/certification the candidate doesn't hold
+- `citizenship_clearance` -- citizenship, work authorization, or security clearance the candidate can't meet
+- `onsite_commute` -- a routine onsite/hybrid presence requirement (this category is auto-cleared downstream when the posting is within the candidate's commute radius, so tag it even if you think proximity might resolve it)
+- `other` -- any other explicit, non-negotiable disqualifier
+
+Leave the list empty if there are none.
 
 Also assess **posting_legitimacy** ("High Confidence", "Proceed with Caution", "Suspicious") and provide **posting_legitimacy_notes** (1-2 sentences on the specific signals).
 
