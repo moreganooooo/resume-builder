@@ -177,6 +177,46 @@ def find_candidates(profile: str) -> list:
     return findings
 
 
+def filter_gate_passing(identifiers: list, profile: str) -> tuple:
+    """Splits a flat list of identifiers (file paths and/or database-only
+    ids) into (passing, excluded) by re-running today's scan_filters.yml
+    gates -- gate check only, no score-based recompute, since this is
+    meant to run cheaply on a backlog that may not have an evaluation yet.
+
+    This is the automatic pre-flight batch_evaluate.evaluate_all_pending()
+    runs before spending an API call: a role that wouldn't pass today's
+    scan gates never gets evaluated in the first place, closing the gap
+    where scan_filters.yml could drift after a role was scraped but
+    before it was evaluated. Deliberately non-destructive -- excluded
+    roles are simply left out of THIS evaluation run, not archived; run
+    this module's --apply mode (or re-run it later) to archive them for
+    good after reviewing the report.
+    """
+    passing = []
+    excluded = []
+    for identifier in identifiers:
+        try:
+            data = _raw_jd_fields(identifier, profile)
+        except (LookupError, OSError, json.JSONDecodeError):
+            passing.append(identifier)
+            continue
+
+        gate_failures = check_gates(data)
+        if gate_failures:
+            excluded.append(
+                {
+                    "identifier": identifier,
+                    "title": data.get("job_title") or "",
+                    "company": data.get("company_name") or "",
+                    "gate_failures": gate_failures,
+                }
+            )
+        else:
+            passing.append(identifier)
+
+    return passing, excluded
+
+
 def apply_archive(findings: list, profile: str) -> None:
     for finding in findings:
         identifier = finding["identifier"]
