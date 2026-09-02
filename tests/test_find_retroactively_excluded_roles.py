@@ -174,6 +174,30 @@ class TestFindCandidatesAndApply(unittest.TestCase):
         self.assertIn("Beta", companies)
         self.assertNotIn("Acme", companies)
 
+    def test_find_candidates_gate_checks_unevaluated_backlog_too(self):
+        # No _evaluation key at all -- this is the never-evaluated backlog
+        # that list_all_evaluated_jds() can't see, and the reason
+        # find_candidates() also walks picker.pending_roles().
+        self._write_pending_jd(
+            "unevaluated.json",
+            {
+                "job_title": "Contractor",
+                "company_name": "Gamma",
+                "description": "Fixed-term contract role.",
+                "employment_type": "Contract",
+            },
+        )
+
+        filters = {"employment_type": ["full_time"]}
+        with patch.object(fre.scan_boards, "_load_filters", return_value=filters):
+            findings = fre.find_candidates(self.profile)
+
+        companies = {f["company"] for f in findings}
+        self.assertIn("Gamma", companies)
+        flagged = next(f for f in findings if f["company"] == "Gamma")
+        self.assertEqual(flagged["gate_failures"], ["employment_type"])
+        self.assertFalse(flagged["score_flagged"])
+
     def test_apply_archive_moves_filename_id_jd_to_archived(self):
         path = self._write_pending_jd(
             "role.json",

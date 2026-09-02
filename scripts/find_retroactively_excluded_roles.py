@@ -12,7 +12,19 @@ Two independent kinds of "would now be excluded", counted separately:
   2. Score-based flags: recomputes composite_score/recommendation with
      the current fit_composite_score() (current content_settings
      scoring_weights, current stress/capability-gap adjustments) and
-     flags roles whose recommendation now comes out "Skip".
+     flags roles whose recommendation now comes out "Skip". Only
+     applicable to roles that already have an evaluation -- an
+     unevaluated role has no score to recompute, so it's checked for
+     gate failures only.
+
+Covers the FULL pending population, not just already-evaluated rows:
+picker.pending_roles() (file paths + database-only ids, no evaluation
+required) is unioned with the already-evaluated pending set from
+picker.list_all_evaluated_jds(). Checking gates only on the evaluated
+subset would miss exactly the population this script exists to protect --
+the unevaluated backlog about to be spent API calls on -- so a
+scan_filters.yml change made after a role was scraped but before it's
+evaluated is still caught here, before evaluation ever runs.
 
 Restricted to PENDING/unevaluated roles only -- this never looks at, and
 will never touch, anything already applied/interviewing/offer or later in
@@ -110,11 +122,13 @@ def check_score(evaluation: dict, description: str, scoring_weights: dict) -> bo
 
 def find_candidates(profile: str) -> list:
     scoring_weights = content_settings.read_scoring_weights()
-    rows = picker.list_all_evaluated_jds(statuses=["Pending"])
-
     findings = []
-    for row in rows:
+    checked = set()
+
+    # Already-evaluated pending roles: full gate + score-based check.
+    for row in picker.list_all_evaluated_jds(statuses=["Pending"]):
         identifier = row["path"]
+        checked.add(identifier)
         try:
             data = _raw_jd_fields(identifier, profile)
         except (LookupError, OSError, json.JSONDecodeError):
@@ -132,6 +146,31 @@ def find_candidates(profile: str) -> list:
                     "company": row.get("company") or "",
                     "gate_failures": gate_failures,
                     "score_flagged": score_flagged,
+                }
+            )
+
+    # Unevaluated backlog: no score to recompute, but still worth a gate
+    # check before it burns an API call on evaluation. list_all_evaluated_jds()
+    # skips these entirely (it requires an evaluation to include a row), so
+    # pending_roles() is the only way to reach them.
+    file_paths, db_ids = picker.pending_roles()
+    for identifier in list(file_paths) + list(db_ids):
+        if identifier in checked:
+            continue
+        try:
+            data = _raw_jd_fields(identifier, profile)
+        except (LookupError, OSError, json.JSONDecodeError):
+            continue
+
+        gate_failures = check_gates(data)
+        if gate_failures:
+            findings.append(
+                {
+                    "identifier": identifier,
+                    "title": data.get("job_title") or "",
+                    "company": data.get("company_name") or "",
+                    "gate_failures": gate_failures,
+                    "score_flagged": False,
                 }
             )
 
