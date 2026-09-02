@@ -252,6 +252,29 @@ def _passes_hours_filter(description: str) -> bool:
     return passes
 
 
+def _passes_hybrid_preference_filter(location: str, description: str) -> bool:
+    """The single "hybrid preferred" gate for both scanners.
+
+    Runs after the description exists, unlike `_passes_location_filter` --
+    the preference is stated in body prose, not the `location` field, so
+    it cannot be checked before the description is fetched. Catches a
+    posting that reads as REMOTE by `location`/workplace classification
+    but separately prefers hybrid candidates: without this, that
+    preference would never surface until an interview. No-op (always
+    passes) unless a `location:` block with an origin and radius is
+    configured, and unless the description actually says so.
+    """
+    location_config = _load_filters().get("location") or {}
+    verdict = location_filter.evaluate_hybrid_preference(
+        location, description, location_config
+    )
+    if verdict is None:
+        return True
+    if not verdict.passes:
+        logging.info(f"scan_boards: rejected on hybrid preference -- {verdict.reason}")
+    return verdict.passes
+
+
 def _passes_location_filter(location: str, **posting) -> bool:
     """The single location gate for BOTH scanners -- scan_ats.py routes
     through this function too, so anything added here covers both.
@@ -698,6 +721,10 @@ def fetch_board_jobs(
             if not _passes_compensation_filter(description, raw.get("compensation")):
                 continue
             if not _passes_hours_filter(description):
+                continue
+            if not _passes_hybrid_preference_filter(
+                raw.get("location") or "", description
+            ):
                 continue
 
             job = {

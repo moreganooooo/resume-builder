@@ -1718,6 +1718,30 @@ STALE_POSTING_THRESHOLD_DAYS = 3
 STALE_POSTING_PENALTY_PER_DAY = 0.08
 STALE_POSTING_MAX_PENALTY = 2.5
 
+# Stress signals (scripts/stress_signals.py) are deterministic phrase
+# detections, not an LLM judgment, so they enter composite math directly
+# here rather than through a subscore -- same reasoning as the proximity
+# bonus above: grounded facts about the posting's own text, not something
+# worth asking the model to re-derive. Weighted asymmetrically on purpose:
+# a genuinely low-stress posting (zero categories detected) earns a BONUS
+# larger than the penalty for any single detected category, because the
+# stated goal here is finding comfortable, sustainable work, not merely
+# avoiding red flags. A 2026-09-01 corpus measurement found real but
+# modest hit rates (7.8% of postings had any signal), so most postings
+# receive the bonus, not the penalty -- see
+# docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md.
+STRESS_SIGNAL_PENALTY_PER_CATEGORY = 0.25
+STRESS_SIGNAL_MAX_PENALTY = 0.75
+LOW_STRESS_BONUS = 0.40
+
+# capability_gaps (CapabilityEvaluationSchema) is a deterministic COUNT of
+# explicit narrative/functional mismatches the model already lists --
+# distinct from fit_subscores['level_plausibility'], which is the model's
+# own subjective screen-risk judgment. A per-gap penalty belongs here,
+# in Python, rather than folding it into that subscore a second time.
+STRETCH_GAP_PENALTY_PER_ITEM = 0.20
+STRETCH_GAP_MAX_PENALTY = 0.80
+
 
 def _weighted_score(subscores: dict, weights: dict) -> float:
     """1-5 weighted average of a subscore dict against its matching
@@ -1759,13 +1783,25 @@ def fit_composite_score(
     posting_age_days: int = None,
     distance_miles: float = None,
     radius_miles: float = None,
+    stress_signal_count: int = None,
+    capability_gap_count: int = None,
 ) -> float:
     """Weighted 1-5 blend of the three independent layer scores, per
     COMPOSITE_SCORE_WEIGHTS, plus a proximity boost for local commutable jobs
     (closer = higher, up to +0.50 score boost at 0 mi), minus an age penalty for
     postings older than STALE_POSTING_THRESHOLD_DAYS (see jd_manager.compute_posting_age_days()
     for how posting_age_days is derived -- None means no age signal at
-    all, so no penalty is applied rather than assuming staleness)."""
+    all, so no penalty is applied rather than assuming staleness).
+
+    stress_signal_count (scripts/stress_signals.py's deterministic phrase
+    detector) is None when never computed -- no adjustment, not an assumed
+    clean posting. Zero categories detected earns LOW_STRESS_BONUS; each
+    detected category costs STRESS_SIGNAL_PENALTY_PER_CATEGORY, capped at
+    STRESS_SIGNAL_MAX_PENALTY.
+
+    capability_gap_count is len(capability_gaps) -- a deterministic count
+    of stated mismatches, not the model's subjective level_plausibility
+    judgment which is already in fit_score. None/0 means no penalty."""
     base = (
         fit_score * COMPOSITE_SCORE_WEIGHTS["fit_score"]
         + interview_odds_score * COMPOSITE_SCORE_WEIGHTS["interview_odds_score"]
@@ -1786,7 +1822,34 @@ def fit_composite_score(
             * STALE_POSTING_PENALTY_PER_DAY,
             STALE_POSTING_MAX_PENALTY,
         )
-    return round(max(min(base + proximity_bonus - penalty, 5.0), 0.0), 2)
+
+    stress_adjustment = 0.0
+    if stress_signal_count is not None:
+        if stress_signal_count == 0:
+            stress_adjustment = LOW_STRESS_BONUS
+        else:
+            stress_adjustment = -min(
+                stress_signal_count * STRESS_SIGNAL_PENALTY_PER_CATEGORY,
+                STRESS_SIGNAL_MAX_PENALTY,
+            )
+
+    stretch_penalty = 0.0
+    if capability_gap_count:
+        stretch_penalty = min(
+            capability_gap_count * STRETCH_GAP_PENALTY_PER_ITEM,
+            STRETCH_GAP_MAX_PENALTY,
+        )
+
+    return round(
+        max(
+            min(
+                base + proximity_bonus + stress_adjustment - penalty - stretch_penalty,
+                5.0,
+            ),
+            0.0,
+        ),
+        2,
+    )
 
 
 def is_spurious_commute_blocker(blocker: str) -> bool:
@@ -1839,12 +1902,20 @@ def rescore_evaluation_with_location(
     workplace_mode: str = "any",
     remote_required: bool = False,
     posting_age_days: int = None,
+    description: str = None,
 ) -> dict:
     """Recalculates an evaluation dict incorporating local commute distance:
     1. Calibrates practical_pursue_subscores['remote_quality'] (closer = higher).
     2. Clears spurious onsite/commute blockers if commutable local.
-    3. Recomputes composite_score with proximity boost.
-    4. Recalculates recommendation and estimated interview odds."""
+    3. Recomputes composite_score with proximity boost, plus the deterministic
+       stress-signal and capability-gap adjustments in fit_composite_score.
+    4. Recalculates recommendation and estimated interview odds.
+
+    description is the posting's own body text, used to run
+    stress_signals.categories() -- optional and separate from evaluation
+    itself because the description isn't persisted on the evaluation dict.
+    None means the count is never computed, so fit_composite_score applies
+    no stress adjustment rather than assuming a clean posting."""
     if not evaluation:
         return evaluation
 
@@ -1897,6 +1968,12 @@ def rescore_evaluation_with_location(
         ev["composite_score"] = 0.00
         ev["estimated_interview_probability"] = 0.0
     else:
+        stress_signal_count = None
+        if description:
+            import stress_signals
+
+            stress_signal_count = len(stress_signals.categories(description))
+
         comp = fit_composite_score(
             fit_score,
             interview_odds_score,
@@ -1908,6 +1985,8 @@ def rescore_evaluation_with_location(
             ),
             distance_miles=distance_miles if is_commutable_local else None,
             radius_miles=radius_miles if is_commutable_local else None,
+            stress_signal_count=stress_signal_count,
+            capability_gap_count=len(ev.get("capability_gaps") or []),
         )
         ev["composite_score"] = comp
 
@@ -4021,6 +4100,7 @@ class ResumeEngine:
             workplace_mode=workplace_mode,
             remote_required=remote_required,
             posting_age_days=posting_age_days,
+            description=jd_data.get("description") or jd_text,
         )
 
         # 8. Heuristic Ghost Job Probability Calculator

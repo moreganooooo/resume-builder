@@ -62,6 +62,44 @@ func TestSortByDistanceIsStable(t *testing.T) {
 	}
 }
 
+func TestSortByPayPutsUnstatedLast(t *testing.T) {
+	rows := []model.JobRow{
+		{Company: "NoPay"},
+		{Company: "Mid", PayAnnualMax: pay(80000)},
+		{Company: "Unstated"},
+		{Company: "High", PayAnnualMax: pay(150000)},
+	}
+	sortByPay(rows)
+
+	if rows[0].Company != "High" {
+		t.Fatalf("highest-paying job did not sort first: %+v", rows[0])
+	}
+	if rows[1].Company != "Mid" {
+		t.Fatalf("second-highest job out of order: %+v", rows[1])
+	}
+	// Unstated rows must land at the END. An undisclosed row isn't a
+	// bad-paying job, it's an unknown one, and floating it to the top
+	// would bury the postings that are the entire reason to sort this way.
+	for _, r := range rows[2:] {
+		if r.HasStatedPay() {
+			t.Fatalf("stated-pay row sorted behind an unstated one: %+v", r)
+		}
+	}
+}
+
+func TestSortByPayIsStable(t *testing.T) {
+	// Ties keep their incoming (score) order.
+	a := model.JobRow{Company: "A", PayAnnualMax: pay(100000)}
+	b := model.JobRow{Company: "B", PayAnnualMax: pay(100000)}
+	rows := []model.JobRow{a, b}
+	sortByPay(rows)
+	if rows[0].Company != "A" || rows[1].Company != "B" {
+		t.Fatalf("stable order not preserved: %+v", rows)
+	}
+}
+
+func pay(v float64) *float64 { return &v }
+
 func TestApplyFilterNarrowsByWorkplace(t *testing.T) {
 	m := &JobsModel{
 		filter: "all",
