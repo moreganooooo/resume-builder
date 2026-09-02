@@ -829,6 +829,41 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   changes what a score means -- NOT for a newly persisted field, which is
   a gap in the record rather than an error in it -- and batch scoring
   changes, since a bump costs one API call per pending role.
+  `_evaluation["scoring_version"]` (`jd_manager.SCORING_VERSION`) now
+  rides alongside `evaluated_at` on every newly saved evaluation --
+  `_evaluation_is_stale()` checks it first, an exact int comparison, and
+  only falls back to the `SCORING_EPOCH` date-string comparison for
+  evaluations saved before the field existed. It does not resolve the
+  351 undated rows: there is nothing in them to derive a version from,
+  so they stay stale by the same absence-dates-the-record rule as
+  before. Bump both together, the same day, for the same reason.
+- **`role_track` (IC vs. manager) is wired into `evaluate_capability.md`
+  / `CapabilityEvaluationSchema`, and it is a SORT/display facet, never a
+  gate -- do not build an exclusion filter on it without a labeled
+  accuracy bar first.** `scripts/build_role_track_holdout.py`'s hand
+  labels (103/134 done) measure why: of 49 postings whose only manager
+  signal was the title (`title-only` + `neither` strata), **zero** were
+  people managers, while `title+body` is 29 managers of 40 -- title
+  carries no signal, body evidence does. The schema's negative
+  instruction is written from that measurement, not a guess, and
+  `role_track: "unknown"` is the *correct* answer for roughly 40% of
+  postings (the model is told this explicitly, or it fills the gap with
+  a title-derived guess -- the exact bias the field exists to avoid).
+  `role_track_evidence` (the deciding quoted phrase) is what makes the
+  holdout cheap to label and a wrong verdict correctable, and is required
+  before any future opt-in exclusion (`manager` + `high` confidence +
+  non-empty evidence). Surfaced read-only in the Jobs detail pane
+  (`jobs.go`) only for `manager`/`player_coach` -- `unknown`/`ic` render
+  nothing, since flagging the expected-40%-unknown case on every row
+  would read as a data problem it isn't. The holdout's own excerpt
+  generator (`_excerpt()`) used to cap at 900 chars and fall back to
+  `body[:900]` -- mostly "About us..." boilerplate -- whenever its
+  report-evidence regex found nothing, starving the labeler of exactly
+  the text a body-only signal needs. Bodies under
+  `MAX_FULL_EXCERPT_CHARS` (6000) are now shown whole;
+  `--refresh-excerpts` rewrites excerpts for an already-labeled CSV in
+  place (label/note untouched) rather than requiring `--force`, which
+  would discard the labels to get wider text.
 - **`evaluate_all_pending(skip_evaluated=False)` was DEAD, and the shape
   of that bug recurs.** Its default work list came from
   `unevaluated_roles()`, which by definition holds nothing that has a

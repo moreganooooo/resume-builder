@@ -152,6 +152,35 @@ class CapabilityEvaluationSchema(BaseModel):
     capability_gaps: List[str] = Field(
         description="Conceptual capability gaps or narrative omissions; empty if none"
     )
+    role_track: Literal["ic", "manager", "player_coach", "unknown"] = Field(
+        description="IC vs. people-manager. 'player_coach' when the role both "
+        "manages people and does the work. Judge ONLY by stated "
+        "responsibilities and direct reports, NEVER by the word 'Manager' in "
+        "the title -- in marketing and operations that word denotes scope, "
+        "not reports. Measured on this corpus: of 49 postings whose only "
+        "manager signal was the title, ZERO were people managers. Return "
+        "'unknown' whenever the body does not say who reports to whom -- "
+        "that is the correct answer for roughly two of every five postings, "
+        "not a failure to try. A role that says direct reports will come "
+        "LATER ('no reports initially', 'you will build the team') is "
+        "'manager', not 'ic'."
+    )
+    role_track_confidence: Literal["high", "medium", "low"] = Field(
+        description="Confidence in role_track given what the posting actually states"
+    )
+    role_track_evidence: str = Field(
+        description="The phrase from the posting that decided role_track; "
+        "empty when the posting gives no signal"
+    )
+    stretch_evidence: str = Field(
+        description="The single biggest gap between what this posting asks for "
+        "and what the resume shows -- the sharpest entry of capability_gaps, "
+        "not a new judgment. Empty when the role is a comfortable, "
+        "well-within-reach match with no real stretch. This describes how "
+        "much of a reach the role is, not whether the job itself is "
+        "stressful -- do not describe the posting's pace, workload, or "
+        "on-call expectations here."
+    )
 
 
 class RecruiterEvaluationSchema(BaseModel):

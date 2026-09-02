@@ -65,7 +65,13 @@ type JobsModel struct {
 	payFilter string
 	// distanceSort orders by measured distance ascending instead of the
 	// default composite-score ordering.
-	distanceSort  bool
+	distanceSort bool
+	// paySort orders by annualized pay descending, unstated rows last --
+	// the same unmeasured-goes-last convention distanceSort uses for
+	// unresolvable locations. Mutually exclusive with distanceSort in
+	// practice (applyFilter applies whichever was toggled most recently),
+	// since ranking by two different things at once has no single answer.
+	paySort       bool
 	width, height int
 	theme         theme.Theme
 
@@ -299,6 +305,8 @@ func (m *JobsModel) applyFilter() {
 	}
 	if m.distanceSort {
 		sortByDistance(out)
+	} else if m.paySort {
+		sortByPay(out)
 	}
 	m.filtered = out
 	if m.cursor >= len(m.filtered) {
@@ -324,6 +332,22 @@ func sortByDistance(rows []model.JobRow) {
 		b, bOK := rows[j].Miles()
 		if aOK && bOK {
 			return a < b
+		}
+		return aOK && !bOK
+	})
+}
+
+// sortByPay orders rows highest-annualized-pay first, with rows that
+// disclosed nothing last -- the same unmeasured-goes-last convention
+// sortByDistance uses. An undisclosed row isn't a bad-paying job, it's an
+// unknown one, and floating it to either end on a guess would misrepresent
+// data the posting never gave.
+func sortByPay(rows []model.JobRow) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, aOK := rows[i].PayAnnualMax, rows[i].PayAnnualMax != nil
+		b, bOK := rows[j].PayAnnualMax, rows[j].PayAnnualMax != nil
+		if aOK && bOK {
+			return *a > *b
 		}
 		return aOK && !bOK
 	})
@@ -1160,6 +1184,16 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			// above intercepts "d" for its raw-detail toggle and returns
 			// before this switch, so the two never contend.
 			m.distanceSort = !m.distanceSort
+			if m.distanceSort {
+				m.paySort = false
+			}
+			m.cursor = 0
+			m.applyFilter()
+		case "p":
+			m.paySort = !m.paySort
+			if m.paySort {
+				m.distanceSort = false
+			}
 			m.cursor = 0
 			m.applyFilter()
 		case "s":
@@ -1311,6 +1345,11 @@ var jobsHelpCategories = []helpCategory{
 	}},
 	{"Filters", []helpBinding{
 		{"f", "Cycle filters: All → Pending → Completed → High Fit → Good Fit → Recent"},
+		{"w", "Cycle workplace filter: All → Remote → Hybrid → Onsite"},
+		{"e", "Cycle employment type filter"},
+		{"$", "Cycle pay filter: All → Stated → Unstated"},
+		{"d", "Toggle sort by distance (nearest first, unmeasured last)"},
+		{"p", "Toggle sort by pay (highest first, unstated last)"},
 		{"/", "Search company/title (narrows within active filter)"},
 	}},
 	{"Quick Reference", []helpBinding{
@@ -1556,6 +1595,9 @@ func (m JobsModel) renderHeader() string {
 	}
 	if m.distanceSort {
 		info += modeStyle.Render("  ↕ nearest")
+	}
+	if m.paySort {
+		info += modeStyle.Render("  ↕ pay")
 	}
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Jobs+"  ") +
@@ -1948,6 +1990,56 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		}
 	}
 
+	// Stretch is assembled from fields that already exist rather than a new
+	// LLM judgment: level_plausibility (screen risk) plus StretchEvidence,
+	// the sharpest single entry of CapabilityGaps restated as one sentence.
+	// len(CapabilityGaps) also now costs a deterministic penalty in
+	// composite_score (orchestrator.fit_composite_score's
+	// STRETCH_GAP_PENALTY_PER_ITEM) -- shown here so the number on the row
+	// is explained, not just displayed. See
+	// docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md.
+	if eval.StretchEvidence != "" {
+		content = append(content, "")
+		content = append(content, accent.Render("Stretch for this candidate"))
+		if lp, ok := eval.FitSubscores["level_plausibility"]; ok {
+			content = append(content, styles.Value.Render(fmt.Sprintf("Screen risk: %.0f/5", lp)))
+		}
+		content = append(content, wrapStyle.Render(eval.StretchEvidence))
+	}
+
+	// role_track is a display/sort facet, never a gate (see model.JobRow's
+	// RoleTrack doc): a labeled holdout found zero people managers among 49
+	// title-only-signal postings, and ~40% of postings never say who
+	// reports to whom at all. "unknown" is the expected answer for that
+	// large minority, not a classifier failure, so it stays silent here
+	// rather than showing on every row.
+	if eval.RoleTrack == "manager" || eval.RoleTrack == "player_coach" {
+		content = append(content, "")
+		label := "Manager role"
+		if eval.RoleTrack == "player_coach" {
+			label = "Player-coach role (manages and does the work)"
+		}
+		content = append(content, accent.Render("Role track")+" "+styles.Value.Render(label))
+		if eval.RoleTrackEvidence != "" {
+			content = append(content, wrapStyle.Render("\""+eval.RoleTrackEvidence+"\""))
+		}
+	}
+
+	// Deterministic phrase categories from scripts/stress_signals.py.
+	// StressSignals itself is display-only -- the count that actually
+	// drives composite_score (orchestrator.fit_composite_score's
+	// LOW_STRESS_BONUS/STRESS_SIGNAL_PENALTY_PER_CATEGORY) is computed
+	// fresh at evaluation time from the posting's description, not stored
+	// on JobRow, so this list is shown to explain the score, not as the
+	// scoring input itself.
+	if job.HasStressSignals() {
+		content = append(content, "")
+		content = append(content, accent.Render("Stress signals in posting"))
+		for _, s := range job.StressSignals {
+			content = append(content, "  • "+s)
+		}
+	}
+
 	// -- Posting legitimacy warning --
 	if eval.PostingLegitimacy != "" && eval.PostingLegitimacy != "High Confidence" {
 		color := m.theme.Yellow
@@ -2192,6 +2284,7 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("w") + descStyle.Render(" workplace  ") +
 			keyStyle.Render("e") + descStyle.Render(" emp type  ") +
 			keyStyle.Render("d") + descStyle.Render(" nearest  ") +
+			keyStyle.Render("p") + descStyle.Render(" pay  ") +
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("m") + descStyle.Render(" matrix  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
