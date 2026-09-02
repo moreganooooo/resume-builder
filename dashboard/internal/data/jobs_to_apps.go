@@ -46,14 +46,25 @@ func JobRowsToApplications(rows []model.JobRow) []model.CareerApplication {
 		}
 
 		app := model.CareerApplication{
-			Number:         len(apps) + 1,
-			Company:        row.Company,
-			Role:           row.Title,
-			Status:         normalizeStatus(row),
-			Score:          row.Evaluation.CompositeScore,
-			JobURL:         row.SourceURL,
-			Notes:          row.Description,
-			SourcePlatform: row.SourcePlatform,
+			Number:              len(apps) + 1,
+			Company:             row.Company,
+			Role:                row.Title,
+			Status:              normalizeStatus(row),
+			Score:               row.Evaluation.CompositeScore,
+			JobURL:              row.SourceURL,
+			Notes:               row.Description,
+			SourcePlatform:      row.SourcePlatform,
+			Workplace:           row.Workplace,
+			EmploymentType:      row.EmploymentType,
+			EmploymentTypeRaw:   row.EmploymentTypeRaw,
+			PayText:             row.PayLabel(),
+			HasStatedPay:        row.HasStatedPay(),
+			HoursText:           row.HoursLabel(),
+			StressSignals:       row.StressSignals,
+			CapabilityGaps:      row.Evaluation.CapabilityGaps,
+			RoleTrack:           row.Evaluation.RoleTrack,
+			RoleTrackConfidence: row.Evaluation.RoleTrackConfidence,
+			ExperienceBlockers:  row.Evaluation.ExperienceBlockers,
 		}
 		if row.Coverage != nil {
 			app.Coverage = row.Coverage.Score
