@@ -160,11 +160,11 @@ type PipelineModel struct {
 	// Filter parity with Jobs (jobs.go's [w]/[e]/[$]/[r] filters) -- same
 	// predicates, mirrored onto CareerApplication (see model/career.go).
 	// roleTrackFilter uses [t] here instead of Jobs' [r], since [r] is
-	// already Pipeline's refresh key. experienceBlockerFilter ([x]) has
-	// no Jobs-screen equivalent to mirror -- Jobs only renders
-	// ExperienceBlockers in its detail pane (jobs.go), it never got its
-	// own opt-in filter/keybinding. Pipeline is ahead of Jobs here, not
-	// behind it.
+	// already Pipeline's refresh key. experienceBlockerFilter uses [x]
+	// here vs. Jobs' [c] (Jobs' own [x] is its archive-confirm key) --
+	// a deliberate per-screen keybinding divergence, not a parity gap;
+	// both screens have the same opt-in filter/keybinding/detail-pane
+	// rendering.
 	workplaceFilter         string
 	employmentFilter        string
 	payFilter               string
