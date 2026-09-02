@@ -7,7 +7,6 @@ import json
 import os
 import sqlite3
 import sys
-import tempfile
 import unittest
 
 SCRIPTS_DIR = os.path.join(
@@ -20,17 +19,15 @@ if TESTS_DIR not in sys.path:
     sys.path.insert(0, TESTS_DIR)
 
 import persona  # noqa: E402
-import profile_paths  # noqa: E402
 
 
 class TestPlatformAnalyticsIsolatedBase(unittest.TestCase):
     """Base class providing a sandboxed, isolated profile with an in-memory or temp SQLite database."""
 
     def setUp(self):
-        self._temp_dir = tempfile.TemporaryDirectory()
-        profile_paths.isolate_for_tests(self._temp_dir.name)
         self.profile = "sandbox"
-        persona.sandbox_profile(self.profile)
+        self._sandbox = persona.sandbox_profile(self.profile)
+        self._sandbox.__enter__()
         import db
 
         self.db_path = db.get_db_path(self.profile)
@@ -45,7 +42,7 @@ class TestPlatformAnalyticsIsolatedBase(unittest.TestCase):
             self.conn.close()
         except Exception:
             pass
-        self._temp_dir.cleanup()
+        self._sandbox.__exit__(None, None, None)
 
     def _insert_job(
         self,

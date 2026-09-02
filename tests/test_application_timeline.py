@@ -20,15 +20,10 @@ class TestApplicationTimeline(unittest.TestCase):
 
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.tmp_dir, "profiles", "test_user", "data.db")
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        self.conn = db.get_db("test_user")
 
     def tearDown(self):
         import shutil
 
-        if hasattr(self, "conn"):
-            self.conn.close()
         if os.path.exists(self.tmp_dir):
             shutil.rmtree(self.tmp_dir)
 
