@@ -90,7 +90,17 @@ LABEL_ALIASES = {
 }
 
 DEFAULT_PER_STRATUM = 40
-EXCERPT_CHARS = 900
+
+# Below this length, the excerpt is the WHOLE body -- no windowing. Trying
+# to be clever about where to center a small window was itself the bug: a
+# posting with no REPORTS_EVIDENCE match fell back to body[:900], which is
+# mostly "About us..." boilerplate (the module's own prior comment said so
+# and shipped it anyway), so a labeler could get zero real signal on a
+# posting that actually stated reports further down. Only bodies longer
+# than this get windowed, and the window itself is now wide enough that a
+# report-evidence match plus its surrounding paragraph both fit.
+MAX_FULL_EXCERPT_CHARS = 6000
+EXCERPT_CHARS = 3000
 
 
 def _stratum(title: str, body: str) -> str:
@@ -142,9 +152,13 @@ def _strip_html(text: str) -> str:
 def _excerpt(body: str) -> str:
     """The evidence a human needs, biased toward where reports are named.
 
-    A leading slice is mostly boilerplate ("About us..."), so if the body
-    describes reports anywhere, centre the excerpt there instead.
+    Short bodies are shown in full -- see MAX_FULL_EXCERPT_CHARS. Only a
+    body long enough to need trimming gets windowed, and a leading slice
+    is mostly boilerplate ("About us..."), so if the body describes
+    reports anywhere, centre the excerpt there instead.
     """
+    if len(body) <= MAX_FULL_EXCERPT_CHARS:
+        return " ".join(body.split())
     match = REPORTS_EVIDENCE.search(body)
     if match:
         start = max(0, match.start() - EXCERPT_CHARS // 3)
@@ -230,6 +244,66 @@ def write_holdout(path: str, rows: list[dict]) -> None:
 def read_labels(path: str) -> list[dict]:
     with open(path, newline="") as fh:
         return list(csv.DictReader(fh))
+
+
+def refresh_excerpts(path: str, profile: str | None) -> int:
+    """Rewrites every row's excerpt from the current DB text, in place,
+    touching nothing else -- label and note survive untouched.
+
+    Separate from the sample-and-write path in main(): that path refuses
+    to run against an existing labeled file at all (the right call when
+    the risk is losing labels to a fresh, reshuffled sample), but widening
+    MAX_FULL_EXCERPT_CHARS doesn't change which jobs were sampled, only
+    how much of each one is shown -- so there's a labeled file's worth of
+    human judgement worth updating, not discarding.
+    """
+    rows = read_labels(path)
+    if not rows:
+        print(f"{path} has no rows.")
+        return 1
+
+    root = (
+        profile_paths.profile_root(profile) if profile else profile_paths.profile_root()
+    )
+    db = sqlite3.connect(f"{root}/data.db")
+    try:
+        bodies = {
+            job_id: _description_of(stored)
+            for job_id, stored in db.execute(
+                "select id, coalesce(raw_text,'') from jobs"
+            ).fetchall()
+        }
+    finally:
+        db.close()
+
+    missing = 0
+    for row in rows:
+        body = bodies.get(row["job_id"])
+        if body is None:
+            missing += 1
+            continue
+        row["excerpt"] = _excerpt(body)
+
+    with open(path, "w", newline="") as fh:
+        writer = csv.DictWriter(
+            fh,
+            fieldnames=[
+                "job_id",
+                "title",
+                "company",
+                "stratum",
+                "label",
+                "note",
+                "excerpt",
+            ],
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"refreshed {len(rows) - missing}/{len(rows)} excerpts in {path}")
+    if missing:
+        print(f"  {missing} row(s) had no matching job_id in data.db -- left unchanged")
+    return 0
 
 
 def normalize_label(raw: str) -> str:
@@ -323,6 +397,12 @@ def main() -> int:
         "--status", action="store_true", help="report labeling progress and stop"
     )
     parser.add_argument(
+        "--refresh-excerpts",
+        action="store_true",
+        help="rewrite excerpts in an existing holdout from current DB text, "
+        "keeping every label and note",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="overwrite an existing holdout, discarding any labels in it",
@@ -341,6 +421,12 @@ def main() -> int:
             print(f"no holdout at {path}")
             return 1
         return status(path)
+
+    if args.refresh_excerpts:
+        if not os.path.exists(path):
+            print(f"no holdout at {path}")
+            return 1
+        return refresh_excerpts(path, args.profile)
 
     # Never silently destroy hand-labeling. Same reasoning as
     # write_verified_ledger()'s bail-out: the expensive artifact here is

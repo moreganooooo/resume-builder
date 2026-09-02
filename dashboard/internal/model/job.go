@@ -74,6 +74,20 @@ type JobRow struct {
 	HoursMin  *float64 `json:"hours_min"`
 	HoursMax  *float64 `json:"hours_max"`
 	HoursText string   `json:"hours_text"`
+
+	// StressSignals are deterministic, display-only phrase categories
+	// detected in the posting's own body text by scripts/stress_signals.py
+	// ("Fast-paced environment", "On-call / after-hours availability"...).
+	// Not a score and not a filter -- a 2026-09-01 corpus measurement
+	// found real but modest hit rates (7.8% of postings had any signal at
+	// all), so this is shown for eyeballing only until a category earns a
+	// scored subscore. See docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md.
+	StressSignals []string `json:"stress_signals"`
+}
+
+// HasStressSignals reports whether any stress-phrase category was detected.
+func (j JobRow) HasStressSignals() bool {
+	return len(j.StressSignals) > 0
 }
 
 // PayLabel renders stated pay for a list cell, or "" when none was stated.
@@ -241,7 +255,27 @@ type Evaluation struct {
 	// usually addressable, and is exactly what to write about in the
 	// cover letter. Produced by CapabilityEvaluationSchema in
 	// scripts/schemas.py and carried through orchestrator's evaluation.
-	CapabilityGaps           []string           `json:"capability_gaps"`
+	CapabilityGaps []string `json:"capability_gaps"`
+
+	// RoleTrack is a SORT/display facet, never a gate: a labeled holdout
+	// found zero people managers among 49 title-only-signal postings, but
+	// also that ~40% of postings never state who reports to whom at all,
+	// so "unknown" is the correct, expected answer for a large minority
+	// rather than a classifier failure. Produced by
+	// CapabilityEvaluationSchema in scripts/schemas.py.
+	RoleTrack           string `json:"role_track"`
+	RoleTrackConfidence string `json:"role_track_confidence"`
+	RoleTrackEvidence   string `json:"role_track_evidence"`
+
+	// StretchEvidence is the sharpest entry of CapabilityGaps, restated as
+	// a single sentence describing how much of a reach the role is for the
+	// candidate -- not whether the role itself is demanding (that's
+	// StressSignals, a separate signal). Empty when the role is a
+	// comfortable match. Produced by CapabilityEvaluationSchema in
+	// scripts/schemas.py. See
+	// docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md.
+	StretchEvidence string `json:"stretch_evidence"`
+
 	PostingLegitimacy        string             `json:"posting_legitimacy"`
 	PostingLegitimacyNotes   string             `json:"posting_legitimacy_notes"`
 	Archetype                string             `json:"archetype"`

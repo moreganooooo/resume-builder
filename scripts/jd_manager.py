@@ -138,6 +138,22 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
         )
 
 
+# The version of what an _evaluation MEANS, not a count of fields it
+# carries. Bump this whenever a commit changes a scoring weight or
+# calibration (a rescore is required to make old and new evaluations
+# comparable) -- never for a newly added field, which is a gap in the
+# record rather than an error in it. Previously this was tracked only
+# by comparing evaluated_at against picker.SCORING_EPOCH, a date string
+# -- workable, but it meant every pre-versioning evaluation (351 rows
+# with no evaluated_at at all) could only be judged stale "by
+# assumption": there was no data in the row itself proving it, only its
+# absence. This field doesn't fix that -- there's nothing to backfill it
+# from -- but it stops the assumption from compounding: every evaluation
+# from here forward carries an exact, clock-independent answer to "was
+# this scored under the current system".
+SCORING_VERSION = 2
+
+
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
     """Persists an evaluate_fit() result into the JD's own JSON file under
     an _evaluation key, so a later picker can filter/sort/label by it
@@ -178,8 +194,13 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         # put it in `evaluation`, and 0 of 1,138 evaluated JDs on disk
         # carried it. Anything added to that schema needs a line here too.
         "capability_gaps": evaluation.get("capability_gaps") or [],
+        "role_track": evaluation.get("role_track") or "unknown",
+        "role_track_confidence": evaluation.get("role_track_confidence") or "low",
+        "role_track_evidence": evaluation.get("role_track_evidence") or "",
+        "stretch_evidence": evaluation.get("stretch_evidence") or "",
         "posting_age_days": evaluation.get("posting_age_days"),
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "scoring_version": SCORING_VERSION,
     }
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)

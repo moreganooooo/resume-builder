@@ -31,9 +31,17 @@ Also identify the single best-matching role family archetype key from the `=== R
 
 Also identify any **capability_gaps** -- explicit conceptual or functional mismatches where the candidate's narrative, skills, or historical experience falls short of the JD's core operational needs. Return this as a list of strings, empty if none. Keep each gap concise and grounded (e.g., "No demonstrated experience managing direct sales development representatives").
 
+Also classify **role_track** -- individual contributor vs. people manager. This is a fact about the posting, not about the candidate. Judge ONLY by stated responsibilities and direct reports, **never** by the word "Manager" in the title: in marketing and operations that word denotes scope of ownership, not headcount, and a measured sample of 49 postings whose only manager signal was the title contained zero actual people managers. Return `unknown` whenever the posting never says who reports to whom -- that is the correct, expected answer for roughly two of every five postings, not a failure to classify. A role that says direct reports will come *later* ("no reports initially," "you will build the team over time") is `manager`, not `ic` -- a management role that hasn't started is still a management role. Set `role_track_confidence` to how directly the text supports your answer, and quote the deciding phrase (or leave it empty if the posting gives no signal) in `role_track_evidence`.
+
+Also identify **stretch_evidence** -- the single biggest gap between what this posting asks for and what the candidate's resume shows, stated as one concise sentence. This is the sharpest entry of `capability_gaps`, not a new independent judgment -- do not invent a gap that isn't already implied by your `capability_gaps` list. Leave it empty (`""`) when the role is a comfortable, well-within-reach match with no real stretch. This describes how much of a *reach the role is for the candidate*, not whether the role itself is demanding -- do not describe the posting's pace, workload, or on-call expectations here, that is a separate signal.
+
 # Output Format
 
 Return a structured JSON object containing:
 - `archetype`: Best-matching archetype key
 - `fit_subscores`: Dict containing the 5 Fit subscores
 - `capability_gaps`: List of capability gap strings
+- `role_track`: "ic", "manager", "player_coach", or "unknown"
+- `role_track_confidence`: "high", "medium", or "low"
+- `role_track_evidence`: the deciding phrase from the posting, or "" if none
+- `stretch_evidence`: the single biggest capability stretch, or "" if none
