@@ -196,6 +196,67 @@ class TestEvaluateLocation(unittest.TestCase):
         self.assertIsNone(verdict.distance_miles)
 
 
+class TestHybridPreferred(unittest.TestCase):
+    def test_detects_hybrid_preferred_phrasing(self):
+        self.assertTrue(lf.mentions_hybrid_preferred("Hybrid schedule preferred."))
+        self.assertTrue(
+            lf.mentions_hybrid_preferred("We prefer candidates who can work hybrid.")
+        )
+        self.assertTrue(lf.mentions_hybrid_preferred("Ideally hybrid, 2 days a week."))
+
+    def test_does_not_flag_a_plain_hybrid_requirement(self):
+        # A hard requirement is already caught upstream (workplace
+        # classification / the keyword block list) -- this check exists
+        # only for a stated PREFERENCE, which reads as optional.
+        self.assertFalse(lf.mentions_hybrid_preferred("This is a hybrid role."))
+        self.assertFalse(lf.mentions_hybrid_preferred("Fully remote position."))
+        self.assertFalse(lf.mentions_hybrid_preferred(""))
+
+    def test_far_away_hybrid_preferred_is_rejected_despite_remote_label(self):
+        # "Remote - Austin, TX" would otherwise short-circuit
+        # evaluate_location() past the radius entirely, since REMOTE
+        # returns True before distance is ever measured -- this is the
+        # gap evaluate_hybrid_preference() closes, using the location
+        # field's own named city.
+        verdict = lf.evaluate_hybrid_preference(
+            "Remote - Austin, TX",
+            "Hybrid schedule preferred for local candidates.",
+            cfg(),
+        )
+        self.assertIsNotNone(verdict)
+        self.assertFalse(verdict.passes)
+        self.assertGreater(verdict.distance_miles, 500)
+
+    def test_nearby_hybrid_preferred_passes(self):
+        verdict = lf.evaluate_hybrid_preference(
+            "Overland Park, KS", "Hybrid schedule preferred.", cfg()
+        )
+        self.assertIsNotNone(verdict)
+        self.assertTrue(verdict.passes)
+
+    def test_no_hybrid_language_is_not_evaluated(self):
+        self.assertIsNone(
+            lf.evaluate_hybrid_preference("Remote (US)", "Fully remote role.", cfg())
+        )
+
+    def test_no_radius_configured_is_not_evaluated(self):
+        self.assertIsNone(
+            lf.evaluate_hybrid_preference(
+                "Remote (US)",
+                "Hybrid schedule preferred.",
+                {"city": "Kansas City", "state": "MO"},
+            )
+        )
+
+    def test_unresolvable_location_is_kept_not_dropped(self):
+        verdict = lf.evaluate_hybrid_preference(
+            "Remote (US)", "Hybrid schedule preferred.", cfg()
+        )
+        self.assertIsNotNone(verdict)
+        self.assertTrue(verdict.passes)
+        self.assertIsNone(verdict.distance_miles)
+
+
 class TestInternationalInText(unittest.TestCase):
     def test_explicit_international_location_line_trips(self):
         text = "Great remote role.\nLocation: Poland, Romania, Serbia\nApply now."

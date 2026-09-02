@@ -16,6 +16,7 @@ import employment_type
 import jd_manager
 import location_filter
 import questionary
+import stress_signals
 import theme
 import work_hours
 
@@ -431,6 +432,20 @@ def _compensation_fields(data: dict) -> dict:
     }
 
 
+def _stress_fields(data: dict) -> dict:
+    """Deterministic, display-only role-stress phrase categories.
+
+    Computed live from the JD's own description, same reasoning as
+    `_compensation_fields`/`_employment_fields`: no persisted field, no
+    LLM call, and a JD saved before this existed still gets it without a
+    backfill. Display-only per
+    docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md
+    -- categories haven't earned a scored subscore or a filter yet, only
+    a corpus hit-rate measurement (scripts/measure_stress_signals.py).
+    """
+    return {"stress_signals": stress_signals.categories(data.get("description") or "")}
+
+
 def _location_fields(data: dict, settings: dict) -> dict:
     """Location, workplace mode, and distance for one JD's export row.
 
@@ -517,6 +532,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     **_location_fields(jd_data, location_settings_block),
                     **_employment_fields(jd_data),
                     **_compensation_fields(jd_data),
+                    **_stress_fields(jd_data),
                 }
             )
     if "Completed" in statuses:
@@ -557,6 +573,7 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     **_location_fields(jd_data, location_settings_block),
                     **_employment_fields(jd_data),
                     **_compensation_fields(jd_data),
+                    **_stress_fields(jd_data),
                 }
             )
     if "Pending" in statuses:
@@ -656,6 +673,7 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
                 **_location_fields(data, settings or {}),
                 **_employment_fields(data),
                 **_compensation_fields(data),
+                **_stress_fields(data),
             }
         )
     return extra
@@ -695,17 +713,31 @@ def count_active_roles() -> int:
 # persisted field, which is a gap in the record rather than an error in
 # it. Bumping costs one API call per pending role, so batch scoring
 # changes rather than shipping them one at a time.
-SCORING_EPOCH = "2026-08-31"
+#
+# 2026-09-01: orchestrator.fit_composite_score() started applying
+# deterministic stress-signal/capability-gap adjustments
+# (LOW_STRESS_BONUS/STRESS_SIGNAL_PENALTY_PER_CATEGORY/
+# STRETCH_GAP_PENALTY_PER_ITEM) -- a composite_score computed before this
+# didn't have those adjustments applied at all, which is exactly the
+# "materially different evaluator" case this constant exists for.
+SCORING_EPOCH = "2026-09-01"
 
 
 def _evaluation_is_stale(evaluation, evaluated_before: str) -> bool:
     """Whether a persisted evaluation predates evaluated_before.
 
-    An evaluation with no evaluated_at is treated as stale: the field was
-    added later, so its absence dates the record rather than excusing it.
+    scoring_version (jd_manager.SCORING_VERSION) is checked first when
+    present: an exact integer comparison, immune to clock/timezone edges
+    the date-string comparison below has. Older evaluations were written
+    before that field existed, so they fall back to comparing evaluated_at
+    against evaluated_before -- and an evaluation with neither is treated
+    as stale, since its absence dates the record rather than excusing it.
     """
     if not isinstance(evaluation, dict):
         return True
+    version = evaluation.get("scoring_version")
+    if version is not None:
+        return version < jd_manager.SCORING_VERSION
     return (evaluation.get("evaluated_at") or "")[:10] < evaluated_before
 
 
