@@ -307,5 +307,118 @@ class TestLocationProximityScoringAndRescoring(unittest.TestCase):
         self.assertEqual(rescored["composite_score"], 0.0)
 
 
+class TestFitCompositeScoreStressAndStretch(unittest.TestCase):
+    """stress_signal_count/capability_gap_count are deterministic, Python-side
+    adjustments -- see the LOW_STRESS_BONUS/STRESS_SIGNAL_*/STRETCH_GAP_*
+    constants' docstring in orchestrator.py."""
+
+    def _score(self, **kwargs):
+        return orchestrator.fit_composite_score(3.0, 3.0, 3.0, **kwargs)
+
+    def test_none_is_backward_compatible_no_argument(self):
+        self.assertEqual(self._score(), self._score(stress_signal_count=None))
+
+    def test_zero_stress_signals_earns_the_low_stress_bonus(self):
+        base = self._score()
+        rewarded = self._score(stress_signal_count=0)
+        self.assertAlmostEqual(rewarded - base, orchestrator.LOW_STRESS_BONUS, places=2)
+
+    def test_low_stress_bonus_exceeds_any_single_category_penalty(self):
+        # The candidate's goal is finding comfortable roles, not merely
+        # avoiding red flags -- the bonus for zero must outweigh the
+        # penalty for exactly one detected category.
+        self.assertGreater(
+            orchestrator.LOW_STRESS_BONUS,
+            orchestrator.STRESS_SIGNAL_PENALTY_PER_CATEGORY,
+        )
+
+    def test_each_detected_category_costs_a_penalty(self):
+        base = self._score()
+        one_signal = self._score(stress_signal_count=1)
+        two_signals = self._score(stress_signal_count=2)
+        self.assertAlmostEqual(
+            base - one_signal,
+            orchestrator.STRESS_SIGNAL_PENALTY_PER_CATEGORY,
+            places=2,
+        )
+        self.assertLess(two_signals, one_signal)
+
+    def test_stress_penalty_is_capped(self):
+        base = self._score()
+        many_signals = self._score(stress_signal_count=20)
+        self.assertAlmostEqual(
+            base - many_signals, orchestrator.STRESS_SIGNAL_MAX_PENALTY, places=2
+        )
+
+    def test_each_capability_gap_costs_a_penalty(self):
+        base = self._score()
+        one_gap = self._score(capability_gap_count=1)
+        self.assertAlmostEqual(
+            base - one_gap, orchestrator.STRETCH_GAP_PENALTY_PER_ITEM, places=2
+        )
+
+    def test_capability_gap_penalty_is_capped(self):
+        base = self._score()
+        many_gaps = self._score(capability_gap_count=20)
+        self.assertAlmostEqual(
+            base - many_gaps, orchestrator.STRETCH_GAP_MAX_PENALTY, places=2
+        )
+
+    def test_zero_capability_gaps_is_not_treated_as_a_bonus(self):
+        # Unlike stress (where "clean" is the explicit goal), an absence of
+        # capability gaps is simply "no penalty", not a reward.
+        self.assertEqual(self._score(), self._score(capability_gap_count=0))
+
+    def test_score_never_goes_below_zero_or_above_five(self):
+        self.assertGreaterEqual(
+            orchestrator.fit_composite_score(
+                1.0, 1.0, 1.0, stress_signal_count=20, capability_gap_count=20
+            ),
+            0.0,
+        )
+        self.assertLessEqual(
+            orchestrator.fit_composite_score(5.0, 5.0, 5.0, stress_signal_count=0),
+            5.0,
+        )
+
+    def test_rescore_computes_stress_signal_count_from_description(self):
+        eval_data = {
+            "fit_subscores": PERFECT_FIT,
+            "interview_odds_subscores": PERFECT_INTERVIEW_ODDS,
+            "practical_pursue_subscores": PERFECT_PRACTICAL,
+            "hard_blockers": [],
+            "recommendation": "Strong pursue",
+            "posting_age_days": 0,
+        }
+
+        clean = orchestrator.rescore_evaluation_with_location(
+            dict(eval_data), posting_age_days=0, description="A normal, calm role."
+        )
+        stressful = orchestrator.rescore_evaluation_with_location(
+            dict(eval_data),
+            posting_age_days=0,
+            description="This is a fast-paced environment with an on-call rotation.",
+        )
+        self.assertGreater(clean["composite_score"], stressful["composite_score"])
+
+    def test_rescore_applies_capability_gap_penalty(self):
+        eval_data = {
+            "fit_subscores": PERFECT_FIT,
+            "interview_odds_subscores": PERFECT_INTERVIEW_ODDS,
+            "practical_pursue_subscores": PERFECT_PRACTICAL,
+            "hard_blockers": [],
+            "recommendation": "Strong pursue",
+            "posting_age_days": 0,
+            "capability_gaps": ["No demonstrated experience managing a team"],
+        }
+        rescored = orchestrator.rescore_evaluation_with_location(
+            eval_data, posting_age_days=0
+        )
+        clean = orchestrator.rescore_evaluation_with_location(
+            {**eval_data, "capability_gaps": []}, posting_age_days=0
+        )
+        self.assertLess(rescored["composite_score"], clean["composite_score"])
+
+
 if __name__ == "__main__":
     unittest.main()

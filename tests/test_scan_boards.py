@@ -119,6 +119,64 @@ class TestLocationFilter(unittest.TestCase):
         self.assertTrue(scan_boards._passes_location_filter("Remote, Hybrid optional"))
 
 
+class TestHybridPreferenceFilter(unittest.TestCase):
+    """The body-prose "hybrid preferred" gate -- a Remote-labeled posting
+    that separately prefers hybrid candidates, which the location field
+    alone (TestLocationFilter above) cannot see."""
+
+    def setUp(self):
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+
+        patcher = patch.object(
+            scan_boards,
+            "_load_filters",
+            return_value={
+                "location": {
+                    "city": "Kansas City",
+                    "state": "MO",
+                    "zip": "64111",
+                    "radius_miles": 25,
+                }
+            },
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_no_hybrid_language_passes(self):
+        self.assertTrue(
+            scan_boards._passes_hybrid_preference_filter(
+                "Remote (US)", "Fully remote role."
+            )
+        )
+
+    def test_far_away_hybrid_preference_is_blocked(self):
+        self.assertFalse(
+            scan_boards._passes_hybrid_preference_filter(
+                "Remote - Austin, TX",
+                "Hybrid schedule preferred.",
+            )
+        )
+
+    def test_nearby_hybrid_preference_passes(self):
+        self.assertTrue(
+            scan_boards._passes_hybrid_preference_filter(
+                "Overland Park, KS", "Hybrid schedule preferred."
+            )
+        )
+
+    def test_no_location_config_is_a_noop(self):
+        with patch.object(scan_boards, "_load_filters", return_value={}):
+            self.assertTrue(
+                scan_boards._passes_hybrid_preference_filter(
+                    "Remote (US)", "Hybrid schedule preferred."
+                )
+            )
+
+
 class TestFetchBoardJobs(unittest.TestCase):
 
     def setUp(self):

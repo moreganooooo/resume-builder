@@ -308,6 +308,8 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
         return None
     if not scan_boards._passes_hours_filter(description):
         return None
+    if not scan_boards._passes_hybrid_preference_filter(location, description):
+        return None
 
     job = {
         "job_title": title,
