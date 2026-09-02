@@ -63,6 +63,16 @@ type JobsModel struct {
 	// are kept unconditionally, so "cleared your floor" and "never said"
 	// look identical in a row. "" means no restriction.
 	payFilter string
+	// roleTrackFilter narrows to manager-track postings only: RoleTrack
+	// manager OR player_coach at RoleTrackConfidence high (see
+	// model.JobRow.IsManagerTrack). Unlike the other filters above this
+	// is a single boolean, not a multi-value cycle, because the design's
+	// measured >=90% precision bar was only cleared for the combined
+	// manager/player_coach excluded class at high confidence -- there is
+	// no other value worth exposing. Purely a VIEW-time narrowing: rows
+	// that don't clear it stay in m.rows and reappear the moment this is
+	// toggled back off, same reversibility guarantee as every filter here.
+	roleTrackFilter bool
 	// distanceSort orders by measured distance ascending instead of the
 	// default composite-score ordering.
 	distanceSort bool
@@ -294,6 +304,15 @@ func (m *JobsModel) applyFilter() {
 			continue
 		}
 		if m.payFilter == "unstated" && r.HasStatedPay() {
+			continue
+		}
+
+		// Narrow to manager-track postings only. A row that stated no
+		// role_track, or was classified below high confidence, is
+		// excluded here for the same reason "unknown" is excluded from
+		// the other filters above: absence of a confident signal is not
+		// evidence a posting qualifies.
+		if m.roleTrackFilter && !r.IsManagerTrack() {
 			continue
 		}
 
@@ -1179,6 +1198,10 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.payFilter = nextPayFilter(m.payFilter)
 			m.cursor = 0
 			m.applyFilter()
+		case "r":
+			m.roleTrackFilter = !m.roleTrackFilter
+			m.cursor = 0
+			m.applyFilter()
 		case "d":
 			// Reachable only in the normal state: the actionError branch
 			// above intercepts "d" for its raw-detail toggle and returns
@@ -1592,6 +1615,9 @@ func (m JobsModel) renderHeader() string {
 	}
 	if m.payFilter != "" {
 		info += modeStyle.Render("  " + m.theme.Icons.Filter + " " + payFilterLabel(m.payFilter))
+	}
+	if m.roleTrackFilter {
+		info += modeStyle.Render("  " + m.theme.Icons.Filter + " manager roles")
 	}
 	if m.distanceSort {
 		info += modeStyle.Render("  ↕ nearest")
@@ -2007,12 +2033,16 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		content = append(content, wrapStyle.Render(eval.StretchEvidence))
 	}
 
-	// role_track is a display/sort facet, never a gate (see model.JobRow's
-	// RoleTrack doc): a labeled holdout found zero people managers among 49
-	// title-only-signal postings, and ~40% of postings never say who
-	// reports to whom at all. "unknown" is the expected answer for that
-	// large minority, not a classifier failure, so it stays silent here
-	// rather than showing on every row.
+	// role_track is a display facet here and never a scan-time or database
+	// gate (see model.JobRow's RoleTrack doc): a labeled holdout found zero
+	// people managers among 49 title-only-signal postings, and ~40% of
+	// postings never say who reports to whom at all. "unknown" is the
+	// expected answer for that large minority, not a classifier failure,
+	// so it stays silent here rather than showing on every row. The [r]
+	// key on this screen offers an opt-in, default-off VIEW filter on top
+	// of this same field (model.JobRow.IsManagerTrack) -- it only narrows
+	// what's displayed, never what's stored, so this detail pane is
+	// unaffected by it.
 	if eval.RoleTrack == "manager" || eval.RoleTrack == "player_coach" {
 		content = append(content, "")
 		label := "Manager role"
@@ -2285,6 +2315,7 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("e") + descStyle.Render(" emp type  ") +
 			keyStyle.Render("d") + descStyle.Render(" nearest  ") +
 			keyStyle.Render("p") + descStyle.Render(" pay  ") +
+			keyStyle.Render("r") + descStyle.Render(" managers  ") +
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("m") + descStyle.Render(" matrix  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +

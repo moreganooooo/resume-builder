@@ -155,29 +155,191 @@ cheap stratum (like `neither`) already separates the classes cleanly,
 and which band (`title-only`) the classifier actually has to earn its
 score on.
 
-### Current state (as of this doc)
+### Current state (as of 2026-09-02)
 
 - **134/134 rows labeled** (completed 2026-09-01).
-- `role_track` predictions are **not yet computed for any job** — the
-  field postdates the last full evaluation pass, so 0 of the (then)
-  2,510 jobs in `data.db` carried a `role_track` value at all. There is
-  currently nothing to compare the hand labels against.
 - The 134 labeled jobs' full source text was preserved separately in
   `profiles/<profile>/role_track_holdout_source.json` (job_id → title/
   company/raw_text) ahead of a 2026-09-01 pipeline wipe, specifically so
   the labeling work stays usable once fresh evaluations exist to compare
   against.
+- **The comparison described below as "still unbuilt" has since been
+  built and run**: `scripts/eval_role_track.py` re-runs the real
+  `evaluate_capability.md` prompt against each holdout row's preserved
+  text and reports a confusion matrix + per-stratum precision/recall on
+  the excluded class (`manager`/`player_coach`). It makes real, billable
+  Gemini calls, so it's a manual/on-demand script, not part of CI.
+  Usage: `python scripts/eval_role_track.py --profile morgan [--limit N]`.
+
+### Measured result: 90.3% precision / 90.3% recall (2026-09-02)
+
+This clears the design's own ≥90% precision bar on the excluded class.
+Getting here took one holdout correction and two prompt experiments,
+both of which failed — recorded below so neither is re-attempted without
+new evidence.
+
+**Holdout audit.** The first eval run scored 90.3% precision but only
+87.5% recall, with 3 genuine-looking misses in the two single-signal
+strata (`title-only`, `body-only`) — the model predicted `ic` on rows
+hand-labeled `manager`. Before assuming the model was wrong, the full
+raw posting text and the labeler's own `note` field were pulled for all
+3 rows (there are only 3 `manager`-labeled single-signal rows in the
+whole 134-row holdout, so this was exhaustive, not a sample):
+
+- **2 of 3 (`body-only`, both "Revenue Strategy & Operations" @
+  Anthropic — a role posted twice) were correct labels.** The note
+  correctly invokes the prompt's own stated rule: the posting says "no
+  direct reports initially... you will build the team over time," which
+  the prompt explicitly defines as `manager`, not `ic`. These are real
+  model misses (see below).
+- **1 of 3 (`title-only`, "Partner Sales Manager, Systems Integrators" @
+  Anthropic) was a mislabel, now corrected.** Its only manager-shaped
+  language is "hold that partner accountable for the outcomes they
+  own" — but the partners being held accountable are external partner
+  companies (boutiques/regional Systems Integrators), not direct
+  reports. There's no headcount, hiring, or performance-review language
+  anywhere in the posting, and the role itself reports INTO "GTM
+  Partnerships EMEA." It doesn't meet the prompt's own manager criteria.
+  Relabeled `manager` → `ic` in `role_track_holdout.csv`, with the
+  rationale appended to that row's `note` field.
+
+Fixing the mislabel moved recall from 87.5% → 90.3% with precision
+unchanged (90.3%), and fully resolved the `title-only` stratum's
+apparent 0% recall — it turned out to have zero genuine misses once the
+bad label was fixed.
+
+**The one remaining genuine miss** (the two Anthropic "Revenue Strategy
+& Operations" `body-only` rows, which are the same posting seen twice)
+is a real model failure to apply the prompt's own explicit
+reports-come-later rule.
+
+### What was tried and didn't work
+
+The research question after the audit was whether this miss is
+class-imbalance / low-confidence hedging (the model defaulting to the
+majority class `ic` under uncertainty) or something else. It's not:
+
+- **Repeatability test (temp=0.7, 8 calls) — the miss is deterministic,
+  not noise.** All 8 calls returned `role_track: "ic"` at
+  `role_track_confidence: "high"`, and all 8 correctly quoted "no direct
+  reports initially" (or the equivalent surrounding phrase) as their
+  `role_track_evidence` — i.e. the model isn't uncertain and isn't
+  missing the trigger phrase. It reads the exact rule-triggering text,
+  identifies it as the deciding evidence, and still concludes `ic`. This
+  falsifies the majority-class-defaulting theory for this failure mode:
+  it's a confident, repeatable misapplication of a known rule, not
+  hedging under ambiguity.
+
+- **Experiment 1 (rejected, not attempted): broad "Kamsa" four-dimension
+  rubric.** Restructuring the whole `role_track` paragraph into a
+  multi-dimension rubric was tried earlier in this project's history and
+  made things worse — 87.5% precision / 87.5% recall, no recall gain,
+  plus one new false positive. Not worth repeating without a
+  fundamentally different structural idea.
+
+- **Experiment 2 (tried 2026-09-02, null result): surgical hard-rule
+  reinforcement.** Added one sentence to `evaluate_capability.md`'s
+  `role_track` paragraph, immediately after the existing
+  reports-come-later example: *"This is a hard rule, not a factor to
+  weigh against other signals: if the phrase you are about to quote in
+  `role_track_evidence` says or implies reports are coming later, your
+  `role_track` MUST be `manager`. Quoting a 'no reports initially' style
+  phrase as evidence for `ic` is always wrong — that phrase is manager
+  evidence by definition, never ic evidence."* Repeatability-tested
+  (temp=0.7, 8 calls) against the exact same miss both before and after:
+  **8/8 → 8/8, zero change** — identical `ic` verdict, identical
+  confidence, identical evidence quote. The prompt edit was reverted
+  (`evaluate_capability.md` is back to its original wording; no net diff
+  survives from this experiment). This is a stronger, more targeted
+  version of the "make the rule more explicit" idea than the Kamsa
+  rubric, and it still didn't move this specific case — the model isn't
+  failing to find or understand the rule, it's failing to apply it
+  consistently even when told to. A future fix attempt for this specific
+  pattern likely needs new evidence (e.g. a larger sample of similar
+  misses to look for a common structural cause) rather than another
+  prompt-wording iteration.
+
+Given the corpus now scores 90.3%/90.3% against a design bar of ≥90%,
+with the one remaining known gap being a single, prompt-immune edge
+case, `role_track` graduation to any kind of opt-in filter should treat
+this as evidence the design bar is met, not as a reason to hold off
+pending a fix for the one remaining miss.
+
+### The high-confidence gate: all 3 false positives are already high-confidence
+
+Before shipping any opt-in filter, the natural follow-up question is
+whether gating on `role_track_confidence == "high"` (on top of the
+verdict) improves precision further. `eval_role_track.py`'s
+per-confidence breakdown already existed in the script (nothing new to
+build) — it just hadn't been run and read. It has now:
+
+```
+Per confidence level (scoreable rows only):
+  high     precision= 90.3%  recall= 90.3%  n=90
+  medium   precision=  nan%  recall=  nan%  n=3
+```
+
+(`low` confidence never appears here — of the 2 `low`-confidence
+predictions in the full 134-row run, both were `role_track: "unknown"`
+on `unclear`-labeled rows, so neither is scoreable.)
+
+**All 31 manager/player_coach predictions — the 28 true positives and
+all 3 false positives — were made at `high` confidence.** None of the 3
+false positives are `medium` or `low`. That means the high-confidence
+gate is a no-op on this holdout: precision at the gate is 90.3%,
+identical to the ungated number, because there was nothing at a lower
+confidence to filter out. This lands on the "all high confidence" row
+of the scenario table above — the floor of the range, not an
+improvement, but still clearing the ≥90% bar with nothing left on the
+table to gain from confidence-gating alone.
+
+The 3 false positives, for the record:
+
+| Posting | Predicted | Label |
+|---|---|---|
+| "Influencer Marketing Lead" @ Aftershoot | manager (high) | ic |
+| "Marketing Automation SaaS + Services Line of Business Owner" @ New Law Business Model | manager (high) | ic |
+| "Sr. Customer Success Executive" @ Lumahealth | manager (high) | ic |
+
+None of these three were investigated further (unlike the one known
+false negative above) — three isolated postings with no shared
+structural pattern, versus the Anthropic case's clean 8/8 repeatability
+signal, don't justify the same depth of investigation for a metric
+that already clears its bar.
+
+## Where this landed: opt-in Jobs-screen view filter (2026-09-02)
+
+`role_track` graduated to an opt-in, default-OFF **view filter** on the
+Jobs screen — deliberately not a scan-time or database gate. The
+distinction matters given the one known false negative above: a
+scan-time filter would permanently drop a posting like the Anthropic
+"build the team over time" case from the corpus, with no way to recover
+it once the classifier missed it. A view filter can't do that — every
+posting is still scanned, evaluated, and saved to `data.db` exactly as
+before, regardless of `role_track`. The filter only narrows what the
+Jobs list *displays*, and toggling it off always shows everything
+again, including postings the classifier missed or scored low-confidence.
+
+- **Gate**: `model.JobRow.IsManagerTrack()` — `role_track` is `manager`
+  OR `player_coach` (a player-coach still manages people, and is
+  scored as part of the same excluded class by
+  `eval_role_track.py`'s `MANAGER_VERDICTS`), AND
+  `role_track_confidence == "high"`.
+- **Control**: the `[r]` key on the Jobs screen (`JobsModel.roleTrackFilter`,
+  `dashboard/internal/ui/screens/jobs.go`) — same shape as the existing
+  `[w]`/`[e]`/`[$]` view filters on that screen, but a single boolean
+  rather than a multi-value cycle, since the measured ≥90% precision bar
+  only covers the combined manager/player_coach class at high confidence
+  specifically — there's no other value worth exposing as a filter
+  option.
+- **Default**: off. Nothing changes for a user who never presses `[r]`.
 
 ## What's still unbuilt
 
-There is **no script that computes precision/accuracy of the model's
-`role_track` predictions against the hand labels**. `status()` only
-cross-tabs stratum vs. label — it has no column for what the model
-actually predicted, by design (the holdout stays blind). Building that
-comparison is the natural next step once a fresh batch of evaluations
-exists (see `role_track_holdout_source.json` above): re-run those 134
-preserved postings through `evaluate_capability`, join predictions
-against the hand labels by `job_id`, and report precision per stratum —
-especially on the excluded class, against the design's ≥90% bar. Only
-past that measurement should `role_track` be considered for graduation
-from display-only to any kind of opt-in filter.
+Nothing structural — the precision/recall comparison against hand
+labels, the confidence-level breakdown, and the opt-in filter itself are
+all built and have been run/shipped. What's left is process, not code:
+re-running `eval_role_track.py` periodically as the prompt or holdout
+changes, and expanding the holdout past 134 rows if the filter's
+observed real-world miss rate ever suggests the current confidence
+interval is too wide to trust.
