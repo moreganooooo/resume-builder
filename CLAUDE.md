@@ -865,7 +865,7 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   / `CapabilityEvaluationSchema`, and it is a SORT/display facet, never a
   gate -- do not build an exclusion filter on it without a labeled
   accuracy bar first.** `scripts/build_role_track_holdout.py`'s hand
-  labels (103/134 done) measure why: of 49 postings whose only manager
+  labels (134/134 done) measure why: of 49 postings whose only manager
   signal was the title (`title-only` + `neither` strata), **zero** were
   people managers, while `title+body` is 29 managers of 40 -- title
   carries no signal, body evidence does. The schema's negative
@@ -888,6 +888,45 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `--refresh-excerpts` rewrites excerpts for an already-labeled CSV in
   place (label/note untouched) rather than requiring `--force`, which
   would discard the labels to get wider text.
+  `scripts/eval_role_track.py` (real Gemini calls, manual/not-CI) now
+  measures actual model precision/recall against the holdout: **90.3%
+  precision / 90.3% recall** as of 2026-09-02, after fixing one holdout
+  mislabel (a `title-only` "Partner Sales Manager" row was labeled
+  `manager` on the phrase "hold that partner accountable for the
+  outcomes they own" -- that's holding an external partner company
+  accountable, not a direct report; no headcount/hiring/review language
+  anywhere and the role itself reports INTO another team, so it doesn't
+  meet the prompt's own manager criteria; relabeled to `ic`). One
+  genuine miss remains (`body-only`, an Anthropic "Revenue Strategy &
+  Operations" posting containing "no direct reports initially... you
+  will build the team over time" -- exactly the prompt's own
+  reports-come-later example) and it is **not a class-imbalance/
+  low-confidence artifact**: repeatability-tested at temperature=0.7,
+  8/8 calls returned `ic` at `high` confidence, correctly quoting the
+  trigger phrase as evidence while still concluding `ic`. Two prompt
+  fixes were tried and both are confirmed NULL results, don't retry
+  either without new evidence: (1) a broader four-dimension "Kamsa"
+  rubric restructuring the whole role_track paragraph -- made things
+  worse (87.5%/87.5%, one new false positive); (2) a surgical one-clause
+  hard-rule addition ("if the phrase you are about to quote says or
+  implies reports are coming later, `role_track` MUST be `manager`") --
+  zero measured effect, identical 8/8 `ic` verdict and evidence quote
+  before and after. The per-confidence breakdown was already in
+  `eval_role_track.py` (nothing to build) but had never been run and
+  read: all 31 manager/player_coach predictions on the 134-row
+  holdout -- the 28 true positives AND all 3 false positives -- came
+  back at `role_track_confidence: "high"`. A confidence gate on top of
+  the verdict is therefore a no-op on this holdout (precision stays
+  90.3% either way), which is the "all high confidence" floor of the
+  scenario table in `docs/role_track.md`, not an improvement -- but
+  still clears the ≥90% bar. `role_track` has since graduated to an
+  opt-in, default-OFF **Jobs-screen view filter** (`[r]` key,
+  `model.JobRow.IsManagerTrack()`, `dashboard/internal/ui/screens/jobs.go`)
+  gated on manager-or-player_coach at high confidence -- deliberately a
+  VIEW filter, not a scan-time/database gate, so the one known false
+  negative (the Anthropic case above) never gets permanently dropped
+  from the corpus; toggling the filter off always shows every posting
+  again. Full history in `docs/role_track.md`.
 - **`evaluate_all_pending(skip_evaluated=False)` was DEAD, and the shape
   of that bug recurs.** Its default work list came from
   `unevaluated_roles()`, which by definition holds nothing that has a
