@@ -184,6 +184,8 @@ def evaluate_all_pending(
     than dead -- it would spend an API call per role without being asked
     -- so the caller names the date.
     """
+    auto_derived = pending_paths is None
+
     if pending_paths is None:
         import picker
 
@@ -218,6 +220,31 @@ def evaluate_all_pending(
             cli_art.print_literal(
                 f"Skipping {len(already_evaluated)} already-evaluated JD(s); evaluating {len(pending_paths)} new one(s)."
             )
+
+    # Gate check runs only on an auto-derived work list, not an explicit
+    # caller-supplied pick (resume run --pick choosing one specific JD
+    # should still evaluate it) -- see find_retroactively_excluded_roles.py
+    # for why this exists: scan_filters.yml can change after a role was
+    # scraped but before it's evaluated, and nothing else re-checks that.
+    if auto_derived and pending_paths:
+        import find_retroactively_excluded_roles as fre
+        import profile_paths
+
+        pending_paths, gate_excluded = fre.filter_gate_passing(
+            pending_paths, profile_paths.active_profile()
+        )
+        if gate_excluded:
+            cli_art.print_literal(
+                f"Excluding {len(gate_excluded)} role(s) that no longer pass today's "
+                f"scan filters; evaluating {len(pending_paths)}. Run "
+                "`python scripts/find_retroactively_excluded_roles.py` to review and "
+                "archive them."
+            )
+            for finding in gate_excluded:
+                cli_art.print_literal(
+                    f"  [{finding['company']}] {finding['title']} -- "
+                    + ", ".join(finding["gate_failures"])
+                )
 
     engine = orchestrator.ResumeEngine()
     results = []
