@@ -54,6 +54,11 @@ _COMPENSATION_RE = re.compile(
     re.MULTILINE,
 )
 
+_SCORING_WEIGHTS_RE = re.compile(
+    r"^scoring_weights:[ \t]*\n(?:[ \t]+[^\n]*\n|[ \t]*\n(?=[ \t]+\S))*",
+    re.MULTILINE,
+)
+
 # Ordered so the written block reads top to bottom the way someone would
 # describe the constraint. Keys are the ones compensation.py and
 # work_hours.py read; a key here that neither reads is a setting that
@@ -98,6 +103,44 @@ TRAVEL_CHOICES = [
     (50, "Up to 50% -- half your time on the road"),
 ]
 
+# Unlike everything above, these don't decide which postings survive
+# scanning -- they tune how already-surviving postings get RANKED by
+# orchestrator.fit_composite_score()/evaluate_fit()'s prestige/funnel
+# calibration. Kept in this file because scan_filters.yml is the one
+# place per-profile filtering config lives, but exposed through its own
+# Settings entry (run_scoring_weights_settings(), not folded into
+# run_content_settings()) since "how stress signals affect ranking" is a
+# different kind of decision than "what postings to admit at all".
+_SCORING_WEIGHTS_KEYS = (
+    "stress_signal_penalty_per_category",
+    "stress_signal_max_penalty",
+    "low_stress_bonus",
+    "stretch_gap_penalty_per_item",
+    "stretch_gap_max_penalty",
+    "funnel_friction_nudge",
+)
+
+# Mirrors orchestrator.py's hardcoded module constants exactly, so an
+# unedited scan_filters.yml produces identical scoring to before this
+# setting existed.
+DEFAULT_SCORING_WEIGHTS = {
+    "stress_signal_penalty_per_category": 0.25,
+    "stress_signal_max_penalty": 0.75,
+    "low_stress_bonus": 0.40,
+    "stretch_gap_penalty_per_item": 0.20,
+    "stretch_gap_max_penalty": 0.80,
+    "funnel_friction_nudge": 1,
+}
+
+SCORING_WEIGHT_LABELS = {
+    "stress_signal_penalty_per_category": "Penalty per detected stress-signal category",
+    "stress_signal_max_penalty": "Max total stress-signal penalty",
+    "low_stress_bonus": "Bonus for zero detected stress signals",
+    "stretch_gap_penalty_per_item": "Penalty per capability gap",
+    "stretch_gap_max_penalty": "Max total capability-gap penalty",
+    "funnel_friction_nudge": "Remote/onsite funnel-friction nudge (+/-)",
+}
+
 
 def scan_filters_path(profile: str | None = None) -> str:
     root = profile_paths.profile_root(profile or profile_paths.active_profile())
@@ -131,7 +174,38 @@ def read_settings(path: str | None = None) -> dict:
         kept = {k: pay[k] for k in _COMPENSATION_KEYS if pay.get(k) not in (None, "")}
         if kept:
             settings["compensation"] = kept
+    weights = data.get("scoring_weights")
+    if isinstance(weights, dict):
+        kept = {
+            k: weights[k]
+            for k in _SCORING_WEIGHTS_KEYS
+            if weights.get(k) not in (None, "")
+        }
+        if kept:
+            settings["scoring_weights"] = kept
     return settings
+
+
+def read_scoring_weights(path: str | None = None) -> dict:
+    """DEFAULT_SCORING_WEIGHTS merged with any profile override -- what
+    orchestrator.py actually reads. Always returns all six keys, so a
+    caller never has to fall back itself."""
+    overrides = read_settings(path).get("scoring_weights") or {}
+    merged = dict(DEFAULT_SCORING_WEIGHTS)
+    merged.update(overrides)
+    return merged
+
+
+def describe_scoring_weights(weights: dict | None) -> str:
+    """One line for the menu header -- only mentions keys that differ
+    from the default, since the common case is "unedited"."""
+    weights = weights or {}
+    changed = [
+        f"{key}={weights[key]}"
+        for key in _SCORING_WEIGHTS_KEYS
+        if key in weights and weights[key] != DEFAULT_SCORING_WEIGHTS[key]
+    ]
+    return ", ".join(changed) if changed else "defaults (unedited)"
 
 
 def describe(settings: dict) -> str:
@@ -272,6 +346,20 @@ def write_settings(settings: dict, path: str | None = None) -> None:
         updated = _replace_or_append(updated, _COMPENSATION_RE, block)
     else:
         updated = _COMPENSATION_RE.sub("", updated, count=1)
+
+    weights = settings.get("scoring_weights") or {}
+    weights = {
+        k: weights[k] for k in _SCORING_WEIGHTS_KEYS if weights.get(k) not in (None, "")
+    }
+    if weights:
+        block = "scoring_weights:\n" + "".join(
+            f"  {key}: {_yaml_scalar(weights[key])}\n"
+            for key in _SCORING_WEIGHTS_KEYS
+            if key in weights
+        )
+        updated = _replace_or_append(updated, _SCORING_WEIGHTS_RE, block)
+    else:
+        updated = _SCORING_WEIGHTS_RE.sub("", updated, count=1)
 
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(updated)
@@ -512,14 +600,99 @@ def run_content_settings() -> None:
         )
 
 
+def run_scoring_weights_settings() -> None:
+    """Interactive editor for the composite-score tuning constants.
+
+    Separate menu from run_content_settings() on purpose -- these don't
+    gate which postings survive scanning, they tune how already-
+    surviving postings get ranked, which is a different kind of decision.
+    """
+    path = scan_filters_path()
+    if not os.path.exists(path):
+        cli_art.console.print(
+            f"{cli_art.WARNING} No scan_filters.yml for this profile yet.",
+            soft_wrap=True,
+        )
+        return
+
+    current = read_settings(path)
+    weights = dict(current.get("scoring_weights") or {})
+    cli_art.console.print(
+        f"\n  Current scoring weights: [cyan]{describe_scoring_weights(weights)}[/cyan]\n",
+        soft_wrap=True,
+    )
+
+    import questionary
+
+    action = cli_art.select(
+        "Scoring weights & preferences:",
+        choices=[
+            questionary.Choice(
+                f"Edit: {SCORING_WEIGHT_LABELS[key]} "
+                f"(currently {weights.get(key, DEFAULT_SCORING_WEIGHTS[key])})",
+                value=key,
+            )
+            for key in _SCORING_WEIGHTS_KEYS
+        ]
+        + [
+            questionary.Choice("Reset all to defaults", value="reset"),
+            questionary.Choice("Back", value="back"),
+        ],
+    )
+    if action in (None, "back"):
+        return
+
+    if action == "reset":
+        current.pop("scoring_weights", None)
+        write_settings(current, path)
+        cli_art.console.print(
+            f"{cli_art.SUCCESS} Scoring weights reset to defaults.", soft_wrap=True
+        )
+        return
+
+    key = action
+    default = DEFAULT_SCORING_WEIGHTS[key]
+    raw = cli_art.text(
+        f"{SCORING_WEIGHT_LABELS[key]} (blank for default {default}):",
+        default=_scalar_default(weights.get(key)),
+    )
+    if raw is None:
+        return
+    if not raw.strip():
+        weights.pop(key, None)
+    else:
+        try:
+            parsed = float(raw)
+        except ValueError:
+            cli_art.console.print(
+                f"{cli_art.WARNING} Couldn't read {raw!r} as a number.",
+                soft_wrap=True,
+            )
+            return
+        weights[key] = parsed
+
+    current["scoring_weights"] = weights
+    write_settings(current, path)
+    cli_art.console.print(
+        f"{cli_art.SUCCESS} Scoring weights: "
+        f"{describe_scoring_weights(read_settings(path).get('scoring_weights'))}",
+        soft_wrap=True,
+    )
+
+
 __all__ = [
+    "DEFAULT_SCORING_WEIGHTS",
     "EMPLOYMENT_LABELS",
+    "SCORING_WEIGHT_LABELS",
     "describe_pay",
+    "describe_scoring_weights",
     "LANGUAGE_LABELS",
     "TRAVEL_CHOICES",
     "describe",
+    "read_scoring_weights",
     "read_settings",
     "run_content_settings",
+    "run_scoring_weights_settings",
     "scan_filters_path",
     "write_settings",
 ]
