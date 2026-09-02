@@ -555,3 +555,83 @@ def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict
         return LocationVerdict(True, workplace, miles, label)
 
     return LocationVerdict(True, workplace, None, "no radius configured")
+
+
+# "Hybrid preferred" is body prose, not the `location` field's workplace
+# classification -- a posting can say "Remote" (so classify_workplace()
+# calls it REMOTE and evaluate_location() short-circuits past the radius
+# entirely) while its own description separately prefers hybrid
+# candidates. That combination is exactly what the radius gate above
+# cannot see, because it never reads the description. Deliberately
+# narrow: "hybrid required"/"hybrid" alone is already caught by the
+# workplace classifier and the keyword `block:` list; only a stated
+# PREFERENCE, which reads as optional and could otherwise slip through
+# as if fully remote, needs this second check.
+_HYBRID_PREFERRED_PATTERNS = (
+    re.compile(
+        r"hybrid\s+(?:work\s+)?(?:schedule\s+)?(?:is\s+)?preferred", re.IGNORECASE
+    ),
+    re.compile(
+        r"prefer(?:ence|red|s)?\s+(?:is\s+)?(?:given\s+to\s+)?"
+        r"(?:for\s+)?candidates?\s+(?:who\s+can\s+|able\s+to\s+)?work\s+hybrid",
+        re.IGNORECASE,
+    ),
+    re.compile(r"prefer(?:ence|red|s)?\s+for\s+hybrid", re.IGNORECASE),
+    re.compile(r"ideally\s+hybrid", re.IGNORECASE),
+)
+
+
+def mentions_hybrid_preferred(text: str) -> bool:
+    """True when a posting's body expresses a PREFERENCE for hybrid work,
+    as distinct from a requirement (already caught upstream). A stated
+    requirement reads as a hard no from far away; a stated preference
+    reads as optional -- and is exactly the case a candidate outside
+    commuting range would otherwise never learn about until an interview.
+    """
+    if not text:
+        return False
+    return any(p.search(text) for p in _HYBRID_PREFERRED_PATTERNS)
+
+
+def evaluate_hybrid_preference(
+    location: str, description: str, config: dict
+) -> LocationVerdict | None:
+    """Hard-excludes a "hybrid preferred" posting that resolves farther
+    than the configured radius, even though its `location` field or
+    workplace classification already said REMOTE.
+
+    Returns None when the check does not apply -- no hybrid-preferred
+    language found, or no origin/radius configured -- so a caller can
+    tell "not evaluated" from "evaluated and passed". Uses the same
+    `location:` radius the general onsite/hybrid gate uses, per this
+    project's rule that a personal threshold like this lives in
+    scan_filters.yml, not as a second hardcoded constant that could drift
+    from the one the user already configured.
+    """
+    if not config or not mentions_hybrid_preferred(description):
+        return None
+    origin = origin_from_config(config)
+    radius = config.get("radius_miles")
+    if not origin or not radius:
+        return None
+
+    miles, hub = nearest_hub_distance(location, origin)
+    if miles is None:
+        # Unresolvable is NOT far -- same convention as the radius gate
+        # above: surfacing an unknown is cheap, silently dropping a
+        # commutable role is not.
+        return LocationVerdict(
+            True,
+            HYBRID,
+            None,
+            "hybrid preferred; location not resolvable, kept for review",
+        )
+    if miles > float(radius):
+        return LocationVerdict(
+            False,
+            HYBRID,
+            miles,
+            f"hybrid preferred and {miles:.0f} mi exceeds {radius} mi radius",
+        )
+    label = f"hybrid preferred; {miles:.1f} mi" + (f" ({hub})" if hub else "")
+    return LocationVerdict(True, HYBRID, miles, label)

@@ -638,6 +638,30 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   permissive "unresolvable" bucket -- adzuna did exactly this by
   reporting "Buffalo, Erie County" (city, COUNTY) until it was mapped
   from its structured `area` array instead.
+- **"Hybrid preferred" is a second, later chokepoint, not a third
+  location gate.** `location_filter.evaluate_location()` short-circuits
+  past the radius entirely once it classifies a posting REMOTE -- so a
+  posting whose `location` field says "Remote" but whose BODY separately
+  prefers hybrid candidates sailed through unrestricted, because that
+  preference lives in prose the location gate never reads. It can't be
+  checked at the same point as the general radius gate either: that gate
+  runs before the description is fetched (the whole reason
+  `_passes_location_filter` takes only a location string), and prose
+  requires the description to exist. `location_filter.evaluate_hybrid_preference()`
+  is called from `scan_boards._passes_hybrid_preference_filter()` at the
+  same point as the hours/compensation gates -- after the description
+  exists -- and reuses the SAME `location:` radius the general gate
+  uses, deliberately, rather than a second hardcoded threshold that
+  could drift from what the user actually configured. Deliberately
+  narrow: it only fires on a stated PREFERENCE ("hybrid preferred",
+  "ideally hybrid") -- a stated REQUIREMENT is already caught by
+  `classify_workplace()`/the keyword `block:` list, so matching that too
+  would just duplicate an existing rejection. Resolves distance from the
+  `location` field's own named city, same as the general radius gate --
+  it does not scan the description for a city, so "Remote (US)" with a
+  hybrid-preferred body and no named office stays in the permissive
+  "unresolvable, kept for review" bucket, per the same
+  unresolvable-is-not-far rule as everywhere else in this file.
 - **Aggregators are discovery sources; ATS boards are text sources.**
   Measured: greenhouse a median of 8,898 description characters,
   workday 8,427, indeed 3,983 -- versus jooble ~275 and adzuna EXACTLY
@@ -886,3 +910,26 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `_PAY_ANCHOR`/`_BENEFIT_NEAR` exist to exclude. Any future subscore
   that references a user setting must actually be SENT that setting --
   grep the prompt before trusting a schema description.
+- **Stress and stretch enter `composite_score` as Python math, never an
+  LLM subscore -- same reasoning as the proximity bonus and stale-posting
+  penalty.** `orchestrator.fit_composite_score()` takes
+  `stress_signal_count` (the number of `scripts/stress_signals.py`
+  categories detected in the posting's own body, computed fresh each
+  evaluation in `rescore_evaluation_with_location()`, never persisted) and
+  `capability_gap_count` (`len(capability_gaps)`, a deterministic count
+  distinct from `fit_subscores.level_plausibility`'s already-weighted
+  subjective screen-risk judgment). Weighted asymmetrically by explicit
+  user request: a posting with zero detected stress categories earns
+  `LOW_STRESS_BONUS` (0.40), larger than the cost of any single detected
+  category (`STRESS_SIGNAL_PENALTY_PER_CATEGORY`, 0.25, capped at 0.75) --
+  finding a comfortable role is the stated goal, not merely avoiding red
+  flags, so "clean" is rewarded rather than just spared a penalty.
+  `capability_gaps` costs `STRETCH_GAP_PENALTY_PER_ITEM` (0.20/gap,
+  capped at 0.80). Unlike `compensation.annual_floor` or
+  `location.radius_miles`, these are NOT a Settings & Upkeep control --
+  they're composite-scoring tuning constants in the same category as
+  `FIT_SUBSCORE_WEIGHTS`/`STALE_POSTING_PENALTY_PER_DAY`, chosen to match
+  a stated preference rather than a corpus-measured precision number (see
+  docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md
+  for the caveat that this skipped the corpus-validation step `role_track`
+  and `work_hours.py`/`compensation.py` all went through first).
