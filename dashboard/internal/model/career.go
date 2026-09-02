@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // CareerApplication represents a single job application from the tracker.
 type CareerApplication struct {
 	Number       int
@@ -29,6 +31,70 @@ type CareerApplication struct {
 	TlDr         string
 	Remote       string
 	CompEstimate string
+
+	// Filter-parity fields with Jobs (dashboard/internal/model/job.go's
+	// JobRow) -- populated by data.JobRowsToApplications straight from
+	// the same JobRow/Evaluation the Jobs screen reads, not derived from
+	// Notes free-text the way WorkMode/PayRange above are. Kept as plain
+	// data here (not JobRow itself) because Pipeline's row type predates
+	// JobRow and this avoids reshaping every other Pipeline field at once.
+	Workplace           string // "remote" | "hybrid" | "onsite" | "unknown", matches model.WorkplaceRemote etc.
+	EmploymentType      []string
+	EmploymentTypeRaw   string
+	PayText             string
+	HasStatedPay        bool
+	HoursText           string
+	StressSignals       []string
+	CapabilityGaps      []string
+	RoleTrack           string
+	RoleTrackConfidence string
+	ExperienceBlockers  []HardBlocker
+}
+
+// EmploymentLabel renders the employment type for a list cell, mirroring
+// JobRow.EmploymentLabel() -- same "" means nothing stated convention.
+func (a CareerApplication) EmploymentLabel() string {
+	if len(a.EmploymentType) > 0 {
+		parts := make([]string, 0, len(a.EmploymentType))
+		for _, t := range a.EmploymentType {
+			if label, ok := EmploymentLabels[t]; ok {
+				parts = append(parts, label)
+			} else {
+				parts = append(parts, t)
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
+	return strings.TrimSpace(a.EmploymentTypeRaw)
+}
+
+// HasEmploymentType reports whether this application is offered as the
+// given canonical type. Mirrors JobRow.HasEmploymentType().
+func (a CareerApplication) HasEmploymentType(want string) bool {
+	for _, t := range a.EmploymentType {
+		if t == want {
+			return true
+		}
+	}
+	return false
+}
+
+// IsManagerTrack mirrors JobRow.IsManagerTrack(): RoleTrack manager OR
+// player_coach AND RoleTrackConfidence high -- the same >=90% precision
+// gate, see docs/role_track.md.
+func (a CareerApplication) IsManagerTrack() bool {
+	return (a.RoleTrack == "manager" || a.RoleTrack == "player_coach") &&
+		a.RoleTrackConfidence == "high"
+}
+
+// HasStressSignals reports whether any stress-phrase category was detected.
+func (a CareerApplication) HasStressSignals() bool {
+	return len(a.StressSignals) > 0
+}
+
+// HasCapabilityGaps reports whether the evaluation flagged any capability gap.
+func (a CareerApplication) HasCapabilityGaps() bool {
+	return len(a.CapabilityGaps) > 0
 }
 
 // PipelineMetrics holds aggregate stats for the pipeline dashboard.
@@ -114,7 +180,6 @@ type FunnelDrilldownStage struct {
 	Conversion float64
 	Friction   string
 }
-
 
 // PlatformStat holds aggregate stats for a single job source/ATS.
 type PlatformStat struct {

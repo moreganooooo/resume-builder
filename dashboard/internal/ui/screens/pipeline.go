@@ -157,6 +157,16 @@ type PipelineModel struct {
 	searchInput bool   // true while the user is typing the query
 	searchQuery string // committed (or in-progress) lowercased query
 
+	// Filter parity with Jobs (jobs.go's [w]/[e]/[$]/[r] filters) -- same
+	// predicates, mirrored onto CareerApplication (see model/career.go).
+	// roleTrackFilter uses [t] here instead of Jobs' [r], since [r] is
+	// already Pipeline's refresh key.
+	workplaceFilter         string
+	employmentFilter        string
+	payFilter               string
+	roleTrackFilter         bool
+	experienceBlockerFilter bool
+
 	// notice explains why a keypress was a no-op (e.g. "o" with no saved
 	// URL) instead of silently doing nothing. Cleared on the next keypress,
 	// same dismiss convention as jobs.go's actionError.
@@ -512,6 +522,36 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 			m.viewMode = "grouped"
 		}
 
+	case "w":
+		m.workplaceFilter = nextWorkplaceFilter(m.workplaceFilter)
+		m.applyFilterAndSort()
+		m.cursor = 0
+		m.scrollOffset = 0
+
+	case "e":
+		m.employmentFilter = nextEmploymentFilter(m.employmentFilter)
+		m.applyFilterAndSort()
+		m.cursor = 0
+		m.scrollOffset = 0
+
+	case "$":
+		m.payFilter = nextPayFilter(m.payFilter)
+		m.applyFilterAndSort()
+		m.cursor = 0
+		m.scrollOffset = 0
+
+	case "t":
+		m.roleTrackFilter = !m.roleTrackFilter
+		m.applyFilterAndSort()
+		m.cursor = 0
+		m.scrollOffset = 0
+
+	case "x":
+		m.experienceBlockerFilter = !m.experienceBlockerFilter
+		m.applyFilterAndSort()
+		m.cursor = 0
+		m.scrollOffset = 0
+
 	case "enter":
 		if app, ok := m.CurrentApp(); ok && app.ReportPath != "" {
 			fullPath := filepath.Join(m.careerOpsPath, app.ReportPath)
@@ -750,6 +790,9 @@ func (m *PipelineModel) applyFilterAndSort() {
 		if !matchesSearch(app, m.searchQuery) {
 			continue
 		}
+		if !matchesPipelineFilters(app, *m) {
+			continue
+		}
 		norm := data.NormalizeStatus(app.Status)
 		switch currentFilter {
 		case filterAll:
@@ -782,6 +825,31 @@ func (m *PipelineModel) applyFilterAndSort() {
 	}
 
 	m.filtered = filtered
+}
+
+// matchesPipelineFilters applies the [w]/[e]/[$]/[t]/[x] opt-in view
+// filters, same predicates as jobs.go's applyFilter. Empty/false means no
+// restriction, same "opt-in, never a permanent gate" convention as Jobs.
+func matchesPipelineFilters(app model.CareerApplication, m PipelineModel) bool {
+	if m.workplaceFilter != "" && app.Workplace != m.workplaceFilter {
+		return false
+	}
+	if m.employmentFilter != "" && !app.HasEmploymentType(m.employmentFilter) {
+		return false
+	}
+	if m.payFilter == "stated" && !app.HasStatedPay {
+		return false
+	}
+	if m.payFilter == "unstated" && app.HasStatedPay {
+		return false
+	}
+	if m.roleTrackFilter && !app.IsManagerTrack() {
+		return false
+	}
+	if m.experienceBlockerFilter && len(app.ExperienceBlockers) == 0 {
+		return false
+	}
+	return true
 }
 
 func (m PipelineModel) sortLess() func(a, b model.CareerApplication) bool {
@@ -904,6 +972,13 @@ var pipelineHelpCategories = []helpCategory{
 		{"s", "Cycle sort mode"},
 		{"v", "Toggle grouped/flat view"},
 		{"p", "Open Progress screen"},
+	}},
+	{"Filters", []helpBinding{
+		{"w", "Cycle workplace mode"},
+		{"e", "Cycle employment type"},
+		{"$", "Cycle pay-disclosure mode"},
+		{"t", "Toggle manager-track only"},
+		{"x", "Toggle years/degree blocker only"},
 	}},
 	{"Exit", []helpBinding{
 		{"Esc", "Clear search, or back to Main Menu"},
@@ -1100,6 +1175,36 @@ func (m PipelineModel) pipelineDetailContentLines(app model.CareerApplication, w
 		content = append(content, styles.Subtext.Render("Details: ")+styles.Value.Render(facts))
 		content = append(content, "")
 	}
+
+	// FILTER-PARITY FACTS (see model/career.go) -- same fields the Jobs
+	// screen surfaces, shown here read-only regardless of whether a
+	// filter narrowed to them.
+	if label := app.EmploymentLabel(); label != "" {
+		content = append(content, styles.Subtext.Render("Employment: ")+styles.Value.Render(label))
+	}
+	if app.PayText != "" {
+		content = append(content, styles.Subtext.Render("Pay: ")+styles.Value.Render(app.PayText))
+	}
+	if app.HoursText != "" {
+		content = append(content, styles.Subtext.Render("Hours: ")+styles.Value.Render(app.HoursText))
+	}
+	if app.HasStressSignals() {
+		content = append(content, styles.Subtext.Render("Stress signals: ")+styles.Value.Render(strings.Join(app.StressSignals, ", ")))
+	}
+	if app.HasCapabilityGaps() {
+		content = append(content, styles.Subtext.Render("Capability gaps: ")+styles.Value.Render(strings.Join(app.CapabilityGaps, "; ")))
+	}
+	if app.IsManagerTrack() {
+		content = append(content, styles.Subtext.Render("Role track: ")+styles.Value.Render("manager"))
+	}
+	if len(app.ExperienceBlockers) > 0 {
+		texts := make([]string, len(app.ExperienceBlockers))
+		for i, b := range app.ExperienceBlockers {
+			texts[i] = b.Text
+		}
+		content = append(content, styles.Subtext.Render("Experience blockers: ")+styles.Value.Render(strings.Join(texts, "; ")))
+	}
+	content = append(content, "")
 
 	// MATCHED / MISSING SKILLS & REASONING (from Report Summary if available)
 	if summary, ok := m.reportCache[app.ReportPath]; ok {
@@ -1355,7 +1460,25 @@ func (m PipelineModel) renderSortBar() string {
 	viewLabel := fmt.Sprintf("[View: %s]", m.viewMode)
 	count := fmt.Sprintf("%d shown", len(m.filtered))
 
-	return style.Render(fmt.Sprintf("%s  %s  %s", sortLabel, viewLabel, count))
+	parts := []string{sortLabel, viewLabel}
+	if m.workplaceFilter != "" {
+		parts = append(parts, workplaceFilterLabel(m.workplaceFilter))
+	}
+	if m.employmentFilter != "" {
+		parts = append(parts, employmentFilterLabel(m.employmentFilter))
+	}
+	if m.payFilter != "" {
+		parts = append(parts, payFilterLabel(m.payFilter))
+	}
+	if m.roleTrackFilter {
+		parts = append(parts, "[manager roles]")
+	}
+	if m.experienceBlockerFilter {
+		parts = append(parts, "[years/degree blocker]")
+	}
+	parts = append(parts, count)
+
+	return style.Render(strings.Join(parts, "  "))
 }
 
 func (m PipelineModel) renderHelp() string {
@@ -1408,6 +1531,7 @@ func (m PipelineModel) renderHelp() string {
 		keyStyle.Render("c") + descStyle.Render(" change  ") +
 		keyStyle.Render("v") + descStyle.Render(" view  ") +
 		keyStyle.Render("p") + descStyle.Render(" progress  ") +
+		keyStyle.Render("w/e/$/t/x") + descStyle.Render(" filter  ") +
 		keyStyle.Render("?") + descStyle.Render(" help  ") +
 		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
 		keyStyle.Render("q") + descStyle.Render(" quit")
