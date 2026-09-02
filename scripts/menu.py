@@ -253,6 +253,18 @@ def _content_filter_label() -> str:
         return ""
 
 
+def _scoring_weights_label() -> str:
+    """Current scoring-weight overrides, shown inline for the same reason
+    the other Settings entries display theirs: an override you cannot see
+    is one you forget you set."""
+    try:
+        import content_settings
+
+        return f"({content_settings.describe_scoring_weights(content_settings.read_settings().get('scoring_weights'))})"
+    except Exception:
+        return ""
+
+
 def _handle_manage_content_filters() -> bool:
     """Settings & Upkeep -> Role & Travel Limits."""
     import content_settings
@@ -314,6 +326,15 @@ def _handle_manage_location() -> bool:
     return True
 
 
+def _handle_manage_scoring_weights() -> bool:
+    """Settings & Upkeep -> Scoring Weights & Preferences."""
+    import content_settings
+
+    content_settings.run_scoring_weights_settings()
+    _pause_and_return()
+    return True
+
+
 def _build_settings_upkeep_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why
     (the last-run label below is itself state that can change between
@@ -347,6 +368,13 @@ def _build_settings_upkeep_choices() -> list:
                 "filter", f"↳ Role, Language & Travel Limits {_content_filter_label()}"
             ),
             value="manage_content_filters",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "evaluate",
+                f"↳ Scoring Weights & Preferences {_scoring_weights_label()}",
+            ),
+            value="manage_scoring_weights",
         ),
         questionary.Choice(
             title=_icon_title("evaluate", "↳ Discover Local Employers with ATS Boards"),
@@ -1861,6 +1889,9 @@ def _handle_settings_upkeep() -> bool:
             continue
         if choice == "manage_content_filters":
             _handle_manage_content_filters()
+            continue
+        if choice == "manage_scoring_weights":
+            _handle_manage_scoring_weights()
             continue
         if choice == "discover_employers":
             _handle_discover_employers()
