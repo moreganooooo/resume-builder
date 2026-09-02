@@ -964,14 +964,14 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   finding a comfortable role is the stated goal, not merely avoiding red
   flags, so "clean" is rewarded rather than just spared a penalty.
   `capability_gaps` costs `STRETCH_GAP_PENALTY_PER_ITEM` (0.20/gap,
-  capped at 0.80). Unlike `compensation.annual_floor` or
-  `location.radius_miles`, these are NOT a Settings & Upkeep control --
-  they're composite-scoring tuning constants in the same category as
-  `FIT_SUBSCORE_WEIGHTS`/`STALE_POSTING_PENALTY_PER_DAY`, chosen to match
-  a stated preference rather than a corpus-measured precision number (see
+  capped at 0.80). These five values, plus the `funnel_friction` remote/
+  onsite ±1 nudge described below, are chosen to match a stated
+  preference rather than a corpus-measured precision number (see
   docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md
   for the caveat that this skipped the corpus-validation step `role_track`
-  and `work_hours.py`/`compensation.py` all went through first).
+  and `work_hours.py`/`compensation.py` all went through first) -- but as
+  of the `scoring_weights:` block below, they're no longer hardcoded
+  Python literals; a user can retune them without a code change.
 - **A remote posting competes against a bigger applicant pool than an
   onsite one, and `funnel_friction` says so.** `orchestrator.evaluate_fit()`
   step 5b (`scripts/orchestrator.py`) classifies the posting with the
@@ -988,3 +988,101 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   there's no reason to trust a free-floating LLM guess over it. Like the
   prestige-tier nudge, this is a preference-weighted constant (±1), not
   a corpus-measured precision number.
+- **`hard_blockers` used to unconditionally zero every score it touched,
+  with zero precision measurement -- ever.** Any non-empty `hard_blockers`
+  list from `evaluate_recruiter.md` forced `composite_score = 0` and
+  `recommendation = "Skip"` (`orchestrator.py`
+  `rescore_evaluation_with_location`), a stronger and less-validated gate
+  than `role_track` was pre-graduation, and free text mixing "no
+  bachelor's degree" in with "requires an active security clearance."
+  Each blocker item now carries a `category`
+  (`years_experience`/`degree`/`certification`/`citizenship_clearance`/
+  `onsite_commute`/`other`, `HardBlockerSchema` in `scripts/schemas.py`).
+  `orchestrator.EXPERIENCE_BLOCKER_CATEGORIES = ("years_experience",
+  "degree")` carves those two out into a separate `experience_blockers`
+  list -- persisted through the same allowlist as `hard_blockers`
+  (`jd_manager.save_evaluation`) -- and they no longer zero anything;
+  every OTHER category keeps the original unconditional zero-out
+  behavior unchanged, including `is_spurious_commute_blocker`'s existing
+  `onsite_commute` carve-out. Same reversibility principle as
+  `role_track`: `experience_blockers` surfaces only as
+  `model.JobRow.IsExperienceBlocked()` -- an opt-in Pipeline view filter
+  (`[x]`, see below) -- not a gate, and won't become one without
+  clearing the same ≥90% holdout bar `role_track` did.
+  `jd_manager.SCORING_VERSION` was bumped to `3` (2026-09-02) for this
+  change, which is sufficient on its own to stale-flag every
+  pre-existing evaluation -- `picker._evaluation_is_stale()` checks the
+  int `scoring_version` first and only falls back to the `SCORING_EPOCH`
+  date-string comparison for evaluations saved before that field
+  existed, so a separate `SCORING_EPOCH` bump was not needed here.
+  **The holdout labeling spreadsheet for `years_experience`/`degree`
+  precision is not filled in yet** (as of 2026-09-02) -- `docs/hard_blockers.md`,
+  referenced in a code comment (`orchestrator.py`, near
+  `EXPERIENCE_BLOCKER_CATEGORIES`), does not exist yet either. Until that
+  measurement exists, treat `experience_blockers`/`IsExperienceBlocked()`
+  as unvalidated display/filter-only signal, same caution as any
+  pre-holdout `role_track` state.
+- **Six previously-hardcoded scoring constants are now a
+  `scoring_weights:` block in `scan_filters.yml`, editable from Settings
+  & Upkeep -- "Scoring Weights & Preferences" in `menu.py`.** Covers the
+  five stress/stretch constants documented above
+  (`stress_signal_penalty_per_category`, `stress_signal_max_penalty`,
+  `low_stress_bonus`, `stretch_gap_penalty_per_item`,
+  `stretch_gap_max_penalty`) plus the `funnel_friction` remote/onsite
+  nudge magnitude. `content_settings.read_scoring_weights()` always
+  returns all six keys (defaults merged with any override, so
+  `orchestrator.py` never needs its own fallback), and
+  `describe_scoring_weights()` only lists keys that differ from default
+  for the menu header, since the common case is unedited. Same pattern
+  as `_COMPENSATION_KEYS`: `_SCORING_WEIGHTS_KEYS` is an explicit
+  allowlist, so a stray key in the YAML can't silently round-trip
+  through the editor and look supported.
+- **Pipeline has full filter parity with Jobs for the audited signals --
+  and one filter (`[x]`, experience blockers) that Jobs itself doesn't
+  have yet.** `dashboard/internal/model/career.go`'s `CareerApplication`
+  gained `Workplace`, `EmploymentType`, pay/hours fields,
+  `StressSignals`, `CapabilityGaps`, `RoleTrack`, and `ExperienceBlockers`;
+  `jobs_to_apps.go`'s `JobRowsToApplications` populates them directly
+  from `JobRow`/`Evaluation`, the same source Jobs itself reads (not the
+  dead `deriveNoteFields`/markdown-tracker path). `pipeline.go` filters:
+  `[w]` workplace, `[e]` employment type, `[$]` pay, `[t]` role track,
+  `[x]` experience blockers. Jobs assigns `[r]` to role track (`[t]`
+  would collide with nothing on Jobs, but `[r]` is Pipeline's own
+  refresh key, so Pipeline uses `[t]` instead -- a deliberate, documented
+  keybinding divergence, not a parity gap). **Jobs, however, never
+  finished its own `experienceBlockerFilter`** -- Phase A's plan called
+  for it (opt-in view filter + keybinding + footer legend, mirroring
+  `[r]`/`roleTrackFilter`'s shape), but only the detail-pane rendering
+  (`jobs.go`, `if len(eval.ExperienceBlockers) > 0`) ever shipped. Until
+  that's added, Pipeline is the only screen where experience-blocker
+  filtering is actually usable, not merely visible.
+- **`scripts/find_retroactively_excluded_roles.py` checks whether a
+  PENDING role would be excluded under TODAY's config, even though it
+  was saved under an older one -- two independent checks, counted
+  separately.** Gate failures re-run the same deterministic scan-time
+  gates `scan_boards.py` applies
+  (`_passes_employment_filter`/`_passes_compensation_filter`/
+  `_passes_hours_filter`/`_passes_location_filter`/
+  `_passes_hybrid_preference_filter`) against the JD's own saved fields
+  and the CURRENT `scan_filters.yml`. Score-based flags recompute
+  `composite_score`/`recommendation` with current `fit_composite_score()`
+  (current `scoring_weights`, current stress/capability-gap math) and
+  flag anything that now comes out `Skip` -- evaluated roles only, since
+  there's no score to recompute on a role that's never been evaluated.
+  Covers the FULL pending population deliberately: gate-checking only
+  already-evaluated rows (`picker.list_all_evaluated_jds()`) would miss
+  the population most at risk -- roles scraped under an old filter
+  config that haven't been evaluated yet, which `batch_evaluate.py` is
+  about to spend an API call scoring. `picker.pending_roles()` (file
+  paths + database-only ids, no evaluation required) is what reaches
+  them; they get the gate check only. Same safe-maintenance-script shape
+  as `purge_terminal_jobs.py`: dry-run by default, `--apply` required,
+  `data.db` backed up via `shutil.copy2` before any write, restricted to
+  PENDING roles only (never touches applied/interviewing/offer or any
+  later funnel status) as a hard safety rule, not a toggle. Because scan
+  gates never re-run automatically at evaluation time (confirmed: no
+  code path in `orchestrator.py`/`batch_evaluate.py` calls any
+  `_passes_*` gate function), this script is the only thing that catches
+  `scan_filters.yml` drift against an existing pending backlog --
+  re-running it before every `evaluate_all_pending()` batch, not just
+  once, is what actually closes that gap.
