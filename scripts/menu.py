@@ -371,7 +371,7 @@ def _build_settings_upkeep_choices() -> list:
         ),
         questionary.Choice(
             title=_icon_title(
-                "evaluate",
+                "hint",
                 f"↳ Scoring Weights & Preferences {_scoring_weights_label()}",
             ),
             value="manage_scoring_weights",
