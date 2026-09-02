@@ -1005,10 +1005,13 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   every OTHER category keeps the original unconditional zero-out
   behavior unchanged, including `is_spurious_commute_blocker`'s existing
   `onsite_commute` carve-out. Same reversibility principle as
-  `role_track`: `experience_blockers` surfaces only as
-  `model.JobRow.IsExperienceBlocked()` -- an opt-in Pipeline view filter
-  (`[x]`, see below) -- not a gate, and won't become one without
-  clearing the same ≥90% holdout bar `role_track` did.
+  `role_track`: `experience_blockers` surfaces only as an opt-in view
+  filter on both Jobs (`[c]`) and Pipeline (`[x]`, see below) -- a plain
+  `len(...ExperienceBlockers) == 0` presence check in both screens, since
+  `HardBlocker` carries no confidence field to gate on the way
+  `RoleTrackConfidence` does. Not a gate, and won't become one without
+  clearing the same ≥90% holdout bar `role_track` did -- see the "should
+  this eventually be a hard stop" discussion below.
   `jd_manager.SCORING_VERSION` was bumped to `3` (2026-09-02) for this
   change, which is sufficient on its own to stale-flag every
   pre-existing evaluation -- `picker._evaluation_is_stale()` checks the
@@ -1049,13 +1052,14 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `[x]` experience blockers. Jobs assigns `[r]` to role track (`[t]`
   would collide with nothing on Jobs, but `[r]` is Pipeline's own
   refresh key, so Pipeline uses `[t]` instead -- a deliberate, documented
-  keybinding divergence, not a parity gap). **Jobs, however, never
-  finished its own `experienceBlockerFilter`** -- Phase A's plan called
-  for it (opt-in view filter + keybinding + footer legend, mirroring
-  `[r]`/`roleTrackFilter`'s shape), but only the detail-pane rendering
-  (`jobs.go`, `if len(eval.ExperienceBlockers) > 0`) ever shipped. Until
-  that's added, Pipeline is the only screen where experience-blocker
-  filtering is actually usable, not merely visible.
+  keybinding divergence, not a parity gap). **Jobs now has its own
+  `experienceBlockerFilter` too**, bound to `[c]` (`w`/`e`/`$`/`r` were
+  already taken there) -- opt-in view filter, footer legend, and
+  detail-pane rendering, same shape as `[r]`/`roleTrackFilter` and
+  Pipeline's own `[x]`. Both screens filter with a plain
+  `len(...ExperienceBlockers) == 0` presence check, since `HardBlocker`
+  carries no confidence field to gate on the way `RoleTrackConfidence`
+  does.
 - **`scripts/find_retroactively_excluded_roles.py` checks whether a
   PENDING role would be excluded under TODAY's config, even though it
   was saved under an older one -- two independent checks, counted
@@ -1079,10 +1083,16 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   as `purge_terminal_jobs.py`: dry-run by default, `--apply` required,
   `data.db` backed up via `shutil.copy2` before any write, restricted to
   PENDING roles only (never touches applied/interviewing/offer or any
-  later funnel status) as a hard safety rule, not a toggle. Because scan
-  gates never re-run automatically at evaluation time (confirmed: no
-  code path in `orchestrator.py`/`batch_evaluate.py` calls any
-  `_passes_*` gate function), this script is the only thing that catches
-  `scan_filters.yml` drift against an existing pending backlog --
-  re-running it before every `evaluate_all_pending()` batch, not just
-  once, is what actually closes that gap.
+  later funnel status) as a hard safety rule, not a toggle. **This gap is
+  now closed automatically, not just by manual habit:**
+  `batch_evaluate.evaluate_all_pending()` calls this module's
+  `filter_gate_passing()` (gate check only, no score recompute) as a
+  pre-flight on its auto-derived work list before spending any API call
+  -- a role that wouldn't pass today's `scan_filters.yml` gates is
+  excluded from the run and reported, never evaluated. Scoped to
+  `auto_derived` work lists only (`pending_paths is None`); an explicit
+  caller-supplied pick, e.g. `resume run --pick` naming one specific JD,
+  bypasses this and always evaluates what was asked for. Deliberately
+  non-destructive -- excluded roles are left out of that run, not
+  archived; this script's own `--apply` mode (or a manual re-run) is
+  still what archives them for good after review.
