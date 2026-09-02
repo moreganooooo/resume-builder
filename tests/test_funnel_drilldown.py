@@ -22,8 +22,10 @@ from rich.console import Console
 
 class TestFunnelDrilldown(unittest.TestCase):
     def test_compute_funnel_metrics_isolated_db(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            profile_paths.isolate_for_tests(tmpdir)
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            profile_paths.isolate_for_tests(tmpdir),
+        ):
             conn = db.get_db("test_user")
             try:
                 conn.execute("DELETE FROM jobs;")
