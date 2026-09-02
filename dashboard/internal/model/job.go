@@ -143,6 +143,19 @@ func (j JobRow) HasEmploymentType(want string) bool {
 	return false
 }
 
+// IsManagerTrack reports whether this posting clears the Jobs screen's [r]
+// filter gate: RoleTrack manager OR player_coach (a player-coach still
+// manages people, and is treated as the excluded/flagged class the same
+// way scripts/eval_role_track.py's MANAGER_VERDICTS does), AND
+// RoleTrackConfidence high. Confidence-gating, not just verdict-gating,
+// is the whole reason the filter clears the design's >=90% precision bar
+// with room to spare -- see docs/role_track.md.
+func (j JobRow) IsManagerTrack() bool {
+	track := j.Evaluation.RoleTrack
+	return (track == "manager" || track == "player_coach") &&
+		j.Evaluation.RoleTrackConfidence == "high"
+}
+
 // EmploymentLabels keys match scripts/employment_type.py's CANONICAL tuple.
 var EmploymentLabels = map[string]string{
 	"full_time":        "Full-time",
@@ -257,12 +270,17 @@ type Evaluation struct {
 	// scripts/schemas.py and carried through orchestrator's evaluation.
 	CapabilityGaps []string `json:"capability_gaps"`
 
-	// RoleTrack is a SORT/display facet, never a gate: a labeled holdout
-	// found zero people managers among 49 title-only-signal postings, but
-	// also that ~40% of postings never state who reports to whom at all,
-	// so "unknown" is the correct, expected answer for a large minority
-	// rather than a classifier failure. Produced by
-	// CapabilityEvaluationSchema in scripts/schemas.py.
+	// RoleTrack is a SORT/display facet by default, and never a scan-time
+	// or database gate -- a labeled 134-row holdout found zero people
+	// managers among 49 title-only-signal postings, but also that ~40% of
+	// postings never state who reports to whom at all, so "unknown" is
+	// the correct, expected answer for a large minority rather than a
+	// classifier failure. Measured 90.3% precision/90.3% recall on the
+	// manager/player_coach excluded class against that holdout
+	// (docs/role_track.md), which is why JobRow.IsManagerTrack() exists:
+	// it backs the Jobs screen's opt-in, default-off [r] VIEW filter,
+	// which only ever narrows what's displayed, never what's stored.
+	// Produced by CapabilityEvaluationSchema in scripts/schemas.py.
 	RoleTrack           string `json:"role_track"`
 	RoleTrackConfidence string `json:"role_track_confidence"`
 	RoleTrackEvidence   string `json:"role_track_evidence"`
