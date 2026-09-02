@@ -249,6 +249,12 @@ type Research struct {
 	ResearchedAt            string   `json:"researched_at"`
 }
 
+// HardBlocker mirrors scripts/schemas.py's HardBlockerSchema.
+type HardBlocker struct {
+	Text     string `json:"text"`
+	Category string `json:"category"`
+}
+
 // Evaluation mirrors the _evaluation key persisted by
 // scripts/jd_manager.py's save_evaluation().
 type Evaluation struct {
@@ -259,7 +265,26 @@ type Evaluation struct {
 	Recommendation       string   `json:"recommendation"`
 	Why                  string   `json:"why"`
 	RecruiterRead        string   `json:"recruiter_read"`
-	HardBlockers         []string `json:"hard_blockers"`
+
+	// HardBlockers are the categories that still force
+	// CompositeScore=0.00 / Recommendation="Skip" unconditionally in
+	// scripts/orchestrator.py's rescore_evaluation_with_location() --
+	// onsite_commute, certification, citizenship_clearance, other.
+	// years_experience/degree items are carved OUT of this list and land
+	// in ExperienceBlockers instead (see there for why).
+	HardBlockers []HardBlocker `json:"hard_blockers"`
+
+	// ExperienceBlockers holds years_experience/degree hard_blockers,
+	// which -- unlike every other blocker category -- do NOT force a
+	// Skip/zero. That auto-zero behavior was never holdout-measured for
+	// precision (unlike role_track's 90.3%/90.3% before it was allowed to
+	// gate anything, see docs/role_track.md), so scripts/orchestrator.py
+	// carves these two categories out into display-only data pending
+	// their own measurement (scripts/build_hard_blocker_holdout.py /
+	// scripts/eval_hard_blocker.py). Do NOT wire an opt-in filter on this
+	// field until that measurement clears the same >=90% bar -- see
+	// docs/hard_blockers.md for current status.
+	ExperienceBlockers []HardBlocker `json:"experience_blockers"`
 
 	// CapabilityGaps is the softer counterpart to HardBlockers, and the
 	// two must not be conflated. A hard blocker disqualifies (a licence

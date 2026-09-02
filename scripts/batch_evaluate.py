@@ -72,6 +72,7 @@ def _result_row(identifier, job_key, job_title, company_name, evaluation) -> dic
         "recommendation": evaluation.get("recommendation"),
         "why": evaluation.get("why") or "",
         "hard_blockers": evaluation.get("hard_blockers") or [],
+        "experience_blockers": evaluation.get("experience_blockers") or [],
         "posting_legitimacy": evaluation.get("posting_legitimacy") or "",
         "posting_age_days": evaluation.get("posting_age_days"),
         "error": not evaluation,

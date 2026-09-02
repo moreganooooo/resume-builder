@@ -151,7 +151,14 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
 # from -- but it stops the assumption from compounding: every evaluation
 # from here forward carries an exact, clock-independent answer to "was
 # this scored under the current system".
-SCORING_VERSION = 2
+#
+# v3 (2026-09-02): hard_blockers gained a `category` per item, and
+# years_experience/degree blockers no longer force composite_score=0.00 /
+# recommendation="Skip" -- they're carved out into experience_blockers and
+# surfaced only as an opt-in view filter, pending their own holdout
+# measurement (see docs/hard_blockers.md). A pre-v3 evaluation may have
+# been zeroed by a blocker that would no longer zero anything today.
+SCORING_VERSION = 3
 
 
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
@@ -194,6 +201,7 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         # put it in `evaluation`, and 0 of 1,138 evaluated JDs on disk
         # carried it. Anything added to that schema needs a line here too.
         "capability_gaps": evaluation.get("capability_gaps") or [],
+        "experience_blockers": evaluation.get("experience_blockers") or [],
         "role_track": evaluation.get("role_track") or "unknown",
         "role_track_confidence": evaluation.get("role_track_confidence") or "low",
         "role_track_evidence": evaluation.get("role_track_evidence") or "",
