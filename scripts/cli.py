@@ -561,7 +561,13 @@ def evaluate(jd_file, yes, refresh):
     if blockers:
         cli_art.console.print(f"\n{cli_art.WARNING} Hard blockers:")
         for b in blockers:
-            cli_art.console.print(f"  - {b}")
+            text = b.get("text", "") if isinstance(b, dict) else str(b)
+            category = (
+                f" [{b['category']}]"
+                if isinstance(b, dict) and b.get("category")
+                else ""
+            )
+            cli_art.console.print(f"  - {text}{category}")
 
     cli_art.console.print(f"\n[bold]Why:[/bold] {result.get('why', '')}\n")
     menu.offer_next_steps("evaluate", from_cli=True)

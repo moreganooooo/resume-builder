@@ -1218,9 +1218,11 @@ def _print_evaluation_detail(row: dict) -> None:
             f"[bold]Recruiter read:[/bold] {evaluation['recruiter_read']}"
         )
     if evaluation.get("hard_blockers"):
-        cli_art.console.print(
-            f"[bold]Hard blockers:[/bold] {', '.join(evaluation['hard_blockers'])}"
-        )
+        blocker_texts = [
+            b.get("text", "") if isinstance(b, dict) else str(b)
+            for b in evaluation["hard_blockers"]
+        ]
+        cli_art.console.print(f"[bold]Hard blockers:[/bold] {', '.join(blocker_texts)}")
     if evaluation.get("why"):
         cli_art.console.print(f"[bold]Why:[/bold] {evaluation['why']}")
     if has_dimensions or evaluation.get("hard_blockers") or evaluation.get("why"):

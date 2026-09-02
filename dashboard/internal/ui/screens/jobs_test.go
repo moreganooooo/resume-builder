@@ -165,7 +165,7 @@ func TestRenderJobDetailPaneShowsKeyFields(t *testing.T) {
 			Recommendation: "Strong pursue",
 			Why:            "Great fit for the role.",
 			RecruiterRead:  "Recruiter will see a match.",
-			HardBlockers:   []string{},
+			HardBlockers:   []model.HardBlocker{},
 			FitSubscores:   map[string]float64{"functional_alignment": 5},
 		},
 	}

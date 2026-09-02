@@ -2001,7 +2001,20 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		content = append(content, "")
 		content = append(content, accent.Render("Hard blockers"))
 		for _, b := range eval.HardBlockers {
-			content = append(content, "  • "+b)
+			content = append(content, "  • "+b.Text)
+		}
+	}
+	// Unmeasured pending its own holdout precision pass (see
+	// docs/hard_blockers.md) -- these years_experience/degree items no
+	// longer force a Skip/zero (scripts/orchestrator.py), so they're
+	// surfaced here for manual judgment only. No opt-in filter exists for
+	// this field yet; do not add one until that measurement clears the
+	// same >=90% bar role_track did.
+	if len(eval.ExperienceBlockers) > 0 {
+		content = append(content, "")
+		content = append(content, accent.Render("Experience/degree requirements (unmeasured)"))
+		for _, b := range eval.ExperienceBlockers {
+			content = append(content, "  • "+b.Text)
 		}
 	}
 	// Rendered separately from and below hard blockers, never merged

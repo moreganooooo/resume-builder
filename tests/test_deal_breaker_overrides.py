@@ -159,7 +159,7 @@ class TestDealBreakerOverridesAndBayesianOdds(unittest.TestCase):
         )  # Hard skip sets prob to 0.0%
         self.assertIn(
             "Onsite/hybrid signal detected (Remote Quality scored 3/5)",
-            result["hard_blockers"],
+            [b["text"] for b in result["hard_blockers"]],
         )
 
     @patch("orchestrator.GeminiClient.generate")
