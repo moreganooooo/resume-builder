@@ -183,9 +183,26 @@ class CapabilityEvaluationSchema(BaseModel):
     )
 
 
+class HardBlockerSchema(BaseModel):
+    text: str = Field(description="The literal disqualifier text or description")
+    category: Literal[
+        "years_experience",
+        "degree",
+        "certification",
+        "citizenship_clearance",
+        "onsite_commute",
+        "other",
+    ] = Field(
+        description="What kind of disqualifier this is. 'years_experience' and "
+        "'degree' are unmeasured/opt-in categories (see docs/hard_blockers.md) "
+        "-- everything else keeps the existing behavior of forcing a Skip."
+    )
+
+
 class RecruiterEvaluationSchema(BaseModel):
-    hard_blockers: List[str] = Field(
-        description="Explicit disqualifying constraints found; empty list if none"
+    hard_blockers: List[HardBlockerSchema] = Field(
+        description="Explicit disqualifying constraints found, each tagged with "
+        "a category; empty list if none"
     )
     interview_odds_subscores: InterviewOddsSubscores
     practical_pursue_subscores: PracticalPursueSubscores

@@ -1853,12 +1853,29 @@ def fit_composite_score(
     )
 
 
-def is_spurious_commute_blocker(blocker: str) -> bool:
+# Categories carved out of the unconditional hard_blockers zero-out below,
+# since neither has ever been holdout-measured for precision -- unlike
+# role_track, which cleared a >=90% bar before it was allowed to gate
+# anything (see docs/hard_blockers.md). These surface only as an opt-in
+# view filter (model.JobRow.IsExperienceBlocked) instead.
+EXPERIENCE_BLOCKER_CATEGORIES = ("years_experience", "degree")
+
+
+def _blocker_text(blocker) -> str:
+    """blocker may be a dict ({"text": ..., "category": ...}) or, for older
+    persisted evaluations predating the categorized schema, a plain string."""
+    if isinstance(blocker, dict):
+        return (blocker.get("text") or "").strip()
+    return (blocker or "").strip()
+
+
+def is_spurious_commute_blocker(blocker) -> bool:
     """Returns True if a hard blocker is merely a routine onsite/hybrid requirement
     or local commute prompt that is resolved because the job is within the candidate's
     local commute radius, while strictly preserving genuine non-local travel or vehicle duties.
     """
-    b = (blocker or "").strip()
+    b = _blocker_text(blocker)
+    category = blocker.get("category") if isinstance(blocker, dict) else None
     b_lower = b.lower()
 
     # If it specifies external travel, field visits, client visits, or non-local destinations, preserve it!
@@ -1881,15 +1898,20 @@ def is_spurious_commute_blocker(blocker: str) -> bool:
     if any(m in b_lower for m in non_commute_markers):
         return False
 
-    # 1. Exact auto-generated Python override string
+    if category == "onsite_commute":
+        return True
+
+    # Legacy/auto-generated string forms (evaluations predating the
+    # categorized schema, and the Python-injected remote-required message
+    # below, which is appended as a plain dict but starts identically).
     if b.startswith("Onsite/hybrid signal detected"):
         return True
 
-    # 2. ATS / Indeed commute prompt (e.g. "Ability to Commute: Buffalo, NY 14228 (Required)")
+    # ATS / Indeed commute prompt (e.g. "Ability to Commute: Buffalo, NY 14228 (Required)")
     if re.match(r"^ability to commute\b", b_lower):
         return True
 
-    # 3. Routine onsite/hybrid presence requirements
+    # Routine onsite/hybrid presence requirements
     if re.match(r"^(on-?site|hybrid|in-office)\b", b_lower):
         return True
 
@@ -1947,8 +1969,9 @@ def rescore_evaluation_with_location(
             msg = (
                 f"Onsite/hybrid signal detected (Remote Quality scored {remote_val}/5)"
             )
-            if msg not in blockers:
-                blockers.append(msg)
+            existing_texts = {_blocker_text(b) for b in blockers}
+            if msg not in existing_texts:
+                blockers.append({"text": msg, "category": "onsite_commute"})
             ev["hard_blockers"] = blockers
 
     fit_score = compute_fit_score(ev.get("fit_subscores", {}))
@@ -1961,10 +1984,27 @@ def rescore_evaluation_with_location(
     ev["interview_odds_score"] = interview_odds_score
     ev["practical_pursue_score"] = practical_pursue_score
 
-    if blockers:
+    # years_experience/degree blockers are split out and never force a
+    # Skip/zero -- see EXPERIENCE_BLOCKER_CATEGORIES above. Every other
+    # category keeps the original unconditional behavior.
+    experience_blockers = [
+        b
+        for b in blockers
+        if isinstance(b, dict) and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
+    ]
+    disqualifying_blockers = [
+        b
+        for b in blockers
+        if not (
+            isinstance(b, dict) and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
+        )
+    ]
+    ev["experience_blockers"] = experience_blockers
+
+    if disqualifying_blockers:
         ev["recommendation"] = "Skip"
-        ev["why"] = (
-            f"Application skipped due to triggered deal-breakers: {', '.join(blockers)}"
+        ev["why"] = "Application skipped due to triggered deal-breakers: " + ", ".join(
+            _blocker_text(b) for b in disqualifying_blockers
         )
         ev["composite_score"] = 0.00
         ev["estimated_interview_probability"] = 0.0
