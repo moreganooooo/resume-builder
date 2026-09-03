@@ -1559,6 +1559,7 @@ class TestWriteVoiceAnchors(BootstrapProfileTestCase):
 
 class TestRunProfileSetup(BootstrapProfileTestCase):
 
+    @patch("bootstrap_profile.collect_voice_calibration_example", return_value="")
     @patch("bootstrap_profile.write_voice_anchors")
     @patch("bootstrap_profile.write_background_guide")
     @patch("bootstrap_profile.write_cv_md")
@@ -1583,6 +1584,7 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
         mock_write_cv,
         mock_write_bg,
         mock_write_voice,
+        mock_collect_voice_calibration,
     ):
         mock_collect_identity.return_value = {
             "full_name": "Jamie Rivera",

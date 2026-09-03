@@ -11,6 +11,7 @@ already ingested. See run_profile_setup() for the single entry point.
 import csv
 import json
 import os
+import re
 import sys
 
 import questionary
@@ -301,6 +302,76 @@ def collect_identity(dry_run: bool = False) -> dict:
     }
 
 
+def collect_voice_calibration_example(dry_run: bool = False) -> str:
+    """A short, real quote in the candidate's own voice, used only by
+    evaluate_recruiter.md's role-rules block for tone calibration --
+    distinct from and much smaller than voice-anchors.md (the full
+    writing-sample corpus drafted from source_documents/, see
+    write_voice_anchors()). Optional: an empty string is a fully
+    supported "not set" state (build_role_rules_block() falls back to
+    general judgment)."""
+    if dry_run:
+        cli_art.cli_info(
+            "[DRY RUN] would prompt for an optional voice-calibration example quote."
+        )
+        return ""
+    return (
+        _confirm_text(
+            "A short, real sentence or two in your own voice (optional -- used "
+            "to calibrate tone during resume critique; press Enter to skip):",
+            None,
+        )
+        or ""
+    )
+
+
+_VOICE_CALIBRATION_LINE_RE = re.compile(
+    r'^voice_calibration_example:\s*".*"\s*$', re.MULTILINE
+)
+
+
+def get_voice_calibration_example() -> str:
+    """Reads the current value straight from profile.yml, if any -- used
+    by the Settings & Upkeep editor to show what's already set before
+    offering to replace it."""
+    if not os.path.exists(PROFILE_YML_PATH):
+        return ""
+    with open(PROFILE_YML_PATH, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    return data.get("voice_calibration_example") or ""
+
+
+def set_voice_calibration_example(value: str) -> None:
+    """Adds or replaces profile.yml's voice_calibration_example line via
+    targeted text substitution rather than a full yaml.safe_load/dump
+    round-trip -- profile.yml is a hand-annotated template full of prose
+    comments (see _PROFILE_YML_TEMPLATE), and a real yaml.dump would
+    silently strip every one of them. A profile.yml written before this
+    field existed has no line to replace, so a missing match appends a
+    fresh section instead, mirroring the template's own comment block."""
+    if not os.path.exists(PROFILE_YML_PATH):
+        raise FileNotFoundError(f"No profile.yml at {PROFILE_YML_PATH} yet.")
+    with open(PROFILE_YML_PATH, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    escaped = json.dumps(value or "")
+    new_line = f"voice_calibration_example: {escaped}"
+    if _VOICE_CALIBRATION_LINE_RE.search(content):
+        content = _VOICE_CALIBRATION_LINE_RE.sub(new_line, content, count=1)
+    else:
+        content = content.rstrip("\n") + (
+            "\n\n# A short, real quote in your own voice -- used only to calibrate "
+            "tone\n# during resume critique (evaluate_recruiter.md's role-rules "
+            "block), not\n# your full writing-sample corpus (that's "
+            "voice-anchors.md, drawn from\n# whatever you dropped into "
+            "source_documents/ during bootstrap). Optional\n# -- leave blank and "
+            f"this is skipped entirely.\n{new_line}\n"
+        )
+
+    with atomic_write(PROFILE_YML_PATH, encoding="utf-8") as f:
+        f.write(content)
+
+
 def _yaml_string_list(items: list, indent: str = "    ") -> str:
     if not items:
         return f"{indent}[]"
@@ -440,6 +511,13 @@ location:
 
 cv:
   output_format: "html"
+
+# A short, real quote in your own voice -- used only to calibrate tone
+# during resume critique (evaluate_recruiter.md's role-rules block), not
+# your full writing-sample corpus (that's voice-anchors.md, drawn from
+# whatever you dropped into source_documents/ during bootstrap). Optional
+# -- leave blank and this is skipped entirely.
+voice_calibration_example: "{voice_calibration_example}"
 """
 
 
@@ -448,6 +526,7 @@ def write_profile_yml(
     recommendations: list,
     taxonomy,
     linkedin_search_queries: list = None,
+    voice_calibration_example: str = "",
 ) -> bool:
     """Writes profile.yml. Unlike write_cv_md()/write_background_guide()/
     write_voice_anchors(), this has no accept/regenerate/skip preview loop
@@ -485,6 +564,7 @@ def write_profile_yml(
         key_recommendations_yaml=_yaml_key_recommendations(recommendations),
         location_flexibility="Remote only" if identity.get("remote_preference") else "",
         remote_required=str(bool(identity.get("remote_preference"))).lower(),
+        voice_calibration_example=voice_calibration_example or "",
     )
     os.makedirs(os.path.dirname(PROFILE_YML_PATH), exist_ok=True)
     with atomic_write(PROFILE_YML_PATH, encoding="utf-8") as f:
@@ -1555,7 +1635,14 @@ def run_profile_setup(dry_run: bool = False) -> dict:
         dry_run=dry_run,
     )
     situational_roles = collect_situational_roles(dry_run=dry_run)
-    write_profile_yml(identity, recommendations, taxonomy, linkedin_search_queries)
+    voice_calibration_example = collect_voice_calibration_example(dry_run=dry_run)
+    write_profile_yml(
+        identity,
+        recommendations,
+        taxonomy,
+        linkedin_search_queries,
+        voice_calibration_example=voice_calibration_example,
+    )
     write_portals_yml(identity)
     write_situational_roles(situational_roles, dry_run=dry_run)
     seed_scan_filters_from_target_roles(identity)
