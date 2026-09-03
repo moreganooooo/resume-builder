@@ -630,10 +630,7 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   the two can never be out of step.
 - **The location gate has exactly one chokepoint.**
   `scan_boards._passes_location_filter()` -- `scan_ats.py` routes through
-  it too, so anything added there covers both scanners. It is NOT in
-  `prefilter.py`, which reads JD body prose at batch-sweep time for
-  deal-breaker phrases; that is a different input at a different stage
-  and stays a downstream safety net. A provider whose location format the
+  it too, so anything added there covers both scanners. A provider whose location format the
   resolver cannot parse silently defeats the radius by landing in the
   permissive "unresolvable" bucket -- adzuna did exactly this by
   reporting "Buffalo, Erie County" (city, COUNTY) until it was mapped
@@ -1025,6 +1022,33 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   measurement exists, treat `experience_blockers`/`IsExperienceBlocked()`
   as unvalidated display/filter-only signal, same caution as any
   pre-holdout `role_track` state.
+- **`field_domain` (required industry/functional background) is now its
+  own `hard_blockers` category, split out of `other`.** Discovered via a
+  hand-labeled holdout: it was the single largest blocker bucket (107 of
+  150 sampled rows), previously falling inconsistently into the
+  catch-all `other`, which force-zeroes the score with zero measurement
+  -- unlike `years_experience`/`degree` above, it is NOT carved out of
+  the zero-out path yet; it stays in `other`'s unconditional
+  zero-score/Skip behavior until it clears its own ≥90% holdout bar via
+  `eval_hard_blocker.py`, which now measures both dimensions
+  (`label`/`field_domain_label` columns) from the same holdout sample in
+  one pass. `jd_manager.SCORING_VERSION` bumped to `4` for this, since
+  the model was never previously told domain mismatch counts as an
+  explicit disqualifier and may have flagged it inconsistently before.
+  Also fixed the same session: `ghost_job_probability`
+  (`orchestrator.evaluate_fit()` step 8, computed from real posting age
+  + the LLM's `ghost_job_red_flags`) was computed on every evaluation and
+  silently discarded -- missing from `jd_manager.save_evaluation`'s
+  allowlist, same bug class as `capability_gaps` before its fix. And
+  `scripts/batch_sweeper.py` / `scripts/prefilter.py` /
+  `scripts/job_eval_heuristics.py` (a parallel salary/ghost-job/visa
+  heuristics chain, reachable only from `batch_sweeper.py`, itself
+  referenced by nothing but its own test) were deleted 2026-09-03 as
+  confirmed-unreachable dead code duplicating the real, wired paths
+  (`compensation.py` for salary, `ghost_job_probability` above for
+  ghost-job detection) -- `location_filter.py` and this file both had a
+  stale comment describing `prefilter.py` as a live "downstream safety
+  net," which it never actually was; both fixed alongside the deletion.
 - **Six previously-hardcoded scoring constants are now a
   `scoring_weights:` block in `scan_filters.yml`, editable from Settings
   & Upkeep -- "Scoring Weights & Preferences" in `menu.py`.** Covers the

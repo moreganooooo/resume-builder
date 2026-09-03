@@ -188,6 +188,7 @@ class HardBlockerSchema(BaseModel):
     category: Literal[
         "years_experience",
         "degree",
+        "field_domain",
         "certification",
         "citizenship_clearance",
         "onsite_commute",
@@ -195,7 +196,8 @@ class HardBlockerSchema(BaseModel):
     ] = Field(
         description="What kind of disqualifier this is. 'years_experience' and "
         "'degree' are unmeasured/opt-in categories (see docs/hard_blockers.md) "
-        "-- everything else keeps the existing behavior of forcing a Skip."
+        "-- everything else, including 'field_domain', keeps the existing "
+        "behavior of forcing a Skip."
     )
 
 

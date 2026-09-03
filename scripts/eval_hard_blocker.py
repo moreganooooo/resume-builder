@@ -1,5 +1,5 @@
-"""Measure the zero-shot years/degree hard-blocker classifier against the
-hand-labeled holdout.
+"""Measure the zero-shot years/degree AND field/domain hard-blocker
+classifiers against the hand-labeled holdout.
 
 WHY THIS EXISTS
 
@@ -12,18 +12,25 @@ the other half -- it re-runs the SAME evaluate_recruiter.md call the real
 pipeline makes, against each holdout posting's preserved original text,
 and reports precision/recall against those labels.
 
+field_domain (required industry/functional background) is measured here
+too, on the same holdout sample via its separate `field_domain_label`
+column -- it currently falls into the catch-all `other` category, which
+still force-zeroes the score with no measurement at all, the same
+unvalidated-gate problem years/degree had before this script existed.
+
 WHAT "CORRECT" MEANS HERE
 
 Unlike role_track, the model isn't being scored on whether it can read a
 posting -- it's being scored on whether it correctly tags a stated
-years/degree requirement as one, at all. The candidate-specific judgment
-of whether that requirement actually blocks you is the label; the model
-is only ever asked to identify and categorize what the posting states, so
-"predicted" here means "did the model emit a years_experience/degree
-blocker for this posting", and precision/recall are computed against
-whether a human labeled the row `blocks` (a real, disqualifying
-requirement is present) vs. `does_not_block`/`n/a` (no real disqualifying
-requirement is present).
+requirement as a blocker, at all. The candidate-specific judgment of
+whether that requirement actually blocks you is the label; the model is
+only ever asked to identify and categorize what the posting states, so
+"predicted" here means "did the model emit a blocker in this category for
+this posting", and precision/recall are computed against whether a human
+labeled the row `blocks` (a real, disqualifying requirement is present)
+vs. `does_not_block`/`n/a` (no real disqualifying requirement is
+present). years_experience/degree and field_domain are scored as two
+independent dimensions on the same rows.
 
 Preserved text, not live re-scrape: hard_blocker_holdout_source.json
 snapshots each holdout posting's raw_text at label time.
@@ -50,6 +57,7 @@ import build_hard_blocker_holdout as holdout  # noqa: E402
 import profile_paths  # noqa: E402
 
 EXPERIENCE_CATEGORIES = ("years_experience", "degree")
+FIELD_DOMAIN_CATEGORIES = ("field_domain",)
 
 
 def _holdout_paths(profile: str | None) -> tuple[str, str]:
@@ -93,14 +101,14 @@ def _predict(engine, jd_text: str) -> list[dict]:
     return parsed.get("hard_blockers", [])
 
 
-def _confusion_matrix(rows: list[dict]) -> None:
+def _confusion_matrix(rows: list[dict], label_key: str, predicted_key: str) -> None:
     predicted_values = ("flagged", "not_flagged")
     label_values = ("blocks", "does_not_block", "unclear", "n/a")
     grid: dict[str, dict[str, int]] = {
         p: {l: 0 for l in label_values} for p in predicted_values
     }
     for r in rows:
-        grid[r["predicted"]][r["label"]] += 1
+        grid[r[predicted_key]][r[label_key]] += 1
 
     print(f"\n{'predicted \\ label':<18} " + " ".join(f"{l:>15}" for l in label_values))
     for p in predicted_values:
@@ -108,15 +116,15 @@ def _confusion_matrix(rows: list[dict]) -> None:
         print(f"{p:<18} {cells}")
 
 
-def _precision_recall(rows: list[dict]) -> None:
+def _precision_recall(rows: list[dict], label_key: str, predicted_key: str) -> None:
     # Excluded-class bar, mirroring eval_role_track.py: of postings the
-    # model flags with a years_experience/degree blocker, how many did a
-    # human actually confirm as blocking? Rows labeled unclear/n/a are
-    # excluded -- neither is evidence the model was right or wrong.
-    scoreable = [r for r in rows if r["label"] in ("blocks", "does_not_block")]
-    flagged = [r for r in scoreable if r["predicted"] == "flagged"]
-    true_positives = [r for r in flagged if r["label"] == "blocks"]
-    actual_blocks = [r for r in scoreable if r["label"] == "blocks"]
+    # model flags with a blocker in this category, how many did a human
+    # actually confirm as blocking? Rows labeled unclear/n/a are excluded
+    # -- neither is evidence the model was right or wrong.
+    scoreable = [r for r in rows if r[label_key] in ("blocks", "does_not_block")]
+    flagged = [r for r in scoreable if r[predicted_key] == "flagged"]
+    true_positives = [r for r in flagged if r[label_key] == "blocks"]
+    actual_blocks = [r for r in scoreable if r[label_key] == "blocks"]
 
     precision = len(true_positives) / len(flagged) if flagged else float("nan")
     recall = len(true_positives) / len(actual_blocks) if actual_blocks else float("nan")
@@ -131,9 +139,9 @@ def _precision_recall(rows: list[dict]) -> None:
     print("\nPer stratum (scoreable rows only):")
     for stratum in sorted({r["stratum"] for r in scoreable}):
         sub = [r for r in scoreable if r["stratum"] == stratum]
-        sub_flagged = [r for r in sub if r["predicted"] == "flagged"]
-        sub_tp = [r for r in sub_flagged if r["label"] == "blocks"]
-        sub_actual = [r for r in sub if r["label"] == "blocks"]
+        sub_flagged = [r for r in sub if r[predicted_key] == "flagged"]
+        sub_tp = [r for r in sub_flagged if r[label_key] == "blocks"]
+        sub_actual = [r for r in sub if r[label_key] == "blocks"]
         p = len(sub_tp) / len(sub_flagged) if sub_flagged else float("nan")
         r_ = len(sub_tp) / len(sub_actual) if sub_actual else float("nan")
         print(f"  {stratum:<14} precision={p:>6.1%}  recall={r_:>6.1%}  n={len(sub)}")
@@ -176,8 +184,9 @@ def main() -> int:
     skipped = 0
     for i, row in enumerate(rows_to_run, 1):
         job_id = row["job_id"]
-        label = holdout.normalize_label(row.get("label", ""))
-        if not label:
+        label_yd = holdout.normalize_label(row.get("label", ""))
+        label_fd = holdout.normalize_label(row.get("field_domain_label", ""))
+        if not label_yd and not label_fd:
             skipped += 1
             continue
         source = sources.get(job_id)
@@ -197,19 +206,35 @@ def main() -> int:
             skipped += 1
             continue
 
-        flagged = any(
-            isinstance(b, dict) and b.get("category") in EXPERIENCE_CATEGORIES
-            for b in blockers
+        predicted_yd = (
+            "flagged"
+            if any(
+                isinstance(b, dict) and b.get("category") in EXPERIENCE_CATEGORIES
+                for b in blockers
+            )
+            else "not_flagged"
         )
-        predicted = "flagged" if flagged else "not_flagged"
-        print(f"predicted={predicted} label={label}")
+        predicted_fd = (
+            "flagged"
+            if any(
+                isinstance(b, dict) and b.get("category") in FIELD_DOMAIN_CATEGORIES
+                for b in blockers
+            )
+            else "not_flagged"
+        )
+        print(
+            f"predicted_yd={predicted_yd} label_yd={label_yd or '-'}  "
+            f"predicted_fd={predicted_fd} label_fd={label_fd or '-'}"
+        )
 
         results.append(
             {
                 "job_id": job_id,
                 "stratum": row["stratum"],
-                "label": label,
-                "predicted": predicted,
+                "label": label_yd,
+                "predicted": predicted_yd,
+                "field_domain_label": label_fd,
+                "predicted_field_domain": predicted_fd,
                 "blockers": blockers,
             }
         )
@@ -217,8 +242,20 @@ def main() -> int:
     print(f"\n{'=' * 60}")
     print(f"Evaluated {len(results)}/{len(rows_to_run)} rows ({skipped} skipped)")
     if results:
-        _confusion_matrix(results)
-        _precision_recall(results)
+        yd_results = [r for r in results if r["label"]]
+        fd_results = [r for r in results if r["field_domain_label"]]
+        if yd_results:
+            print("\n### years_experience / degree ###")
+            _confusion_matrix(yd_results, "label", "predicted")
+            _precision_recall(yd_results, "label", "predicted")
+        if fd_results:
+            print("\n### field_domain ###")
+            _confusion_matrix(
+                fd_results, "field_domain_label", "predicted_field_domain"
+            )
+            _precision_recall(
+                fd_results, "field_domain_label", "predicted_field_domain"
+            )
     return 0
 
 
