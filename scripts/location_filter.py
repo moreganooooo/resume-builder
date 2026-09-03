@@ -11,11 +11,6 @@ Where this sits, and why there is only one of it:
       so delegating from there covers both scanners without either one
       growing its own copy of this logic.
 
-  prefilter.evaluate_preflight_gate()    <- NOT this. That reads the JD
-      *body prose* at batch-sweep time for deal-breaker phrases ("100%
-      on-site"), which is a different input at a different stage. It is
-      a downstream safety net, not a location resolver, and stays as-is.
-
   geo_distance.py                        <- pure math and point lookup.
       This module decides; that one measures.
 

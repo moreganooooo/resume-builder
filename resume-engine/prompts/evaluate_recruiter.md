@@ -51,6 +51,7 @@ Also evaluate the following 7 Practical Pursue subscores (each 1-5):
 Also identify any **hard_blockers** -- explicit, non-negotiable disqualifiers stated or clearly implied in the JD (e.g., "onsite required, no remote option," a required degree the candidate doesn't hold, a required certification, citizenship/clearance requirement they can't meet, a minimum years-of-experience threshold the candidate's history doesn't meet). Compare these against the candidate's explicit `deal_breakers` list. Each entry is an object with `text` (the literal disqualifier text or description) and `category`, one of:
 - `years_experience` -- a stated minimum years-in-role/years-in-industry the candidate's history doesn't meet
 - `degree` -- a required degree or field of study the candidate doesn't hold
+- `field_domain` -- a required industry/domain or functional background the candidate's history doesn't have (e.g., "healthcare experience required," "must have worked in a SaaS/DevOps environment") -- distinct from years_experience/degree, which are about a threshold or credential rather than the subject-matter background itself
 - `certification` -- a required license/certification the candidate doesn't hold
 - `citizenship_clearance` -- citizenship, work authorization, or security clearance the candidate can't meet
 - `onsite_commute` -- a routine onsite/hybrid presence requirement (this category is auto-cleared downstream when the posting is within the candidate's commute radius, so tag it even if you think proximity might resolve it)

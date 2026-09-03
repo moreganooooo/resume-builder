@@ -7,15 +7,17 @@ Two filters live here, both opt-in and both exclusion-only:
   * travel   -- the posting states a travel requirement above the
     candidate's ceiling.
 
-WHY A NEW MODULE RATHER THAN prefilter.py
-
-prefilter.evaluate_preflight_gate() is the obvious home and would have
-been the wrong one: it is reached only from batch_sweeper.py, and
-batch_sweeper is referenced by nothing but its own test. Adding a filter
-there would have been a silent no-op -- the filter would exist, pass its
-tests, and never run. These gates are instead wired into
-scan_boards._passes_content_filters(), beside the location gate, which
-scan_ats.py also routes through.
+These gates are wired into scan_boards._passes_content_filters(), beside
+the location gate, which scan_ats.py also routes through -- a deliberate
+choice made after finding that the obvious home, prefilter.py's
+evaluate_preflight_gate(), was reached only from batch_sweeper.py, itself
+referenced by nothing but its own test. Adding a filter there would have
+been a silent no-op -- the filter would exist, pass its tests, and never
+run. batch_sweeper.py/prefilter.py/job_eval_heuristics.py (the whole
+unreachable chain -- salary extraction, ghost-job scoring, visa
+classification) were deleted 2026-09-03; the real, wired equivalents are
+compensation.py (salary) and orchestrator.py's ghost_job_probability
+(ghost-job).
 
 DESIGN, CARRIED FROM THE LOCATION WORK
 

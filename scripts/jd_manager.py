@@ -158,7 +158,14 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
 # surfaced only as an opt-in view filter, pending their own holdout
 # measurement (see docs/hard_blockers.md). A pre-v3 evaluation may have
 # been zeroed by a blocker that would no longer zero anything today.
-SCORING_VERSION = 3
+#
+# v4 (2026-09-03): hard_blockers gained a `field_domain` category, split
+# out of the catch-all `other` (still force-zeroes, same as `other` --
+# unmeasured, pending its own holdout bar). A pre-v4 evaluation was made
+# without the model ever being told domain/industry mismatch counts as an
+# explicit disqualifier category, so it may have inconsistently flagged
+# (or missed) exactly the requirements this category exists to catch.
+SCORING_VERSION = 4
 
 
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
@@ -207,6 +214,7 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "role_track_evidence": evaluation.get("role_track_evidence") or "",
         "stretch_evidence": evaluation.get("stretch_evidence") or "",
         "posting_age_days": evaluation.get("posting_age_days"),
+        "ghost_job_probability": evaluation.get("ghost_job_probability"),
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
         "scoring_version": SCORING_VERSION,
     }

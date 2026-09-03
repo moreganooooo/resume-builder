@@ -1897,6 +1897,13 @@ def fit_composite_score(
 # role_track, which cleared a >=90% bar before it was allowed to gate
 # anything (see docs/hard_blockers.md). These surface only as an opt-in
 # view filter (model.JobRow.IsExperienceBlocked) instead.
+#
+# field_domain (required industry/functional background) is deliberately
+# NOT in this tuple yet -- it's a new category (see evaluate_recruiter.md)
+# carved out of the catch-all `other` bucket specifically so it can be
+# measured (scripts/eval_hard_blocker.py) before it gets the same
+# stop-auto-zeroing treatment. Until it clears its own holdout bar it
+# stays in the unconditional zero-out path below, same as `other`.
 EXPERIENCE_BLOCKER_CATEGORIES = ("years_experience", "degree")
 
 

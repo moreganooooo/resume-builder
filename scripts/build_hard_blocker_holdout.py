@@ -1,5 +1,5 @@
 """Draw a blind, stratified sample of roles for hand-labeling years/degree
-hard-blocker judgments.
+(and field/domain) hard-blocker judgments.
 
 WHY THIS EXISTS
 
@@ -7,11 +7,21 @@ hard_blockers was, until this change, an unmeasured, unconditional gate:
 any non-empty list from the recruiter-eval LLM call zeroed composite_score
 and forced Skip -- a stronger, less-validated gate than role_track was
 before ITS holdout measurement. Categorizing blockers (years_experience,
-degree, certification, citizenship_clearance, onsite_commute, other) let
-the years_experience/degree subset stop auto-zeroing, but "stop doing an
-unmeasured thing automatically" is not the same as "safe to gate on once
-measured" -- the same >=90% precision bar role_track cleared applies here
-before any opt-in filter gets built on top of experience_blockers.
+degree, field_domain, certification, citizenship_clearance,
+onsite_commute, other) let the years_experience/degree subset stop
+auto-zeroing, but "stop doing an unmeasured thing automatically" is not
+the same as "safe to gate on once measured" -- the same >=90% precision
+bar role_track cleared applies here before any opt-in filter gets built
+on top of experience_blockers or a future field-domain equivalent.
+
+`field_domain` (required industry/functional background, e.g. "requires
+healthcare experience") was added as its own category after the first
+labeling pass surfaced it as the single largest blocker bucket -- far
+bigger than years/degree combined -- previously falling inconsistently
+into the catch-all `other`, which already force-zeroes the score with no
+precision measurement at all. The holdout below carries a SECOND label
+column, `field_domain_label`, so both dimensions are measured from the
+same sample rather than requiring a second holdout draw.
 
 CANDIDATE-SPECIFIC, UNLIKE role_track
 
@@ -206,7 +216,16 @@ def write_holdout(path: str, rows: list[dict]) -> None:
     with open(path, "w", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(
-            ["job_id", "title", "company", "stratum", "label", "note", "excerpt"]
+            [
+                "job_id",
+                "title",
+                "company",
+                "stratum",
+                "label",
+                "field_domain_label",
+                "note",
+                "excerpt",
+            ]
         )
         for row in rows:
             writer.writerow(
@@ -215,7 +234,8 @@ def write_holdout(path: str, rows: list[dict]) -> None:
                     row["title"],
                     row["company"],
                     row["stratum"],
-                    "",  # you fill this in: blocks | does_not_block | unclear | n/a
+                    "",  # years/degree: blocks | does_not_block | unclear | n/a
+                    "",  # field_domain: same four values, separate judgment
                     "",
                     row["excerpt"],
                 ]
@@ -252,29 +272,32 @@ def normalize_label(raw: str) -> str:
     )
 
 
-def status(path: str) -> int:
-    rows = read_labels(path)
-    done = [r for r in rows if (r.get("label") or "").strip()]
+def _report_column(rows: list[dict], column: str, heading: str) -> list[str]:
+    """Prints the labeled-count/cross-tab breakdown for one label column
+    (`label` or `field_domain_label`) and returns any unrecognized values
+    found in it."""
+    done = [r for r in rows if (r.get(column) or "").strip()]
     bad = sorted(
         {
-            (r.get("label") or "").strip()
+            (r.get(column) or "").strip()
             for r in done
-            if not normalize_label(r.get("label", ""))
+            if not normalize_label(r.get(column, ""))
         }
     )
+    print(f"\n== {heading} ==")
     print(f"labeled {len(done)}/{len(rows)}")
 
     counts: dict[str, int] = {}
     for r in done:
-        counts[normalize_label(r["label"]) or "?"] = (
-            counts.get(normalize_label(r["label"]) or "?", 0) + 1
+        counts[normalize_label(r[column]) or "?"] = (
+            counts.get(normalize_label(r[column]) or "?", 0) + 1
         )
     for label, n in sorted(counts.items()):
         print(f"  {label:<15} {n}")
 
     grid: dict[str, dict[str, int]] = {}
     for r in done:
-        label = normalize_label(r["label"]) or "?"
+        label = normalize_label(r[column]) or "?"
         grid.setdefault(r["stratum"], {})[label] = (
             grid.setdefault(r["stratum"], {}).get(label, 0) + 1
         )
@@ -291,15 +314,26 @@ def status(path: str) -> int:
 
     remaining: dict[str, int] = {}
     for r in rows:
-        if not (r.get("label") or "").strip():
+        if not (r.get(column) or "").strip():
             remaining[r["stratum"]] = remaining.get(r["stratum"], 0) + 1
     if remaining:
-        print("\nunlabeled per stratum:", dict(sorted(remaining.items())))
+        print("unlabeled per stratum:", dict(sorted(remaining.items())))
 
     if bad:
-        print(f"\nUNRECOGNIZED LABELS: {bad}  (allowed: {', '.join(LABEL_VALUES)})")
-        return 1
-    return 0
+        print(
+            f"UNRECOGNIZED VALUES in {column}: {bad}  (allowed: {', '.join(LABEL_VALUES)})"
+        )
+    return bad
+
+
+def status(path: str) -> int:
+    rows = read_labels(path)
+    bad = _report_column(rows, "label", "years/degree (label)")
+    if "field_domain_label" in (rows[0].keys() if rows else []):
+        bad += _report_column(
+            rows, "field_domain_label", "field/domain (field_domain_label)"
+        )
+    return 1 if bad else 0
 
 
 def main() -> int:
@@ -355,18 +389,22 @@ def main() -> int:
     print(f"\nwrote {len(picked)} rows to {path}")
     print(f"preserved source text for {len(picked)} rows to {source_path}")
     print(textwrap.dedent(f"""
-            Fill the `label` column with one of: {', '.join(LABEL_VALUES)}.
-              blocks          -- you don't meet this years/degree
-                                 requirement and it would realistically
-                                 disqualify you
+            Fill `label` (years/degree) and `field_domain_label`
+            (industry/functional background) each with one of:
+            {', '.join(LABEL_VALUES)}.
+              blocks          -- you don't meet this requirement and it
+                                 would realistically disqualify you
               does_not_block  -- there's a stated requirement, but you
                                  meet it, or it reads as a soft
                                  preference rather than a hard bar
               unclear         -- the posting states a requirement but
                                  it's genuinely ambiguous whether it'd
                                  block you
-              n/a             -- no real years/degree requirement here
-                                 (the regex signal was a false hit)
+              n/a             -- no real requirement of this kind here
+
+            The two columns are independent judgments on the SAME
+            posting -- a role can block on field/domain and not on
+            years/degree, or vice versa, or both, or neither.
 
             "unclear" and "n/a" are real answers -- forcing a guess
             would put noise in the ground truth the classifier gets
