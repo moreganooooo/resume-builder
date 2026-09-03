@@ -128,12 +128,19 @@ def run(profile: str = None) -> tuple[bool, str]:
         )
 
     data_dir = profile_paths.data_dir(profile)
-    if not os.path.exists(os.path.join(data_dir, "applications.md")):
+    has_applications = os.path.exists(os.path.join(data_dir, "applications.md"))
+    # applications.md only feeds Pipeline -- Jobs reads the evaluated-jobs
+    # export instead (see _write_jobs_export() below), so a profile with
+    # evaluated jobs but zero logged application statuses still has
+    # something to show and shouldn't be locked out of the dashboard
+    # entirely just because Pipeline would be empty.
+    if not has_applications and not picker.list_all_evaluated_jds():
         return False, (
-            f"No applications logged yet for this profile ({data_dir} has no "
-            "applications.md) -- log at least one application status via "
-            '"Browse & Manage Jobs" first, then the dashboard has something '
-            "to show."
+            f"Nothing to show yet for this profile ({data_dir} has no "
+            "applications.md, and no roles have been evaluated) -- log at "
+            'least one application status via "Browse & Manage Jobs", or '
+            "evaluate a role first, then the dashboard has something to "
+            "show."
         )
 
     # Compile the dashboard if needed to prevent slow 'go run .' compiling loops!
