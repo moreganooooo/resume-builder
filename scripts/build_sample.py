@@ -17,6 +17,8 @@ picked up by get_pending_jds() during a batch `resume run` -- it can only
 ever be processed by explicitly invoking this command.
 """
 
+import datetime
+import logging
 import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,11 +36,34 @@ def build_sample() -> dict:
     Returns {"resume": {...}, "coverletter": {...}} -- each value is that
     build_tailored_*() call's own return dict ({} on failure, or the real
     data plus an _output_paths key on success)."""
+    logger = logging.getLogger("resume_pipeline")
+    if not logger.handlers:
+        try:
+            output_root = os.path.join(
+                os.path.dirname(PROJECT_ROOT), "output", "morgan"
+            )
+            os.makedirs(output_root, exist_ok=True)
+            timestamp = datetime.datetime.now().isoformat().replace(":", "-")
+            log_path = os.path.join(output_root, f"pipeline_run_{timestamp}.log")
+            handler = logging.FileHandler(log_path, encoding="utf-8")
+            formatter = logging.Formatter(
+                "%(asctime)s - %(levelname)s - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+            logger.info("Sample build started")
+        except Exception as e:
+            cli_art.detail(f"Could not initialize logging: {e}", level=cli_art.NORMAL)
+
     if not os.path.exists(SAMPLE_JD_PATH):
         cli_art.console.print(
             f"  {theme.colorize_icon('error')} Sample fixture not found: {SAMPLE_JD_PATH}",
             soft_wrap=True,
         )
+        if logger.handlers:
+            logger.error(f"Sample fixture not found: {SAMPLE_JD_PATH}")
         return {"resume": {}, "coverletter": {}}
 
     # Clear any leftover checkpoint so this is always a full, fresh run --
@@ -59,7 +84,15 @@ def build_sample() -> dict:
     cli_art.console.rule("Building Sample Cover Letter", style="dim")
     coverletter_result = engine.build_tailored_coverletter(SAMPLE_JD_PATH)
 
-    return {"resume": resume_result, "coverletter": coverletter_result}
+    result = {"resume": resume_result, "coverletter": coverletter_result}
+    resume_ok = bool(result["resume"])
+    coverletter_ok = bool(result["coverletter"])
+    if logger.handlers:
+        logger.info(
+            f"Sample build complete: resume={'ok' if resume_ok else 'failed'}, "
+            f"coverletter={'ok' if coverletter_ok else 'failed'}"
+        )
+    return result
 
 
 def main():
