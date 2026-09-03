@@ -77,8 +77,10 @@ class TestHandleUpdateKnowledgeNotYetSetUp(unittest.TestCase):
         side_effect=lambda p: str(p).endswith("profile.yml"),
     )
     @patch("menu.os.path.isdir", return_value=True)
+    @patch("menu.cli_art.confirm", return_value=False)
     def test_configured_profile_without_a_bootstrap_checkpoint_is_not_locked_out(
         self,
+        mock_cli_confirm,
         mock_isdir,
         mock_exists,
         mock_makedirs,
@@ -89,7 +91,9 @@ class TestHandleUpdateKnowledgeNotYetSetUp(unittest.TestCase):
         profile was created -- so a large, long-established profile was
         told it hadn't been set up. os.path.exists is forced False here to stand
         in for the absent checkpoint; the handler must get past the gate anyway
-        and reach the source-documents step."""
+        and reach the source-documents step. cli_art.confirm is mocked False
+        to decline the "pick with the file browser instead?" offer -- this
+        test is about the setup gate, not the picker."""
         with patch("menu.questionary.checkbox") as mock_checkbox:
             result = menu._handle_update_knowledge()
         self.assertFalse(result)  # no new files to ingest
@@ -142,8 +146,10 @@ class TestHandleUpdateKnowledgeEmptyFolder(unittest.TestCase):
     @patch("menu.os.listdir", side_effect=_listdir_only_source_docs([]))
     @patch("menu.os.makedirs")
     @patch("menu.os.path.exists", return_value=True)
+    @patch("menu.cli_art.confirm", return_value=False)
     def test_returns_false_and_shows_instructions_when_no_new_files(
         self,
+        mock_cli_confirm,
         mock_exists,
         mock_makedirs,
         mock_listdir,

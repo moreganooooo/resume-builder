@@ -270,3 +270,45 @@ def text(message: str, default: str = "") -> str | None:
     if data is None:
         return None
     return data["value"]
+
+
+def file_picker(
+    message: str,
+    start_dir: str | None = None,
+    allowed_extensions: list | None = None,
+) -> str | None:
+    """Single-file huh.FilePicker, styled like the rest of the program.
+
+    huh has no multi-file picker (confirmed via `go doc
+    charm.land/huh/v2.FilePicker` -- Value takes *string, not *[]string), so
+    multi-file intake (e.g. bootstrap_profile.pick_source_documents()) calls
+    this once per file in a pick/confirm-another loop rather than expecting
+    it to return more than one path.
+
+    Falls back to picker.interactive_file_picker() -- the existing
+    hand-rolled questionary picker -- when Go is unavailable, same
+    degrade-gracefully contract as every other function here.
+    """
+    if not _go_available():
+        import picker
+
+        return picker.interactive_file_picker(
+            message, start_dir=start_dir, allowed_extensions=allowed_extensions
+        )
+    spec = {"type": "filepicker", "message": message}
+    if start_dir:
+        spec["current_directory"] = start_dir
+    if allowed_extensions:
+        spec["allowed_types"] = allowed_extensions
+    try:
+        data = _run_prompt(spec)
+    except RuntimeError as e:
+        _warn_and_degrade(e)
+        import picker
+
+        return picker.interactive_file_picker(
+            message, start_dir=start_dir, allowed_extensions=allowed_extensions
+        )
+    if data is None:
+        return None
+    return data.get("value") or None

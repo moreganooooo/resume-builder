@@ -114,11 +114,16 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
             if "jd_manager" in sys.modules:
                 importlib.reload(sys.modules["jd_manager"])
 
+    @patch("menu.cli_art.confirm", return_value=False)
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
     @patch("menu.subprocess.run")
     def test_guest_mode_triggers_wizard_even_though_morgan_profile_exists(
-        self, mock_subprocess_run, mock_run_menu
+        self, mock_subprocess_run, mock_run_menu, mock_cli_confirm
     ):
+        # cli_art.confirm mocked False to decline the "add other writing
+        # samples?" follow-up prompt -- otherwise it falls through to a real,
+        # unmocked questionary.confirm() with no tty attached and raises
+        # EOFError.
         # Deliberately does NOT mock bootstrap_bullet_bank.create_new_profile
         # -- letting this run for real is a more honest test of the actual
         # bug (does a real profile directory get created, not just a mocked
@@ -199,12 +204,16 @@ class TestHandleBootstrapIngestAndFallback(unittest.TestCase):
             if "jd_manager" in sys.modules:
                 importlib.reload(sys.modules["jd_manager"])
 
+    @patch("menu.cli_art.confirm", return_value=False)
     @patch("menu.bootstrap_menu._run_express_setup", return_value=True)
     @patch("menu._run_go_bootstrap_wizard")
     @patch("menu._profile_is_set_up", return_value=False)
     def test_handle_bootstrap_copies_ingest_path_and_runs_express_setup(
-        self, mock_is_set_up, mock_go_wizard, mock_express_setup
+        self, mock_is_set_up, mock_go_wizard, mock_express_setup, mock_cli_confirm
     ):
+        # cli_art.confirm is mocked False here to decline the "add other
+        # writing samples?" follow-up prompt (_pick_and_copy_source_documents)
+        # -- this test is only about the primary ingest_path copy.
         mock_go_wizard.return_value = (
             True,
             {
@@ -228,6 +237,7 @@ class TestHandleBootstrapIngestAndFallback(unittest.TestCase):
         )
         self.assertTrue(os.path.isfile(os.path.join(dest_dir, "sample_resume.pdf")))
 
+    @patch("menu.cli_art.confirm", return_value=False)
     @patch("menu.bootstrap_menu._run_express_setup", return_value=True)
     @patch("menu.picker.interactive_file_picker")
     @patch("menu.questionary.confirm")
@@ -244,7 +254,14 @@ class TestHandleBootstrapIngestAndFallback(unittest.TestCase):
         mock_confirm,
         mock_picker,
         mock_express_setup,
+        mock_cli_confirm,
     ):
+        # cli_art.confirm is mocked False separately (not via mock_confirm)
+        # to decline the "add other writing samples?" follow-up prompt
+        # (_pick_and_copy_source_documents) -- without this, mock_confirm's
+        # blanket True answer plus mock_picker's constant sample_pdf return
+        # never gives that loop a way to terminate (regression test:
+        # this combination previously spun forever, see git history).
         mock_text.return_value.ask.return_value = "py_fallback_prof"
         mock_select.return_value.ask.return_value = "Resume PDF"
         mock_picker.return_value = self.sample_pdf
