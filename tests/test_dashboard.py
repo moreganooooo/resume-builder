@@ -47,12 +47,27 @@ class TestRun(unittest.TestCase):
         self.assertFalse(success)
         self.assertIn("Go isn't installed", message)
 
+    @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
     @patch("dashboard.os.path.exists", return_value=False)
     @patch("dashboard.go_available", return_value=True)
-    def test_returns_false_when_no_applications_logged_yet(self, mock_go, mock_exists):
+    def test_returns_false_when_nothing_to_show(self, mock_go, mock_exists, mock_list):
         success, message = dashboard.run("testprofile")
         self.assertFalse(success)
-        self.assertIn("No applications logged yet", message)
+        self.assertIn("Nothing to show yet", message)
+
+    @patch("dashboard.picker.list_all_evaluated_jds", return_value=[{"path": "a.json"}])
+    @patch("dashboard.subprocess.run")
+    @patch("dashboard.os.path.exists", return_value=False)
+    @patch("dashboard.go_available", return_value=True)
+    def test_proceeds_without_applications_md_when_jobs_are_evaluated(
+        self, mock_go, mock_exists, mock_subproc, mock_list
+    ):
+        # applications.md only feeds Pipeline -- a profile with evaluated
+        # jobs but no logged application statuses still has something for
+        # the Jobs screen to show, so it shouldn't be locked out entirely.
+        mock_subproc.return_value = MagicMock(returncode=0)
+        success, message = dashboard.run("testprofile")
+        self.assertTrue(success)
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
     @patch("dashboard.subprocess.run")
