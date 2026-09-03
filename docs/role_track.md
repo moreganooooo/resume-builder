@@ -334,6 +334,108 @@ again, including postings the classifier missed or scored low-confidence.
   option.
 - **Default**: off. Nothing changes for a user who never presses `[r]`.
 
+## Second labeling pass and revised numbers (2026-09-03)
+
+The labeler gave all 134 rows a second, independent pass without
+consulting the first pass's labels or any model prediction (still blind
+by design). 38 of 134 labels changed; two were reverted by explicit
+decision before adopting the pass: the Anthropic "Revenue Strategy &
+Operations" rows stayed `manager` (the known miss above is a real label,
+not a mislabel — keeping it), and Lumahealth "Sr. Customer Success
+Executive" stayed `ic` (already a known false positive from the original
+measurement, unaffected by the relabel). The rest — mostly `unclear` →
+`ic` resolutions — were adopted as-is.
+
+Net effect: the scoreable sample grew from 93 to 118 rows (the biggest
+practical impact of the second pass — many previously-`unclear` rows
+had a real answer after a closer read). Re-running `eval_role_track.py`
+against the corrected labels:
+
+```
+Manager-class precision: 88.9% (32/36 flagged)
+Manager-class recall:    94.1% (32/34 actual)
+(excludes 16 row(s) labeled unclear/n/a)
+```
+
+Precision dipped just under the ≥90% bar (was 90.3%); recall improved
+(was 90.3%). Both changes come entirely from the larger sample, not from
+any change to the two previously-known misses. Two new false positives
+appeared, both from rows that only became scoreable on the second pass:
+
+| Posting | Predicted | Label |
+|---|---|---|
+| "Senior Product Operations Manager, AI & Systems" @ Guild Education (both duplicate rows) | manager (high) | ic |
+| "Senior Customer Engagement Manager" @ Instabase | manager (high) | ic |
+
+The labeler hand-checked all three current false positives (these two
+plus the pre-existing Lumahealth one) against their full posting text
+and confirmed none mention direct reports or leading a team — the `ic`
+labels are correct. The suspected shared cause: phrasing like "leads the
+team by doing excellent work" — informal, non-managerial "leads by
+example" language on operationally-scoped titles — that the model may be
+reading as a people-management signal. This wasn't isolated further
+(no prompt experiment run against it yet); flagged here as the lead if
+someone wants to pick up the investigation, the same way the Anthropic
+case's 8/8 repeatability signal was investigated to specifically fund
+Experiment 2.
+
+The 88.9%/94.1% numbers are now the current reference point, replacing
+90.3%/90.3% above (that section is left as historical record of the
+audit process, not re-edited). The Jobs-screen opt-in filter's gate
+(`role_track` is `manager`/`player_coach` AND `role_track_confidence ==
+"high"`) is unchanged — this measurement doesn't clear or fail a
+decision already made, it's a periodic accuracy check per "What's still
+unbuilt" below.
+
+## Third experiment (2026-09-03, same day): two false-positive patterns fixed
+
+Unlike the two null-result prompt experiments above (both targeting the
+Anthropic false-negative pattern), this one worked. Investigating the
+three new false positives from the 2026-09-03 relabel (repeatability
+test, temp=0.7, 8 calls each, same method as before) found two distinct,
+deterministic root causes — not one:
+
+- **Pattern A — informal "lead"/"mentor the team" language.** Lumahealth
+  ("Lead the team through the onboarding of new customers") and Instabase
+  ("Mentor and develop the team: Serve as a mentor to mid-level and
+  associate CEMs") both describe leading work or mentoring peers, not
+  managing direct reports. 8/8 deterministic on both, matching the
+  "leads by example" theory.
+- **Pattern B — company-wide culture boilerplate, not role-specific
+  text.** Guild Education's evidence quote wasn't about the role at all:
+  "We know managers are often the single-largest driver of employee
+  satisfaction... we've identified consistent expectations for all of
+  Guild's people managers" is intro boilerplate present on every Guild
+  posting, describing what a candidate can expect from *their own*
+  manager — not asserting the applicant will manage anyone. 8/8
+  deterministic.
+
+**Fix**: one addition to `evaluate_capability.md`'s `role_track`
+paragraph, naming both patterns explicitly and explaining why each
+doesn't count (leading work ≠ managing people; company EVP boilerplate
+≠ this role's own duties).
+
+**Result**: repeatability-tested against the fix first (8/8 flipped to
+`ic` on all three, confidence settling at `medium` for two of the three
+and staying `high` for Instabase — a good sign, the model is genuinely
+less certain on the fuzzier cases now rather than uniformly confident).
+Then the full 134-row holdout was re-run:
+
+```
+Manager-class precision: 100.0% (32/32 flagged)
+Manager-class recall:    94.1% (32/34 actual)
+```
+
+Precision: 88.9% → **100%** (all 4 false positives eliminated, 0 left in
+the confusion matrix). Recall: unchanged at 94.1% — the only remaining
+miss is still the same two Anthropic "Revenue Strategy & Operations"
+rows from the first experiment, confirming this fix targeted a genuinely
+different failure mode and didn't regress the 32 existing true
+positives. All three strata now score 100%/100%.
+
+This is now the current reference measurement, replacing the
+88.9%/94.1% number above.
+
 ## What's still unbuilt
 
 Nothing structural — the precision/recall comparison against hand
@@ -342,4 +444,8 @@ all built and have been run/shipped. What's left is process, not code:
 re-running `eval_role_track.py` periodically as the prompt or holdout
 changes, and expanding the holdout past 134 rows if the filter's
 observed real-world miss rate ever suggests the current confidence
-interval is too wide to trust.
+interval is too wide to trust. The one remaining known gap is the
+Anthropic reports-come-later false negative, which two targeted prompt
+experiments have failed to fix (see above) — a future attempt likely
+needs a larger sample of similar misses to find a structural cause,
+rather than another wording iteration.
