@@ -4737,9 +4737,11 @@ class ResumeEngine:
         so Google can cache-hit the KB prefix on every builder call regardless
         of JD changes.
         """
+        logger = logging.getLogger("resume_pipeline")
         cli_art.print_literal(
             f"\nBuilding tailored resume for: {cli_art._escape_markup(jd_path)}"
         )
+        logger.info(f"build_tailored_resume starting: {jd_path}")
 
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
@@ -6264,6 +6266,7 @@ class ResumeEngine:
         resume_data["_page_count"] = page_count
         os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
 
+        logger.info(f"build_tailored_resume completed successfully: {job_key}")
         return resume_data
 
     def build_application_package(
