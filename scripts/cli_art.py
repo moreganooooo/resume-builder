@@ -1798,6 +1798,24 @@ def checkbox(message: str, choices, **kwargs):
     return charm_prompt.checkbox(message, choices)
 
 
+def file_picker(
+    message: str, start_dir: str | None = None, allowed_extensions: list | None = None
+) -> str | None:
+    """A single-file huh.FilePicker, or the legacy questionary picker under
+    unittest / when Go is unavailable (see charm_prompt.file_picker())."""
+    import sys
+
+    if "unittest" in sys.modules:
+        import picker
+
+        return picker.interactive_file_picker(
+            message, start_dir=start_dir, allowed_extensions=allowed_extensions
+        )
+    return charm_prompt.file_picker(
+        message, start_dir=start_dir, allowed_extensions=allowed_extensions
+    )
+
+
 def confirm_destructive(action: str, target: str, default: bool = False) -> bool:
     """The single gate for actions that change or discard the user's own
     data without costing money -- archiving a posting, overwriting a

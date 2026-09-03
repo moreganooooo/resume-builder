@@ -55,6 +55,23 @@ func TestSpecUnmarshal_TextWithDefaultValue(t *testing.T) {
 	}
 }
 
+func TestSpecUnmarshal_FilePicker(t *testing.T) {
+	raw := `{"type":"filepicker","message":"Pick a file","current_directory":"/tmp","allowed_types":[".pdf",".json"]}`
+	var spec Spec
+	if err := json.Unmarshal([]byte(raw), &spec); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if spec.Type != "filepicker" {
+		t.Errorf("Type = %q, want %q", spec.Type, "filepicker")
+	}
+	if spec.CurrentDirectory != "/tmp" {
+		t.Errorf("CurrentDirectory = %q, want %q", spec.CurrentDirectory, "/tmp")
+	}
+	if len(spec.AllowedTypes) != 2 || spec.AllowedTypes[0] != ".pdf" {
+		t.Errorf("AllowedTypes = %v, want [.pdf .json]", spec.AllowedTypes)
+	}
+}
+
 func TestResultMarshal_Confirm(t *testing.T) {
 	answer := true
 	result := Result{Confirmed: &answer}
