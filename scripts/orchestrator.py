@@ -1,6 +1,8 @@
 import copy
+import datetime
 import inspect
 import json
+import logging
 import os
 import random
 import re
@@ -6485,6 +6487,28 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     """
     kb_snapshot.snapshot_kb()
 
+    logger = None
+    try:
+        output_root = profile_paths.output_root()
+        os.makedirs(output_root, exist_ok=True)
+        timestamp = datetime.datetime.now().isoformat().replace(":", "-")
+        log_path = os.path.join(output_root, f"pipeline_run_{timestamp}.log")
+        logger = logging.getLogger("resume_pipeline")
+        if logger.handlers:
+            logger.handlers.clear()
+        handler = logging.FileHandler(log_path, encoding="utf-8")
+        formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        logger.info("Pipeline run started")
+    except Exception as e:
+        cli_art.detail(f"Could not initialize logging: {e}", level=cli_art.NORMAL)
+        logger = None
+
     master_resume = {}
     if master_resume_path:
         try:
@@ -6508,7 +6532,14 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
         jd_paths = jd_manager.get_pending_jds()
         if not jd_paths:
             cli_art.print_literal("\nNo pending JDs found in jds/. Nothing to do.")
+            if logger:
+                logger.info("No pending JDs found, exiting")
             return 0, 0
+
+    if logger:
+        logger.info(
+            f"Processing {len(jd_paths)} JD(s): {', '.join(os.path.basename(p) for p in jd_paths[:5])}{'...' if len(jd_paths) > 5 else ''}"
+        )
 
     completed_count = 0
     failed_count = 0
@@ -6522,6 +6553,10 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 f"  {theme.colorize_icon('error')} Could not read JD file {path}: {e}",
                 soft_wrap=True,
             )
+            if logger:
+                logger.warning(
+                    f"[{index + 1}/{len(jd_paths)}] Could not read JD file {path}: {e}"
+                )
             tracker.mark_failed(
                 job_key=f"unreadable:{os.path.basename(path)}",
                 source_file=os.path.basename(path),
@@ -6533,6 +6568,11 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
         job_title, company_name = jd_manager.extract_job_meta(path)
         source_url = jd_manager.extract_source_url(path)
         evaluation = jd_manager.read_evaluation(path)
+
+        if logger:
+            logger.info(
+                f"[{index + 1}/{len(jd_paths)}] Starting: {job_title} at {company_name}"
+            )
 
         try:
             result = engine.build_tailored_resume(
@@ -6550,6 +6590,8 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             # pending JD (1,100+ of them), scrolling the one actionable
             # instruction past hundreds of times over several hours. Stop, and
             # say how much work is still waiting.
+            if logger:
+                logger.error(f"Sustained API failure for {job_key}: {e}")
             tracker.mark_failed(
                 job_key=job_key,
                 job_title=job_title,
@@ -6568,8 +6610,14 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 cli_art.print_literal(
                     f"    {aborted_remaining} JD(s) left untouched; re-run to pick up where this stopped."
                 )
+            if logger:
+                logger.info(
+                    f"Pipeline stopped early: {aborted_remaining} JD(s) not attempted"
+                )
             break
         except Exception as e:
+            if logger:
+                logger.error(f"Unhandled exception for {job_key}: {e}")
             result = None
             cli_art.console.print(
                 f"  {theme.colorize_icon('error')} Unhandled exception building resume for {path}: {e}",
@@ -6597,10 +6645,14 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 evaluation=evaluation,
             )
             completed_count += 1
+            if logger:
+                logger.info(f"Successfully completed: {job_key}")
             cli_art.print_literal(
                 f"\nDone! Resume built successfully for {cli_art._escape_markup(path)}"
             )
         else:
+            if logger:
+                logger.warning(f"Failed to build: {job_key}")
             tracker.mark_failed(
                 job_key=job_key,
                 job_title=job_title,
@@ -6626,6 +6678,15 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             f" Aborted early on sustained API failure -- {aborted_remaining} JD(s) not attempted."
         )
     cli_art.console.print(summary, soft_wrap=True)
+
+    if logger:
+        logger.info(
+            f"Pipeline run complete: {completed_count} completed, {failed_count} failed"
+        )
+        if aborted_remaining:
+            logger.info(
+                f"Pipeline stopped early: {aborted_remaining} JD(s) not attempted"
+            )
 
     try:
         import db
