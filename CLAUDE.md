@@ -923,7 +923,24 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   VIEW filter, not a scan-time/database gate, so the one known false
   negative (the Anthropic case above) never gets permanently dropped
   from the corpus; toggling the filter off always shows every posting
-  again. Full history in `docs/role_track.md`.
+  again. **A second, independent labeling pass on 2026-09-03 grew the
+  scoreable holdout from 93 to 118 rows** (mostly `unclear` -> real-answer
+  resolutions), surfacing 3 new false positives -- hand-checked and
+  confirmed correct `ic` labels, not mislabels, from two distinct
+  deterministic (8/8 at temp=0.7) root causes: informal "lead the
+  team"/"mentor the team" language describing work-leadership or peer
+  mentorship rather than direct reports (Lumahealth, Instabase), and
+  Guild Education's own company-wide culture boilerplate ("consistent
+  expectations for all of Guild's people managers") being misread as
+  role-specific evidence rather than a generic EVP statement about what
+  candidates can expect from their OWN manager. **Unlike the two
+  Anthropic-targeting prompt experiments above, a third one (also
+  2026-09-03) fixed both patterns**: one addition to
+  `evaluate_capability.md` naming each explicitly. Re-running the full
+  134-row holdout after: precision 88.9% -> **100%** (0 false positives
+  left), recall unchanged at 94.1% (still only the same 2 known
+  Anthropic misses, confirming no regression on the 32 true positives).
+  Full history in `docs/role_track.md`.
 - **`evaluate_all_pending(skip_evaluated=False)` was DEAD, and the shape
   of that bug recurs.** Its default work list came from
   `unevaluated_roles()`, which by definition holds nothing that has a
