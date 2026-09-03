@@ -52,12 +52,15 @@ type Option struct {
 // Default is used by "confirm"; DefaultValue is used by "select" and
 // "text" (the pre-filled/editable starting value) -- kept as separate
 // fields since they're different JSON types, not a shared "default" key.
+// CurrentDirectory/AllowedTypes are used only by "filepicker".
 type Spec struct {
-	Type         string   `json:"type"` // "select", "confirm", "checkbox", or "text"
-	Message      string   `json:"message"`
-	Options      []Option `json:"options,omitempty"`
-	Default      bool     `json:"default,omitempty"`
-	DefaultValue string   `json:"default_value,omitempty"`
+	Type             string   `json:"type"` // "select", "confirm", "checkbox", "text", or "filepicker"
+	Message          string   `json:"message"`
+	Options          []Option `json:"options,omitempty"`
+	Default          bool     `json:"default,omitempty"`
+	DefaultValue     string   `json:"default_value,omitempty"`
+	CurrentDirectory string   `json:"current_directory,omitempty"`
+	AllowedTypes     []string `json:"allowed_types,omitempty"`
 }
 
 // Result is the answer, encoded to stdout JSON. Exactly one field is set,
@@ -83,6 +86,8 @@ func Run(t theme.Theme, spec Spec) (Result, error) {
 		return runCheckbox(t, spec)
 	case "text":
 		return runText(t, spec)
+	case "filepicker":
+		return runFilePicker(t, spec)
 	default:
 		return Result{}, fmt.Errorf("unknown prompt type %q", spec.Type)
 	}
@@ -134,6 +139,31 @@ func runText(t theme.Theme, spec Spec) (Result, error) {
 	field := huh.NewInput().
 		Title(spec.Message).
 		Value(&answer)
+	form := newForm(t, huh.NewGroup(field))
+	if err := form.Run(); err != nil {
+		return Result{}, err
+	}
+	return Result{Value: answer}, nil
+}
+
+// runFilePicker renders huh's single-file picker. There is no multi-file
+// picker in this huh version (confirmed via `go doc`), so multi-file intake
+// is handled Python-side as a pick-one-then-loop-and-confirm-another UX
+// rather than here.
+func runFilePicker(t theme.Theme, spec Spec) (Result, error) {
+	var answer string
+	field := huh.NewFilePicker().
+		Title(spec.Message).
+		FileAllowed(true).
+		DirAllowed(false).
+		ShowSize(true).
+		Value(&answer)
+	if spec.CurrentDirectory != "" {
+		field = field.CurrentDirectory(spec.CurrentDirectory)
+	}
+	if len(spec.AllowedTypes) > 0 {
+		field = field.AllowedTypes(spec.AllowedTypes)
+	}
 	form := newForm(t, huh.NewGroup(field))
 	if err := form.Run(); err != nil {
 		return Result{}, err

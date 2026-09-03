@@ -335,6 +335,79 @@ def _handle_manage_scoring_weights() -> bool:
     return True
 
 
+def _handle_manage_voice() -> bool:
+    """Settings & Upkeep -> Writing Voice & Samples.
+
+    Two independent, both-optional things live here: the short
+    voice_calibration_example quote (a single profile.yml string, only
+    ever collected at bootstrap until now) and voice-anchors.md (the
+    fuller writing-sample corpus drafted from whatever's in
+    source_documents/, already collected at bootstrap via
+    write_voice_anchors() -- this just gives a returning profile a way
+    to add to or replace it without re-running the whole wizard)."""
+    import bootstrap_profile
+
+    while True:
+        current = bootstrap_profile.get_voice_calibration_example()
+        preview = f'"{current}"' if current else "(not set)"
+        choice = cli_art.select(
+            "Writing Voice & Samples",
+            choices=[
+                questionary.Choice(
+                    title=f"Edit voice-calibration example {preview}",
+                    value="calibration",
+                ),
+                questionary.Choice(
+                    title="Add/replace writing-sample documents "
+                    "(regenerates voice-anchors.md)",
+                    value="anchors",
+                ),
+                questionary.Choice(title="Back", value="back"),
+            ],
+        )
+        if not choice or choice == "back":
+            return True
+
+        if choice == "calibration":
+            new_value = cli_art.text(
+                "A short, real sentence or two in your own voice (used to "
+                "calibrate tone during resume critique; leave blank to clear):",
+                default=current,
+            )
+            if new_value is None:
+                continue
+            bootstrap_profile.set_voice_calibration_example(new_value.strip())
+            cli_art.cli_info("Voice-calibration example saved.")
+            continue
+
+        if choice == "anchors":
+            import profile_paths
+
+            source_docs_dir = os.path.join(
+                profile_paths.kb_dir(), "bootstrap", "source_documents"
+            )
+            os.makedirs(source_docs_dir, exist_ok=True)
+            files = [
+                f
+                for f in os.listdir(source_docs_dir)
+                if os.path.isfile(os.path.join(source_docs_dir, f))
+            ]
+            cli_art.console.print(
+                f"\n  {len(files)} document(s) currently in your source folder.\n"
+            )
+            if cli_art.confirm(
+                "Pick additional/replacement document(s) with the file browser?",
+                default=True,
+            ):
+                _pick_and_copy_source_documents(source_docs_dir)
+            summary = bootstrap_bullet_bank.run_ingestion()
+            bootstrap_bullet_bank.print_ingestion_summary(summary)
+            checkpoint = bootstrap_profile._load_checkpoint()
+            bootstrap_profile.write_voice_anchors(checkpoint)
+            cli_art.cli_info("voice-anchors.md regenerated.")
+            continue
+
+
 def _build_settings_upkeep_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why
     (the last-run label below is itself state that can change between
@@ -379,6 +452,10 @@ def _build_settings_upkeep_choices() -> list:
         questionary.Choice(
             title=_icon_title("evaluate", "↳ Discover Local Employers with ATS Boards"),
             value="discover_employers",
+        ),
+        questionary.Choice(
+            title=_icon_title("save", "↳ Writing Voice & Samples"),
+            value="manage_voice",
         ),
         questionary.Choice(
             title=_icon_title("build", "↳ Generate Sample Resume + Cover Letter (QA)"),
@@ -701,6 +778,42 @@ def _confirm_icon_set() -> None:
     theme.set_icon_set(choice)
 
 
+def _pick_and_copy_source_documents(dest_dir: str) -> int:
+    """Loops a single-file huh.FilePicker (cli_art.file_picker(), see
+    charm_prompt.file_picker()'s docstring for why this is a loop and not
+    one multi-select call -- huh has no multi-file picker) and copies each
+    chosen file into dest_dir, prompting "add another?" after each pick.
+    Returns the number of files copied.
+
+    This is the picker-driven alternative to the original manual-only
+    flow (_print_source_docs_instructions telling the user to drag files
+    into a folder themselves via Finder/Explorer) -- both remain
+    supported, since a user who already has files staged there should
+    never be required to re-pick them through this loop."""
+    import shutil
+
+    os.makedirs(dest_dir, exist_ok=True)
+    copied = 0
+    start_dir = os.path.expanduser("~/Downloads")
+    if not os.path.isdir(start_dir):
+        start_dir = os.path.expanduser("~")
+    while True:
+        picked = cli_art.file_picker(
+            "Select a document to add (resume, LinkedIn export, recommendation "
+            "letter, writing sample, etc.):",
+            start_dir=start_dir,
+        )
+        if not picked or not os.path.isfile(picked):
+            break
+        shutil.copy(picked, dest_dir)
+        copied += 1
+        cli_art.cli_info(f"Added {os.path.basename(picked)}.")
+        start_dir = os.path.dirname(picked)
+        if not cli_art.confirm("Add another document?", default=False):
+            break
+    return copied
+
+
 def _print_source_docs_instructions(source_docs_dir: str) -> None:
     """The proactive "here's what to do first" message for an empty
     source_documents/ folder -- shown whether this is a just-created
@@ -885,7 +998,7 @@ def _handle_bootstrap() -> bool:
             ingest_path = ""
             if source_choice_val != "manual":
                 allowed_exts = [".pdf"] if source_choice_val == "pdf" else [".json"]
-                ingest_path = picker.interactive_file_picker(
+                ingest_path = cli_art.file_picker(
                     f"Browse and select your source {source_choice_val.upper()} file:",
                     allowed_extensions=allowed_exts,
                 )
@@ -949,6 +1062,23 @@ def _handle_bootstrap() -> bool:
                     f"Copied source document: {os.path.basename(source_path)} to your profile's source_documents folder."
                 )
 
+                dest_dir_for_extras = dest_dir
+            else:
+                dest_dir_for_extras = os.path.join(
+                    profile_paths.PROFILES_DIR,
+                    name,
+                    "knowledge_base",
+                    "bootstrap",
+                    "source_documents",
+                )
+
+            if cli_art.confirm(
+                "Add any other writing samples or documents (recommendation "
+                "letters, certifications, past cover letters, etc.)?",
+                default=False,
+            ):
+                _pick_and_copy_source_documents(dest_dir_for_extras)
+
             if data.get("create_bullet"):
                 # Automatically run express auto-pilot onboarding!
                 return bootstrap_menu._run_express_setup(interactive=False)
@@ -987,7 +1117,17 @@ def _handle_update_knowledge() -> bool:
     ]
     if not files:
         _print_source_docs_instructions(source_docs_dir)
-        return False
+        if cli_art.confirm(
+            "Pick document(s) now with the file browser instead?", default=True
+        ):
+            _pick_and_copy_source_documents(source_docs_dir)
+            files = [
+                f
+                for f in os.listdir(source_docs_dir)
+                if os.path.isfile(os.path.join(source_docs_dir, f))
+            ]
+        if not files:
+            return False
 
     scope_choices = cli_art.checkbox(
         f"Found {len(files)} document(s). What would you like to update with them?",
@@ -1895,6 +2035,9 @@ def _handle_settings_upkeep() -> bool:
             continue
         if choice == "discover_employers":
             _handle_discover_employers()
+            continue
+        if choice == "manage_voice":
+            _handle_manage_voice()
             continue
         if choice == "build_sample":
             _handle_build_sample()
