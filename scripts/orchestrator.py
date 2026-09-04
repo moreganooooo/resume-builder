@@ -1962,6 +1962,78 @@ def confirm_jd_skill_gaps_interactively(
     return selected
 
 
+def confirm_missing_coverage_keywords_interactively(missing: list[str]) -> list[str]:
+    """
+    Runs after check_keyword_coverage() reports on the FINISHED resume (Step
+    1.5's confirm_jd_skill_gaps_interactively() only sees pre-build JD
+    keywords, so a gap that check_keyword_coverage() catches -- a keyword
+    the model still didn't use, or one Step 1.5 never surfaced -- would
+    otherwise need a manual trip to Settings & Upkeep to fix. Confirmed
+    2026-09-04: a real build reported 'Missing: Claude, Asana, CMS
+    platforms, Cybersecurity' with no way to say "I actually have that"
+    short of hand-editing verified_tools.json and re-running from scratch.
+
+    Per-keyword confirm/deny (not the Step 1.5 checkbox) since this list is
+    already short and specific to one finished build. Returns the names
+    confirmed, so the caller can offer to rebuild with them included.
+    """
+    if not missing:
+        return []
+    if "unittest" in sys.modules or not sys.stdin.isatty():
+        return []
+
+    import skills_menu
+
+    try:
+        verified_tools_data = skills_menu._load_verified_tools()
+    except Exception:
+        verified_tools_data = {"tools": []}
+    tools = verified_tools_data.setdefault("tools", [])
+
+    cli_art.detail(
+        "The finished resume is missing some JD keywords. Confirm any you "
+        "actually have -- they'll be added to your verified skills ledger:",
+        level=cli_art.NORMAL,
+    )
+
+    confirmed = []
+    for kw in missing:
+        has_it = cli_art.confirm(f"Do you have experience with '{kw}'?", default=False)
+        if not has_it:
+            continue
+        note = (
+            cli_art.text(
+                f"Optional one-line note on how you've used '{kw}' (Enter to skip):",
+                default="",
+            )
+            or ""
+        )
+        tools.append(
+            {
+                "id": skills_menu._generate_next_id(tools),
+                "name": kw,
+                "category": "Candidate Verified",
+                "confidence": "Proficient",
+                "employer": "Self / Profile",
+                "use_notes": note or "Added via post-build keyword-coverage prompt",
+                "tr_references": ["profile.yml"],
+            }
+        )
+        confirmed.append(kw)
+
+    if confirmed:
+        saved = skills_menu._save_verified_tools(verified_tools_data)
+        if saved:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('success')} Added [bold green]{len(confirmed)}[/bold green] "
+                f"tool(s) to verified_tools.json: {', '.join(confirmed)}"
+            )
+    else:
+        cli_art.detail("No additional skills added.", level=cli_art.NORMAL)
+
+    return confirmed
+
+
 def _review_recommendations_interactively(
     recs: list[str], checkpoint: dict, job_key: str
 ) -> list[str]:
@@ -6744,6 +6816,34 @@ class ResumeEngine:
         os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
 
         logger.info(f"build_tailored_resume completed successfully: {job_key}")
+
+        # Offer to close the JD-keyword coverage gap right here, rather than
+        # requiring a manual trip to Settings & Upkeep followed by a manual
+        # re-run. Deliberately after delete_checkpoint() above: the
+        # checkpoint is gone by this point, so a confirmed re-run below
+        # starts completely fresh (re-mines the bullet bank, re-runs the
+        # builder) instead of resuming from cached pre-skill-update state,
+        # which would silently reuse the old output and never pick up the
+        # newly confirmed skill.
+        if interactive and coverage["missing"]:
+            confirmed_skills = confirm_missing_coverage_keywords_interactively(
+                coverage["missing"]
+            )
+            if confirmed_skills and cli_art.confirm(
+                f"Re-run this build now so the resume can use the newly "
+                f"confirmed skill{'s' if len(confirmed_skills) > 1 else ''} "
+                f"({', '.join(confirmed_skills)})?",
+                default=True,
+            ):
+                cli_art.print_literal("  Re-running build with updated skills...")
+                return self.build_tailored_resume(
+                    jd_path,
+                    master_resume,
+                    output_filename=output_filename,
+                    job_key=job_key,
+                    interactive=interactive,
+                )
+
         return resume_data
 
     def build_application_package(
