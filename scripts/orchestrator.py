@@ -6481,6 +6481,25 @@ class ResumeEngine:
 # ---------------------------------------------------------------------------
 
 
+def append_console_transcript(log_path: str) -> None:
+    """Appends the full recorded on-screen console output (everything
+    cli_art printed, not just this module's curated checkpoint lines) to
+    log_path, then clears the recording buffer for the next run.
+
+    Best-effort -- a failure here shouldn't take down a build that
+    otherwise completed successfully.
+    """
+    try:
+        transcript = cli_art.console.export_text(clear=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("FULL CONSOLE TRANSCRIPT\n")
+            f.write("=" * 80 + "\n")
+            f.write(transcript)
+    except Exception:
+        pass
+
+
 def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     """Runs the tailor+render pipeline.
 
@@ -6491,26 +6510,33 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     kb_snapshot.snapshot_kb()
 
     logger = None
-    try:
-        output_root = profile_paths.output_root()
-        os.makedirs(output_root, exist_ok=True)
-        timestamp = datetime.datetime.now().isoformat().replace(":", "-")
-        log_path = os.path.join(output_root, f"pipeline_run_{timestamp}.log")
-        logger = logging.getLogger("resume_pipeline")
-        if logger.handlers:
-            logger.handlers.clear()
-        handler = logging.FileHandler(log_path, encoding="utf-8")
-        formatter = logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-        logger.info("Pipeline run started")
-    except Exception as e:
-        cli_art.detail(f"Could not initialize logging: {e}", level=cli_art.NORMAL)
-        logger = None
+    log_path = None
+    import db as _db  # local import: avoids a module-level cycle, matches
+
+    # the existing lazy `import db` pattern used later in this function
+    if not _db._is_unisolated_test_write():
+        try:
+            output_root = profile_paths.output_dir()
+            os.makedirs(output_root, exist_ok=True)
+            timestamp = datetime.datetime.now().isoformat().replace(":", "-")
+            log_path = os.path.join(output_root, f"pipeline_run_{timestamp}.log")
+            logger = logging.getLogger("resume_pipeline")
+            if logger.handlers:
+                logger.handlers.clear()
+            handler = logging.FileHandler(log_path, encoding="utf-8")
+            formatter = logging.Formatter(
+                "%(asctime)s - %(levelname)s - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+            logger.info("Pipeline run started")
+            cli_art.console.export_text(clear=True)  # discard stale transcript
+        except Exception as e:
+            cli_art.detail(f"Could not initialize logging: {e}", level=cli_art.NORMAL)
+            logger = None
+            log_path = None
 
     master_resume = {}
     if master_resume_path:
@@ -6690,6 +6716,9 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
             logger.info(
                 f"Pipeline stopped early: {aborted_remaining} JD(s) not attempted"
             )
+
+    if log_path:
+        append_console_transcript(log_path)
 
     try:
         import db

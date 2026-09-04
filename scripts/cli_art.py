@@ -36,7 +36,10 @@ from rich.theme import Theme as RichTheme
 # "repr.str" is a dim ANSI green, distinct from -- and clashing with --
 # theme.SUCCESS's brighter flat green) so any auto-highlighted quoted
 # substring anywhere in this app's output stays on-palette.
-console = Console(theme=RichTheme({"repr.str": theme.SUCCESS}))
+# record=True lets a pipeline run capture its own full on-screen transcript
+# (console.export_text(clear=True)) for the build log -- cheap to keep on
+# permanently since callers clear the buffer themselves after reading it.
+console = Console(theme=RichTheme({"repr.str": theme.SUCCESS}), record=True)
 
 SUCCESS = (
     f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}]"
