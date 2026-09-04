@@ -1589,6 +1589,60 @@ def repair_violations_surgically(
             )
             density_modified = density_modified or changed
 
+    # 8. Deterministic Bullet Count Repair
+    # _check_bullet_counts()'s own docstring names this exact failure --
+    # VML and Callahan Creek shipping 2 bullets against a declared
+    # min_bullets of 3 -- as "observed live", but no repair for it was
+    # ever built (unlike Role roster / step 5, which this mirrors): the
+    # LLM full-resume retry loop restates the same instruction on every
+    # attempt and it survives all 4, failing the whole build (fatal per
+    # partition_violations). Pulls additional bullets for the same
+    # company straight from bullet_tuples -- the same source of truth
+    # step 5 uses -- skipping any bullet text already present anywhere
+    # in that job's achievements. If the bank doesn't have enough spare
+    # bullets for that company, this is a no-op and the violation is
+    # left for the LLM loop, same as step 5's "nothing to build from"
+    # case.
+    bullet_count_modified = False
+    bullet_count_violations = [
+        v
+        for v in violations
+        if v.startswith("Bullet count:") and "below its required minimum of" in v
+    ]
+    if bullet_count_violations and bullet_tuples:
+        for v in bullet_count_violations:
+            match = re.match(
+                r"^Bullet count: '(.+)' has \d+ achievement bullet\(s\), "
+                r"below its required minimum of (\d+)",
+                v,
+            )
+            if not match:
+                continue
+            company, minimum_str = match.groups()
+            minimum = int(minimum_str)
+            needle = validate_resume._normalize_company(company)
+            for job in current_data.get("EXPERIENCE", []):
+                entry = validate_resume._normalize_company(job.get("company", ""))
+                if not (needle and (needle in entry or entry in needle)):
+                    continue
+                achievements = job.setdefault("achievements", [])
+                existing = set(achievements)
+                candidates = [
+                    b
+                    for b, c, _t in bullet_tuples
+                    if c == company and b not in existing
+                ]
+                max_b = (role_bullet_maximums or {}).get(company)
+                for candidate in candidates:
+                    if len(achievements) >= minimum:
+                        break
+                    if max_b and len(achievements) >= max_b:
+                        break
+                    achievements.append(candidate)
+                    existing.add(candidate)
+                    bullet_count_modified = True
+                break
+
     # Only re-evaluate if we actually modified something
     if (
         verb_modified
@@ -1600,6 +1654,7 @@ def repair_violations_surgically(
         or roster_modified
         or metric_modified
         or density_modified
+        or bullet_count_modified
     ):
         final_violations = validate_resume.validate(
             current_data,
