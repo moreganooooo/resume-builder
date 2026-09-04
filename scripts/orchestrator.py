@@ -1,3 +1,4 @@
+import ast
 import copy
 import datetime
 import inspect
@@ -1206,6 +1207,40 @@ Return ONLY the rewritten text, no quotes or commentary."""
         return text
 
 
+def _micro_strip_pronoun(text: str) -> str:
+    """Uses a lightweight LLM call to rewrite a single Summary/Skills/bullet
+    field so it no longer contains a first- or third-person pronoun (I, me,
+    my, we, our, she, her, hers, he, him, his), preserving every fact.
+
+    Same narrow, single-field idiom as _micro_dedupe_metric above -- no
+    repair existed for validate_resume._check_pronouns_outside_why()'s
+    violation at all until now, and a real 2026-09-04 build reduced every
+    other fatal violation to zero across 4 fix attempts while this one
+    ("Recruited by the CEO to lead brand design at his next venture...")
+    alone survived unchanged, since the LLM full-resume retry loop had no
+    narrower instruction than to restate the same global rule.
+    """
+    prompt = f"""You are a professional resume editor. This resume text contains a pronoun (I, me, my, we, our, she, her, hers, he, him, or his), which is not allowed outside the Why section.
+
+Current text:
+"{text}"
+
+Rewrite it so it contains no such pronoun, preserving every fact (who did what, to whom, with what result) -- usually this means naming the person/entity the pronoun referred to instead of using the pronoun, or rephrasing the clause so no pronoun is needed. Do not invent new facts.
+
+Return ONLY the rewritten text, no quotes or commentary."""
+    try:
+        repaired, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction="",
+            contents=prompt,
+            temperature=0.2,
+        )
+        cleaned = repaired.strip().strip('"').strip("'") if repaired else text
+        return cleaned if cleaned else text
+    except Exception:
+        return text
+
+
 def _fields_containing_word(
     current_data: dict, word: str
 ) -> list[tuple[str, int, int, str]]:
@@ -1643,6 +1678,78 @@ def repair_violations_surgically(
                     bullet_count_modified = True
                 break
 
+    # 9. Targeted Pronoun Removal Repair
+    # Same gap as step 8: _check_pronouns_outside_why() had no repair path
+    # at all until now, and a real 2026-09-04 build reduced every other
+    # fatal violation to zero across 4 fix attempts while this one alone
+    # survived unchanged. The violation message embeds the exact text via
+    # repr(), which ast.literal_eval() reverses; the field is then located
+    # by an exact content match rather than by re-parsing the field-name
+    # label, so this works regardless of which field type flagged it
+    # (Summary, a Skills line, or any EXPERIENCE/EDUCATION bullet).
+    pronoun_modified = False
+    pronoun_violations = [
+        v for v in violations if v.startswith("Pronoun found outside the Why section")
+    ]
+    if pronoun_violations:
+        for v in pronoun_violations:
+            match = re.match(
+                r"^Pronoun found outside the Why section, in \S+: (.+)$", v
+            )
+            if not match:
+                continue
+            try:
+                original_text = ast.literal_eval(match.group(1))
+            except (ValueError, SyntaxError):
+                continue
+
+            if current_data.get("SUMMARY_TEXT") == original_text:
+                new_text = _micro_strip_pronoun(original_text)
+                if new_text != original_text:
+                    current_data["SUMMARY_TEXT"] = new_text
+                    pronoun_modified = True
+                continue
+
+            found = False
+            for idx, line in enumerate(current_data.get("SKILLS", [])):
+                if line == original_text:
+                    new_line = _micro_strip_pronoun(original_text)
+                    if new_line != original_text:
+                        current_data["SKILLS"][idx] = new_line
+                        pronoun_modified = True
+                    found = True
+                    break
+            if found:
+                continue
+
+            for job in current_data.get("EXPERIENCE", []):
+                achievements = job.get("achievements", [])
+                for idx, bullet in enumerate(achievements):
+                    if bullet == original_text:
+                        new_bullet = _micro_strip_pronoun(original_text)
+                        if new_bullet != original_text:
+                            achievements[idx] = new_bullet
+                            pronoun_modified = True
+                        found = True
+                        break
+                if found:
+                    break
+            if found:
+                continue
+
+            for entry in current_data.get("EDUCATION", []):
+                bullets = entry.get("bullets", [])
+                for idx, bullet in enumerate(bullets):
+                    if bullet == original_text:
+                        new_bullet = _micro_strip_pronoun(original_text)
+                        if new_bullet != original_text:
+                            bullets[idx] = new_bullet
+                            pronoun_modified = True
+                        found = True
+                        break
+                if found:
+                    break
+
     # Only re-evaluate if we actually modified something
     if (
         verb_modified
@@ -1655,6 +1762,7 @@ def repair_violations_surgically(
         or metric_modified
         or density_modified
         or bullet_count_modified
+        or pronoun_modified
     ):
         final_violations = validate_resume.validate(
             current_data,
