@@ -28,6 +28,7 @@ SAMPLE_JD_PATH = os.path.join(PROJECT_ROOT, "fixtures", "sample_jd.txt")
 import cli_art
 import jd_manager
 import orchestrator
+import profile_paths
 import theme
 
 
@@ -37,11 +38,12 @@ def build_sample() -> dict:
     build_tailored_*() call's own return dict ({} on failure, or the real
     data plus an _output_paths key on success)."""
     logger = logging.getLogger("resume_pipeline")
-    if not logger.handlers:
+    log_path = None
+    import db as _db
+
+    if not logger.handlers and not _db._is_unisolated_test_write():
         try:
-            output_root = os.path.join(
-                os.path.dirname(PROJECT_ROOT), "output", "morgan"
-            )
+            output_root = profile_paths.output_dir()
             os.makedirs(output_root, exist_ok=True)
             timestamp = datetime.datetime.now().isoformat().replace(":", "-")
             log_path = os.path.join(output_root, f"pipeline_run_{timestamp}.log")
@@ -54,8 +56,10 @@ def build_sample() -> dict:
             logger.addHandler(handler)
             logger.setLevel(logging.INFO)
             logger.info("Sample build started")
+            cli_art.console.export_text(clear=True)  # discard stale transcript
         except Exception as e:
             cli_art.detail(f"Could not initialize logging: {e}", level=cli_art.NORMAL)
+            log_path = None
 
     if not os.path.exists(SAMPLE_JD_PATH):
         cli_art.console.print(
@@ -65,6 +69,15 @@ def build_sample() -> dict:
         if logger.handlers:
             logger.error(f"Sample fixture not found: {SAMPLE_JD_PATH}")
         return {"resume": {}, "coverletter": {}}
+
+    # Recover the active log file's path even if a prior call in this same
+    # process already attached the handler (log_path would otherwise be
+    # None here, and the transcript below would have nowhere to go).
+    if log_path is None:
+        for h in logger.handlers:
+            if isinstance(h, logging.FileHandler):
+                log_path = h.baseFilename
+                break
 
     # Clear any leftover checkpoint so this is always a full, fresh run --
     # a stale partial checkpoint from an earlier interrupted attempt would
@@ -92,6 +105,8 @@ def build_sample() -> dict:
             f"Sample build complete: resume={'ok' if resume_ok else 'failed'}, "
             f"coverletter={'ok' if coverletter_ok else 'failed'}"
         )
+    if log_path:
+        orchestrator.append_console_transcript(log_path)
     return result
 
 
