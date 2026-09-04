@@ -1132,6 +1132,7 @@ Return ONLY the rewritten bullet text with no quotes, commentary, or markdown.""
     try:
         repaired, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
+            system_instruction="",
             contents=prompt,
             temperature=0.2,
         )
@@ -1159,6 +1160,7 @@ Keep the **Category Name:** format. Return ONLY the rewritten skills line."""
     try:
         repaired, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
+            system_instruction="",
             contents=prompt,
             temperature=0.2,
         )
@@ -1166,6 +1168,177 @@ Keep the **Category Name:** format. Return ONLY the rewritten skills line."""
         return cleaned if cleaned else line
     except Exception:
         return line
+
+
+def _micro_dedupe_metric(
+    text: str, number: str, other_metrics: list[str], field_label: str
+) -> str:
+    """Uses a lightweight LLM call to remove one duplicated metric from a
+    single resume field, leaving everything else in it unchanged.
+
+    Same narrow, single-field idiom as _micro_refactor_single_bullet/
+    _micro_refactor_skills_line above -- a full-resume regenerate already
+    proved unable to fix this: a real 2026-09-03 build returned the exact
+    same "Metric '100+' should appear only once ... Summary and a bullet"
+    violation across all 4 fix attempts (see the stall-escalation comment
+    in build_tailored_resume, and gemini_client.generate's
+    temperature-forced-to-0.0-under-response_schema bug this exposed).
+    """
+    other = ", ".join(m for m in other_metrics if m != number) or "none"
+    prompt = f"""You are a professional resume editor. This {field_label} states the figure '{number}', which is ALSO stated in another part of the resume -- the same fact should not be repeated verbatim in two places.
+
+Current {field_label}:
+"{text}"
+
+Rewrite it so it no longer states '{number}'. Either drop that clause/figure entirely if the sentence reads fine without it, or replace it with different, true, non-numeric language describing the same accomplishment -- do not invent a new number and do not use any of these figures already used elsewhere in the resume: {other}
+
+Return ONLY the rewritten text, no quotes or commentary."""
+    try:
+        repaired, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction="",
+            contents=prompt,
+            temperature=0.2,
+        )
+        cleaned = repaired.strip().strip('"').strip("'") if repaired else text
+        return cleaned if cleaned else text
+    except Exception:
+        return text
+
+
+def _fields_containing_word(
+    current_data: dict, word: str
+) -> list[tuple[str, int, int, str]]:
+    """Returns (field, job_idx, bullet_idx, text) for every Summary/Why/
+    Experience-bullet field containing `word` (whole-word, case-
+    insensitive). job_idx/bullet_idx are only meaningful for
+    'ACHIEVEMENT'. The SKILLS section is deliberately excluded -- see
+    _micro_trim_keyword_density's docstring."""
+    pattern = re.compile(r"\b" + re.escape(word) + r"\b", re.IGNORECASE)
+    hits: list[tuple[str, int, int, str]] = []
+    summary = current_data.get("SUMMARY_TEXT", "") or ""
+    if pattern.search(summary):
+        hits.append(("SUMMARY_TEXT", -1, -1, summary))
+    why = current_data.get("WHY_TEXT", "") or ""
+    if pattern.search(why):
+        hits.append(("WHY_TEXT", -1, -1, why))
+    for j_idx, job in enumerate(current_data.get("EXPERIENCE", [])):
+        for b_idx, bullet in enumerate(job.get("achievements", [])):
+            if pattern.search(bullet):
+                hits.append(("ACHIEVEMENT", j_idx, b_idx, bullet))
+    return hits
+
+
+def _micro_trim_keyword_density(
+    current_data: dict, word: str, reduce_by: int
+) -> tuple[dict, bool]:
+    """Uses one lightweight LLM call to reword just enough occurrences of
+    an overused keyword to bring its density back under the ATS ceiling.
+
+    Scoped to SUMMARY_TEXT/WHY_TEXT/Experience bullets only -- the SKILLS
+    section is left untouched, since an exact keyword match there is the
+    point of that section (what a recruiter's ATS search actually scans
+    for), not the prose repetition this check exists to catch. Same
+    single-call, narrow-scope idiom as _micro_refactor_single_bullet
+    above: a full-resume regenerate already proved unable to fix this --
+    a real 2026-09-03 build returned the exact same "Keyword 'content'
+    appears 16 times (3.8%)" violation across all 4 fix attempts.
+    """
+    hits = _fields_containing_word(current_data, word)
+    if not hits or reduce_by <= 0:
+        return current_data, False
+
+    fields_block = "\n".join(
+        f"{i}. [{field}] {text!r}" for i, (field, _, _, text) in enumerate(hits)
+    )
+    prompt = f"""You are a professional resume editor. The keyword '{word}' is overused across this resume ({len(hits)} field(s) below contain it) and needs at least {reduce_by} fewer total occurrence(s) to pass an ATS keyword-density check.
+
+Fields containing '{word}':
+{fields_block}
+
+Rewrite as few of these fields as necessary -- using natural, true synonyms in place of some occurrences of '{word}' -- so the TOTAL number of times '{word}' appears across all fields drops by at least {reduce_by}. Leave every field you don't need to touch completely unchanged. Do not change anything else about the fields you do edit besides replacing the word.
+
+Return ONLY a JSON array with exactly {len(hits)} strings, one per field above in the same order (unchanged fields repeated verbatim), no commentary."""
+    try:
+        repaired, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction="",
+            contents=prompt,
+            temperature=0.2,
+        )
+        new_texts = GeminiClient.parse_json(repaired or "")
+        if not isinstance(new_texts, list) or len(new_texts) != len(hits):
+            return current_data, False
+    except Exception:
+        return current_data, False
+
+    modified = False
+    for (field, j_idx, b_idx, old_text), new_text in zip(hits, new_texts):
+        if not isinstance(new_text, str) or new_text == old_text:
+            continue
+        if field == "SUMMARY_TEXT":
+            current_data["SUMMARY_TEXT"] = new_text
+        elif field == "WHY_TEXT":
+            current_data["WHY_TEXT"] = new_text
+        else:
+            current_data["EXPERIENCE"][j_idx]["achievements"][b_idx] = new_text
+        modified = True
+    return current_data, modified
+
+
+# Mirrors normalize_resume._RENAME_SUFFIX_PATTERN (private to that module) --
+# cv.md spells a renamed company as "Callahan Creek (Now Callahan)"; this
+# strips the parenthetical before matching against profile.yml's plain name.
+_RENAME_SUFFIX_PATTERN = re.compile(r"\s*\(Now [^)]+\)$")
+
+
+def _parse_cv_role_metadata(cv_text: str) -> dict[str, dict]:
+    """Parses cv.md's '### Title\\n**Company** · Location · Period' blocks into
+    a normalized-company -> {title, period, location} lookup.
+
+    Exists so a missing EXPERIENCE entry (a 'Role roster' violation the LLM
+    fix loop failed to restore -- see the Role roster block in
+    repair_violations_surgically) can be synthesized deterministically, with
+    real title/period/location, instead of either failing the whole build or
+    burning another LLM call on a single missing entry. cv.md is hand-
+    maintained and this exact header shape is a stable convention, not
+    inferred -- see cv.md itself.
+    """
+    metadata: dict[str, dict] = {}
+    pattern = re.compile(
+        r"^###\s+(?P<title>.+?)\s*\n\*\*(?P<company>[^*]+?)\*\*\s*(?P<rest>.*)$",
+        re.MULTILINE,
+    )
+    for m in pattern.finditer(cv_text or ""):
+        title = m.group("title").strip()
+        company_raw = _RENAME_SUFFIX_PATTERN.sub("", m.group("company").strip())
+        parts = [p.strip() for p in m.group("rest").split("·") if p.strip()]
+        location, period = "", ""
+        if len(parts) >= 2:
+            location, period = parts[0], parts[1]
+        elif len(parts) == 1:
+            # A period always contains a year; a bare location never does.
+            if any(ch.isdigit() for ch in parts[0]):
+                period = parts[0]
+            else:
+                location = parts[0]
+        key = validate_resume._normalize_company(company_raw)
+        if key:
+            metadata[key] = {"title": title, "location": location, "period": period}
+    return metadata
+
+
+def _lookup_role_metadata(role_metadata: dict, company: str) -> dict:
+    """Loose containment match, mirroring validate_resume._normalize_company's
+    matching rules -- profile.yml and cv.md don't always spell a company
+    identically ('Element 8 / Strategy LLC' vs 'Element 8 + Strategy, LLC')."""
+    needle = validate_resume._normalize_company(company)
+    if needle in role_metadata:
+        return role_metadata[needle]
+    for key, meta in role_metadata.items():
+        if key and (needle in key or key in needle):
+            return meta
+    return {}
 
 
 def partition_violations(violations: list[str]) -> tuple[list[str], list[str]]:
@@ -1195,6 +1368,7 @@ def repair_violations_surgically(
     role_bullet_minimums: dict[str, int] = None,
     bullet_tuples: list[tuple[str, str, str]] = None,
     role_bullet_maximums: dict[str, int] = None,
+    role_metadata: dict = None,
 ) -> tuple[dict, list[str]]:
     """Mutates only the specific violating fields in-place, avoiding full-document resynthesis."""
     current_data = copy.deepcopy(resume_data)
@@ -1289,6 +1463,132 @@ def repair_violations_surgically(
                     skills[idx] = new_line
                     hallucination_modified = True
 
+    # 5. Deterministic Role Roster Repair
+    # The LLM retry loop (build_tailored_resume's "MISSING EMPLOYERS -- ADD
+    # THESE ENTRIES" block) restates the same instruction on every attempt --
+    # observed live to restore some missing companies but not others across
+    # all 4 attempts (e.g. Element 8 / Strategy LLC), which fails the whole
+    # build (partition_violations treats "Role roster" as fatal). This
+    # builds the missing EXPERIENCE entry directly from data already in
+    # hand -- bullet_tuples for achievements, role_metadata (parsed from
+    # cv.md, see _parse_cv_role_metadata) for title/period/location -- so a
+    # company that survives to this point never costs the build entirely.
+    roster_modified = False
+    roster_violations = [v for v in violations if v.startswith("Role roster")]
+    if roster_violations and bullet_tuples:
+        present = {
+            validate_resume._normalize_company(job.get("company", ""))
+            for job in current_data.get("EXPERIENCE", [])
+        }
+        for v in roster_violations:
+            if "'" not in v:
+                continue
+            company = v.split("'")[1]
+            needle = validate_resume._normalize_company(company)
+            if any(needle in p or p in needle for p in present if p):
+                continue  # a prior violation in this batch already added it
+            achievements = [b for b, c, _t in bullet_tuples if c == company]
+            if not achievements:
+                continue  # nothing to build the entry from -- leave for the LLM loop
+            max_b = (role_bullet_maximums or {}).get(company)
+            if max_b:
+                achievements = achievements[:max_b]
+            meta = _lookup_role_metadata(role_metadata or {}, company)
+            current_data.setdefault("EXPERIENCE", []).append(
+                {
+                    "title": meta.get("title", ""),
+                    "company": company,
+                    "period": meta.get("period", ""),
+                    "location": meta.get("location", ""),
+                    "achievements": achievements,
+                    "career_note": "",
+                }
+            )
+            present.add(needle)
+            roster_modified = True
+        if roster_modified:
+            current_data, _ = auto_fix_experience_order(current_data, role_roster)
+
+    # 6. Targeted Metric Deduplication Repair
+    # Same rationale as step 5: the LLM full-resume retry loop returned the
+    # exact same "Metric '100+' should appear only once ... Summary and a
+    # bullet" violation across all 4 fix attempts in a real 2026-09-03 build
+    # (see build_tailored_resume's stall-escalation comment). Bullets are
+    # the source of truth for exact figures (same convention as the Role
+    # roster block), so only the OTHER occurrence -- the Summary, or a
+    # later-added bullet if the duplicate is bullet-to-bullet -- gets
+    # rewritten, via a single narrowly-scoped LLM call per violation
+    # rather than another full-document regenerate.
+    metric_modified = False
+    metric_violations = [v for v in violations if v.startswith("Metric '")]
+    if metric_violations:
+        for v in metric_violations:
+            match = re.match(r"^Metric '([^']+)'", v)
+            if not match:
+                continue
+            number = match.group(1)
+            other_metrics = validate_resume.get_all_metrics(current_data)
+            summary = current_data.get("SUMMARY_TEXT", "") or ""
+            if number.lower() in summary.lower():
+                new_summary = _micro_dedupe_metric(
+                    summary, number, other_metrics, "Summary"
+                )
+                if new_summary != summary:
+                    current_data["SUMMARY_TEXT"] = new_summary
+                    metric_modified = True
+                continue
+            # Bullet-to-bullet duplicate: edit only the LAST matching
+            # bullet in EXPERIENCE order, leaving the first (the source of
+            # truth per seen_in_bullets in _check_metric_uniqueness) intact.
+            matches = [
+                (j_idx, b_idx)
+                for j_idx, job in enumerate(current_data.get("EXPERIENCE", []))
+                for b_idx, bullet in enumerate(job.get("achievements", []))
+                if number.lower() in bullet.lower()
+            ]
+            if len(matches) < 2:
+                continue
+            j_idx, b_idx = matches[-1]
+            old_bullet = current_data["EXPERIENCE"][j_idx]["achievements"][b_idx]
+            new_bullet = _micro_dedupe_metric(
+                old_bullet, number, other_metrics, "Experience bullet"
+            )
+            if new_bullet != old_bullet:
+                current_data["EXPERIENCE"][j_idx]["achievements"][b_idx] = new_bullet
+                metric_modified = True
+
+    # 7. Targeted ATS Keyword Density Repair
+    # Same real-build stall as step 6, different violation: "Keyword
+    # 'content' appears 16 times (3.8%)" survived all 4 fix attempts
+    # unchanged. Computes exactly how many occurrences must go, then
+    # hands _micro_trim_keyword_density a single targeted call instead of
+    # relying on another full-resume regenerate.
+    density_modified = False
+    density_violations = [
+        v for v in violations if v.startswith("ATS Keyword Density Ceiling:")
+    ]
+    if density_violations:
+        for v in density_violations:
+            match = re.match(
+                r"^ATS Keyword Density Ceiling: Keyword '([^']+)' appears (\d+) times "
+                r"\([\d.]+% of (\d+) words\), exceeding the ([\d.]+)% natural density limit\.",
+                v,
+            )
+            if not match:
+                continue
+            word, count_str, total_words_str, max_density_pct_str = match.groups()
+            count = int(count_str)
+            total_words = int(total_words_str)
+            max_density = float(max_density_pct_str) / 100.0
+            allowed = int(max_density * total_words)
+            reduce_by = count - allowed
+            if reduce_by <= 0:
+                continue
+            current_data, changed = _micro_trim_keyword_density(
+                current_data, word, reduce_by
+            )
+            density_modified = density_modified or changed
+
     # Only re-evaluate if we actually modified something
     if (
         verb_modified
@@ -1297,6 +1597,9 @@ def repair_violations_surgically(
         or widow_modified
         or skills_modified
         or hallucination_modified
+        or roster_modified
+        or metric_modified
+        or density_modified
     ):
         final_violations = validate_resume.validate(
             current_data,
@@ -4925,6 +5228,15 @@ class ResumeEngine:
         role_roster = _required_role_roster(_p_yaml)
         role_bullet_minimums = _required_role_bullet_minimums(_p_yaml)
         role_bullet_maximums = _required_role_bullet_maximums(_p_yaml)
+        # For repair_violations_surgically's deterministic Role Roster repair
+        # -- title/period/location for a company the LLM fix loop couldn't
+        # restore. Best-effort: an unreadable/missing cv.md just means that
+        # repair step falls through to the existing LLM retry path instead.
+        try:
+            with open(os.path.join(self.kb_dir, "cv.md"), "r", encoding="utf-8") as f:
+                role_metadata = _parse_cv_role_metadata(f.read())
+        except Exception:
+            role_metadata = {}
 
         resume_data = checkpoint.get("resume_data")
         if resume_data is not None:
@@ -5080,6 +5392,7 @@ class ResumeEngine:
                     role_bullet_minimums,
                     bullet_tuples,
                     role_bullet_maximums=role_bullet_maximums,
+                    role_metadata=role_metadata,
                 )
 
             max_fix_attempts = 4
@@ -5321,6 +5634,7 @@ class ResumeEngine:
                         role_bullet_minimums,
                         bullet_tuples,
                         role_bullet_maximums=role_bullet_maximums,
+                        role_metadata=role_metadata,
                     )
                 if len(violations) < len(best_violations):
                     best_resume_data, best_violations = resume_data, violations
