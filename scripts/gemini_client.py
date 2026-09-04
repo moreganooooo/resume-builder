@@ -536,9 +536,15 @@ class GeminiClient:
                         time.sleep(wait)
                 GeminiClient._last_gemma_call_ts = time.time()
 
-            current_temp = 0.0 if response_schema is not None else temperature
-
-            generation_config: dict = {"temperature": current_temp}
+            # Used to force temperature to 0.0 whenever response_schema was
+            # set, regardless of what the caller passed -- silently
+            # defeating orchestrator.py's stall-escalation block, which
+            # computes an escalating fix_temperature specifically for its
+            # own schema-constrained retry call. Real 2026-09-03 build: 4
+            # fix attempts against the same TemplateSchema came back
+            # byte-identical because every one of them was actually sent
+            # at temperature 0.0 no matter what fix_temperature said.
+            generation_config: dict = {"temperature": temperature}
             if max_output_tokens is not None:
                 generation_config["maxOutputTokens"] = int(max_output_tokens)
 
