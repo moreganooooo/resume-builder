@@ -165,7 +165,26 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
 # without the model ever being told domain/industry mismatch counts as an
 # explicit disqualifier category, so it may have inconsistently flagged
 # (or missed) exactly the requirements this category exists to catch.
-SCORING_VERSION = 4
+#
+# v5 (2026-09-05): evaluate_capability.md's context now includes a
+# VERIFIED SKILLS & TOOLS block (verified_tools.json + profile.yml's
+# skills dict), and tools_process_overlap/capability_gaps are instructed
+# to check it before falling back to narrative inference. A pre-v5
+# evaluation scored tools_process_overlap purely from prose and had no
+# way to know about a confirmed tool the narrative never named -- likely
+# undercounting overlap and overcounting capability_gaps for any
+# candidate with a nontrivial verified_tools.json.
+#
+# v6 (2026-09-06): evaluate_recruiter.md's Stage-2 call already received
+# the same VERIFIED SKILLS & TOOLS block as Stage-1 (both calls share
+# fit_context), but its own prompt text never referenced it -- so a
+# confirmed tool the resume narrative didn't name by name could still be
+# listed in hard_blockers (force-zeroing composite_score, same as v3/v4
+# above) or missed as evidence_match proof. The prompt now instructs
+# both explicitly. A pre-v6 evaluation may have been zeroed or
+# undercounted for exactly the tools verified_tools.json already
+# confirms.
+SCORING_VERSION = 6
 
 
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
@@ -477,6 +496,40 @@ def read_liveness(jd_path: str) -> dict | None:
     if not isinstance(data, dict):
         return None
     return data.get("_liveness")
+
+
+def save_extracted_keywords(jd_path: str, keywords: dict) -> None:
+    """Persists an extract_keywords.md result (tools/hard_skills/
+    core_functions) into the JD's own JSON file under an _extracted_keywords
+    key, matching _liveness's existing pattern -- lets any caller (the
+    Skills Gap Matrix, a bulk skill scan) reuse a JD's keyword extraction
+    instead of paying for a repeat Gemini call. No-ops silently for
+    non-JSON-dict JDs, same as save_evaluation()."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    data["_extracted_keywords"] = keywords
+    with atomic_write(jd_path, encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def read_extracted_keywords(jd_path: str) -> dict | None:
+    """Reads back a persisted _extracted_keywords (see
+    save_extracted_keywords()), or None if the JD isn't a JSON dict or has
+    never had its keywords extracted."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_extracted_keywords")
 
 
 def save_referral(jd_path: str, text: str) -> None:

@@ -314,6 +314,21 @@ def _handle_discover_employers() -> bool:
             soft_wrap=True,
         )
     _pause_and_return()
+
+
+def _handle_scan_pending_skills() -> None:
+    """Settings & Upkeep -> Scan Pending Pipeline for Skills to Verify.
+
+    Same idea as the tailoring pipeline's Step 1.5 Skill Gap Discovery
+    prompt, but aggregated across every pending JD instead of just the one
+    being tailored -- lets Morgan build up verified_tools.json ahead of
+    applying, so later evaluations' capability_gaps/fit-scoring have more
+    of the model's own extraction to match against."""
+    import skill_gap_scan
+
+    skill_gap_scan.run()
+    maintenance.record_run("skill_gap_scan")
+    _pause_and_return()
     return True
 
 
@@ -423,6 +438,10 @@ def _build_settings_upkeep_choices() -> list:
         questionary.Choice(
             title=_icon_title("bullet_bank", "↳ View & Manage Profile Skills"),
             value="manage_skills",
+        ),
+        questionary.Choice(
+            title=_icon_title("resume", "↳ Scan Pending Pipeline for Skills to Verify"),
+            value="scan_pending_skills",
         ),
         questionary.Choice(
             title=_icon_title(
@@ -2020,6 +2039,9 @@ def _handle_settings_upkeep() -> bool:
             continue
         if choice == "manage_skills":
             skills_menu.run_skills_menu()
+            continue
+        if choice == "scan_pending_skills":
+            _handle_scan_pending_skills()
             continue
         if choice == "manage_scraping":
             _handle_manage_scraping()

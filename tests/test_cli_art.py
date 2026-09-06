@@ -134,6 +134,22 @@ class TestDisplayMainBanner(unittest.TestCase):
         self.assertIn("2 Roles Currently Awaiting Resume Creation", output)
         self.assertIn("1 Resumes Customized All-Time", output)
 
+    @patch("cli_art.maintenance.get_last_run", return_value=None)
+    @patch("cli_art.jd_manager.count_completed_resumes", return_value=1)
+    @patch("picker.count_active_roles", return_value=2)
+    @patch("picker.count_unevaluated_roles", return_value=0)
+    def test_shows_skill_gap_scan_reminder_when_stale(
+        self, mock_backlog, mock_pending, mock_completed, mock_get_last_run
+    ):
+        console = Console(record=True, width=100, force_terminal=False)
+        original = cli_art.console
+        cli_art.console = console
+        try:
+            cli_art.display_main_banner()
+        finally:
+            cli_art.console = original
+        self.assertIn("Skill Gap Scan", console.export_text())
+
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=1)
     @patch("picker.count_active_roles", return_value=1)
     @patch("picker.count_unevaluated_roles", return_value=0)
@@ -154,6 +170,36 @@ class TestDisplayMainBanner(unittest.TestCase):
             cli_art.console = original
         self.assertEqual(mock_pending.call_count, 1)
         self.assertEqual(mock_completed.call_count, 1)
+
+
+class TestSkillGapScanReminderText(unittest.TestCase):
+    @patch("cli_art.maintenance.get_last_run", return_value=None)
+    def test_never_run_returns_a_reminder(self, mock_get_last_run):
+        text = cli_art._skill_gap_scan_reminder_text()
+        self.assertIn("Skill Gap Scan", text)
+
+    @patch("cli_art.maintenance.get_last_run")
+    def test_recent_run_returns_empty(self, mock_get_last_run):
+        import datetime
+
+        mock_get_last_run.return_value = datetime.datetime.now().isoformat(
+            timespec="seconds"
+        )
+        self.assertEqual(cli_art._skill_gap_scan_reminder_text(), "")
+
+    @patch("cli_art.maintenance.get_last_run")
+    def test_stale_run_returns_a_reminder(self, mock_get_last_run):
+        import datetime
+
+        ten_days_ago = datetime.datetime.now() - datetime.timedelta(days=10)
+        mock_get_last_run.return_value = ten_days_ago.isoformat(timespec="seconds")
+        text = cli_art._skill_gap_scan_reminder_text()
+        self.assertIn("Skill Gap Scan", text)
+
+    @patch("cli_art.maintenance.get_last_run", return_value="not-a-timestamp")
+    def test_unparseable_timestamp_returns_a_reminder(self, mock_get_last_run):
+        text = cli_art._skill_gap_scan_reminder_text()
+        self.assertIn("Skill Gap Scan", text)
 
 
 class TestDisplayStatsLine(unittest.TestCase):

@@ -2,7 +2,7 @@ import os
 import re
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
@@ -354,6 +354,15 @@ class TestHandleScan(unittest.TestCase):
         mock_select.return_value.ask.return_value = "linkedin"
         menu._handle_scan()
         mock_run.assert_called_once_with(["linkedin"])
+
+
+class TestHandleScanPendingSkills(unittest.TestCase):
+    @patch("menu._pause_and_return")
+    @patch("menu.maintenance.record_run")
+    def test_records_the_run_for_the_banner_reminder(self, mock_record_run, mock_pause):
+        with patch.dict("sys.modules", {"skill_gap_scan": MagicMock(run=MagicMock())}):
+            menu._handle_scan_pending_skills()
+        mock_record_run.assert_called_once_with("skill_gap_scan")
 
 
 class TestHandleLiveness(unittest.TestCase):
