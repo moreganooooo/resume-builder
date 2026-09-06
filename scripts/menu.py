@@ -3049,11 +3049,18 @@ def _pause_and_return() -> None:
     cli_art.console.print(
         f"[{theme.MUTED}]Press Enter to return to the menu...[/{theme.MUTED}]"
     )
-    if sys.stdin.isatty():
-        try:
-            sys.stdin.readline()
-        except (KeyboardInterrupt, IOError):
-            pass
+    # Same fail-closed-under-tests guard used elsewhere for a real stdin
+    # read (orchestrator.py, skill_gap_scan.py): a test that reaches this
+    # unmocked would otherwise block on sys.stdin.readline() for real
+    # whenever stdin happens to be a genuine tty -- e.g. the whole suite
+    # run directly in a terminal, or inherited by doctor.py's subprocess.
+    # Observed hanging resume doctor for real, 2026-09-06.
+    if "unittest" in sys.modules or not sys.stdin.isatty():
+        return
+    try:
+        sys.stdin.readline()
+    except (KeyboardInterrupt, IOError):
+        pass
 
 
 def _run_with_chain(value: str, session_stats: dict) -> None:
