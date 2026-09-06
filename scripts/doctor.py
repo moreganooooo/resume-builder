@@ -496,17 +496,32 @@ def run_checks() -> list:
     return [check() for check in CHECKS]
 
 
+TEST_SUITE_TIMEOUT_SECONDS = 300
+
+
 def run_test_suite() -> tuple:
     """Runs the real test suite for real. Returns (passed: bool, summary:
     str) -- summary is unittest's own final report line(s) (e.g. "Ran 808
     tests in 19.7s" + "OK"/"FAILED (failures=2)"), not the full verbose
-    output."""
-    result = subprocess.run(
-        [sys.executable, "-m", "unittest", "discover", "-s", "tests"],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-    )
+    output. A full run normally takes under two minutes; TEST_SUITE_TIMEOUT_SECONDS
+    exists so a hung test (e.g. one blocking on real stdin) fails loudly
+    instead of leaving the caller's spinner running forever with no way to
+    tell a hang apart from a slow machine."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", "tests"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=TEST_SUITE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return False, (
+            f"Test suite did not finish within {TEST_SUITE_TIMEOUT_SECONDS}s "
+            "and was killed -- likely a hung test (e.g. one waiting on real "
+            "stdin instead of a mock). Run `python -m unittest discover -s "
+            "tests -v` directly to see which test it stalls on."
+        )
     passed = result.returncode == 0
     lines = [line for line in result.stderr.strip().splitlines() if line.strip()]
     if passed:
