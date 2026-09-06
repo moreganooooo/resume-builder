@@ -1601,13 +1601,19 @@ class TestBatchActionsSuspendAltScreen(unittest.TestCase):
     navigation keeps its existing full-screen look. Regression covering
     the 2026-08-22 fix."""
 
+    @patch("menu._pause_and_return")
     @patch("menu._should_use_alt_screen", return_value=True)
     @patch("menu.cli_art.display_execution_footer")
     @patch("menu.cli_art.display_compact_banner")
     @patch("menu.sys.stdout")
     def test_evaluate_all_suspends_and_restores_alt_screen(
-        self, mock_stdout, mock_banner, mock_footer, mock_use_alt
+        self, mock_stdout, mock_banner, mock_footer, mock_use_alt, mock_pause
     ):
+        # A handler returning False falls through to _pause_and_return(),
+        # which blocks on a real sys.stdin.readline() whenever stdin is a
+        # tty (e.g. this test run inheriting a real terminal via
+        # doctor.py's subprocess) -- observed hanging resume doctor for
+        # real, 2026-09-06. Mocked here so the test can never block on it.
         with patch.dict(menu._HANDLERS, {"evaluate_all": lambda: False}, clear=False):
             menu._run_with_chain("evaluate_all", {})
         writes = "".join(c.args[0] for c in mock_stdout.write.call_args_list)
@@ -1627,12 +1633,13 @@ class TestBatchActionsSuspendAltScreen(unittest.TestCase):
         )
         mock_footer.assert_not_called()
 
+    @patch("menu._pause_and_return")
     @patch("menu._should_use_alt_screen", return_value=True)
     @patch("menu.cli_art.display_execution_footer")
     @patch("menu.cli_art.display_compact_banner")
     @patch("menu.sys.stdout")
     def test_tailor_pick_also_suspends_alt_screen(
-        self, mock_stdout, mock_banner, mock_footer, mock_use_alt
+        self, mock_stdout, mock_banner, mock_footer, mock_use_alt, mock_pause
     ):
         with patch.dict(menu._HANDLERS, {"tailor_pick": lambda: False}, clear=False):
             menu._run_with_chain("tailor_pick", {})
