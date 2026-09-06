@@ -417,6 +417,18 @@ class TestRunTestSuite(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("FAILED", summary)
 
+    @patch("doctor.subprocess.run")
+    def test_passed_false_with_actionable_message_on_timeout(self, mock_run):
+        import subprocess as subprocess_module
+
+        mock_run.side_effect = subprocess_module.TimeoutExpired(
+            cmd="unittest", timeout=doctor.TEST_SUITE_TIMEOUT_SECONDS
+        )
+        passed, summary = doctor.run_test_suite()
+        self.assertFalse(passed)
+        self.assertIn("did not finish", summary)
+        self.assertIn("-v", summary)
+
 
 if __name__ == "__main__":
     unittest.main()
