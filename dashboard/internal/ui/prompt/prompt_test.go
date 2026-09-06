@@ -79,8 +79,8 @@ func TestResultMarshal_Confirm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal failed: %v", err)
 	}
-	if string(out) != `{"confirmed":true}` {
-		t.Errorf("Marshal = %s, want %s", out, `{"confirmed":true}`)
+	if string(out) != `{"value":"","confirmed":true}` {
+		t.Errorf("Marshal = %s, want %s", out, `{"value":"","confirmed":true}`)
 	}
 }
 
@@ -95,14 +95,31 @@ func TestResultMarshal_Select(t *testing.T) {
 	}
 }
 
+// TestResultMarshal_TextEmptyValue guards the real 2026-09-06 crash: a
+// text prompt answered with an empty string (e.g. a skipped optional
+// note) used to omit the "value" key entirely (omitempty on a string
+// field drops it, it doesn't emit ""), and
+// charm_prompt.text()'s data["value"] then raised KeyError instead of
+// returning "".
+func TestResultMarshal_TextEmptyValue(t *testing.T) {
+	result := Result{Value: ""}
+	out, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	if string(out) != `{"value":""}` {
+		t.Errorf("Marshal = %s, want %s", out, `{"value":""}`)
+	}
+}
+
 func TestResultMarshal_Checkbox(t *testing.T) {
 	result := Result{Values: []string{"bullets", "profile"}}
 	out, err := json.Marshal(result)
 	if err != nil {
 		t.Fatalf("marshal failed: %v", err)
 	}
-	if string(out) != `{"values":["bullets","profile"]}` {
-		t.Errorf("Marshal = %s, want %s", out, `{"values":["bullets","profile"]}`)
+	if string(out) != `{"value":"","values":["bullets","profile"]}` {
+		t.Errorf("Marshal = %s, want %s", out, `{"value":"","values":["bullets","profile"]}`)
 	}
 }
 

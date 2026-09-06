@@ -811,6 +811,58 @@ def _confirm_continue_without_keywords() -> bool:
     )
 
 
+def build_verified_skills_context() -> str:
+    """The candidate's own confirmed tools/skills for evaluate_fit()'s user
+    content, or "" when there is nothing to say.
+
+    `tools_process_overlap` and `capability_gaps` used to be scored purely
+    from profile.yml's narrative sections (target_roles/archetypes/
+    narrative/superpowers) -- the candidate's real, concrete tool list
+    (verified_tools.json, built up via Settings & Upkeep's skill-gap scans
+    and skills menu) never reached this prompt at all, only the tailoring
+    pipeline's knowledge-base load did. That meant "does this candidate
+    know Salesforce" was an inference from prose, not a lookup against a
+    list the candidate had actually confirmed. Sourced the same way
+    find_unverified_jd_skill_gaps() already builds its "known" set, so the
+    two can't disagree about what counts as verified.
+    """
+    try:
+        import skills_menu
+    except ImportError:
+        return ""
+
+    names = set()
+    try:
+        for t in (skills_menu._load_verified_tools() or {}).get("tools", []):
+            name = (t.get("name") or "").strip()
+            if name:
+                names.add(name)
+    except Exception:
+        pass
+
+    try:
+        profile_data = profile_paths.profile_yaml() or {}
+    except Exception:
+        profile_data = {}
+    for skills in (profile_data.get("skills") or {}).values():
+        if isinstance(skills, list):
+            for s in skills:
+                s = str(s).strip()
+                if s:
+                    names.add(s)
+
+    if not names:
+        return ""
+
+    return (
+        "=== VERIFIED SKILLS & TOOLS (from verified_tools.json + profile.yml) ===\n"
+        "This is the candidate's own confirmed toolset -- ground `tools_process_overlap` "
+        "in this list rather than inferring it from narrative alone, and do not list "
+        "something here as a `capability_gaps`/`stretch_evidence` item.\n"
+        + ", ".join(sorted(names, key=str.lower))
+    )
+
+
 def build_compensation_context(jd_text: str) -> str:
     """The pay block for evaluate_fit()'s user content, or "" when there is
     nothing useful to say.
@@ -1239,6 +1291,45 @@ Return ONLY the rewritten text, no quotes or commentary."""
         return cleaned if cleaned else text
     except Exception:
         return text
+
+
+def _micro_fix_metric_provenance(
+    bullet: str, company: str, bullet_tuples: list[tuple[str, str, str]]
+) -> str:
+    """Uses a lightweight LLM call to rewrite a single bullet that cites a
+    metric absent from its own company's bullet-bank source -- see
+    validate_resume._check_metric_provenance()'s docstring for the real
+    2026-09-04 case this covers (a fabricated cross-company "100+" figure
+    that only ever appeared in an unrelated Treering Yearbooks bullet).
+    Grounds the rewrite in that company's OWN real bullets only, so the
+    model can't repeat the mistake by reaching for a different bullet's
+    number again."""
+    source_bullets = [b for b, c, _tags in bullet_tuples if c == company]
+    if not source_bullets:
+        return bullet
+    source_block = "\n".join(f"- {b}" for b in source_bullets)
+    prompt = f"""You are a professional resume editor. This bullet cites a metric or figure that does not appear anywhere in this candidate's own verified source bullets for this same company -- it may have been fabricated or borrowed from an unrelated bullet.
+
+Bullet to fix:
+"{bullet}"
+
+This candidate's REAL verified source bullets for this exact company (the only material you may draw facts, scope, or metrics from):
+{source_block}
+
+Rewrite the bullet so every metric and factual claim in it is grounded in the source bullets above -- either select/lightly adapt one of them directly, or remove the unverifiable metric/claim entirely rather than keep it. Do not invent a new number. Preserve the original bullet's general topic if a matching source bullet supports it.
+
+Return ONLY the rewritten bullet text, no quotes or commentary."""
+    try:
+        repaired, _ = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction="",
+            contents=prompt,
+            temperature=0.2,
+        )
+        cleaned = repaired.strip().strip('"').strip("'") if repaired else bullet
+        return cleaned if cleaned else bullet
+    except Exception:
+        return bullet
 
 
 def _fields_containing_word(
@@ -1750,6 +1841,48 @@ def repair_violations_surgically(
                 if found:
                     break
 
+    # 10. Targeted Metric Provenance Repair
+    # Same gap class as steps 8/9: validate_resume._check_metric_provenance()
+    # had no repair path at all until now. Parses company + bullet text out
+    # of the violation message (repr()'d, reversed via ast.literal_eval, same
+    # idiom as the pronoun block above) and hands only that company's own
+    # real bullet-bank text to the rewrite, so the model can't reach for
+    # another company's number a second time.
+    metric_provenance_modified = False
+    if bullet_tuples:
+        metric_provenance_violations = [
+            v
+            for v in violations
+            if v.startswith("Metric '") and "does not appear in" in v
+        ]
+        for v in metric_provenance_violations:
+            match = re.match(
+                r"^Metric '.+?' in a (.+?) bullet does not appear in .+? bullet-bank source -- likely fabricated or borrowed from a different company's bullet: (.+)$",
+                v,
+            )
+            if not match:
+                continue
+            company = match.group(1)
+            try:
+                original_text = ast.literal_eval(match.group(2))
+            except (ValueError, SyntaxError):
+                continue
+
+            for job in current_data.get("EXPERIENCE", []):
+                if job.get("company") != company:
+                    continue
+                achievements = job.get("achievements", [])
+                for idx, bullet in enumerate(achievements):
+                    if bullet == original_text:
+                        new_bullet = _micro_fix_metric_provenance(
+                            original_text, company, bullet_tuples
+                        )
+                        if new_bullet != original_text:
+                            achievements[idx] = new_bullet
+                            metric_provenance_modified = True
+                        break
+                break
+
     # Only re-evaluate if we actually modified something
     if (
         verb_modified
@@ -1763,6 +1896,7 @@ def repair_violations_surgically(
         or density_modified
         or bullet_count_modified
         or pronoun_modified
+        or metric_provenance_modified
     ):
         final_violations = validate_resume.validate(
             current_data,
@@ -1770,6 +1904,7 @@ def repair_violations_surgically(
             role_roster,
             role_bullet_minimums,
             role_bullet_maximums=role_bullet_maximums,
+            bullet_tuples=bullet_tuples,
         )
         return current_data, final_violations
 
@@ -1813,12 +1948,186 @@ def trim_surplus_bullet_deterministically(
     return resume_data, False
 
 
+def extract_jd_keywords_via_gemini(jd_text: str) -> dict | None:
+    """Runs extract_keywords.md against raw JD text, standalone from
+    ResumeEngine (prompts_dir is fixed under PROJECT_ROOT/resume-engine, not
+    profile-scoped, so no instance state is needed). This is the same
+    extraction the tailoring pipeline's Step 1.5 already pays for -- pulled
+    out so any other caller (the Skills Gap Matrix, a bulk pending-role skill
+    scan) can request it without going through a resume build."""
+    prompt_path = os.path.join(
+        PROJECT_ROOT, "resume-engine", "prompts", "extract_keywords.md"
+    )
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        keyword_prompt = f.read()
+    keyword_text, _ = GeminiClient.generate(
+        model=BUILDER_MODEL,
+        system_instruction=keyword_prompt,
+        contents=f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===",
+        response_schema=JDKeywordSchema,
+        temperature=0.0,
+    )
+    return GeminiClient.parse_json(keyword_text or "") or None
+
+
+def get_or_extract_jd_keywords(jd_path: str) -> dict | None:
+    """Reads a JD's cached _extracted_keywords (jd_manager.save_extracted_keywords),
+    or extracts and caches them on a miss. Callers outside the tailoring
+    pipeline's own checkpoint (which extracts and stores jd_keywords
+    per-build-attempt) should go through this rather than re-extracting on
+    every call."""
+    cached = jd_manager.read_extracted_keywords(jd_path)
+    if cached is not None:
+        return cached
+    jd_text = jd_manager.read_jd_text(jd_path)
+    keywords = extract_jd_keywords_via_gemini(jd_text)
+    if keywords is not None:
+        jd_manager.save_extracted_keywords(jd_path, keywords)
+    return keywords
+
+
+def warm_jd_keyword_cache(jd_path: str) -> None:
+    """Extracts and caches a JD's _extracted_keywords during evaluation,
+    paired so the Skills Gap Matrix is already warm by the time a role
+    reaches the Jobs dashboard -- a role must be evaluated before "m" is
+    even offered (dashboard_actions._matrix requires an existing
+    evaluation), so pairing extraction with evaluate_fit() means the
+    Matrix's own get_or_extract_jd_keywords() fallback almost always finds
+    a cache hit instead of paying for extraction at view time.
+
+    Deliberately does not feed extraction into the fit score itself --
+    tools_process_overlap already reads the raw JD text directly, and
+    build_verified_skills_context() covers the candidate side. This is
+    purely a cache pre-warm and must never affect or block evaluation, so
+    every failure mode -- missing file, JD already has scan-provided
+    skills, already cached, extraction failure -- is a silent no-op.
+
+    Requires the JD file to already exist on disk: save_extracted_keywords
+    can't persist into a path that isn't there, and a real evaluate_fit()
+    call only ever reaches here after jd_manager.read_jd_text(jd_path) has
+    already succeeded from that same file.
+    """
+    if not jd_path or not os.path.exists(jd_path):
+        return
+    try:
+        if jd_manager.read_extracted_keywords(jd_path) is not None:
+            return
+        with open(jd_path, "r", encoding="utf-8") as f:
+            jd_data = json.load(f)
+        if isinstance(jd_data, dict) and jd_data.get("skills"):
+            return
+        get_or_extract_jd_keywords(jd_path)
+    except Exception:
+        pass
+
+
+def gather_jd_skill_names(jd_path: str) -> list[str]:
+    """The same skill-name derivation dashboard_actions._matrix() uses:
+    scan-provided jd_data["skills"] first (only ever populated by
+    scan_linkedin.py/scan_jobright.py), falling back to extracted
+    keywords via get_or_extract_jd_keywords() -- a cache hit for any JD
+    that already went through warm_jd_keyword_cache(). Assumes jd_path is
+    a real, already-resolved file."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            jd_data = json.load(f)
+    except Exception:
+        return []
+    if not isinstance(jd_data, dict):
+        return []
+
+    skills = jd_data.get("skills") or []
+    skill_names = [s.get("skill", "") for s in skills if s.get("skill")]
+    if skill_names:
+        return skill_names
+
+    try:
+        jd_keywords = get_or_extract_jd_keywords(jd_path)
+    except Exception:
+        return []
+    if not jd_keywords:
+        return []
+
+    seen = set()
+    names = []
+    for name in (
+        list(jd_keywords.get("tools") or [])
+        + list(jd_keywords.get("hard_skills") or [])
+        + list(jd_keywords.get("core_functions") or [])
+    ):
+        name = (name or "").strip()
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            names.append(name)
+    return names
+
+
+def compute_skill_coverage_matrix(skill_names: list) -> list:
+    """Embeds skill_names against the bullet bank and ranks each by
+    coverage percentile against the bank's own best-match distribution --
+    the same computation dashboard_actions._matrix() runs for the Jobs
+    dashboard's manual "m" action, shared here so evaluate_fit() can
+    populate `skill_matrix` automatically. See dashboard_actions'
+    _coverage_reference()/_coverage_percentile() docstrings for why this
+    is a rank against the corpus, not a raw cosine score.
+
+    Returns [] on any missing prerequisite (no skills, no bullet-bank
+    embeddings file, an embedding API failure) rather than raising --
+    callers treat this as optional enrichment, never a required step.
+    """
+    if not skill_names:
+        return []
+    try:
+        import dashboard_actions
+        import numpy as np
+        from embed_bullet_bank import BATCH_SIZE, embed_batch
+        from vector_store import cosine_similarity_matrix
+    except ImportError:
+        return []
+
+    kb_dir = profile_paths.kb_dir()
+    emb_npy = os.path.join(kb_dir, "bullet_vectors_ge2_d768.npy")
+    if not os.path.exists(emb_npy):
+        return []
+
+    try:
+        embs = np.load(emb_npy)
+        skill_vecs = []
+        for i in range(0, len(skill_names), BATCH_SIZE):
+            batch = skill_names[i : i + BATCH_SIZE]
+            skill_vecs.extend(embed_batch(batch))
+
+        reference = dashboard_actions._coverage_reference(embs)
+
+        skill_matrix = []
+        for name, vec in zip(skill_names, skill_vecs):
+            if vec:
+                scores = cosine_similarity_matrix(np.array(vec, dtype=np.float32), embs)
+                max_score = float(np.max(scores)) if len(scores) > 0 else 0.0
+                coverage_pct = dashboard_actions._coverage_percentile(
+                    max_score, reference
+                )
+                skill_matrix.append({"skill": name, "coverage": coverage_pct})
+        skill_matrix.sort(key=lambda x: x["coverage"])
+        return skill_matrix
+    except Exception:
+        return []
+
+
 def find_unverified_jd_skill_gaps(
     jd_keywords: dict, verified_tools_data: dict, profile_data: dict
 ) -> list[str]:
     """
     Identifies tools and hard skills requested in the JD that are not yet recorded
     in verified_tools.json or profile.yml.
+
+    Candidates deliberately mirror validate_resume.check_keyword_coverage()'s
+    own `all_keywords` (tools + hard_skills + core_functions), not just
+    tools/hard_skills -- core_functions was missing here until 2026-09-06,
+    so anything the JD listed only under core_functions could never surface
+    at this early Step 1.5 prompt, only in check_keyword_coverage()'s
+    post-build report, which triggered a second, separate confirm-and-
+    rebuild prompt for a keyword Step 1.5 should have already asked about.
     """
     import validate_resume
 
@@ -1832,8 +2141,10 @@ def find_unverified_jd_skill_gaps(
             for s in skills:
                 known.add(str(s).strip().lower())
 
-    candidates = list(jd_keywords.get("tools") or []) + list(
-        jd_keywords.get("hard_skills") or []
+    candidates = (
+        list(jd_keywords.get("tools") or [])
+        + list(jd_keywords.get("hard_skills") or [])
+        + list(jd_keywords.get("core_functions") or [])
     )
     gaps = []
     seen = set()
@@ -2513,6 +2824,7 @@ def rescore_evaluation_with_location(
     posting_age_days: int = None,
     description: str = None,
     scoring_weights: dict = None,
+    role_track_settings: dict = None,
 ) -> dict:
     """Recalculates an evaluation dict incorporating local commute distance:
     1. Calibrates practical_pursue_subscores['remote_quality'] (closer = higher).
@@ -2531,7 +2843,15 @@ def rescore_evaluation_with_location(
     deterministic for direct unit testing -- see fit_composite_score()'s
     own docstring. The real pipeline (evaluate_fit()) passes in
     content_settings.read_scoring_weights(), a profile's override merged
-    with defaults."""
+    with defaults.
+
+    role_track_settings is the same pattern: None by default, and the
+    real pipeline passes content_settings.read_role_track_settings(). When
+    its exclude_manager key is set, a HIGH-confidence manager/player_coach
+    verdict forces the same Skip/zero outcome as a disqualifying hard
+    blocker (see docs/role_track.md for why "high confidence" -- the
+    holdout that measures this classifier's precision only covers that
+    slice)."""
     if not evaluation:
         return evaluation
 
@@ -2594,10 +2914,26 @@ def rescore_evaluation_with_location(
     ]
     ev["experience_blockers"] = experience_blockers
 
-    if disqualifying_blockers:
+    # Opt-in IC-only preference (content_settings.py's role_track editor).
+    # Confidence-gated the same way as the Jobs/Pipeline view filters
+    # (model.JobRow.IsManagerTrack) -- only a HIGH-confidence manager or
+    # player_coach verdict excludes, since that's the only slice
+    # docs/role_track.md's holdout actually measured precision on.
+    role_track_excluded = bool(
+        (role_track_settings or {}).get("exclude_manager")
+        and ev.get("role_track") in ("manager", "player_coach")
+        and ev.get("role_track_confidence") == "high"
+    )
+
+    if disqualifying_blockers or role_track_excluded:
         ev["recommendation"] = "Skip"
+        reasons = [_blocker_text(b) for b in disqualifying_blockers]
+        if role_track_excluded:
+            reasons.append(
+                f"role_track preference: excludes {ev.get('role_track')} roles"
+            )
         ev["why"] = "Application skipped due to triggered deal-breakers: " + ", ".join(
-            _blocker_text(b) for b in disqualifying_blockers
+            reasons
         )
         ev["composite_score"] = 0.00
         ev["estimated_interview_probability"] = 0.0
@@ -4531,15 +4867,19 @@ class ResumeEngine:
         evaluator would write confidently about experience the JD had merely
         asserted it wanted.
 
-        Two blocks, both cheap:
+        Three blocks, all cheap:
           - profile.yml, trimmed to the identity sections, so "does this
             candidate fit" has a candidate.
+          - verified_tools.json + profile.yml's skills dict, so
+            tools_process_overlap/capability_gaps are grounded in the
+            candidate's actual confirmed tool list, not just narrative
+            prose (see build_verified_skills_context()).
           - role_dna.yaml, so the returned `archetype` is drawn from the
             project's own controlled vocabulary rather than freeformed. It is
             the archetype library and, per the review, is loaded by nothing
             else today.
 
-        Both are optional: a freshly-bootstrapped profile with neither still
+        All are optional: a freshly-bootstrapped profile with none still
         evaluates, just without the corresponding block, matching how
         build_role_rules_block() degrades.
         """
@@ -4562,6 +4902,10 @@ class ResumeEngine:
                     f"  {theme.colorize_icon('warning')} evaluate_fit: could not load profile.yml: {e}",
                     soft_wrap=True,
                 )
+
+        skills_block = build_verified_skills_context()
+        if skills_block:
+            sections.append(skills_block)
 
         try:
             role_dna = self.load_yaml(self.scoring_dir, "role_dna.yaml")
@@ -4614,6 +4958,11 @@ class ResumeEngine:
             profile = profile_paths.profile_yaml() or {}
 
         remote_required = profile.get("location", {}).get("remote_required", False)
+
+        # Pre-warm the Skills Gap Matrix's extraction cache -- see
+        # warm_jd_keyword_cache()'s own docstring for why this is paired
+        # here rather than left for the Matrix to pay for on first view.
+        warm_jd_keyword_cache(jd_path)
 
         # 1. Prepare evaluation context
         fit_context = self.build_fit_evaluation_context(jd_text)
@@ -4691,8 +5040,10 @@ class ResumeEngine:
             import content_settings
 
             scoring_weights = content_settings.read_scoring_weights()
+            role_track_settings = content_settings.read_role_track_settings()
         except Exception:
             scoring_weights = {}
+            role_track_settings = {}
 
         # 5b. Remote-vs-Local Candidate Pool Calibration. A remote posting
         # competes against a national/global applicant pool; an onsite
@@ -4777,6 +5128,7 @@ class ResumeEngine:
             posting_age_days=posting_age_days,
             description=jd_data.get("description") or jd_text,
             scoring_weights=scoring_weights,
+            role_track_settings=role_track_settings,
         )
 
         # 8. Heuristic Ghost Job Probability Calculator
@@ -4789,6 +5141,24 @@ class ResumeEngine:
                 ghost_score += 0.20
         ghost_score += min(red_flags_count * 0.20, 0.50)
         evaluation["ghost_job_probability"] = round(min(ghost_score * 100.0, 95.0), 1)
+
+        # 9. Skills Gap Matrix -- computed automatically now that
+        # warm_jd_keyword_cache() above guarantees the JD's tools/skills
+        # are already extracted, so this and the Jobs dashboard's "m"
+        # action (dashboard_actions._matrix) never race to be first to
+        # pay for extraction. Never blocks or fails evaluation: a missing
+        # bullet-bank embeddings file or an embedding API hiccup just
+        # means no matrix this round, same as before this existed.
+        try:
+            skill_names = gather_jd_skill_names(jd_path)
+            skill_matrix = compute_skill_coverage_matrix(skill_names)
+            if skill_matrix:
+                evaluation["skill_matrix"] = skill_matrix
+        except Exception as e:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} evaluate_fit: could not compute skill matrix: {e}",
+                soft_wrap=True,
+            )
 
         return evaluation
 
@@ -5614,6 +5984,7 @@ class ResumeEngine:
                 role_roster,
                 role_bullet_minimums,
                 role_bullet_maximums=role_bullet_maximums,
+                bullet_tuples=bullet_tuples,
             )
             if violations:
                 cli_art.print_literal(
@@ -5859,6 +6230,7 @@ class ResumeEngine:
                     role_roster,
                     role_bullet_minimums,
                     role_bullet_maximums=role_bullet_maximums,
+                    bullet_tuples=bullet_tuples,
                 )
                 if violations:
                     resume_data, violations = repair_violations_surgically(
@@ -6242,6 +6614,7 @@ class ResumeEngine:
                         role_roster,
                         role_bullet_minimums,
                         role_bullet_maximums=role_bullet_maximums,
+                        bullet_tuples=bullet_tuples,
                     )
                     if rec_violations:
                         cli_art.console.print(
@@ -6481,6 +6854,7 @@ class ResumeEngine:
                         role_roster,
                         role_bullet_minimums,
                         role_bullet_maximums=role_bullet_maximums,
+                        bullet_tuples=bullet_tuples,
                     )
                     if not condense_violations:
                         resume_data = condensed_resume_data
@@ -6548,6 +6922,7 @@ class ResumeEngine:
                             role_roster,
                             role_bullet_minimums,
                             role_bullet_maximums=role_bullet_maximums,
+                            bullet_tuples=bullet_tuples,
                         )
                     )
                     candidate_resume_data = dict(resume_data)
@@ -6561,6 +6936,7 @@ class ResumeEngine:
                         role_roster,
                         role_bullet_minimums,
                         role_bullet_maximums=role_bullet_maximums,
+                        bullet_tuples=bullet_tuples,
                     )
                     why_violations = [
                         v for v in all_violations if v not in baseline_violations
@@ -6679,6 +7055,7 @@ class ResumeEngine:
                 role_roster,
                 role_bullet_minimums,
                 role_bullet_maximums=role_bullet_maximums,
+                bullet_tuples=bullet_tuples,
             )
             if trim_violations:
                 cli_art.console.print(
@@ -6817,31 +7194,29 @@ class ResumeEngine:
 
         logger.info(f"build_tailored_resume completed successfully: {job_key}")
 
-        # Offer to close the JD-keyword coverage gap right here, rather than
-        # requiring a manual trip to Settings & Upkeep followed by a manual
-        # re-run. Deliberately after delete_checkpoint() above: the
-        # checkpoint is gone by this point, so a confirmed re-run below
-        # starts completely fresh (re-mines the bullet bank, re-runs the
-        # builder) instead of resuming from cached pre-skill-update state,
-        # which would silently reuse the old output and never pick up the
-        # newly confirmed skill.
+        # Record any still-missing keywords to the verified skills ledger for
+        # NEXT time, without offering to rebuild THIS run. Previously this
+        # auto-offered (and defaulted to yes on) a full from-scratch rebuild
+        # -- re-mining the bank and re-running the builder, a second real
+        # API cost -- every time the finished-resume coverage check found
+        # something Step 1.5's confirm_jd_skill_gaps_interactively() (the
+        # pre-build prompt) hadn't already asked about. Since
+        # find_unverified_jd_skill_gaps() now checks the same
+        # tools/hard_skills/core_functions universe check_keyword_coverage()
+        # does (2026-09-06 fix), this list should usually already be empty
+        # by the time we get here; confirming here is a safety net for the
+        # cases it doesn't catch (e.g. ATS text-matching quirks), not a
+        # second full prompt-and-rebuild cycle.
         if interactive and coverage["missing"]:
             confirmed_skills = confirm_missing_coverage_keywords_interactively(
                 coverage["missing"]
             )
-            if confirmed_skills and cli_art.confirm(
-                f"Re-run this build now so the resume can use the newly "
-                f"confirmed skill{'s' if len(confirmed_skills) > 1 else ''} "
-                f"({', '.join(confirmed_skills)})?",
-                default=True,
-            ):
-                cli_art.print_literal("  Re-running build with updated skills...")
-                return self.build_tailored_resume(
-                    jd_path,
-                    master_resume,
-                    output_filename=output_filename,
-                    job_key=job_key,
-                    interactive=interactive,
+            if confirmed_skills:
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('hint')} Saved for next build -- "
+                    f"run `resume run {jd_path}` again if you want this resume "
+                    f"to reflect {'them' if len(confirmed_skills) > 1 else 'it'}.",
+                    soft_wrap=True,
                 )
 
         return resume_data
