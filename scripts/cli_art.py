@@ -13,6 +13,7 @@ import time
 import charm_prompt
 import followup
 import jd_manager
+import maintenance
 import questionary
 import theme
 from rich import box
@@ -285,6 +286,36 @@ def _stats_line_text(
     return line
 
 
+SKILL_GAP_SCAN_REMINDER_DAYS = 7
+
+
+def _skill_gap_scan_reminder_text() -> str:
+    """Nudges toward Settings & Upkeep -> Scan Pending Pipeline for Skills
+    to Verify once its own last-run stamp (maintenance.record_run, set by
+    menu._handle_scan_pending_skills()) is more than
+    SKILL_GAP_SCAN_REMINDER_DAYS old, or has never been recorded at all --
+    the backlog only grows while nobody's told to look at it. Returns ""
+    when a reminder isn't warranted, so callers can append unconditionally."""
+    import datetime
+
+    last_run = maintenance.get_last_run("skill_gap_scan")
+    if last_run:
+        try:
+            ran_at = datetime.datetime.fromisoformat(last_run)
+        except ValueError:
+            ran_at = None
+        if ran_at is not None:
+            age = datetime.datetime.now() - ran_at
+            if age.days < SKILL_GAP_SCAN_REMINDER_DAYS:
+                return ""
+    return (
+        f"\n{theme.colorize_icon('hint')}  It's been over "
+        f"{SKILL_GAP_SCAN_REMINDER_DAYS} days since your last Skill Gap "
+        "Scan -- run it from Settings & Upkeep to add any new skills to "
+        "your profile."
+    )
+
+
 def display_main_banner(
     reveal: bool = True,
     active_roles_fn=None,
@@ -318,11 +349,14 @@ def display_main_banner(
         completed_resumes_fn=completed_resumes_fn,
         unevaluated_roles_fn=unevaluated_roles_fn,
     )
+    skill_scan_reminder = _skill_gap_scan_reminder_text()
 
     def render_frame(threshold):
         body = _render_grid(decorated_lines, grid, threshold=threshold)
         body.append(SUBTITLE, style="bold")
         body.append(stats_line, style=theme.INFO)
+        if skill_scan_reminder:
+            body.append(skill_scan_reminder, style=theme.WARNING)
         return Panel(body, border_style=theme.BRAND, box=box.DOUBLE, padding=(1, 2))
 
     if (

@@ -63,11 +63,19 @@ type Spec struct {
 	AllowedTypes     []string `json:"allowed_types,omitempty"`
 }
 
-// Result is the answer, encoded to stdout JSON. Exactly one field is set,
-// matching Spec.Type: Confirmed for "confirm", Value for "select", Values
-// for "checkbox".
+// Result is the answer, encoded to stdout JSON. Exactly one field is
+// meaningful, matching Spec.Type: Confirmed for "confirm", Value for
+// "select"/"text"/"filepicker", Values for "checkbox". Value deliberately
+// has NO omitempty: an empty string is a legitimate answer (e.g. a user
+// skipping an optional text prompt with a blank line), and omitempty on a
+// string drops the key entirely rather than emitting "". Python's
+// charm_prompt.text()/select() index data["value"] unconditionally, so a
+// missing key -- not just an empty one -- crashed with a KeyError the
+// first time a real user actually skipped a text prompt (observed
+// 2026-09-06, confirm_missing_coverage_keywords_interactively's optional
+// note field).
 type Result struct {
-	Value     string   `json:"value,omitempty"`
+	Value     string   `json:"value"`
 	Values    []string `json:"values,omitempty"`
 	Confirmed *bool    `json:"confirmed,omitempty"`
 }
@@ -171,6 +179,14 @@ func runFilePicker(t theme.Theme, spec Spec) (Result, error) {
 	return Result{Value: answer}, nil
 }
 
+// checkboxViewportHeight bounds how many options huh renders/lays out at
+// once. Unbounded, a long checkbox (e.g. skill_gap_scan.py's pending-
+// pipeline skill list, which can run into the hundreds) redraws every
+// option on every keystroke -- this turns it into a fixed scrollable
+// window instead, which is also what makes Filterable's live re-filtering
+// stay responsive on a large list.
+const checkboxViewportHeight = 14
+
 func runCheckbox(t theme.Theme, spec Spec) (Result, error) {
 	var answer []string
 	opts := make([]huh.Option[string], len(spec.Options))
@@ -180,6 +196,8 @@ func runCheckbox(t theme.Theme, spec Spec) (Result, error) {
 	field := huh.NewMultiSelect[string]().
 		Title(spec.Message).
 		Options(opts...).
+		Filterable(true).
+		Height(checkboxViewportHeight).
 		Value(&answer)
 	form := newForm(t, huh.NewGroup(field))
 	if err := form.Run(); err != nil {
