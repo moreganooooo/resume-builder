@@ -299,6 +299,26 @@ def upsert_job(
     dedup_hash = job_data.get("dedup_hash") or compute_job_dedup_hash(
         title, company, location
     )
+
+    # Merge into an existing row with the same dedup_hash rather than
+    # inserting a new one. ON CONFLICT(id) below only catches a re-scan of
+    # the exact same id -- it never caught a re-scrape that computed a
+    # different id for the same posting (e.g. the RSS aggregator
+    # company-name bug fixed 2026-09-05, where every listing collapsed to
+    # the same company and only dedup_hash still distinguished postings;
+    # also any provider whose id embeds a per-scan timestamp). Skipped for
+    # the generic "Untitled Role"/"Unknown Company" fallback, since two
+    # genuinely different postings that both failed to parse a title/company
+    # would otherwise collide on the same hash and get wrongly merged.
+    target_id = job_id
+    if title != "Untitled Role" or company != "Unknown Company":
+        existing = conn.execute(
+            "SELECT id FROM jobs WHERE dedup_hash = ? AND id != ? LIMIT 1",
+            (dedup_hash, job_id),
+        ).fetchone()
+        if existing is not None:
+            target_id = existing["id"]
+
     visa_sponsored = 1 if job_data.get("visa_sponsored") else 0
     ghost_prob = float(
         job_data.get("ghost_probability") or job_data.get("ghost_prob") or 0.0
@@ -352,7 +372,7 @@ def upsert_job(
                     updated_at=CURRENT_TIMESTAMP
             """,
                 (
-                    job_id,
+                    target_id,
                     title,
                     company,
                     location,

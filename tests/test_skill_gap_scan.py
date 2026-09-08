@@ -136,6 +136,45 @@ class TestGatherPendingSkillGaps(unittest.TestCase):
             self.assertEqual(gaps, [])
             self.assertEqual(stats["failed"], 1)
 
+    def test_dismissed_skills_never_reappear_as_gaps(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            job_a = os.path.join(tmpdir, "a.json")
+            with open(job_a, "w", encoding="utf-8") as f:
+                json.dump({"title": "A"}, f)
+
+            @contextlib.contextmanager
+            def fake_resolved(identifier):
+                yield identifier, False
+
+            with (
+                patch(
+                    "skill_gap_scan._all_pending_jd_identifiers",
+                    return_value=[job_a],
+                ),
+                patch("jd_source.resolved_jd", side_effect=fake_resolved),
+                patch(
+                    "orchestrator.extract_jd_keywords_via_gemini",
+                    return_value={
+                        "tools": ["HubSpot", "Kubernetes"],
+                        "hard_skills": [],
+                        "core_functions": [],
+                    },
+                ),
+                patch("skills_menu._load_verified_tools", return_value={"tools": []}),
+                patch("profile_paths.profile_yaml", return_value={}),
+                # Case-insensitive: the dismissed entry is lowercase.
+                patch(
+                    "skills_menu._load_dismissed_skills",
+                    return_value=["kubernetes"],
+                ),
+            ):
+                gaps, _stats, _categories = skill_gap_scan.gather_pending_skill_gaps(
+                    max_roles=10
+                )
+
+            self.assertIn("HubSpot", gaps)
+            self.assertNotIn("Kubernetes", gaps)
+
 
 class TestCategorizeGaps(unittest.TestCase):
     def test_labels_by_bucket_with_tools_priority(self):
@@ -168,8 +207,12 @@ class TestRun(unittest.TestCase):
             tools_path = os.path.join(tmpdir, "verified_tools.json")
             with open(tools_path, "w", encoding="utf-8") as f:
                 json.dump({"_meta": {}, "tools": []}, f)
+            dismissed_path = os.path.join(tmpdir, "dismissed_skills.json")
 
-            mock_checkbox = MagicMock(return_value=["Claude"])
+            # First checkbox call is "select to add" -> ["Claude"]. Second
+            # is the negative-selector "select to dismiss" over whatever's
+            # left (["Asana"]) -> nothing dismissed this run.
+            mock_checkbox = MagicMock(side_effect=[["Claude"], []])
             modules_no_unittest = {
                 k: v for k, v in sys.modules.items() if k != "unittest"
             }
@@ -190,6 +233,10 @@ class TestRun(unittest.TestCase):
                     ),
                 ),
                 patch("skills_menu._get_verified_tools_path", return_value=tools_path),
+                patch(
+                    "skills_menu._get_dismissed_skills_path",
+                    return_value=dismissed_path,
+                ),
                 patch("sys.stdin.isatty", return_value=True),
                 patch.dict("sys.modules", modules_no_unittest, clear=True),
                 patch("cli_art.checkbox", mock_checkbox),
@@ -197,6 +244,7 @@ class TestRun(unittest.TestCase):
                 code = skill_gap_scan.run()
 
             self.assertEqual(code, 0)
+            self.assertEqual(mock_checkbox.call_count, 2)
             with open(tools_path, "r", encoding="utf-8") as f:
                 saved = json.load(f)
             self.assertEqual(len(saved["tools"]), 1)
@@ -205,6 +253,83 @@ class TestRun(unittest.TestCase):
                 saved["tools"][0]["use_notes"],
                 "Added via Pending Pipeline Skill Gap Scan",
             )
+            # Nothing dismissed this run -- file is never written.
+            self.assertFalse(os.path.exists(dismissed_path))
+
+    def test_negative_selector_persists_dismissed_skills(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tools_path = os.path.join(tmpdir, "verified_tools.json")
+            with open(tools_path, "w", encoding="utf-8") as f:
+                json.dump({"_meta": {}, "tools": []}, f)
+            dismissed_path = os.path.join(tmpdir, "dismissed_skills.json")
+
+            # Nothing added, "Kubernetes" marked as not-my-background.
+            mock_checkbox = MagicMock(side_effect=[[], ["Kubernetes"]])
+            modules_no_unittest = {
+                k: v for k, v in sys.modules.items() if k != "unittest"
+            }
+
+            with (
+                patch(
+                    "skill_gap_scan.gather_pending_skill_gaps",
+                    return_value=(
+                        ["Asana", "Kubernetes"],
+                        {
+                            "total": 2,
+                            "cached": 0,
+                            "extracted": 2,
+                            "failed": 0,
+                            "budget_skipped": 0,
+                        },
+                        {"Asana": "Tool", "Kubernetes": "Tool"},
+                    ),
+                ),
+                patch("skills_menu._get_verified_tools_path", return_value=tools_path),
+                patch(
+                    "skills_menu._get_dismissed_skills_path",
+                    return_value=dismissed_path,
+                ),
+                patch("sys.stdin.isatty", return_value=True),
+                patch.dict("sys.modules", modules_no_unittest, clear=True),
+                patch("cli_art.checkbox", mock_checkbox),
+            ):
+                code = skill_gap_scan.run()
+
+            self.assertEqual(code, 0)
+            with open(dismissed_path, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+            self.assertEqual(saved["dismissed"], ["Kubernetes"])
+            # Never touched the verified tools ledger.
+            with open(tools_path, "r", encoding="utf-8") as f:
+                self.assertEqual(json.load(f)["tools"], [])
+
+    def test_cancelling_add_checkbox_skips_dismiss_step_entirely(self):
+        modules_no_unittest = {k: v for k, v in sys.modules.items() if k != "unittest"}
+        mock_checkbox = MagicMock(return_value=None)
+
+        with (
+            patch(
+                "skill_gap_scan.gather_pending_skill_gaps",
+                return_value=(
+                    ["Asana"],
+                    {
+                        "total": 1,
+                        "cached": 0,
+                        "extracted": 1,
+                        "failed": 0,
+                        "budget_skipped": 0,
+                    },
+                    {"Asana": "Tool"},
+                ),
+            ),
+            patch("sys.stdin.isatty", return_value=True),
+            patch.dict("sys.modules", modules_no_unittest, clear=True),
+            patch("cli_art.checkbox", mock_checkbox),
+        ):
+            code = skill_gap_scan.run()
+
+        self.assertEqual(code, 0)
+        mock_checkbox.assert_called_once()
 
     def test_no_gaps_found_is_a_no_op(self):
         modules_no_unittest = {k: v for k, v in sys.modules.items() if k != "unittest"}

@@ -40,6 +40,24 @@ class TestInteractiveSkillsGap(unittest.TestCase):
         self.assertNotIn("HubSpot", gaps)
         self.assertNotIn("CRM Architecture", gaps)
 
+    def test_find_unverified_jd_skill_gaps_includes_core_functions(self):
+        """Regression for a real 2026-09-06 report: a JD keyword filed under
+        core_functions (not tools/hard_skills) never surfaced at the early
+        Step 1.5 prompt, only in validate_resume.check_keyword_coverage()'s
+        post-build report -- which check_keyword_coverage() itself DOES
+        check (all_keywords = tools + hard_skills + core_functions), so the
+        two prompts disagreed about what counted as "missing"."""
+        jd_keywords = {
+            "tools": ["HubSpot"],
+            "hard_skills": [],
+            "core_functions": ["Cybersecurity"],
+        }
+        verified_tools_data = {"tools": [{"name": "HubSpot"}]}
+        gaps = orchestrator.find_unverified_jd_skill_gaps(
+            jd_keywords, verified_tools_data, {}
+        )
+        self.assertIn("Cybersecurity", gaps)
+
     def test_find_unverified_jd_skill_gaps_case_insensitive(self):
         jd_keywords = {"tools": ["hubspot", "SALESFORCE"]}
         verified_tools_data = {

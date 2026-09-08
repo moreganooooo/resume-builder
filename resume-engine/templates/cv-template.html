@@ -63,7 +63,22 @@
     font-family: 'DM Sans', sans-serif;
     font-size: 9.75pt;
     font-weight: 400;
-    line-height: 1.2;
+    /* 1.2 -> 1.15 resume-wide (2026-09-04): measured via a same-JSON,
+       same-format (US Letter), CSS-only A/B render of a real prior build
+       (MorganEscott_ContentStrategist_AbnormalAI_Resume.json) -- page-1
+       trailing whitespace went from 169.5pt/2.35in to 46.5pt/0.65in, a
+       ~123pt/1.7in recovery. That's far bigger than a naive per-line
+       estimate because it compounds across every wrapped line in a dense
+       multi-page resume, not just once. Reduces (not eliminates) how often
+       a role like Inside Sales Team spills to page 2 and how often a
+       bullet lands close enough to the wrap boundary to trigger the
+       widow-repair loop -- that same A/B pair stayed at 2 pages both
+       before and after, so this narrows the gap a lot without being a
+       guaranteed 1-page fix on its own; content trimming still does the
+       rest via the existing trim-priority loop. Font-size was deliberately
+       left alone -- it's the harder-to-reverse, more visually obvious
+       lever, and this hasn't needed it yet. */
+    line-height: 1.15;
     color: #000000;
     background: #ffffff;
     padding: 0;
@@ -150,13 +165,13 @@
     border-bottom: 0.018cm solid #9aa3af;
     padding-bottom: 2px;
     margin-bottom: 3px;
-    line-height: 1.2;
+    line-height: 1.15;
   }
 
   /* === PROFESSIONAL SUMMARY === */
   .summary-text {
     font-size: 9.75pt;
-    line-height: 1.2;
+    line-height: 1.15;
     color: #000000;
   }
 
@@ -174,7 +189,7 @@
     flex-direction: column;
     gap: 1px;
     font-size: 9.75pt;
-    line-height: 1.2;
+    line-height: 1.15;
     color: #000000;
   }
 
@@ -189,7 +204,7 @@
      commit. Styled identically to .skills-grid so old outputs still look right. */
   .skills-text {
     font-size: 9.75pt;
-    line-height: 1.2;
+    line-height: 1.15;
     color: #000000;
   }
 
@@ -215,6 +230,13 @@
     font-size: 9.75pt;
     font-weight: 800;
     color: #000000;
+  }
+
+  /* Small extra breathing room above every job title except the first --
+     .job already carries margin-bottom, so this only needs to apply to a
+     .job that follows another .job, not the section's first entry. */
+  .job + .job .job-title {
+    margin-top: 4px;
   }
 
   /* Job meta comes second (bold, one line): company, size/revenue,
@@ -254,7 +276,7 @@
     color: #000000;
     margin-top: 4px;
     margin-bottom: 3px;
-    line-height: 1.2;
+    line-height: 1.15;
   }
 
   /* "Career Note:" label -- matches the other 800-weight headings
@@ -272,7 +294,7 @@
 
   .job li {
     font-size: 9.75pt;
-    line-height: 1.2;
+    line-height: 1.15;
     color: #000000;
     margin-bottom: 1px;
   }
@@ -348,7 +370,7 @@
     font-size: 9.75pt;
     color: #000000;
     margin-top: 2px;
-    line-height: 1.2;
+    line-height: 1.15;
   }
 
   /* Education bullets */
@@ -359,7 +381,7 @@
 
   .edu-item li {
     font-size: 9.75pt;
-    line-height: 1.2;
+    line-height: 1.15;
     color: #000000;
     margin-bottom: 1px;
   }
@@ -367,7 +389,7 @@
   /* === WHY SECTION === */
   .why-text {
     font-size: 9.75pt;
-    line-height: 1.2;
+    line-height: 1.15;
     color: #000000;
   }
 
