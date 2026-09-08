@@ -11,6 +11,7 @@ Differences from the original:
   or manually entered, and validated live before use.
 """
 
+import contextlib
 import logging
 import os
 import re
@@ -261,41 +262,95 @@ def _fetch_personalized_extras(job_url: str, li_at_cookie: str) -> dict:
     return extras
 
 
-def _build_queries(job_limit: int, search_terms: list) -> list:
-    """Builds one LinkedIn Query per search string in search_terms -- see
-    fetch_linkedin_jobs() for where those strings actually come from
-    (profile.yml, not hardcoded here)."""
-    shared_filters = QueryFilters(
-        relevance=RelevanceFilters.RELEVANT,
-        time=TimeFilters.DAY,
-        on_site_or_remote=[OnSiteOrRemoteFilters.REMOTE],
-        experience=[
-            ExperienceLevelFilters.ENTRY_LEVEL,
-            ExperienceLevelFilters.ASSOCIATE,
-            ExperienceLevelFilters.MID_SENIOR,
-        ],
-        type=[
-            TypeFilters.FULL_TIME,
-            TypeFilters.PART_TIME,
-            TypeFilters.CONTRACT,
-            TypeFilters.TEMPORARY,
-        ],
-    )
+_WORKPLACE_MODE_FILTERS = {
+    "remote": OnSiteOrRemoteFilters.REMOTE,
+    "onsite": OnSiteOrRemoteFilters.ON_SITE,
+    "on_site": OnSiteOrRemoteFilters.ON_SITE,
+    "hybrid": OnSiteOrRemoteFilters.HYBRID,
+}
+_DEFAULT_WORKPLACE_MODES = ["remote"]
+_DEFAULT_LOCATION = "United States"
 
-    def _query(text):
+
+@contextlib.contextmanager
+def _muted_scraper_logger():
+    """Silences linkedin_jobs_scraper's own 'li:scraper' logger (INFO
+    lines like "Session is valid" and "Metrics: ...", WARNING lines like
+    "Pagination failed, retrying") for the duration of scraper.run().
+    That logger sets its own level explicitly (see the package's
+    utils/logger.py), so it reaches the root logger and prints raw
+    LEVELNAME:name:message lines -- clobbering the "Scanning" spinner --
+    whenever ANY handler with a low enough level exists on the root
+    logger (e.g. `resume --verbose`'s logging.basicConfig(DEBUG)).
+    scan.py's own _ScanWarningCollector doesn't help here: it only
+    captures records explicitly marked scan_warning, which this
+    third-party logger's records never are. Restores the original level
+    afterward rather than assuming a default, in case something else
+    already changed it."""
+    scraper_logger = logging.getLogger("li:scraper")
+    original_level = scraper_logger.level
+    scraper_logger.setLevel(logging.CRITICAL + 1)
+    try:
+        yield
+    finally:
+        scraper_logger.setLevel(original_level)
+
+
+def _build_queries(job_limit: int, search_terms: list) -> list:
+    """Builds one LinkedIn Query per entry in search_terms -- see
+    fetch_linkedin_jobs() for where those entries actually come from
+    (profile.yml, not hardcoded here). An entry is either a plain search
+    string (remote/"United States", the original behavior) or a dict with
+    `query` plus optional `workplace_mode` (list of remote/onsite/hybrid)
+    and `location` overrides -- e.g. a local search wants onsite/hybrid
+    roles near a specific city instead of a nationwide remote search."""
+
+    def _query(entry):
+        if isinstance(entry, dict):
+            text = entry["query"]
+            modes = entry.get("workplace_mode") or _DEFAULT_WORKPLACE_MODES
+            location = entry.get("location") or _DEFAULT_LOCATION
+        else:
+            text = entry
+            modes = _DEFAULT_WORKPLACE_MODES
+            location = _DEFAULT_LOCATION
+
+        on_site_or_remote = [
+            _WORKPLACE_MODE_FILTERS[m.lower().replace("-", "_")]
+            for m in modes
+            if m.lower().replace("-", "_") in _WORKPLACE_MODE_FILTERS
+        ] or [OnSiteOrRemoteFilters.REMOTE]
+
+        filters = QueryFilters(
+            relevance=RelevanceFilters.RELEVANT,
+            time=TimeFilters.DAY,
+            on_site_or_remote=on_site_or_remote,
+            experience=[
+                ExperienceLevelFilters.ENTRY_LEVEL,
+                ExperienceLevelFilters.ASSOCIATE,
+                ExperienceLevelFilters.MID_SENIOR,
+            ],
+            type=[
+                TypeFilters.FULL_TIME,
+                TypeFilters.PART_TIME,
+                TypeFilters.CONTRACT,
+                TypeFilters.TEMPORARY,
+            ],
+        )
+
         return Query(
             query=text,
             options=QueryOptions(
-                locations=["United States"],
+                locations=[location],
                 apply_link=False,
                 skip_promoted_jobs=False,
                 page_offset=0,
                 limit=job_limit,
-                filters=shared_filters,
+                filters=filters,
             ),
         )
 
-    return [_query(text) for text in search_terms]
+    return [_query(entry) for entry in search_terms]
 
 
 def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
@@ -303,10 +358,11 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
     job dicts (same shape as job_automater's/JobRight's).
 
     Search terms come from profile.yml's linkedin_search_queries: (hand-
-    tuned boolean search strings -- Morgan's own profile.yml has her 3
-    real saved searches there) if present, else fall back to one query per
-    target_roles.primary entry, so a profile that hasn't hand-tuned
-    searches yet still gets something reasonable rather than nothing."""
+    tuned boolean search strings, or a dict per entry for a search that
+    needs its own workplace_mode/location -- see _build_queries()) if
+    present, else fall back to one query per target_roles.primary entry,
+    so a profile that hasn't hand-tuned searches yet still gets something
+    reasonable rather than nothing."""
     profile_data = profile_paths.profile_yaml()
     search_terms = (
         profile_data.get("linkedin_search_queries")
@@ -432,12 +488,16 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
     scraper.on(Events.ERROR, on_error)
     scraper.on(Events.END, on_end)
 
+    display_terms = [
+        entry["query"] if isinstance(entry, dict) else entry for entry in search_terms
+    ]
     cli_art.cli_info(
         f"Searching LinkedIn for {len(search_terms)} saved "
-        f"quer{'y' if len(search_terms) == 1 else 'ies'}: {', '.join(search_terms)}"
+        f"quer{'y' if len(search_terms) == 1 else 'ies'}: {', '.join(display_terms)}"
     )
     try:
-        scraper.run(_build_queries(job_limit, search_terms))
+        with _muted_scraper_logger():
+            scraper.run(_build_queries(job_limit, search_terms))
     except Exception as e:
         cli_art.cli_error(f"LinkedIn scraper run failed: {e}")
         on_end()

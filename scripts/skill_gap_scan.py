@@ -168,6 +168,8 @@ def gather_pending_skill_gaps(max_roles: int = DEFAULT_MAX_ROLES) -> tuple:
     gaps = orchestrator.find_unverified_jd_skill_gaps(
         combined, verified_tools_data, profile_data
     )
+    dismissed = {n.strip().lower() for n in skills_menu._load_dismissed_skills()}
+    gaps = [g for g in gaps if g.strip().lower() not in dismissed]
     sorted_gaps = sorted(gaps, key=str.lower)
     categories = _categorize_gaps(sorted_gaps, combined)
     return sorted_gaps, stats, categories
@@ -225,36 +227,69 @@ def run(max_roles: int = DEFAULT_MAX_ROLES) -> int:
     selected = cli_art.checkbox(
         "Select verified skills/tools to add to your profile:", choices=choices
     )
-    if not selected:
-        cli_art.detail("No additional skills added.", level=cli_art.NORMAL)
+    if selected is None:
+        cli_art.detail("Cancelled -- no changes made.", level=cli_art.NORMAL)
         return 0
 
-    try:
-        verified_tools_data = skills_menu._load_verified_tools()
-    except Exception:
-        verified_tools_data = {"tools": []}
+    if selected:
+        try:
+            verified_tools_data = skills_menu._load_verified_tools()
+        except Exception:
+            verified_tools_data = {"tools": []}
 
-    tools = verified_tools_data.setdefault("tools", [])
-    for skill_name in selected:
-        new_id = skills_menu._generate_next_id(tools)
-        tools.append(
-            {
-                "id": new_id,
-                "name": skill_name,
-                "category": "Candidate Verified",
-                "confidence": "Proficient",
-                "employer": "Self / Profile",
-                "use_notes": "Added via Pending Pipeline Skill Gap Scan",
-                "tr_references": ["profile.yml"],
-            }
-        )
+        tools = verified_tools_data.setdefault("tools", [])
+        for skill_name in selected:
+            new_id = skills_menu._generate_next_id(tools)
+            tools.append(
+                {
+                    "id": new_id,
+                    "name": skill_name,
+                    "category": "Candidate Verified",
+                    "confidence": "Proficient",
+                    "employer": "Self / Profile",
+                    "use_notes": "Added via Pending Pipeline Skill Gap Scan",
+                    "tr_references": ["profile.yml"],
+                }
+            )
 
-    saved = skills_menu._save_verified_tools(verified_tools_data)
-    if saved:
-        cli_art.console.print(
-            f"  {theme.colorize_icon('success')} Added [bold green]{len(selected)}[/bold green] "
-            f"tool(s) to verified_tools.json: {', '.join(selected)}"
+        if skills_menu._save_verified_tools(verified_tools_data):
+            cli_art.console.print(
+                f"  {theme.colorize_icon('success')} Added "
+                f"[bold green]{len(selected)}[/bold green] tool(s) to "
+                f"verified_tools.json: {', '.join(selected)}"
+            )
+    else:
+        cli_art.detail("No additional skills added.", level=cli_art.NORMAL)
+
+    # Negative selector: anything not added just now is still a candidate
+    # to permanently dismiss, so the list doesn't keep growing back to the
+    # same off-base names on every future scan.
+    remaining_gaps = [g for g in ordered_gaps if g not in set(selected)]
+    if remaining_gaps:
+        cli_art.detail(
+            "Now select any of the remaining tools/skills that are "
+            "DEFINITELY NOT part of your background -- these will be "
+            "permanently hidden from future Pending Pipeline scans.",
+            level=cli_art.NORMAL,
         )
+        dismiss_choices = [
+            questionary.Choice(title=f"[{categories.get(g, 'Skill')}] {g}", value=g)
+            for g in remaining_gaps
+        ]
+        to_dismiss = cli_art.checkbox(
+            "Select tools/skills to permanently dismiss (not applicable):",
+            choices=dismiss_choices,
+        )
+        if to_dismiss:
+            dismissed = set(skills_menu._load_dismissed_skills())
+            dismissed.update(to_dismiss)
+            if skills_menu._save_dismissed_skills(list(dismissed)):
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('success')} Dismissed "
+                    f"[bold]{len(to_dismiss)}[/bold] skill(s) -- won't show up in "
+                    f"future scans: {', '.join(to_dismiss)}"
+                )
+
     return 0
 
 

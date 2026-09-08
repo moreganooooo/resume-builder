@@ -59,6 +59,11 @@ _SCORING_WEIGHTS_RE = re.compile(
     re.MULTILINE,
 )
 
+_ROLE_TRACK_RE = re.compile(
+    r"^role_track:[ \t]*\n(?:[ \t]+[^\n]*\n|[ \t]*\n(?=[ \t]+\S))*",
+    re.MULTILINE,
+)
+
 # Ordered so the written block reads top to bottom the way someone would
 # describe the constraint. Keys are the ones compensation.py and
 # work_hours.py read; a key here that neither reads is a setting that
@@ -141,6 +146,23 @@ SCORING_WEIGHT_LABELS = {
     "funnel_friction_nudge": "Remote/onsite funnel-friction nudge (+/-)",
 }
 
+# role_track (docs/role_track.md) cleared its >=90% holdout bar --
+# 100% precision / 94.1% recall on the 134-row holdout as of its third
+# prompt experiment -- which is what allows it to gate anything at all
+# (unlike hard_blockers' unvalidated categories, see
+# orchestrator.EXPERIENCE_BLOCKER_CATEGORIES). Still opt-in and default
+# off: recall isn't 100%, so someone who never wants to see a manager
+# posting accepts a small, measured chance of one slipping through
+# uncaught, not a chance of a real IC role being wrongly dropped.
+# Confidence-gated the same way as the Jobs/Pipeline view filters
+# (model.JobRow.IsManagerTrack) -- only "high" confidence excludes,
+# since that's the only slice the holdout actually measured.
+_ROLE_TRACK_KEYS = ("exclude_manager",)
+
+DEFAULT_ROLE_TRACK_SETTINGS = {
+    "exclude_manager": False,
+}
+
 
 def scan_filters_path(profile: str | None = None) -> str:
     root = profile_paths.profile_root(profile or profile_paths.active_profile())
@@ -183,6 +205,15 @@ def read_settings(path: str | None = None) -> dict:
         }
         if kept:
             settings["scoring_weights"] = kept
+    role_track = data.get("role_track")
+    if isinstance(role_track, dict):
+        kept = {
+            k: role_track[k]
+            for k in _ROLE_TRACK_KEYS
+            if role_track.get(k) not in (None, "")
+        }
+        if kept:
+            settings["role_track"] = kept
     return settings
 
 
@@ -192,6 +223,16 @@ def read_scoring_weights(path: str | None = None) -> dict:
     caller never has to fall back itself."""
     overrides = read_settings(path).get("scoring_weights") or {}
     merged = dict(DEFAULT_SCORING_WEIGHTS)
+    merged.update(overrides)
+    return merged
+
+
+def read_role_track_settings(path: str | None = None) -> dict:
+    """DEFAULT_ROLE_TRACK_SETTINGS merged with any profile override --
+    what orchestrator.rescore_evaluation_with_location() actually reads.
+    Always returns the key, so a caller never has to fall back itself."""
+    overrides = read_settings(path).get("role_track") or {}
+    merged = dict(DEFAULT_ROLE_TRACK_SETTINGS)
     merged.update(overrides)
     return merged
 
@@ -233,6 +274,8 @@ def describe(settings: dict) -> str:
     hours = work_hours.describe_range(settings.get("compensation") or {})
     if hours:
         parts.append(f"hours: {hours}")
+    if (settings.get("role_track") or {}).get("exclude_manager"):
+        parts.append("role track: IC-only (manager roles excluded)")
     return "; ".join(parts)
 
 
@@ -361,6 +404,22 @@ def write_settings(settings: dict, path: str | None = None) -> None:
     else:
         updated = _SCORING_WEIGHTS_RE.sub("", updated, count=1)
 
+    role_track = settings.get("role_track") or {}
+    role_track = {
+        k: role_track[k]
+        for k in _ROLE_TRACK_KEYS
+        if role_track.get(k) not in (None, "")
+    }
+    if role_track:
+        block = "role_track:\n" + "".join(
+            f"  {key}: {_yaml_scalar(role_track[key])}\n"
+            for key in _ROLE_TRACK_KEYS
+            if key in role_track
+        )
+        updated = _replace_or_append(updated, _ROLE_TRACK_RE, block)
+    else:
+        updated = _ROLE_TRACK_RE.sub("", updated, count=1)
+
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(updated)
 
@@ -393,6 +452,14 @@ def run_content_settings() -> None:
             ),
             questionary.Choice("Set my minimum pay", value="pay"),
             questionary.Choice("Set my weekly hours range", value="hours"),
+            questionary.Choice(
+                (
+                    "Turn off IC-only mode (currently excluding manager roles)"
+                    if (current.get("role_track") or {}).get("exclude_manager")
+                    else "Turn on IC-only mode (exclude manager/people-lead roles)"
+                ),
+                value="toggle_role_track",
+            ),
             questionary.Choice("Turn off language filtering", value="clear_languages"),
             questionary.Choice("Turn off travel filtering", value="clear_travel"),
             questionary.Choice(
@@ -526,6 +593,11 @@ def run_content_settings() -> None:
             pay["max_hours_per_week"] = parsed_high
         current["compensation"] = pay
 
+    elif action == "toggle_role_track":
+        role_track = dict(current.get("role_track") or {})
+        role_track["exclude_manager"] = not role_track.get("exclude_manager", False)
+        current["role_track"] = role_track
+
     elif action == "clear_pay":
         pay = dict(current.get("compensation") or {})
         pay.pop("annual_floor", None)
@@ -596,6 +668,22 @@ def run_content_settings() -> None:
             "  [dim]Note: postings that state no travel requirement are always "
             "kept -- about 95% of them. This only drops postings that name a "
             "figure above your ceiling.[/dim]",
+            soft_wrap=True,
+        )
+
+    if (current.get("role_track") or {}).get("exclude_manager"):
+        # Precision is measured at 100% / recall 94.1% on a 134-row
+        # holdout (docs/role_track.md) -- good, not perfect. Only
+        # HIGH-confidence manager/player_coach verdicts are excluded, the
+        # same gate the Jobs/Pipeline view filters use, so this can't
+        # newly zero a score the model itself is unsure about.
+        cli_art.console.print(
+            "  [dim]Note: this only excludes postings the model calls "
+            "manager/people-lead with HIGH confidence (~94% of true "
+            "manager roles, measured). It takes effect on future "
+            "evaluations -- re-evaluate a role to apply it retroactively, "
+            "or run scripts/find_retroactively_excluded_roles.py for "
+            "already-evaluated pending roles.[/dim]",
             soft_wrap=True,
         )
 
@@ -681,6 +769,7 @@ def run_scoring_weights_settings() -> None:
 
 
 __all__ = [
+    "DEFAULT_ROLE_TRACK_SETTINGS",
     "DEFAULT_SCORING_WEIGHTS",
     "EMPLOYMENT_LABELS",
     "SCORING_WEIGHT_LABELS",
@@ -689,6 +778,7 @@ __all__ = [
     "LANGUAGE_LABELS",
     "TRAVEL_CHOICES",
     "describe",
+    "read_role_track_settings",
     "read_scoring_weights",
     "read_settings",
     "run_content_settings",

@@ -297,6 +297,56 @@ class TestMatrix(JDFileTestCase):
         self.assertEqual(code, 0)
         mock_export.assert_called_once_with(FAKE_JOBS_PATH)
 
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("embed_bullet_bank.embed_batch")
+    @patch("numpy.load")
+    @patch("os.path.exists")
+    @patch("orchestrator.get_or_extract_jd_keywords")
+    def test_matrix_falls_back_to_extracted_keywords_when_no_scan_skills(
+        self, mock_extract, mock_exists, mock_load, mock_embed, mock_export
+    ):
+        """Most providers never populate jd_data["skills"] (only
+        scan_linkedin.py/scan_jobright.py do) -- the matrix must still work
+        by falling back to an extract_keywords.md-derived skill list."""
+        mock_exists.return_value = True
+        mock_load.return_value = np.ones((2, 768), dtype=np.float32)
+        mock_embed.return_value = [np.ones(768, dtype=np.float32).tolist()]
+        mock_extract.return_value = {
+            "tools": ["Python"],
+            "hard_skills": [],
+            "core_functions": [],
+        }
+
+        jd_data = {
+            "title": "Staff Engineer",
+            "_evaluation": {"composite_score": 90},
+        }
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump(jd_data, f)
+
+        code = dashboard_actions._matrix(self.jd_path, FAKE_JOBS_PATH)
+        self.assertEqual(code, 0)
+        mock_extract.assert_called_once_with(self.jd_path)
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
+
+        with open(self.jd_path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        skill_matrix = saved["_evaluation"]["skill_matrix"]
+        self.assertEqual([s["skill"] for s in skill_matrix], ["Python"])
+
+    @patch("orchestrator.get_or_extract_jd_keywords")
+    def test_matrix_no_skills_anywhere_returns_nonzero(self, mock_extract):
+        mock_extract.return_value = {
+            "tools": [],
+            "hard_skills": [],
+            "core_functions": [],
+        }
+        jd_data = {"title": "Staff Engineer", "_evaluation": {"composite_score": 90}}
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump(jd_data, f)
+        code = dashboard_actions._matrix(self.jd_path, FAKE_JOBS_PATH)
+        self.assertEqual(code, 1)
+
     @patch("dashboard_actions.jd_source.resolved_jd")
     def test_matrix_lookup_error_returns_nonzero(self, mock_resolved):
         mock_resolved.side_effect = LookupError("Not in database")
@@ -336,6 +386,95 @@ class TestMatrix(JDFileTestCase):
         code = dashboard_actions._matrix(self.jd_path, FAKE_JOBS_PATH)
         self.assertEqual(code, 0)
         self.assertEqual(mock_embed.call_count, 2)
+
+
+class TestBatchMatrix(unittest.TestCase):
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("dashboard_actions.jd_source.resolved_jd")
+    @patch("dashboard_actions._compute_skill_matrix_for_jd")
+    @patch("picker.list_all_evaluated_jds")
+    def test_computes_only_jobs_missing_a_matrix(
+        self, mock_list, mock_compute, mock_resolved, mock_export
+    ):
+        mock_list.return_value = [
+            {"path": "a.json", "evaluation": {"skill_matrix": [{"skill": "Python"}]}},
+            {"path": "b.json", "evaluation": {}},
+        ]
+
+        @contextlib.contextmanager
+        def fake_resolved(path):
+            yield path, False
+
+        mock_resolved.side_effect = fake_resolved
+
+        code = dashboard_actions._batch_matrix(FAKE_JOBS_PATH)
+        self.assertEqual(code, 0)
+        mock_compute.assert_called_once_with("b.json")
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("dashboard_actions.jd_source.resolved_jd")
+    @patch("dashboard_actions._compute_skill_matrix_for_jd")
+    @patch("picker.list_all_evaluated_jds")
+    def test_caps_candidates_at_max_jobs(
+        self, mock_list, mock_compute, mock_resolved, mock_export
+    ):
+        mock_list.return_value = [
+            {"path": f"{i}.json", "evaluation": {}} for i in range(5)
+        ]
+
+        @contextlib.contextmanager
+        def fake_resolved(path):
+            yield path, False
+
+        mock_resolved.side_effect = fake_resolved
+
+        code = dashboard_actions._batch_matrix(FAKE_JOBS_PATH, max_jobs=2)
+        self.assertEqual(code, 0)
+        self.assertEqual(mock_compute.call_count, 2)
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("dashboard_actions.jd_source.resolved_jd")
+    @patch("dashboard_actions._compute_skill_matrix_for_jd")
+    @patch("picker.list_all_evaluated_jds")
+    def test_a_skip_or_failure_on_one_job_does_not_stop_the_batch(
+        self, mock_list, mock_compute, mock_resolved, mock_export
+    ):
+        mock_list.return_value = [
+            {"path": "skip.json", "evaluation": {}},
+            {"path": "fail.json", "evaluation": {}},
+            {"path": "ok.json", "evaluation": {}},
+        ]
+        mock_compute.side_effect = [
+            dashboard_actions._SkillMatrixSkip(
+                "No named skills extracted for this JD."
+            ),
+            Exception("boom"),
+            None,
+        ]
+
+        @contextlib.contextmanager
+        def fake_resolved(path):
+            yield path, False
+
+        mock_resolved.side_effect = fake_resolved
+
+        code = dashboard_actions._batch_matrix(FAKE_JOBS_PATH)
+        self.assertEqual(code, 0)
+        self.assertEqual(mock_compute.call_count, 3)
+        mock_export.assert_called_once_with(FAKE_JOBS_PATH)
+
+    @patch("dashboard_actions.dashboard._export_jobs_to")
+    @patch("picker.list_all_evaluated_jds")
+    def test_listing_failure_returns_nonzero_without_refreshing(
+        self, mock_list, mock_export
+    ):
+        mock_list.side_effect = Exception("db error")
+        code = dashboard_actions._batch_matrix(FAKE_JOBS_PATH)
+        self.assertEqual(code, 1)
+        mock_export.assert_not_called()
 
 
 class TestUserErrorContract(JDFileTestCase):
@@ -444,7 +583,11 @@ class TestCoveragePercentile(unittest.TestCase):
         rng = np.random.default_rng(0)
         embs = rng.normal(size=(64, 32)).astype(np.float32)
         embs /= np.linalg.norm(embs, axis=1, keepdims=True)
-        return dashboard_actions._coverage_reference(embs)
+        with patch(
+            "dashboard_actions._load_verified_skill_reference_vectors",
+            return_value=None,
+        ):
+            return dashboard_actions._coverage_reference(embs)
 
     def test_reference_is_sorted_and_one_entry_per_bullet(self):
         ref = self._reference()
@@ -481,3 +624,57 @@ class TestCoveragePercentile(unittest.TestCase):
 
     def test_empty_reference_scores_zero_rather_than_dividing_by_zero(self):
         self.assertEqual(dashboard_actions._coverage_percentile(0.9, np.array([])), 0.0)
+
+
+class TestCoverageReferencePrefersVerifiedSkills(unittest.TestCase):
+    """A short skill PHRASE ("Content Strategy") scored against full
+    BULLET sentences systematically lands lower than bullet-to-bullet
+    similarity does, which used to pin real matches at 0% coverage (see
+    _coverage_reference()'s own docstring). The fix ranks a skill against
+    other verified skill NAMES instead, when that cache is available."""
+
+    def _bullet_embs(self):
+        rng = np.random.default_rng(1)
+        embs = rng.normal(size=(20, 16)).astype(np.float32)
+        embs /= np.linalg.norm(embs, axis=1, keepdims=True)
+        return embs
+
+    @patch("dashboard_actions._load_verified_skill_reference_vectors")
+    def test_uses_verified_skill_vectors_when_cache_exists(self, mock_load):
+        rng = np.random.default_rng(2)
+        skill_vecs = rng.normal(size=(10, 16)).astype(np.float32)
+        skill_vecs /= np.linalg.norm(skill_vecs, axis=1, keepdims=True)
+        mock_load.return_value = skill_vecs
+
+        embs = self._bullet_embs()
+        ref = dashboard_actions._coverage_reference(embs)
+
+        self.assertEqual(len(ref), 10)
+        self.assertTrue(np.all(np.diff(ref) >= 0), "reference must be sorted")
+
+    @patch("dashboard_actions._load_verified_skill_reference_vectors")
+    def test_falls_back_to_bullet_self_similarity_when_no_cache(self, mock_load):
+        mock_load.return_value = None
+        embs = self._bullet_embs()
+        ref = dashboard_actions._coverage_reference(embs)
+        self.assertEqual(len(ref), len(embs))
+
+
+class TestLoadVerifiedSkillReferenceVectors(unittest.TestCase):
+
+    @patch("os.path.exists", return_value=False)
+    def test_returns_none_when_cache_file_is_missing(self, mock_exists):
+        self.assertIsNone(dashboard_actions._load_verified_skill_reference_vectors())
+
+    @patch("numpy.load")
+    @patch("os.path.exists", return_value=True)
+    def test_returns_none_when_cache_file_is_empty(self, mock_exists, mock_load):
+        mock_load.return_value = np.zeros((0, 768), dtype=np.float32)
+        self.assertIsNone(dashboard_actions._load_verified_skill_reference_vectors())
+
+    @patch("numpy.load")
+    @patch("os.path.exists", return_value=True)
+    def test_returns_vectors_when_cache_file_has_content(self, mock_exists, mock_load):
+        mock_load.return_value = np.ones((3, 768), dtype=np.float32)
+        result = dashboard_actions._load_verified_skill_reference_vectors()
+        self.assertEqual(result.shape, (3, 768))

@@ -92,6 +92,7 @@ def build_sample() -> dict:
         jd_path=SAMPLE_JD_PATH,
         master_resume={},
         job_key=job_key,
+        interactive=True,
     )
 
     cli_art.console.rule("Building Sample Cover Letter", style="dim")
