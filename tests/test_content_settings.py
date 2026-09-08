@@ -228,6 +228,81 @@ class TestEmploymentTypeSettings(_TempYaml):
         self.assertIn("types: any", cs.describe({}))
 
 
+class TestRoleTrackSettings(_TempYaml):
+    """The IC-only preference: same round-trip/inert-by-default contract
+    as every other gate in this editor."""
+
+    def test_absent_by_default(self):
+        path = self._write(BASE)
+        self.assertNotIn("role_track", cs.read_settings(path))
+        self.assertEqual(cs.read_role_track_settings(path), {"exclude_manager": False})
+
+    def test_round_trip(self):
+        path = self._write(BASE)
+        cs.write_settings({"role_track": {"exclude_manager": True}}, path)
+        self.assertEqual(
+            cs.read_settings(path)["role_track"], {"exclude_manager": True}
+        )
+        self.assertEqual(cs.read_role_track_settings(path), {"exclude_manager": True})
+
+    def test_clearing_it_leaves_the_other_gates_alone(self):
+        path = self._write(BASE)
+        cs.write_settings(
+            {"languages": ["en"], "role_track": {"exclude_manager": True}}, path
+        )
+        cs.write_settings({"languages": ["en"]}, path)
+        settings = cs.read_settings(path)
+        self.assertNotIn("role_track", settings)
+        self.assertEqual(settings["languages"], ["en"])
+
+    def test_comments_and_unrelated_keys_survive(self):
+        path = self._write(BASE)
+        current = cs.read_settings(path)
+        current["role_track"] = {"exclude_manager": True}
+        cs.write_settings(current, path)
+        text = self._read(path)
+        self.assertIn("# Body-text gates", text)
+        data = yaml.safe_load(text)
+        self.assertEqual(data["employment_type"], ["full_time", "part_time"])
+
+    def test_describe_mentions_it_only_when_set(self):
+        self.assertNotIn("role track", cs.describe({}))
+        self.assertIn(
+            "IC-only",
+            cs.describe({"role_track": {"exclude_manager": True}}),
+        )
+
+    def test_written_settings_drive_the_rescore_gate(self):
+        """End to end: what the editor writes is what
+        rescore_evaluation_with_location() actually reads."""
+        import orchestrator
+
+        path = self._write(BASE)
+        cs.write_settings({"role_track": {"exclude_manager": True}}, path)
+        settings = cs.read_role_track_settings(path)
+
+        evaluation = {
+            "fit_subscores": {},
+            "interview_odds_subscores": {},
+            "practical_pursue_subscores": {},
+            "hard_blockers": [],
+            "recommendation": "Strong pursue",
+            "role_track": "manager",
+            "role_track_confidence": "high",
+        }
+        rescored = orchestrator.rescore_evaluation_with_location(
+            evaluation=evaluation, role_track_settings=settings
+        )
+        self.assertEqual(rescored["recommendation"], "Skip")
+        self.assertEqual(rescored["composite_score"], 0.00)
+
+        evaluation["role_track"] = "ic"
+        rescored = orchestrator.rescore_evaluation_with_location(
+            evaluation=evaluation, role_track_settings=settings
+        )
+        self.assertNotEqual(rescored["recommendation"], "Skip")
+
+
 class TestMenuWiring(unittest.TestCase):
     def test_settings_menu_offers_the_editor(self):
         import menu

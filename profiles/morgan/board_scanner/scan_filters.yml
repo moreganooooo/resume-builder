@@ -1,3 +1,14 @@
+compensation:
+  annual_floor: 40000.0
+  hourly_floor: 18.0
+  min_hours_per_week: 5.0
+  max_hours_per_week: 40.0
+employment_type:
+- full_time
+- part_time
+- contract
+- contract_to_hire
+- temporary
 enabled_boards:
 - remoteok
 - remotive
@@ -8,6 +19,7 @@ enabled_boards:
 - fourdayweek
 - nodesk
 - authenticjobs
+- crunchboard
 - jobspresso
 - realworkfromanywhere
 - powertofly
@@ -16,42 +28,17 @@ enabled_boards:
 - adzuna
 - usajobs
 - jooble
+languages:
+- en
 location:
   city: Getzville
   radius_miles: 5
   state: NY
-  # On-site is accepted on the same terms as hybrid: inside the radius.
-  # Note this changes nothing in the current corpus -- zero postings
-  # declare an onsite mode in their location string (711 are 'unknown',
-  # 348 remote, 6 hybrid) -- but an 'unknown' that later resolves to
-  # onsite is now judged on distance rather than mode.
   workplace_mode:
   - hybrid
   - onsite
   - remote
   zip: '14068'
-# Body-text gates (scripts/content_filters.py). Both are exclusion-only
-# and both keep anything they cannot classify.
-# languages: ISO codes you can actually work in. Postings detected as
-#   another language are dropped; 3 of 2,135 in the current corpus.
-# max_travel_percent: ceiling on a STATED travel requirement. Postings
-#   that state no figure are always kept, so this acts on ~3.5% of the
-#   corpus at 10%. Remove the key to disable.
-languages:
-- en
-max_travel_percent: 10
-# employment_type (scripts/employment_type.py): the kinds of work to
-#   accept. Unlike the two gates above this reads a STRUCTURED field the
-#   provider published rather than inferring from body text, so it runs
-#   before the description is even fetched. Exclusion-only and unknown is
-#   kept: Greenhouse never publishes the field, so anything from there
-#   passes regardless. Currently this only excludes internships.
-employment_type:
-- full_time
-- part_time
-- contract
-- contract_to_hire
-- temporary
 location_filter:
   always_allow:
   - Remote
@@ -215,6 +202,7 @@ location_filter:
   - EMEA
   - APAC
   - LATAM
+max_travel_percent: 0
 title_filter:
   negative:
   - ' Engineer'
@@ -640,18 +628,5 @@ title_filter:
   - Sales Operation
   - RevOps
   - Revenue Operations
-# Casting a wide net while ruling out unpaid work. The two floors are one
-# bar written two ways; the LOWER of them applies ($40,000, just under
-# $20 x 2080). Only about 27% of postings state pay at all, and the rest
-# are always kept -- so this trims the disclosing minority rather than
-# the whole list.
-#
-# No min/max_hours_per_week is set on purpose: only ~2% of postings state
-# weekly hours, so a bound here would mostly do nothing while risking
-# dropping a good role that simply didn't say. The hours are DETECTED and
-# shown either way ([$] and the detail pane in Browse & Manage Jobs), so
-# a 10-hour part-time role is now distinguishable from a 30-hour one by
-# eye before committing to a filter.
-compensation:
-  annual_floor: 40000
-  hourly_floor: 20
+role_track:
+  exclude_manager: true

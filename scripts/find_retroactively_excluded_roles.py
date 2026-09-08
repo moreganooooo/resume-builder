@@ -11,11 +11,12 @@ Two independent kinds of "would now be excluded", counted separately:
      the JD's own already-saved fields and the *current* scan_filters.yml.
   2. Score-based flags: recomputes composite_score/recommendation with
      the current fit_composite_score() (current content_settings
-     scoring_weights, current stress/capability-gap adjustments) and
-     flags roles whose recommendation now comes out "Skip". Only
-     applicable to roles that already have an evaluation -- an
-     unevaluated role has no score to recompute, so it's checked for
-     gate failures only.
+     scoring_weights, current stress/capability-gap adjustments, and the
+     current role_track preference -- see content_settings.py's
+     "IC-only mode" toggle) and flags roles whose recommendation now
+     comes out "Skip". Only applicable to roles that already have an
+     evaluation -- an unevaluated role has no score to recompute, so
+     it's checked for gate failures only.
 
 Covers the FULL pending population, not just already-evaluated rows:
 picker.pending_roles() (file paths + database-only ids, no evaluation
@@ -99,12 +100,22 @@ def check_gates(data: dict) -> list:
     return failed
 
 
-def check_score(evaluation: dict, description: str, scoring_weights: dict) -> bool:
+def check_score(
+    evaluation: dict,
+    description: str,
+    scoring_weights: dict,
+    role_track_settings: dict | None = None,
+) -> bool:
     """Recomputes the recommendation with current scoring weights and
     reports whether it now comes out Skip. hard_blockers/experience_blockers
     already on the evaluation are preserved as-is -- this only re-applies
     the deterministic stress/capability-gap/composite-score math, not a
-    fresh location/proximity recompute (no live distance input here)."""
+    fresh location/proximity recompute (no live distance input here).
+
+    role_track_settings flows through the same way scoring_weights does,
+    so a profile that turns on the IC-only preference (content_settings.py)
+    gets already-evaluated pending roles re-flagged here rather than only
+    ever applying to evaluations run after the setting was turned on."""
     if not evaluation:
         return False
     rescored = orchestrator.rescore_evaluation_with_location(
@@ -116,12 +127,14 @@ def check_score(evaluation: dict, description: str, scoring_weights: dict) -> bo
         posting_age_days=evaluation.get("posting_age_days"),
         description=description,
         scoring_weights=scoring_weights,
+        role_track_settings=role_track_settings,
     )
     return rescored.get("recommendation") == "Skip"
 
 
 def find_candidates(profile: str) -> list:
     scoring_weights = content_settings.read_scoring_weights()
+    role_track_settings = content_settings.read_role_track_settings()
     findings = []
     checked = set()
 
@@ -136,7 +149,9 @@ def find_candidates(profile: str) -> list:
 
         gate_failures = check_gates(data)
         description = data.get("description") or ""
-        score_flagged = check_score(row["evaluation"], description, scoring_weights)
+        score_flagged = check_score(
+            row["evaluation"], description, scoring_weights, role_track_settings
+        )
 
         if gate_failures or score_flagged:
             findings.append(

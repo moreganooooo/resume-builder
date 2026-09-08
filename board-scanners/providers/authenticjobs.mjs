@@ -24,13 +24,18 @@ export default {
         link: extractTag(item, 'link'),
         description: extractTag(item, 'description'),
         pubDate: extractTag(item, 'pubDate'),
+        // dc:creator holds the poster's account slug, which names the real
+        // employer (e.g. "hirediscord" for Discord) -- was previously
+        // discarded and every listing fell back to the fixed provider
+        // label "authenticjobs", which broke per-employer dedup.
+        creator: extractTag(item, 'dc:creator'),
       }))
       .filter((j) => j.link && j.title)
       .filter((j) => matchesSearchTerm(j.title, j.description, entry.search_term))
       .map((j) => ({
         title: j.title,
         url: /** @type {string} */ (j.link),
-        company: entry.name, // Authentic Jobs RSS titles/links don't expose a company field
+        company: j.creator || entry.name,
         location: '',
         posted_at: j.pubDate || '',
         description: j.description || '',

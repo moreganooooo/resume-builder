@@ -170,6 +170,68 @@ class TestScanLinkedinCookieAndQueries(unittest.TestCase):
         self.assertEqual(queries[0].query, "Marketing Director")
         self.assertEqual(queries[1].query, "Content Strategist")
 
+    def test_build_queries_plain_string_defaults_to_remote_us(self):
+        """A plain string entry keeps the original remote/US behavior."""
+        [query] = scan_linkedin._build_queries(10, ["Marketing Director"])
+        self.assertEqual(query.options.locations, ["United States"])
+        self.assertEqual(
+            query.options.filters.on_site_or_remote,
+            [scan_linkedin.OnSiteOrRemoteFilters.REMOTE],
+        )
+
+    def test_build_queries_dict_entry_uses_workplace_mode_and_location(self):
+        """A dict entry can override workplace_mode and location, e.g. a
+        local search that wants hybrid/onsite roles near a specific city
+        instead of a nationwide remote search."""
+        [query] = scan_linkedin._build_queries(
+            10,
+            [
+                {
+                    "query": "Office Manager",
+                    "workplace_mode": ["hybrid", "onsite"],
+                    "location": "Williamsville, NY",
+                }
+            ],
+        )
+        self.assertEqual(query.query, "Office Manager")
+        self.assertEqual(query.options.locations, ["Williamsville, NY"])
+        self.assertCountEqual(
+            query.options.filters.on_site_or_remote,
+            [
+                scan_linkedin.OnSiteOrRemoteFilters.HYBRID,
+                scan_linkedin.OnSiteOrRemoteFilters.ON_SITE,
+            ],
+        )
+
+    def test_build_queries_dict_entry_without_overrides_uses_defaults(self):
+        """A dict entry that omits workplace_mode/location still falls back
+        to the same remote/US defaults as a plain string."""
+        [query] = scan_linkedin._build_queries(10, [{"query": "Office Manager"}])
+        self.assertEqual(query.options.locations, ["United States"])
+        self.assertEqual(
+            query.options.filters.on_site_or_remote,
+            [scan_linkedin.OnSiteOrRemoteFilters.REMOTE],
+        )
+
+    def test_muted_scraper_logger_silences_and_restores_level(self):
+        """The li:scraper logger is silenced for the duration of the
+        context and restored to whatever it was before, even on error."""
+        import logging
+
+        scraper_logger = logging.getLogger("li:scraper")
+        scraper_logger.setLevel(logging.INFO)
+        try:
+            with scan_linkedin._muted_scraper_logger():
+                self.assertGreater(scraper_logger.level, logging.CRITICAL)
+            self.assertEqual(scraper_logger.level, logging.INFO)
+
+            with self.assertRaises(ValueError):
+                with scan_linkedin._muted_scraper_logger():
+                    raise ValueError("boom")
+            self.assertEqual(scraper_logger.level, logging.INFO)
+        finally:
+            scraper_logger.setLevel(logging.NOTSET)
+
     @patch("scan_linkedin.check_li_cookie_live", return_value=True)
     @patch("scan_linkedin.profile_paths.profile_root")
     def test_get_li_at_cookie_cached(self, mock_root, mock_check_live):

@@ -238,6 +238,9 @@ def main() -> int:
     matrix_parser.add_argument("jd_path")
     matrix_parser.add_argument("--jobs-path", required=True)
 
+    batch_matrix_parser = subparsers.add_parser("batch_matrix")
+    batch_matrix_parser.add_argument("--jobs-path", required=True)
+
     scan_parser = subparsers.add_parser("scan")
     scan_parser.add_argument("--jobs-path", required=True)
 
@@ -267,6 +270,8 @@ def main() -> int:
         return _archive(args.jd_path, args.jobs_path)
     if args.command == "matrix":
         return _matrix(args.jd_path, args.jobs_path)
+    if args.command == "batch_matrix":
+        return _batch_matrix(args.jobs_path)
     if args.command == "scan":
         return _scan(args.jobs_path)
     if args.command == "batch_evaluate":
@@ -286,6 +291,7 @@ _ACTION_CONTEXTS = {
     "status": "updating this job's application status",
     "archive": "archiving this job posting",
     "matrix": "computing the skills gap matrix",
+    "batch_matrix": "computing skills gap matrices in bulk",
     "scan": "scanning job postings",
     "batch_evaluate": "batch evaluating job postings",
     "sweep_stale": "sweeping stale postings",
@@ -325,87 +331,155 @@ def _run() -> int:
         return 1
 
 
-def _matrix(jd_path: str, jobs_path: str) -> int:
+class _SkillMatrixSkip(Exception):
+    """Raised for expected "nothing to compute yet" cases (not a failure)."""
+
+
+def _compute_skill_matrix_for_jd(path: str) -> None:
+    """Compute and persist evaluation["skill_matrix"] for the JD at `path`.
+
+    Raises `_SkillMatrixSkip(message)` for expected non-error skip cases
+    (not evaluated / no skills extracted / missing embeddings file) and
+    lets any other exception (e.g. a Gemini API failure) propagate as-is
+    so callers can distinguish "nothing to do" from "something broke".
+    """
     import json
     import os
 
     import jd_manager
-    import jd_source
     import numpy as np
     import profile_paths
     from embed_bullet_bank import BATCH_SIZE, embed_batch
     from vector_store import cosine_similarity_matrix
 
+    evaluation = jd_manager.read_evaluation(path)
+    if not evaluation:
+        raise _SkillMatrixSkip("JD must be evaluated first.")
+
+    with open(path, "r", encoding="utf-8") as f:
+        jd_data = json.load(f)
+
+    # jd_data["skills"] is only ever populated by scan_linkedin.py and
+    # scan_jobright.py at scan time -- every other provider (the bulk
+    # of the corpus) never writes it, which used to make the matrix
+    # unusable for most postings. Fall back to the same
+    # extract_keywords.md extraction the tailoring pipeline's Step
+    # 1.5 already runs, cached on the JD via _extracted_keywords so a
+    # repeat "m" press doesn't pay for it twice.
+    skills = jd_data.get("skills") or []
+    skill_names = [s.get("skill", "") for s in skills if s.get("skill")]
+    if not skill_names:
+        import orchestrator
+
+        jd_keywords = orchestrator.get_or_extract_jd_keywords(path)
+        if jd_keywords:
+            seen = set()
+            for name in (
+                list(jd_keywords.get("tools") or [])
+                + list(jd_keywords.get("hard_skills") or [])
+                + list(jd_keywords.get("core_functions") or [])
+            ):
+                name = (name or "").strip()
+                if name and name.lower() not in seen:
+                    seen.add(name.lower())
+                    skill_names.append(name)
+
+    if not skill_names:
+        raise _SkillMatrixSkip("No named skills extracted for this JD.")
+
+    kb_dir = profile_paths.kb_dir()
+    emb_npy = os.path.join(kb_dir, "bullet_vectors_ge2_d768.npy")
+    if not os.path.exists(emb_npy):
+        raise _SkillMatrixSkip(
+            "Missing bullet bank embeddings. Run `resume doctor` to check your setup."
+        )
+
+    embs = np.load(emb_npy)
+
+    skill_vecs = []
+    for i in range(0, len(skill_names), BATCH_SIZE):
+        batch = skill_names[i : i + BATCH_SIZE]
+        skill_vecs.extend(embed_batch(batch))
+
+    reference = _coverage_reference(embs)
+
+    skill_matrix = []
+    for name, vec in zip(skill_names, skill_vecs):
+        if vec:
+            scores = cosine_similarity_matrix(np.array(vec, dtype=np.float32), embs)
+            max_score = float(np.max(scores)) if len(scores) > 0 else 0.0
+            coverage_pct = _coverage_percentile(max_score, reference)
+            skill_matrix.append({"skill": name, "coverage": coverage_pct})
+
+    skill_matrix.sort(key=lambda x: x["coverage"])
+    evaluation["skill_matrix"] = skill_matrix
+    jd_manager.save_evaluation(path, evaluation)
+
+
+def _matrix(jd_path: str, jobs_path: str) -> int:
+    import jd_source
+
     try:
-        try:
-            resolved_ctx = jd_source.resolved_jd(jd_path)
-        except LookupError as exc:
-            print(f"matrix lookup failed for {jd_path}: {exc}", file=sys.stderr)
-            _user_error(
-                "Couldn't find this job's details to compute the skills gap matrix."
-            )
-            return 1
+        resolved_ctx = jd_source.resolved_jd(jd_path)
+    except LookupError as exc:
+        print(f"matrix lookup failed for {jd_path}: {exc}", file=sys.stderr)
+        _user_error(
+            "Couldn't find this job's details to compute the skills gap matrix."
+        )
+        return 1
 
+    try:
         with resolved_ctx as (path, _is_db):
-            evaluation = jd_manager.read_evaluation(path)
-            if not evaluation:
-                _user_error("JD must be evaluated first.")
-                return 1
-
-            with open(path, "r", encoding="utf-8") as f:
-                jd_data = json.load(f)
-
-            skills = jd_data.get("skills") or []
-            if not skills:
-                _user_error("No skills found for this JD.")
-                return 1
-
-            kb_dir = profile_paths.kb_dir()
-            emb_npy = os.path.join(kb_dir, "bullet_vectors_ge2_d768.npy")
-            if not os.path.exists(emb_npy):
-                _user_error(
-                    "Missing bullet bank embeddings. Run `resume doctor` to check your setup."
-                )
-                return 1
-
-            embs = np.load(emb_npy)
-            skill_names = [s.get("skill", "") for s in skills if s.get("skill")]
-            if not skill_names:
-                _user_error("No named skills extracted for this JD.")
-                return 1
-
-            skill_vecs = []
-            for i in range(0, len(skill_names), BATCH_SIZE):
-                batch = skill_names[i : i + BATCH_SIZE]
-                try:
-                    vecs = embed_batch(batch)
-                    skill_vecs.extend(vecs)
-                except Exception as e:
-                    _user_error_from_exception(e, "embedding JD skills via Gemini API")
-                    return 1
-
-            reference = _coverage_reference(embs)
-
-            skill_matrix = []
-            for name, vec in zip(skill_names, skill_vecs):
-                if vec:
-                    scores = cosine_similarity_matrix(
-                        np.array(vec, dtype=np.float32), embs
-                    )
-                    max_score = float(np.max(scores)) if len(scores) > 0 else 0.0
-                    coverage_pct = _coverage_percentile(max_score, reference)
-                    skill_matrix.append(
-                        {
-                            "skill": name,
-                            "coverage": coverage_pct,
-                        }
-                    )
-
-            skill_matrix.sort(key=lambda x: x["coverage"])
-            evaluation["skill_matrix"] = skill_matrix
-            jd_manager.save_evaluation(path, evaluation)
+            _compute_skill_matrix_for_jd(path)
+    except _SkillMatrixSkip as skip:
+        _user_error(str(skip))
+        return 1
     except Exception as e:
         _user_error_from_exception(e, "computing the skills gap matrix")
+        return 1
+
+    return _export(jobs_path)
+
+
+def _batch_matrix(jobs_path: str, max_jobs: int = 30) -> int:
+    """Compute the skills gap matrix for pending evaluated jobs missing one.
+
+    Bounded by `max_jobs` per invocation, same reasoning as
+    `refresh_verified_ledger.py --max-chunks`: each skill costs a real
+    Gemini embedding call, so an unbounded sweep over the whole pending
+    backlog is a real, uncontrolled spend.
+    """
+    import jd_source
+    import picker
+
+    try:
+        candidates = [
+            jd["path"]
+            for jd in picker.list_all_evaluated_jds(statuses=["Pending"])
+            if not (jd.get("evaluation") or {}).get("skill_matrix")
+        ][:max_jobs]
+
+        computed = 0
+        skipped = 0
+        failed = 0
+        for jd_path in candidates:
+            try:
+                with jd_source.resolved_jd(jd_path) as (path, _is_db):
+                    _compute_skill_matrix_for_jd(path)
+                computed += 1
+            except _SkillMatrixSkip as skip:
+                print(f"skipped {jd_path}: {skip}", file=sys.stderr)
+                skipped += 1
+            except Exception as e:
+                print(f"failed {jd_path}: {e}", file=sys.stderr)
+                failed += 1
+
+        print(
+            f"Skills gap matrix: {computed} computed, {skipped} skipped, "
+            f"{failed} failed (of {len(candidates)} candidates)."
+        )
+    except Exception as e:
+        _user_error_from_exception(e, "computing skills gap matrices in bulk")
         return 1
 
     return _export(jobs_path)
@@ -425,15 +499,55 @@ def _matrix(jd_path: str, jobs_path: str) -> int:
 # Ranking against the corpus's own best-match distribution sidesteps the
 # problem: it needs no hand-tuned constants, and it re-calibrates itself as
 # the bullet bank grows or the embedding model changes.
-def _coverage_reference(embs):
-    """Distribution of best-match similarity within the bullet bank itself.
+def _load_verified_skill_reference_vectors():
+    """Cached embeddings of every verified tool/skill NAME (short phrases),
+    built offline by embed_verified_skills.py. Returns None if the cache
+    doesn't exist yet, so callers can fall back to the older bullet-to-
+    bullet reference rather than failing.
+    """
+    import os
 
-    Each bullet's similarity to its nearest OTHER bullet -- i.e. what a
-    strong match looks like in this corpus. A skill is then scored by where
-    its own best match falls in that distribution.
+    import numpy as np
+    import profile_paths
+
+    path = os.path.join(profile_paths.kb_dir(), "verified_skill_vectors_ge2_d768.npy")
+    if not os.path.exists(path):
+        return None
+    vecs = np.load(path)
+    return vecs if len(vecs) > 0 else None
+
+
+def _coverage_reference(embs):
+    """Distribution of best-match similarity a SKILL PHRASE should be
+    ranked against.
+
+    Prefers each verified tool/skill name's own best match against the
+    bullet bank (a short-phrase-to-bullet comparison, the same shape of
+    comparison a JD's extracted skill names get) -- this is an
+    apples-to-apples calibration, unlike bullet-to-bullet similarity.
+
+    Measured on the real corpus: bullet-to-bullet similarity has a floor
+    around 0.72 (full sentences in a similar style score high against
+    each other almost regardless of content), while a genuinely strong
+    skill-phrase match often lands around 0.65-0.71 -- below that floor,
+    which pinned real matches at 0% coverage. Falls back to bullet-to-
+    bullet self-similarity only when the verified-skill cache doesn't
+    exist yet (see embed_verified_skills.py).
     """
     import numpy as np
 
+    skill_vecs = _load_verified_skill_reference_vectors()
+    if skill_vecs is not None:
+        from vector_store import cosine_similarity_matrix
+
+        scores = [
+            float(np.max(cosine_similarity_matrix(v.astype(np.float32), embs)))
+            for v in skill_vecs
+        ]
+        return np.sort(np.array(scores, dtype=np.float32))
+
+    # Fallback: each bullet's similarity to its nearest OTHER bullet --
+    # i.e. what a strong match looks like within the bullet bank itself.
     sims = embs @ embs.T
     np.fill_diagonal(sims, -1.0)
     return np.sort(sims.max(axis=1))

@@ -22,7 +22,7 @@ Before selecting any content, fill in: "The candidate is an [X] who helps organi
 2. **Surface Evidence** — Identify hidden alignment. Short-term contracts, adjacent roles, and transferable systems all count when mechanics align.
 3. **Clarify Evidence** — Remove internal jargon. Translate achievements into the JD's vocabulary.
 4. **Mirror ATS Language** — Use the JD's exact phrasing for core terms (e.g., "lifecycle marketing" not "customer communications") across Summary, Skills, and bullets.
-5. **Expand Evidence** — If a bullet touches a required JD skill but is too brief, expand on methodology and tools using only verified context from the candidate data.
+5. **Expand Evidence** — If a bullet touches a required JD skill but is too brief, expand on methodology and tools using only verified context from **that same bullet's own source material for that same company**. Never pull a metric, scope, or detail from a DIFFERENT bullet or a different company to fill out a brief one, even if both appear in the verified bullet bank — that is fabrication by cross-contamination, not expansion, and it is exactly as prohibited as inventing a number from nothing.
 6. **Add Content (Last Resort Only)** — You may generate new summary statements or bridge transitions. You may not add new hard evidence.
 
 # Archetype Detection
@@ -167,6 +167,7 @@ Analyze the target company's business stage (from JD and COMPANY RESEARCH) and s
 - Bullets never end with periods or trailing punctuation
 - No parentheses in bullets; use commas or semicolons
 - Do not reword, paraphrase, or restructure a bullet to match the company's tone or `vocabulary_substitutions` — bullets come from the pre-audited bullet bank, and a separate deterministic pass applies the company's preferred terms after you're done. Your job for bullets is selection and arrangement, not rewriting for voice
+- Every metric or figure in a bullet must belong to that bullet's own real source text, for that same company — never merge a number from one bullet or company into a different bullet's text, even when both are true facts about the candidate. A bullet with no metric in its own source stays that way; it does not "borrow" one to look more impressive
 - No dashes in prose; en-dashes in date ranges only
 - No bold text inside bullet content
 - Target length: ~100 chars for one-liners, hard ceiling 108 chars (empirically measured against real rendering — a bullet past 108 chars risks wrapping to a short widow 2nd line); up to 220 chars for intentional two-liners

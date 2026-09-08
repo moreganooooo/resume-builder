@@ -26,16 +26,26 @@ export default {
         description: extractTag(item, 'description'),
         category: extractTag(item, 'category') || extractTag(item, 'dc:subject'),
         pubDate: extractTag(item, 'pubDate') || extractTag(item, 'dc:date'),
+        // dc:creator holds "Company<br>⚲ Location" -- the only place the
+        // feed actually names the employer (was previously discarded and
+        // every listing fell back to the fixed provider label "jobspresso",
+        // which broke per-employer dedup).
+        creator: extractTag(item, 'dc:creator'),
       }))
       .filter((j) => j.link && j.title)
       .filter((j) => matchesSearchTerm(j.title, j.description, j.category, entry.search_term))
-      .map((j) => ({
-        title: /** @type {string} */ (j.title),
-        url: /** @type {string} */ (j.link),
-        company: entry.name,
-        location: '',
-        posted_at: j.pubDate || '',
-        description: j.description || '',
-      }));
+      .map((j) => {
+        const [company, location] = (j.creator || '')
+          .split('<br')
+          .map((s) => s.replace(/^[^\w]*/, '').trim());
+        return {
+          title: /** @type {string} */ (j.title),
+          url: /** @type {string} */ (j.link),
+          company: company || entry.name,
+          location: location || '',
+          posted_at: j.pubDate || '',
+          description: j.description || '',
+        };
+      });
   },
 };

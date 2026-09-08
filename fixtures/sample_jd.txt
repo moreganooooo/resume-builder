@@ -181,12 +181,12 @@
     "jargon_density": "moderate",
     "recurring_keywords": [
       "AI-native",
-      "behavioral",
+      "behavior",
       "trust"
     ],
     "company_facts": [
-      "Abnormal is a cybersecurity company that uses AI to analyze human behavior and stop cyberattacks.",
-      "The company was founded in 2018 by former adtech professionals who applied AI anomaly detection to cybersecurity.",
+      "Abnormal Security provides a behavioral AI platform designed to stop cyberattacks by modeling human behavior.",
+      "The company was founded in 2018 by experts with backgrounds in adtech and AI.",
       "The platform integrates via API in 60 seconds without requiring MX record changes."
     ],
     "company_hq_location": "",
@@ -195,7 +195,7 @@
       "Prevents billions in financial losses for customers."
     ],
     "vocabulary_substitutions": [],
-    "researched_at": "2026-08-28T18:50:43"
+    "researched_at": "2026-09-04T22:28:02"
   },
   "_ats_classification": {
     "provider_id": "greenhouse",
@@ -208,24 +208,24 @@
     "matched": [
       "ChatGPT",
       "Claude",
+      "Asana",
       "CMS platforms",
       "Content marketing",
       "B2B SaaS",
-      "Cybersecurity",
       "Campaign messaging",
       "AI-assisted workflows",
       "Content repurposing",
+      "Editorial judgment",
       "Integrated marketing",
       "Content Strategy",
       "Campaign Execution",
       "Content Transformation",
-      "Content Distribution",
       "Workflow Optimization"
     ],
     "missing": [
-      "Asana",
-      "Editorial judgment"
+      "Cybersecurity",
+      "Content Distribution"
     ],
-    "checked_at": "2026-08-28T18:50:39"
+    "checked_at": "2026-09-04T22:27:49"
   }
 }

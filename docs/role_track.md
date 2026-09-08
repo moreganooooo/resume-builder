@@ -449,3 +449,47 @@ Anthropic reports-come-later false negative, which two targeted prompt
 experiments have failed to fix (see above) — a future attempt likely
 needs a larger sample of similar misses to find a structural cause,
 rather than another wording iteration.
+
+## Second graduation: a real, persisted exclusion (2026-09-04)
+
+The Jobs/Pipeline view filter above only ever hides a row on screen, for
+the current session — it can't answer "just don't show me manager roles
+at all, ever, everywhere." Now that precision reads 100% (recall 94.1%)
+on the 134-row holdout, that bar is the same one `hard_blockers`
+categories have to clear before they're allowed to zero a score (see
+`docs/hard_blockers.md`), so `role_track` graduates a second time: an
+opt-in `role_track: {exclude_manager: true}` key in `scan_filters.yml`,
+edited from Settings & Upkeep -> "Role, Language & Travel Limits"
+(`content_settings.py`'s `run_content_settings()`, "Turn on IC-only
+mode").
+
+Wired into `orchestrator.rescore_evaluation_with_location()` right next
+to the `hard_blockers` zero-out this file's own text calls the "stronger,
+less-validated gate" — same outcome (`recommendation = "Skip"`,
+`composite_score = 0.00`), same confidence gate as the view filter
+(`role_track` `manager`/`player_coach` AND `role_track_confidence ==
+"high"` only — the holdout never measured medium/low confidence, so
+those are left alone exactly like the view filter leaves them alone).
+Default off: nothing changes for a profile that never opens the toggle.
+
+Two consequences worth knowing:
+
+- **This is a real gate, not a display filter — recall is not 100%.**
+  The one confirmed miss class (the Anthropic "build the team over time"
+  pattern, see above) will silently score `ic` and pass through when
+  this is on, same as it always has. Someone who wants zero manager
+  roles in their pipeline is trading a small, measured false-negative
+  rate for never having to see one; that trade is exactly why this is
+  opt-in and not a default.
+- **It only reaches roles evaluated *after* the toggle is turned on**,
+  same as every other `scan_filters.yml`-driven scoring change (compare
+  `scoring_weights`). For already-evaluated PENDING roles,
+  `find_retroactively_excluded_roles.py` now threads
+  `content_settings.read_role_track_settings()` through its existing
+  score-based recompute (the same mechanism a `scoring_weights` edit
+  already used) — so turning this on and running that script (dry-run
+  by default) finds and can archive the manager-track backlog without
+  waiting for anyone to individually re-evaluate every role by hand.
+  Since `orchestrator.evaluate_fit()` recomputes from a role's already
+  saved `role_track`/`role_track_confidence` rather than re-calling the
+  LLM, this costs no API calls either way.

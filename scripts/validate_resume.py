@@ -541,6 +541,48 @@ def _check_metric_uniqueness(resume_data: dict) -> list[str]:
     return violations
 
 
+def _normalize_metric_for_provenance(number: str) -> str:
+    """Comma/whitespace-insensitive form used only for the provenance
+    substring check below -- '1,000+' in the bank must still match '1000+'
+    if formatting ever drifts, without weakening the uniqueness check above."""
+    return number.replace(",", "").replace(" ", "").lower()
+
+
+def _check_metric_provenance(
+    resume_data: dict, bullet_tuples: list[tuple[str, str, str]] | None
+) -> list[str]:
+    """Every metric-bearing number in an EXPERIENCE bullet must trace back to
+    that SAME company's own bullet-bank source text. tailor_resume.md's
+    Bullet Rules already say bullets are selected from the pre-audited bank,
+    not rewritten -- so a metric absent from that company's real bullets was
+    either invented outright or borrowed from an unrelated bullet during
+    generation. Observed live 2026-09-04: a Callahan Creek bullet describing
+    a self-directed personal JSON project acquired an unrelated "100+
+    assets" figure that only ever appeared in a Treering Yearbooks bullet.
+    No bullet_tuples means the caller is validating a partial document
+    (e.g. polish.py) that never had bank context -- skip rather than flag."""
+    if not bullet_tuples:
+        return []
+    violations = []
+    company_metrics: dict[str, set[str]] = {}
+    for bullet, company, _tags in bullet_tuples:
+        seen = company_metrics.setdefault(company, set())
+        for number, _sig in _extract_metric_signatures(bullet):
+            seen.add(_normalize_metric_for_provenance(number))
+    for entry in resume_data.get("EXPERIENCE", []):
+        company = entry.get("company", "")
+        allowed = company_metrics.get(company, set())
+        for achievement in entry.get("achievements", []):
+            for number, _sig in _extract_metric_signatures(achievement):
+                if _normalize_metric_for_provenance(number) not in allowed:
+                    violations.append(
+                        f"Metric '{number}' in a {company} bullet does not appear in "
+                        f"{company}'s own bullet-bank source -- likely fabricated or "
+                        f"borrowed from a different company's bullet: {achievement!r}"
+                    )
+    return violations
+
+
 def _check_experience_completeness(resume_data: dict) -> list[str]:
     violations = []
     for i, job in enumerate(resume_data.get("EXPERIENCE", [])):
@@ -2117,11 +2159,12 @@ def validate(
     role_bullet_minimums: dict = None,
     enforce_star: bool = False,
     role_bullet_maximums: dict = None,
+    bullet_tuples: list[tuple[str, str, str]] = None,
 ) -> list[str]:
-    """role_roster and role_bullet_minimums/role_bullet_maximums are optional
-    so callers that legitimately validate a partial document (polish.py's
-    single-section edits) aren't forced to supply them; omitting any of them
-    skips its checks rather than failing them."""
+    """role_roster and role_bullet_minimums/role_bullet_maximums/bullet_tuples
+    are optional so callers that legitimately validate a partial document
+    (polish.py's single-section edits) aren't forced to supply them; omitting
+    any of them skips its checks rather than failing them."""
     violations: list[str] = []
     violations.extend(_check_forbidden_phrases(resume_data, style_rules))
     violations.extend(_check_forbidden_openers(resume_data, style_rules))
@@ -2134,6 +2177,7 @@ def validate(
     violations.extend(_check_hallucinated_tools(resume_data))
     violations.extend(_check_pronouns_outside_why(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
+    violations.extend(_check_metric_provenance(resume_data, bullet_tuples))
     violations.extend(_check_experience_completeness(resume_data))
     violations.extend(_check_role_roster(resume_data, role_roster or []))
     violations.extend(_check_role_order(resume_data, role_roster or []))
