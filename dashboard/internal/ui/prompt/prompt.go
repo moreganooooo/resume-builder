@@ -184,8 +184,13 @@ func runFilePicker(t theme.Theme, spec Spec) (Result, error) {
 // pipeline skill list, which can run into the hundreds) redraws every
 // option on every keystroke -- this turns it into a fixed scrollable
 // window instead, which is also what makes Filterable's live re-filtering
-// stay responsive on a large list.
-const checkboxViewportHeight = 14
+// stay responsive on a large list. Raised from 14 to 24 (2026-09-08, per
+// direct user request for a bigger viewable window) -- still a fixed
+// constant rather than a real-terminal-size read, since huh's own
+// Bubbletea render runs independent of the DECSTBM scroll region
+// menu.py's _run_with_chain sets around it; a much larger value risks
+// overflowing a short terminal window.
+const checkboxViewportHeight = 24
 
 func runCheckbox(t theme.Theme, spec Spec) (Result, error) {
 	var answer []string

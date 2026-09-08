@@ -11,6 +11,20 @@ function matchesSearchTerm(title, description, category, term) {
   return `${title} ${description || ''} ${category || ''}`.toLowerCase().includes(needle);
 }
 
+// Every title in this feed ends "<role> at <Company>" -- the feed itself
+// exposes no company field on items (see below), but the employer name is
+// right there in the title. Previously discarded, so every listing fell
+// back to the fixed provider label "realworkfromanywhere", which broke
+// per-employer dedup and hid the real company from evaluation entirely.
+const TITLE_COMPANY_RE = /^(.*)\s+at\s+([^,]+?)(\s*\(Remote\))?$/i;
+
+function splitTitleCompany(rawTitle, fallbackName) {
+  const match = rawTitle.match(TITLE_COMPANY_RE);
+  if (!match) return { title: rawTitle, company: fallbackName };
+  const suffix = match[3] || '';
+  return { title: `${match[1].trim()}${suffix}`, company: match[2].trim() };
+}
+
 /** @type {Provider} */
 export default {
   id: 'realworkfromanywhere',
@@ -29,13 +43,16 @@ export default {
       }))
       .filter((j) => j.link && j.title)
       .filter((j) => matchesSearchTerm(j.title, j.description, j.category, entry.search_term))
-      .map((j) => ({
-        title: /** @type {string} */ (j.title),
-        url: /** @type {string} */ (j.link),
-        company: entry.name, // feed exposes no company field on items
-        location: '',
-        posted_at: j.pubDate || '',
-        description: j.description || '',
-      }));
+      .map((j) => {
+        const { title, company } = splitTitleCompany(/** @type {string} */ (j.title), entry.name);
+        return {
+          title,
+          url: /** @type {string} */ (j.link),
+          company,
+          location: '',
+          posted_at: j.pubDate || '',
+          description: j.description || '',
+        };
+      });
   },
 };

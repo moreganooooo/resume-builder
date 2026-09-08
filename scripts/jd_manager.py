@@ -184,7 +184,14 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
 # both explicitly. A pre-v6 evaluation may have been zeroed or
 # undercounted for exactly the tools verified_tools.json already
 # confirms.
-SCORING_VERSION = 6
+#
+# v7 (2026-09-07): re-weighted composite_score (fit_score 0.40->0.35,
+# interview_odds_score 0.40->0.45 -- a good fit on paper doesn't matter
+# if interview odds are poor) and two subscore weights within their own
+# buckets (tools_process_overlap 0.10->0.15 within fit_subscores,
+# funnel_friction 0.10->0.15 within interview_odds_subscores). A
+# pre-v7 composite_score was computed under the old weights.
+SCORING_VERSION = 7
 
 
 def save_evaluation(jd_path: str, evaluation: dict) -> None:

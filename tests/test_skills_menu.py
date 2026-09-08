@@ -425,5 +425,54 @@ class TestSkillsMenuFullSuite(unittest.TestCase):
             self.assertEqual(data["tools"][0]["name"], "Python")
 
 
+class TestDismissedSkills(unittest.TestCase):
+    """skill_gap_scan.py's negative selector: skills marked "not my
+    background" persist here so they never re-appear as gaps."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self._tmpdir, ignore_errors=True)
+
+        patcher = patch.object(
+            skills_menu,
+            "_get_dismissed_skills_path",
+            return_value=os.path.join(self._tmpdir, "dismissed_skills.json"),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_load_returns_empty_list_when_file_missing(self):
+        self.assertEqual(skills_menu._load_dismissed_skills(), [])
+
+    def test_save_then_load_round_trips_sorted_case_insensitively(self):
+        self.assertTrue(skills_menu._save_dismissed_skills(["Kubernetes", "ansible"]))
+        self.assertEqual(
+            skills_menu._load_dismissed_skills(), ["ansible", "Kubernetes"]
+        )
+
+    def test_save_dedupes_and_drops_blank_entries(self):
+        skills_menu._save_dismissed_skills(["Docker", "Docker", "  ", ""])
+        self.assertEqual(skills_menu._load_dismissed_skills(), ["Docker"])
+
+    def test_manage_dismissed_with_none_is_a_no_op(self):
+        # Nothing dismissed yet -- should just report that and return,
+        # never call the checkbox prompt.
+        with patch("questionary.Choice") as mock_choice:
+            skills_menu._manage_dismissed_skills()
+            mock_choice.assert_not_called()
+
+    def test_manage_dismissed_restores_selected_entries(self):
+        skills_menu._save_dismissed_skills(["Docker", "Kubernetes"])
+        with patch("cli_art.checkbox", return_value=["Docker"]):
+            skills_menu._manage_dismissed_skills()
+        self.assertEqual(skills_menu._load_dismissed_skills(), ["Kubernetes"])
+
+    def test_manage_dismissed_cancel_leaves_list_untouched(self):
+        skills_menu._save_dismissed_skills(["Docker"])
+        with patch("cli_art.checkbox", return_value=None):
+            skills_menu._manage_dismissed_skills()
+        self.assertEqual(skills_menu._load_dismissed_skills(), ["Docker"])
+
+
 if __name__ == "__main__":
     unittest.main()

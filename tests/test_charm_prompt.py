@@ -521,7 +521,11 @@ class TestRealBinaryOverAPty(unittest.TestCase):
         )
         self.assertTrue(rendered, "nothing was ever written to the pty (hang)")
         self.assertEqual(returncode, 0)
-        self.assertEqual(json.loads(stdout), {"confirmed": True})
+        # value:"" always rides along -- see prompt.go's Result.Value
+        # docstring: omitempty on a string drops the key rather than
+        # emitting "", which crashed charm_prompt.text() the first time a
+        # real user skipped an optional text prompt (2026-09-06).
+        self.assertEqual(json.loads(stdout), {"value": "", "confirmed": True})
 
     def test_select_renders_and_returns_clean_json(self):
         rendered, returncode, stdout = self._run_over_pty(

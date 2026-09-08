@@ -2503,10 +2503,10 @@ from schemas import (  # noqa: E402
 # the recommendation.
 FIT_SUBSCORE_WEIGHTS = {
     "functional_alignment": 0.30,
-    "north_star_alignment": 0.25,
+    "north_star_alignment": 0.20,
     "level_plausibility": 0.20,
     "work_style_sustainability": 0.15,
-    "tools_process_overlap": 0.10,
+    "tools_process_overlap": 0.15,
 }
 
 INTERVIEW_ODDS_WEIGHTS = {
@@ -2514,8 +2514,8 @@ INTERVIEW_ODDS_WEIGHTS = {
     "evidence_match": 0.25,
     "domain_credibility": 0.15,
     "recruiter_legibility": 0.15,
-    "narrative_burden": 0.10,
-    "funnel_friction": 0.10,
+    "narrative_burden": 0.05,
+    "funnel_friction": 0.15,
 }
 
 PRACTICAL_PURSUE_WEIGHTS = {
@@ -2528,12 +2528,14 @@ PRACTICAL_PURSUE_WEIGHTS = {
     "posting_legitimacy_score": 0.15,
 }
 
-# Fit and interview odds carry equal primary weight; practical
-# constraints matter but shouldn't dominate the decision the way a hard
-# blocker does (that's handled separately, via hard_blockers).
+# Interview odds carries slightly more weight than fit -- being a good
+# fit on paper doesn't matter if the funnel/title/evidence math means a
+# recruiter never moves you forward. Practical constraints matter but
+# shouldn't dominate the decision the way a hard blocker does (that's
+# handled separately, via hard_blockers).
 COMPOSITE_SCORE_WEIGHTS = {
-    "fit_score": 0.40,
-    "interview_odds_score": 0.40,
+    "fit_score": 0.35,
+    "interview_odds_score": 0.45,
     "practical_pursue_score": 0.20,
 }
 

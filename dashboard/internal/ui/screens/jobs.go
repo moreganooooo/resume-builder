@@ -442,6 +442,9 @@ func (m JobsModel) hasExtraBar() bool {
 // budgets an extra row for the same two conditions.
 func (m JobsModel) extraRows() int {
 	rows := 0
+	if m.hasNextBestMove() {
+		rows++
+	}
 	if m.hasExtraBar() {
 		rows++
 	}
@@ -1291,6 +1294,13 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 				m.actionCancel = cancel
 				return m, tea.Batch(m.runAction(ctx, m.actionChan, "matrix", job.Path), m.spinner.Tick)
 			}
+		case "M":
+			m.actionInProgress = "batch_matrix"
+			m.actionStartedAt = time.Now()
+			m.actionChan = make(chan tea.Msg)
+			ctx, cancel := context.WithCancel(context.Background())
+			m.actionCancel = cancel
+			return m, tea.Batch(m.runAction(ctx, m.actionChan, "batch_matrix", ""), m.spinner.Tick)
 		case "u":
 			if _, ok := m.CurrentJob(); ok {
 				m.statusPicker = true
@@ -1380,7 +1390,8 @@ var jobsHelpCategories = []helpCategory{
 		{"b", "Batch evaluate pending jobs"},
 		{"L", "Sweep stale postings"},
 		{"l", "Check posting liveness"},
-		{"m", "Compute Skills Gap Matrix"},
+		{"m", "Compute Skills Gap Matrix for this job"},
+		{"M", "Compute Skills Gap Matrix for pending jobs missing one (bulk, capped)"},
 		{"t", "Tailor resume for this job (Pending only)"},
 		{"u", "Change application status"},
 		{"a", "Archive this job (removes from all filters)"},
@@ -1413,7 +1424,11 @@ var jobsHelpCategories = []helpCategory{
 	}},
 }
 
-func (m JobsModel) renderNextBestMove() string {
+// bestNextMoveRow returns the highest-scoring pending role eligible for the
+// "NEXT BEST MOVE" banner (nil if none qualify) -- shared by
+// renderNextBestMove and hasNextBestMove so the two can never disagree about
+// whether the banner is showing.
+func (m JobsModel) bestNextMoveRow() *model.JobRow {
 	var best *model.JobRow
 	for i := range m.rows {
 		row := &m.rows[i]
@@ -1423,6 +1438,20 @@ func (m JobsModel) renderNextBestMove() string {
 			}
 		}
 	}
+	return best
+}
+
+// hasNextBestMove reports whether View() will render the "NEXT BEST MOVE"
+// banner above the split pane -- extraRows() needs this so chromeAvailHeight
+// budgets for it; otherwise the banner silently renders one line taller than
+// the terminal and pushes the footer help bar off the bottom whenever a
+// pending role scores >= 4.0.
+func (m JobsModel) hasNextBestMove() bool {
+	return m.bestNextMoveRow() != nil
+}
+
+func (m JobsModel) renderNextBestMove() string {
+	best := m.bestNextMoveRow()
 	if best == nil {
 		return ""
 	}
@@ -1511,6 +1540,8 @@ func actionLabel(action string) string {
 		return "Checking liveness"
 	case "matrix":
 		return "Computing skill matrix"
+	case "batch_matrix":
+		return "Computing skills gap matrices in bulk"
 	case "tailor":
 		return "Tailoring resume"
 	case "status":

@@ -1336,14 +1336,15 @@ def _handle_rescore_stale() -> bool:
     to_evaluate = file_paths + database_only
     if not to_evaluate:
         cli_art.console.print(
-            f"Nothing to re-score -- every pending role was evaluated "
-            f"on or after {picker.SCORING_EPOCH}."
+            "Nothing to re-score -- every pending role was evaluated under "
+            "the current scoring version."
         )
         return False
     cli_art.console.print(
-        f"{len(to_evaluate)} role(s) carry a score from before "
-        f"{picker.SCORING_EPOCH}, when the fit evaluator changed. "
-        "Re-scoring overwrites them and costs one API call each."
+        f"{len(to_evaluate)} role(s) carry a score from an older version of "
+        "the fit evaluator (the scoring logic has changed since then, not "
+        "necessarily on any one specific date). Re-scoring overwrites them "
+        "and costs one API call each."
     )
     if database_only:
         cli_art.console.print(

@@ -11,7 +11,6 @@ import sys
 import cli_art
 import profile_paths
 import questionary
-import theme
 from atomic_write import atomic_write
 
 
@@ -66,6 +65,72 @@ def _save_verified_tools(data: dict) -> bool:
     except Exception as e:
         cli_art.display_error(f"Failed to save verified_tools.json: {e}")
         return False
+
+
+def _get_dismissed_skills_path() -> str:
+    kb_dir = profile_paths.kb_dir()
+    return os.path.join(kb_dir, "dismissed_skills.json")
+
+
+def _load_dismissed_skills() -> list:
+    """Skill/tool names explicitly marked "not part of my background" via
+    skill_gap_scan.py's negative selector. Excluded from every future
+    pending-pipeline scan so the candidate checkbox list doesn't keep
+    re-offering the same irrelevant names run after run."""
+    path = _get_dismissed_skills_path()
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f).get("dismissed", [])
+    except Exception:
+        return []
+
+
+def _save_dismissed_skills(names: list) -> bool:
+    path = _get_dismissed_skills_path()
+    try:
+        import datetime
+
+        data = {
+            "dismissed": sorted(
+                {n.strip() for n in names if n and n.strip()}, key=str.lower
+            ),
+            "_meta": {"last_updated": datetime.date.today().isoformat()},
+        }
+        with atomic_write(path, encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        return True
+    except Exception as e:
+        cli_art.display_error(f"Failed to save dismissed_skills.json: {e}")
+        return False
+
+
+def _manage_dismissed_skills():
+    """Lets the user un-dismiss a skill, in case one was hidden by
+    mistake -- otherwise a wrong dismissal would be permanent."""
+    dismissed = _load_dismissed_skills()
+    if not dismissed:
+        cli_art.detail(
+            'No dismissed skills yet. Skills you mark as "not applicable" '
+            "during a Pending Pipeline Skill Gap Scan show up here.",
+            level=cli_art.NORMAL,
+        )
+        return
+
+    choices = [questionary.Choice(name, name) for name in dismissed]
+    selected = cli_art.checkbox(
+        "Select any to restore (they'll be eligible to reappear in future scans):",
+        choices=choices,
+    )
+    if not selected:
+        return
+
+    remaining = [n for n in dismissed if n not in selected]
+    if _save_dismissed_skills(remaining):
+        cli_art.display_success(
+            f"Restored {len(selected)} skill(s): {', '.join(selected)}"
+        )
 
 
 def _generate_next_id(tools: list) -> str:
@@ -361,6 +426,11 @@ def run_skills_menu():
         choices.append(
             questionary.Choice("📜  View Verified Facts Ledger", "view_facts_ledger")
         )
+        choices.append(
+            questionary.Choice(
+                "🚫  Manage Dismissed Skills (Not My Background)", "manage_dismissed"
+            )
+        )
         choices.append(questionary.Choice("⬅  Back to Settings & Upkeep", "back"))
 
         action = cli_art.select("Skills Actions", choices=choices)
@@ -385,6 +455,10 @@ def run_skills_menu():
                 "Press Enter to return to Skills & Facts menu...",
                 style=cli_art.QUESTIONARY_STYLE,
             ).ask()
+            continue
+
+        if action == "manage_dismissed":
+            _manage_dismissed_skills()
             continue
 
         if action == "select_skill":

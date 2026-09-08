@@ -307,6 +307,70 @@ class TestLocationProximityScoringAndRescoring(unittest.TestCase):
         self.assertEqual(rescored["composite_score"], 0.0)
 
 
+class TestRoleTrackExclusion(unittest.TestCase):
+    """The opt-in IC-only preference (content_settings.py's role_track
+    editor) -- default off, and confidence-gated the same way as the
+    Jobs/Pipeline view filters (model.JobRow.IsManagerTrack)."""
+
+    def _eval(self, role_track, confidence):
+        return {
+            "fit_subscores": {},
+            "interview_odds_subscores": {},
+            "practical_pursue_subscores": {},
+            "hard_blockers": [],
+            "recommendation": "Strong pursue",
+            "role_track": role_track,
+            "role_track_confidence": confidence,
+        }
+
+    def test_off_by_default_even_for_high_confidence_manager(self):
+        rescored = orchestrator.rescore_evaluation_with_location(
+            self._eval("manager", "high")
+        )
+        self.assertNotEqual(rescored["recommendation"], "Skip")
+
+    def test_excludes_high_confidence_manager_when_enabled(self):
+        rescored = orchestrator.rescore_evaluation_with_location(
+            self._eval("manager", "high"),
+            role_track_settings={"exclude_manager": True},
+        )
+        self.assertEqual(rescored["recommendation"], "Skip")
+        self.assertEqual(rescored["composite_score"], 0.00)
+        self.assertEqual(rescored["estimated_interview_probability"], 0.0)
+
+    def test_excludes_high_confidence_player_coach_when_enabled(self):
+        rescored = orchestrator.rescore_evaluation_with_location(
+            self._eval("player_coach", "high"),
+            role_track_settings={"exclude_manager": True},
+        )
+        self.assertEqual(rescored["recommendation"], "Skip")
+
+    def test_ic_never_excluded(self):
+        rescored = orchestrator.rescore_evaluation_with_location(
+            self._eval("ic", "high"),
+            role_track_settings={"exclude_manager": True},
+        )
+        self.assertNotEqual(rescored["recommendation"], "Skip")
+
+    def test_low_and_medium_confidence_not_excluded(self):
+        """Same reasoning as the Jobs/Pipeline view filters: the holdout
+        only measured precision at high confidence."""
+        for confidence in ("medium", "low"):
+            rescored = orchestrator.rescore_evaluation_with_location(
+                self._eval("manager", confidence),
+                role_track_settings={"exclude_manager": True},
+            )
+            self.assertNotEqual(rescored["recommendation"], "Skip")
+
+    def test_genuine_hard_blocker_still_excludes_when_role_track_off(self):
+        eval_data = self._eval("ic", "high")
+        eval_data["hard_blockers"] = ["Salesforce certification required"]
+        rescored = orchestrator.rescore_evaluation_with_location(
+            eval_data, role_track_settings={"exclude_manager": True}
+        )
+        self.assertEqual(rescored["recommendation"], "Skip")
+
+
 class TestFitCompositeScoreStressAndStretch(unittest.TestCase):
     """stress_signal_count/capability_gap_count are deterministic, Python-side
     adjustments -- see the LOW_STRESS_BONUS/STRESS_SIGNAL_*/STRETCH_GAP_*
