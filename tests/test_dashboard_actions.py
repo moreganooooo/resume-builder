@@ -237,13 +237,9 @@ class TestMatrix(JDFileTestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("embed_bullet_bank.embed_batch")
-    @patch("numpy.load")
-    @patch("os.path.exists")
-    def test_matrix_file_backed_success(
-        self, mock_exists, mock_load, mock_embed, mock_export
-    ):
-        mock_exists.return_value = True
-        mock_load.return_value = np.ones((2, 768), dtype=np.float32)
+    @patch("dashboard_actions._load_verified_skill_reference_vectors")
+    def test_matrix_file_backed_success(self, mock_ref_vecs, mock_embed, mock_export):
+        mock_ref_vecs.return_value = np.ones((5, 768), dtype=np.float32)
         mock_embed.return_value = [
             np.ones(768, dtype=np.float32).tolist(),
             np.ones(768, dtype=np.float32).tolist(),
@@ -269,14 +265,12 @@ class TestMatrix(JDFileTestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("embed_bullet_bank.embed_batch")
-    @patch("numpy.load")
-    @patch("os.path.exists")
+    @patch("dashboard_actions._load_verified_skill_reference_vectors")
     @patch("jd_source.resolved_jd")
     def test_matrix_database_backed_success(
-        self, mock_resolved, mock_exists, mock_load, mock_embed, mock_export
+        self, mock_resolved, mock_ref_vecs, mock_embed, mock_export
     ):
-        mock_exists.return_value = True
-        mock_load.return_value = np.ones((2, 768), dtype=np.float32)
+        mock_ref_vecs.return_value = np.ones((5, 768), dtype=np.float32)
         mock_embed.return_value = [np.ones(768, dtype=np.float32).tolist()]
 
         jd_data = {
@@ -299,17 +293,15 @@ class TestMatrix(JDFileTestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("embed_bullet_bank.embed_batch")
-    @patch("numpy.load")
-    @patch("os.path.exists")
+    @patch("dashboard_actions._load_verified_skill_reference_vectors")
     @patch("orchestrator.get_or_extract_jd_keywords")
     def test_matrix_falls_back_to_extracted_keywords_when_no_scan_skills(
-        self, mock_extract, mock_exists, mock_load, mock_embed, mock_export
+        self, mock_extract, mock_ref_vecs, mock_embed, mock_export
     ):
         """Most providers never populate jd_data["skills"] (only
         scan_linkedin.py/scan_jobright.py do) -- the matrix must still work
         by falling back to an extract_keywords.md-derived skill list."""
-        mock_exists.return_value = True
-        mock_load.return_value = np.ones((2, 768), dtype=np.float32)
+        mock_ref_vecs.return_value = np.ones((5, 768), dtype=np.float32)
         mock_embed.return_value = [np.ones(768, dtype=np.float32).tolist()]
         mock_extract.return_value = {
             "tools": ["Python"],
@@ -333,6 +325,19 @@ class TestMatrix(JDFileTestCase):
             saved = json.load(f)
         skill_matrix = saved["_evaluation"]["skill_matrix"]
         self.assertEqual([s["skill"] for s in skill_matrix], ["Python"])
+
+    @patch("dashboard_actions._load_verified_skill_reference_vectors")
+    def test_matrix_no_verified_skills_embedded_returns_nonzero(self, mock_ref_vecs):
+        mock_ref_vecs.return_value = None
+        jd_data = {
+            "title": "Staff Engineer",
+            "skills": [{"skill": "Python"}],
+            "_evaluation": {"composite_score": 90},
+        }
+        with open(self.jd_path, "w", encoding="utf-8") as f:
+            json.dump(jd_data, f)
+        code = dashboard_actions._matrix(self.jd_path, FAKE_JOBS_PATH)
+        self.assertEqual(code, 1)
 
     @patch("orchestrator.get_or_extract_jd_keywords")
     def test_matrix_no_skills_anywhere_returns_nonzero(self, mock_extract):
@@ -362,13 +367,11 @@ class TestMatrix(JDFileTestCase):
 
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("embed_bullet_bank.embed_batch")
-    @patch("numpy.load")
-    @patch("os.path.exists")
+    @patch("dashboard_actions._load_verified_skill_reference_vectors")
     def test_matrix_batches_large_skill_lists(
-        self, mock_exists, mock_load, mock_embed, mock_export
+        self, mock_ref_vecs, mock_embed, mock_export
     ):
-        mock_exists.return_value = True
-        mock_load.return_value = np.ones((2, 768), dtype=np.float32)
+        mock_ref_vecs.return_value = np.ones((5, 768), dtype=np.float32)
         mock_embed.side_effect = [
             [np.ones(768, dtype=np.float32).tolist()] * 20,
             [np.ones(768, dtype=np.float32).tolist()] * 5,
@@ -569,33 +572,29 @@ if __name__ == "__main__":
 
 
 class TestCoveragePercentile(unittest.TestCase):
-    """Coverage is a rank against the bullet bank's own best-match
-    distribution, not a rescaled cosine.
+    """Coverage is a rank against the verified-skill corpus's own
+    best-match distribution, not a rescaled cosine.
 
     Gemini embeddings sit in a narrow cone -- measured on the real
     844-bullet corpus, two RANDOM bullets had median similarity 0.727 and
     5% of unrelated pairs already cleared 0.85. Since a skill is scored by
-    its MAX similarity over the whole bank, the previous affine mapping
-    ((x - 0.50) / 0.35) pinned 95% of queries at 100% and never dropped
-    below 63.9%, so the bar could not show a gap at all."""
+    its MAX similarity over the whole reference set, the previous affine
+    mapping ((x - 0.50) / 0.35) pinned 95% of queries at 100% and never
+    dropped below 63.9%, so the bar could not show a gap at all."""
 
     def _reference(self):
         rng = np.random.default_rng(0)
-        embs = rng.normal(size=(64, 32)).astype(np.float32)
-        embs /= np.linalg.norm(embs, axis=1, keepdims=True)
-        with patch(
-            "dashboard_actions._load_verified_skill_reference_vectors",
-            return_value=None,
-        ):
-            return dashboard_actions._coverage_reference(embs)
+        skill_vecs = rng.normal(size=(64, 32)).astype(np.float32)
+        skill_vecs /= np.linalg.norm(skill_vecs, axis=1, keepdims=True)
+        return dashboard_actions._coverage_reference(skill_vecs)
 
-    def test_reference_is_sorted_and_one_entry_per_bullet(self):
+    def test_reference_is_sorted_and_one_entry_per_skill(self):
         ref = self._reference()
         self.assertEqual(len(ref), 64)
         self.assertTrue(np.all(np.diff(ref) >= 0), "reference must be sorted")
 
     def test_reference_excludes_self_match(self):
-        """Without the diagonal masked, every bullet's best match is
+        """Without the diagonal masked, every skill's best match is
         itself at 1.0 and the whole scale collapses to a constant."""
         ref = self._reference()
         self.assertLess(float(np.max(ref)), 0.999)
@@ -626,38 +625,21 @@ class TestCoveragePercentile(unittest.TestCase):
         self.assertEqual(dashboard_actions._coverage_percentile(0.9, np.array([])), 0.0)
 
 
-class TestCoverageReferencePrefersVerifiedSkills(unittest.TestCase):
-    """A short skill PHRASE ("Content Strategy") scored against full
-    BULLET sentences systematically lands lower than bullet-to-bullet
-    similarity does, which used to pin real matches at 0% coverage (see
-    _coverage_reference()'s own docstring). The fix ranks a skill against
-    other verified skill NAMES instead, when that cache is available."""
+class TestCoverageReference(unittest.TestCase):
+    """_coverage_reference ranks a JD skill against other VERIFIED skill
+    names -- apples to apples, since both are short phrases -- rather
+    than against bullet-bank sentences, which systematically deflated
+    real matches (see _coverage_reference()'s own docstring)."""
 
-    def _bullet_embs(self):
-        rng = np.random.default_rng(1)
-        embs = rng.normal(size=(20, 16)).astype(np.float32)
-        embs /= np.linalg.norm(embs, axis=1, keepdims=True)
-        return embs
-
-    @patch("dashboard_actions._load_verified_skill_reference_vectors")
-    def test_uses_verified_skill_vectors_when_cache_exists(self, mock_load):
+    def test_one_entry_per_verified_skill_sorted(self):
         rng = np.random.default_rng(2)
         skill_vecs = rng.normal(size=(10, 16)).astype(np.float32)
         skill_vecs /= np.linalg.norm(skill_vecs, axis=1, keepdims=True)
-        mock_load.return_value = skill_vecs
 
-        embs = self._bullet_embs()
-        ref = dashboard_actions._coverage_reference(embs)
+        ref = dashboard_actions._coverage_reference(skill_vecs)
 
         self.assertEqual(len(ref), 10)
         self.assertTrue(np.all(np.diff(ref) >= 0), "reference must be sorted")
-
-    @patch("dashboard_actions._load_verified_skill_reference_vectors")
-    def test_falls_back_to_bullet_self_similarity_when_no_cache(self, mock_load):
-        mock_load.return_value = None
-        embs = self._bullet_embs()
-        ref = dashboard_actions._coverage_reference(embs)
-        self.assertEqual(len(ref), len(embs))
 
 
 class TestLoadVerifiedSkillReferenceVectors(unittest.TestCase):
