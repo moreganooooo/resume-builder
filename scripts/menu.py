@@ -1099,11 +1099,17 @@ def _handle_bootstrap() -> bool:
                     "ingest_path": ingest_path,
                     "create_bullet": create_bullet,
                 }
+                print(f"[DEBUG] Created data dict: {data}")
 
+            print(f"[DEBUG] About to create profile...")
             name = data.get("profile_name")
+            print(f"[DEBUG] Got name: {name}")
             if name:
+                print(f"[DEBUG] Name is: {name}")
                 try:
+                    print(f"[DEBUG] Creating profile for: {name}")
                     bootstrap_bullet_bank.create_new_profile(name)
+                    print(f"[DEBUG] Profile created successfully")
                 except ValueError as exc:
                     cli_art.friendly_error(
                         exc,
