@@ -85,7 +85,6 @@ class TestChoicesAndHandlers(unittest.TestCase):
             [c.value for c in menu._build_choices()]
             + [c.value for c in menu._build_find_jobs_choices()]
             + [c.value for c in menu._build_build_documents_choices()]
-            + [c.value for c in menu._build_track_followup_choices()]
             + [c.value for c in menu._build_settings_upkeep_choices()]
         )
         for retired in (
@@ -115,16 +114,25 @@ class TestChoicesAndHandlers(unittest.TestCase):
         self.assertIn("Polish a Resume or Cover Letter With Gemini", labels["polish"])
 
     def test_browse_jobs_entry_is_registered(self):
-        values = [c.value for c in menu._build_track_followup_choices()]
-        self.assertIn("browse_jobs", values)
+        # No longer offered as a Track & Follow Up submenu choice (see
+        # test_track_followup_goes_straight_to_career_dashboard) -- it's
+        # still reachable from several "what's next" chain prompts
+        # (_CHAIN), so the handler itself must stay registered.
         self.assertIn("browse_jobs", menu._HANDLERS)
         self.assertIs(menu._HANDLERS["browse_jobs"], menu._handle_browse_jobs)
 
     def test_career_dashboard_entry_is_registered(self):
-        values = [c.value for c in menu._build_track_followup_choices()]
-        self.assertIn("career_dashboard", values)
         self.assertIn("career_dashboard", menu._HANDLERS)
         self.assertIs(menu._HANDLERS["career_dashboard"], menu._handle_career_dashboard)
+
+    def test_track_followup_goes_straight_to_career_dashboard(self):
+        # Collapsed 2026-09: "Browse & Manage Jobs" and "Career Dashboard"
+        # both launched the exact same dashboard_module.run(), so the
+        # submenu offering a choice between them was a choice between two
+        # identical options, not a real fork.
+        with patch("menu._run_with_chain") as mock_chain:
+            menu._handle_track_followup({})
+        mock_chain.assert_called_once_with("career_dashboard", {})
 
     def test_bullet_bank_entry_is_registered(self):
         values = [c.value for c in menu._build_choices()]
@@ -181,7 +189,6 @@ class TestChoicesAndHandlers(unittest.TestCase):
             for builder in (
                 menu._build_find_jobs_choices,
                 menu._build_build_documents_choices,
-                menu._build_track_followup_choices,
                 menu._build_settings_upkeep_choices,
             ):
                 theme.set_icon_set("nerd")
@@ -196,7 +203,6 @@ class TestChoicesAndHandlers(unittest.TestCase):
         for builder in (
             menu._build_find_jobs_choices,
             menu._build_build_documents_choices,
-            menu._build_track_followup_choices,
             menu._build_settings_upkeep_choices,
         ):
             choices = [c for c in builder() if isinstance(c, questionary.Choice)]
@@ -214,7 +220,6 @@ class TestChoicesAndHandlers(unittest.TestCase):
             menu._build_choices,
             menu._build_find_jobs_choices,
             menu._build_build_documents_choices,
-            menu._build_track_followup_choices,
             menu._build_settings_upkeep_choices,
         ):
             seen = {}
