@@ -1046,13 +1046,22 @@ def _handle_bootstrap() -> bool:
                 data = go_data
             else:
                 print(f"[DEBUG] Falling back to questionary wizard")
-                cli_art.console.print()
-                cli_art.console.print(
-                    f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
-                )
+                try:
+                    cli_art.console.print()
+                    print(f"[DEBUG] After console.print()")
+                    cli_art.console.print(
+                        f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
+                    )
+                    print(f"[DEBUG] After wizard title")
+                except Exception as e:
+                    print(f"[DEBUG] Exception in console.print: {e}")
+                    import traceback
+                    traceback.print_exc()
 
                 # Use simple input instead of questionary.text to avoid rendering issues
+                print(f"[DEBUG] About to prompt for profile name")
                 profile_name = input("Profile name (e.g., 'morgan'): ").strip()
+                print(f"[DEBUG] Got profile name: {profile_name}")
                 if not profile_name:
                     return False
 
