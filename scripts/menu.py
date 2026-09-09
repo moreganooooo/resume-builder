@@ -1081,11 +1081,10 @@ def _handle_bootstrap() -> bool:
                 if not ingest_path:
                     return False
 
-            create_bullet = questionary.confirm(
+            create_bullet = cli_art.confirm(
                 "Build the bullet-bank now?",
                 default=True,
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
+            )
             if create_bullet is None:
                 return False
 
