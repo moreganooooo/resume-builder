@@ -1081,16 +1081,15 @@ def _handle_bootstrap() -> bool:
                 if not ingest_path:
                     return False
 
-            create_bullet = cli_art.confirm(
-                "Build the bullet-bank now?",
-                default=True,
-            )
+            # Default to True for bullet bank generation
+            # (questionary prompts have been unreliable, so just proceed)
+            create_bullet = True
 
             data = {
                 "profile_name": profile_name.strip(),
                 "source_choice": source_choice_val,
                 "ingest_path": ingest_path,
-                "create_bullet": bool(create_bullet),
+                "create_bullet": create_bullet,
             }
 
         name = data.get("profile_name")
