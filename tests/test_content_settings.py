@@ -21,7 +21,7 @@ BASE = """\
 enabled_boards:
 - remoteok
 location:
-  city: Getzville
+  city: Springfield
   radius_miles: 5
 # Body-text gates. Both are exclusion-only.
 languages:

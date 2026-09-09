@@ -15,9 +15,9 @@
  *
  * Two hard-won details about their API:
  *
- * 1. `location` wants a CITY NAME, not a ZIP. Posting "14068" returns
+ * 1. `location` wants a CITY NAME, not a ZIP. Posting "62704" returns
  *    totalCount 0 with a 200 status -- a silent empty result, not an
- *    error -- while "Getzville, NY" returns thousands. scan_boards.py
+ *    error -- while "Springfield, NY" returns thousands. scan_boards.py
  *    therefore sends city/state from the configured origin, and this
  *    provider refuses to run on a ZIP-only origin rather than quietly
  *    returning nothing.

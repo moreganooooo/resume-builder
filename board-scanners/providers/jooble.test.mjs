@@ -53,7 +53,7 @@ test('fetch: posts keywords, location and radius to the keyed endpoint', async (
   const capture = {};
   await withKey('test-key', async () => {
     await provider.fetch(
-      { name: 'jooble', search_term: 'marketing', location: 'Getzville, NY', radius_miles: 25 },
+      { name: 'jooble', search_term: 'marketing', location: 'Springfield, NY', radius_miles: 25 },
       ctxReturning(SAMPLE, capture)
     );
   });
@@ -63,7 +63,7 @@ test('fetch: posts keywords, location and radius to the keyed endpoint', async (
   assert.equal(capture.opts.method, 'POST');
   const body = JSON.parse(capture.opts.body);
   assert.equal(body.keywords, 'marketing');
-  assert.equal(body.location, 'Getzville, NY');
+  assert.equal(body.location, 'Springfield, NY');
   assert.equal(body.radius, '25');
 });
 

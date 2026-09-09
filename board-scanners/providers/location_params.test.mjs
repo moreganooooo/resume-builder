@@ -43,12 +43,12 @@ test('adzuna: converts the mile radius to kilometres', async () => {
   const capture = {};
   await withEnv({ ADZUNA_APP_ID: 'id', ADZUNA_APP_KEY: 'key' }, () =>
     adzuna.fetch(
-      { name: 'adzuna', location: 'Getzville, NY', radius_miles: 25 },
+      { name: 'adzuna', location: 'Springfield, NY', radius_miles: 25 },
       capturingCtx({ results: [] }, capture)
     )
   );
   const params = new URL(capture.url).searchParams;
-  assert.equal(params.get('where'), 'Getzville, NY');
+  assert.equal(params.get('where'), 'Springfield, NY');
   // 25 mi -> 40 km. Sending 25 verbatim would search a radius 1.6x too
   // small, silently returning fewer local jobs than configured.
   assert.equal(params.get('distance'), '40');
