@@ -1068,11 +1068,16 @@ def _handle_bootstrap() -> bool:
 
             ingest_path = ""
             if source_choice_val != "manual":
-                allowed_exts = [".pdf"] if source_choice_val == "pdf" else [".json"]
-                ingest_path = cli_art.file_picker(
-                    f"Browse and select your source {source_choice_val.upper()} file:",
-                    allowed_extensions=allowed_exts,
-                )
+                # Simple text input for file path instead of broken file picker
+                file_type = source_choice_val.upper()
+                ingest_path = questionary.text(
+                    f"Path to your {file_type} file (e.g., ~/Documents/Resume.pdf):",
+                    style=cli_art.QUESTIONARY_STYLE,
+                    validate=lambda p: (
+                        True if p and os.path.exists(os.path.expanduser(p))
+                        else f"File not found: {p}"
+                    ),
+                ).ask()
                 if not ingest_path:
                     return False
 
