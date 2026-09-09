@@ -625,8 +625,8 @@ grouped submenu — one entry out, one entry in, no net growth:
 
 ```
 ⚙ Settings & Upkeep
-  ⌂ ↳ Role Criteria & Filters (14068 · 5mi · hybrid+remote · FT · $65K+)
-      ⌂ ↳ Location & Commute Radius   (14068 -- 5 mi, hybrid+remote)
+  ⌂ ↳ Role Criteria & Filters (62704 · 5mi · hybrid+remote · FT · $65K+)
+      ⌂ ↳ Location & Commute Radius   (62704 -- 5 mi, hybrid+remote)
       ▤ ↳ Employment Type              (full-time, contract)
       ▤ ↳ Pay Floor                    ($65K/yr · reporting only)
       ▤ ↳ Role Track (IC vs. Manager)  (IC preferred · sort only)
@@ -640,7 +640,7 @@ three flat siblings never would.
 
 `_location_filter_label()` (menu.py:230) calls
 `location_settings.describe()` and renders the current config **inline in
-the menu label**: `Location & Commute Radius (14068 -- 5 mi,
+the menu label**: `Location & Commute Radius (62704 -- 5 mi,
 hybrid+remote)`. That is why the user can see their configuration
 without opening anything.
 

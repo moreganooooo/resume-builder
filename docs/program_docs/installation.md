@@ -1,6 +1,6 @@
 # 🚀 Unified Setup & Installation Guide
 
-Setting up your job-search pipeline should feel like magic. We have built an automated, interactive setup wizard ([`scripts/install.sh`](../scripts/install.sh)) that handles dependencies, virtual environments, shell aliases, and mobile power-user configurations in seconds.
+Setting up your job-search pipeline should feel like magic. We have built an automated, interactive setup wizard ([`scripts/install.sh`](../../scripts/install.sh)) that handles dependencies, virtual environments, shell aliases, and mobile power-user configurations in seconds.
 
 ---
 
@@ -9,7 +9,7 @@ Setting up your job-search pipeline should feel like magic. We have built an aut
 For standard laptops and desktops, this installs the full Python backend and compiles the headless browser engine used to render pixel-perfect vector PDFs.
 
 ### Prerequisites:
-* Python `3.10+` installed on your system.
+* Python `3.10`–`3.12` installed on your system. **Not 3.13+**: a dependency (`python-jobspy`) pins `numpy==1.26.3`, which publishes no wheel for Python 3.13 and cannot be built against it, so `pip install` fails partway through. `install.sh` checks this for you and tells you what to do.
 * Go `1.21+` (Go `1.25` recommended) for compiling native Charm TUI binaries (`dashboard/bin/dashboard` and `dashboard/bin/prompt`).
 * Node.js & `npm` (for HTML/CSS PDF rendering via Playwright) or Typst CLI (for instant native vector PDF rendering).
 

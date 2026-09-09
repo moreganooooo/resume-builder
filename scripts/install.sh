@@ -49,6 +49,21 @@ PY_MINOR=$(python3 -c "import sys; print(sys.version_info[1])")
 if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
     printf "[ ${BOLD}${ERROR}FAIL${RESET} ] Python version ${PY_VERSION} detected. ${BOLD}Requires >= 3.10.${RESET}\n"
     exit 1
+# Upper bound is real, not caution: python-jobspy hard-pins numpy==1.26.3,
+# whose earliest CPython 3.13 wheel on PyPI is numpy 2.1.0. On 3.13+ pip
+# therefore falls back to building 1.26.3 from source -- a version that
+# never supported 3.13 -- and the install dies deep in a compiler error
+# rather than here. Checking only the lower bound let 3.13 pass this gate
+# and fail later with a message nobody can act on.
+elif [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -gt 12 ]; then
+    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] Python ${PY_VERSION} detected. ${BOLD}Requires 3.10-3.12.${RESET}\n"
+    printf "         A dependency (python-jobspy) pins numpy==1.26.3, which has no\n"
+    printf "         wheel for Python 3.13+ and cannot be built against it.\n"
+    printf "         Install Python 3.12, then re-run this script with it, e.g.:\n"
+    printf "           ${BOLD}brew install python@3.12${RESET}   (macOS)\n"
+    printf "           ${BOLD}sudo apt install python3.12-venv${RESET}   (Debian/Ubuntu)\n"
+    printf "         and make sure ${BOLD}python3${RESET} resolves to 3.12 for this shell.\n"
+    exit 1
 else
     printf "[ ${BOLD}${SUCCESS}PASS${RESET} ] Python ${PY_VERSION} verified.\n"
 fi
