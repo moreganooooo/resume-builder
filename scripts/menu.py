@@ -1090,19 +1090,25 @@ def _handle_bootstrap() -> bool:
 
                 ingest_path = ""
                 if source_choice_val != "manual":
+                    print(f"[DEBUG] Entering file path input section", flush=True)
                     # Simple text input for file path (avoid questionary)
                     file_type = source_choice_val.upper()
                     while True:
-                        ingest_path = input(
-                            f"Path to your {file_type} file (e.g., ~/Documents/Resume.pdf): "
-                        ).strip()
-                        print(f"[DEBUG] User entered path: {ingest_path}")
+                        print(f"[DEBUG] In while loop, about to call input()", flush=True)
+                        try:
+                            ingest_path = input(
+                                f"Path to your {file_type} file (e.g., ~/Documents/Resume.pdf): "
+                            ).strip()
+                            print(f"[DEBUG] User entered path: {ingest_path}", flush=True)
+                        except Exception as e:
+                            print(f"[DEBUG] Exception during input(): {e}", flush=True)
+                            raise
                         if not ingest_path:
-                            print(f"[DEBUG] Empty path, returning False")
+                            print(f"[DEBUG] Empty path, returning False", flush=True)
                             return False
                         expanded_path = os.path.expanduser(ingest_path)
-                        print(f"[DEBUG] Expanded path: {expanded_path}")
-                        print(f"[DEBUG] File exists: {os.path.exists(expanded_path)}")
+                        print(f"[DEBUG] Expanded path: {expanded_path}", flush=True)
+                        print(f"[DEBUG] File exists: {os.path.exists(expanded_path)}", flush=True)
                         if os.path.exists(expanded_path):
                             ingest_path = expanded_path  # Use expanded path
                             print(f"[DEBUG] File found, breaking loop")
