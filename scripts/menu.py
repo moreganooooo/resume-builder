@@ -1144,12 +1144,14 @@ def _handle_bootstrap() -> bool:
                     "source_documents",
                 )
 
-            if cli_art.confirm(
-                "Add any other writing samples or documents (recommendation "
-                "letters, certifications, past cover letters, etc.)?",
-                default=False,
-            ):
-                _pick_and_copy_source_documents(dest_dir_for_extras)
+            # Skip second document prompt due to unreliable confirm prompts
+            # Users can add more documents later via "Update My Knowledge"
+            # if cli_art.confirm(
+            #     "Add any other writing samples or documents (recommendation "
+            #     "letters, certifications, past cover letters, etc.)?",
+            #     default=False,
+            # ):
+            #     _pick_and_copy_source_documents(dest_dir_for_extras)
 
             if data.get("create_bullet"):
                 # Automatically run express auto-pilot onboarding!
