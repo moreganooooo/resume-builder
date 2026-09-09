@@ -1087,11 +1087,16 @@ def _handle_bootstrap() -> bool:
                         ingest_path = input(
                             f"Path to your {file_type} file (e.g., ~/Documents/Resume.pdf): "
                         ).strip()
+                        print(f"[DEBUG] User entered path: {ingest_path}")
                         if not ingest_path:
+                            print(f"[DEBUG] Empty path, returning False")
                             return False
                         expanded_path = os.path.expanduser(ingest_path)
+                        print(f"[DEBUG] Expanded path: {expanded_path}")
+                        print(f"[DEBUG] File exists: {os.path.exists(expanded_path)}")
                         if os.path.exists(expanded_path):
                             ingest_path = expanded_path  # Use expanded path
+                            print(f"[DEBUG] File found, breaking loop")
                             break
                         else:
                             print(f"[!] File not found: {ingest_path}")
