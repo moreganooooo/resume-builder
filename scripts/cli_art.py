@@ -298,6 +298,24 @@ def _skill_gap_scan_reminder_text() -> str:
     when a reminder isn't warranted, so callers can append unconditionally."""
     import datetime
 
+    # A profile with no knowledge base has no pending pipeline to scan, so
+    # the nudge is pure noise -- and it landed on the very first launch of
+    # a fresh clone, telling a brand-new user they were already 7 days
+    # behind on a task they'd never heard of, directly under "0 Roles /
+    # 0 Resumes". Checked before the last-run stamp because "never
+    # recorded" is exactly the state a new profile is in.
+    try:
+        import os
+
+        import profile_paths
+
+        if not os.path.isdir(profile_paths.kb_dir()):
+            return ""
+    except Exception:
+        # An unresolvable profile is the banner's least useful moment to
+        # raise; fall through and let the normal reminder logic decide.
+        pass
+
     last_run = maintenance.get_last_run("skill_gap_scan")
     if last_run:
         try:

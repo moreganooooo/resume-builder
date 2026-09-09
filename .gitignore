@@ -64,7 +64,8 @@ MorganEscott_*.pdf
 # Globs, not per-name lines -- see the note in the JD section above. Every
 # profile's knowledge base and data/ is personal by default; the board_scanner
 # YAML below is the one deliberately-tracked exception (committed scaffold,
-# no PII), so it needs both the directory re-included and the file re-included.
+# shareable reference data), so it needs both the directory re-included and
+# the file re-included -- except scan_filters.yml, see below.
 # profiles/*/* (contents), NOT profiles/*/ (the directory). Git cannot
 # re-include a file whose PARENT DIRECTORY is excluded, so with the
 # directory-form pattern both negations below were dead: a new or renamed
@@ -75,6 +76,14 @@ MorganEscott_*.pdf
 profiles/*/*
 !profiles/*/board_scanner/
 !profiles/*/board_scanner/*.yml
+# ...but NOT scan_filters.yml. Unlike tracked_companies.yml and
+# search_queries.yml (company names and job keywords -- shareable), this one
+# holds the answers to "where do you live and what will you accept": a home
+# ZIP and city, a commute radius measured from it, and salary/hours floors.
+# It is regenerated from an in-code template by
+# bootstrap_profile.seed_scan_filters_from_target_roles(), so a new user
+# loses nothing by it being absent. Removed from history 2026-09-09.
+profiles/*/board_scanner/scan_filters.yml
 # Timestamped backups the ledger/company-discovery scripts write next to
 # the file they are editing (tracked_companies.yml.bak-20260821-131134).
 # Only visible once the pattern above started working; they are local
