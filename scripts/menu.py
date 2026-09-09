@@ -2567,6 +2567,7 @@ def _handle_manage_profiles():
         choice = cli_art.select(
             "Manage Profiles:",
             choices=[
+                questionary.Choice(title="Create new profile", value="create"),
                 questionary.Choice(title="Rename profile", value="rename"),
                 questionary.Choice(title="Delete profile", value="delete"),
                 questionary.Choice(title="Back", value="back"),
@@ -2574,6 +2575,44 @@ def _handle_manage_profiles():
         )
         if not choice or choice == "back":
             return
+
+        if choice == "create":
+            # Launch the bootstrap wizard for a new profile
+            import bootstrap_bullet_bank
+
+            new_name = questionary.text(
+                "New profile name (e.g., 'dom'):",
+                style=cli_art.QUESTIONARY_STYLE,
+                validate=lambda text: (
+                    True if text.strip() != "" else "Profile name cannot be empty."
+                ),
+            ).ask()
+            if not new_name:
+                continue
+            new_name = new_name.strip()
+
+            # Check if profile already exists
+            if os.path.exists(os.path.join(profile_paths.PROFILES_DIR, new_name)):
+                cli_art.display_error(f"Profile '{new_name}' already exists.")
+                continue
+
+            # Create the new profile
+            try:
+                bootstrap_bullet_bank.create_new_profile(new_name)
+                cli_art.display_success(f"Profile '{new_name}' created! You can now switch to it.")
+
+                # Ask if they want to switch to the new profile now
+                if cli_art.confirm(f"Switch to profile '{new_name}' now?", default=True):
+                    profile_paths.set_active_profile(new_name)
+                    cli_art.display_success(f"Switched to profile '{new_name}'.")
+                    cli_art.console.print(
+                        f"\n[{theme.INFO}]Remember to run the bootstrap wizard "
+                        f"(New User? Start Here!) to set up this profile![/{theme.INFO}]\n"
+                    )
+                continue
+            except Exception as e:
+                cli_art.display_error(f"Failed to create profile: {e}")
+                continue
 
         target = cli_art.select(
             f"Select profile to {choice}:", choices=names + ["Cancel"]
