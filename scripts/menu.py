@@ -1038,132 +1038,132 @@ def _handle_bootstrap() -> bool:
             if go_ok and go_data is not None:
                 data = go_data
             else:
-            cli_art.console.print()
-            cli_art.console.print(
-                f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
-            )
-
-            # Use simple input instead of questionary.text to avoid rendering issues
-            profile_name = input("Profile name (e.g., 'morgan'): ").strip()
-            if not profile_name:
-                return False
-
-            # Use simple select without questionary to avoid rendering issues
-            print("Source of your career data:")
-            print("  1. Resume PDF")
-            print("  2. LinkedIn export (JSON)")
-            print("  3. Manual markdown")
-            source_input = input("Choose (1-3): ").strip()
-            source_map_by_num = {
-                "1": "Resume PDF",
-                "2": "LinkedIn export (JSON)",
-                "3": "Manual markdown",
-            }
-            source_choice = source_map_by_num.get(source_input)
-            if not source_choice:
-                cli_art.console.print("[red]Invalid choice[/red]")
-                return False
-
-            source_map = {
-                "Resume PDF": "pdf",
-                "LinkedIn export (JSON)": "linkedin",
-                "Manual markdown": "manual",
-            }
-            source_choice_val = source_map[source_choice]
-
-            ingest_path = ""
-            if source_choice_val != "manual":
-                # Simple text input for file path (avoid questionary)
-                file_type = source_choice_val.upper()
-                while True:
-                    ingest_path = input(
-                        f"Path to your {file_type} file (e.g., ~/Documents/Resume.pdf): "
-                    ).strip()
-                    if not ingest_path:
-                        return False
-                    expanded_path = os.path.expanduser(ingest_path)
-                    if os.path.exists(expanded_path):
-                        ingest_path = expanded_path  # Use expanded path
-                        break
-                    else:
-                        print(f"[!] File not found: {ingest_path}")
-                        print("    Try again with the full path, or press Ctrl+C to cancel")
-
-            # Default to True for bullet bank generation
-            # (questionary prompts have been unreliable, so just proceed)
-            create_bullet = True
-
-            data = {
-                "profile_name": profile_name.strip(),
-                "source_choice": source_choice_val,
-                "ingest_path": ingest_path,
-                "create_bullet": create_bullet,
-            }
-
-        name = data.get("profile_name")
-        if name:
-            try:
-                bootstrap_bullet_bank.create_new_profile(name)
-            except ValueError as exc:
-                cli_art.friendly_error(
-                    exc,
-                    "creating the new profile",
-                    fix="Use only letters, digits, underscores, and hyphens in the profile name, then try New User Setup again.",
-                )
-                return False
-            except FileExistsError as exc:
-                # create_new_profile() refuses to overwrite an existing
-                # profile. Only ValueError was caught here, so retyping a
-                # name that already exists crashed the whole menu.
-                cli_art.friendly_error(
-                    exc,
-                    "creating the new profile",
-                    fix=(
-                        "That profile already exists. Pick a different name, or "
-                        "restart and choose it from the profile picker instead of "
-                        "creating it again."
-                    ),
-                )
-                return False
-            profile_paths.set_active_profile(name)
-
-            source_path = data.get("ingest_path")
-            if source_path and os.path.exists(source_path):
-                dest_dir = os.path.join(
-                    profile_paths.PROFILES_DIR,
-                    name,
-                    "knowledge_base",
-                    "bootstrap",
-                    "source_documents",
-                )
-                os.makedirs(dest_dir, exist_ok=True)
-                shutil.copy(source_path, dest_dir)
-                cli_art.cli_info(
-                    f"Copied source document: {os.path.basename(source_path)} to your profile's source_documents folder."
+                cli_art.console.print()
+                cli_art.console.print(
+                    f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
                 )
 
-                dest_dir_for_extras = dest_dir
-            else:
-                dest_dir_for_extras = os.path.join(
-                    profile_paths.PROFILES_DIR,
-                    name,
-                    "knowledge_base",
-                    "bootstrap",
-                    "source_documents",
-                )
+                # Use simple input instead of questionary.text to avoid rendering issues
+                profile_name = input("Profile name (e.g., 'morgan'): ").strip()
+                if not profile_name:
+                    return False
 
-            # Skip second document prompt due to unreliable confirm prompts
-            # Users can add more documents later via "Update My Knowledge"
-            # if cli_art.confirm(
-            #     "Add any other writing samples or documents (recommendation "
-            #     "letters, certifications, past cover letters, etc.)?",
-            #     default=False,
-            # ):
-            #     _pick_and_copy_source_documents(dest_dir_for_extras)
+                # Use simple select without questionary to avoid rendering issues
+                print("Source of your career data:")
+                print("  1. Resume PDF")
+                print("  2. LinkedIn export (JSON)")
+                print("  3. Manual markdown")
+                source_input = input("Choose (1-3): ").strip()
+                source_map_by_num = {
+                    "1": "Resume PDF",
+                    "2": "LinkedIn export (JSON)",
+                    "3": "Manual markdown",
+                }
+                source_choice = source_map_by_num.get(source_input)
+                if not source_choice:
+                    cli_art.console.print("[red]Invalid choice[/red]")
+                    return False
 
-            if data.get("create_bullet"):
-                # Automatically run express auto-pilot onboarding!
-                return bootstrap_menu._run_express_setup(interactive=False)
+                source_map = {
+                    "Resume PDF": "pdf",
+                    "LinkedIn export (JSON)": "linkedin",
+                    "Manual markdown": "manual",
+                }
+                source_choice_val = source_map[source_choice]
+
+                ingest_path = ""
+                if source_choice_val != "manual":
+                    # Simple text input for file path (avoid questionary)
+                    file_type = source_choice_val.upper()
+                    while True:
+                        ingest_path = input(
+                            f"Path to your {file_type} file (e.g., ~/Documents/Resume.pdf): "
+                        ).strip()
+                        if not ingest_path:
+                            return False
+                        expanded_path = os.path.expanduser(ingest_path)
+                        if os.path.exists(expanded_path):
+                            ingest_path = expanded_path  # Use expanded path
+                            break
+                        else:
+                            print(f"[!] File not found: {ingest_path}")
+                            print("    Try again with the full path, or press Ctrl+C to cancel")
+
+                # Default to True for bullet bank generation
+                # (questionary prompts have been unreliable, so just proceed)
+                create_bullet = True
+
+                data = {
+                    "profile_name": profile_name.strip(),
+                    "source_choice": source_choice_val,
+                    "ingest_path": ingest_path,
+                    "create_bullet": create_bullet,
+                }
+
+            name = data.get("profile_name")
+            if name:
+                try:
+                    bootstrap_bullet_bank.create_new_profile(name)
+                except ValueError as exc:
+                    cli_art.friendly_error(
+                        exc,
+                        "creating the new profile",
+                        fix="Use only letters, digits, underscores, and hyphens in the profile name, then try New User Setup again.",
+                    )
+                    return False
+                except FileExistsError as exc:
+                    # create_new_profile() refuses to overwrite an existing
+                    # profile. Only ValueError was caught here, so retyping a
+                    # name that already exists crashed the whole menu.
+                    cli_art.friendly_error(
+                        exc,
+                        "creating the new profile",
+                        fix=(
+                            "That profile already exists. Pick a different name, or "
+                            "restart and choose it from the profile picker instead of "
+                            "creating it again."
+                        ),
+                    )
+                    return False
+                profile_paths.set_active_profile(name)
+
+                source_path = data.get("ingest_path")
+                if source_path and os.path.exists(source_path):
+                    dest_dir = os.path.join(
+                        profile_paths.PROFILES_DIR,
+                        name,
+                        "knowledge_base",
+                        "bootstrap",
+                        "source_documents",
+                    )
+                    os.makedirs(dest_dir, exist_ok=True)
+                    shutil.copy(source_path, dest_dir)
+                    cli_art.cli_info(
+                        f"Copied source document: {os.path.basename(source_path)} to your profile's source_documents folder."
+                    )
+
+                    dest_dir_for_extras = dest_dir
+                else:
+                    dest_dir_for_extras = os.path.join(
+                        profile_paths.PROFILES_DIR,
+                        name,
+                        "knowledge_base",
+                        "bootstrap",
+                        "source_documents",
+                    )
+
+                # Skip second document prompt due to unreliable confirm prompts
+                # Users can add more documents later via "Update My Knowledge"
+                # if cli_art.confirm(
+                #     "Add any other writing samples or documents (recommendation "
+                #     "letters, certifications, past cover letters, etc.)?",
+                #     default=False,
+                # ):
+                #     _pick_and_copy_source_documents(dest_dir_for_extras)
+
+                if data.get("create_bullet"):
+                    # Automatically run express auto-pilot onboarding!
+                    return bootstrap_menu._run_express_setup(interactive=False)
 
         except Exception as e:
             cli_art.console.print(f"\n[red]Error in bootstrap wizard:[/red] {e}")
