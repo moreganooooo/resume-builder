@@ -354,22 +354,37 @@ def _handle_clear_stale_skill_matrices() -> bool:
     dashboard_actions._batch_matrix() (the dashboard's "[M]" bulk action)
     only computes a matrix for a job that doesn't have one yet, so it never
     refreshes a job that was already scored before verified_tools.json
-    changed -- even if every entry in its cached matrix reads a flat 0%.
-    This clears exactly those flat matrices so the dashboard's bulk action
-    treats them as missing and regenerates them with current skills."""
+    changed. Offers a choice: clear only flat (all-0%) matrices -- the
+    cheap, ordinary case -- or every cached matrix, needed once after a
+    change to HOW coverage is computed at all (see
+    dashboard_actions._compute_skill_matrix_for_jd), since every existing
+    matrix was scored under the old method regardless of what values it
+    holds. Either way this only clears the cache, then the dashboard's
+    bulk action treats the cleared jobs as missing and regenerates them."""
     import clear_stale_skill_matrices
 
-    findings = clear_stale_skill_matrices.find_flat_matrices()
+    clear_all = cli_art.confirm(
+        "\nClear EVERY cached skill matrix (not just flat/all-0% ones)? "
+        "Choose this after a change to how coverage itself is scored; "
+        "otherwise flat-only is the cheaper, usual choice.",
+        default=False,
+    )
+    findings = (
+        clear_stale_skill_matrices.find_all_matrices()
+        if clear_all
+        else clear_stale_skill_matrices.find_flat_matrices()
+    )
+    label = "cached" if clear_all else "flat (all-0%)"
     if not findings:
         cli_art.console.print(
-            f"\n  {cli_art.SUCCESS} No flat (all-0%) skill matrices found.\n",
+            f"\n  {cli_art.SUCCESS} No {label} skill matrices found.\n",
             soft_wrap=True,
         )
         _pause_and_return()
         return True
 
     cli_art.console.print(
-        f"\n  Found [cyan]{len(findings)}[/cyan] job(s) with a flat skill matrix:\n",
+        f"\n  Found [cyan]{len(findings)}[/cyan] job(s) with a {label} skill matrix:\n",
         soft_wrap=True,
     )
     for f in findings:
