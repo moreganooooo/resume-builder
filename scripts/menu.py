@@ -217,20 +217,6 @@ def _build_build_documents_choices() -> list:
     ]
 
 
-def _build_track_followup_choices() -> list:
-    """Built fresh per call -- see _build_choices()'s docstring for why."""
-    return [
-        questionary.Choice(
-            title=_icon_title("utility", "↳ Browse & Manage Jobs"), value="browse_jobs"
-        ),
-        questionary.Choice(
-            title=_icon_title("evaluate", "↳ Career Dashboard"),
-            value="career_dashboard",
-        ),
-        questionary.Choice(title="Back", value="back"),
-    ]
-
-
 def _location_filter_label() -> str:
     """Current radius setting, shown inline so the menu states what is
     configured without the user having to open the editor to find out."""
@@ -644,7 +630,11 @@ def _handle_build_documents(session_stats: dict) -> None:
 
 
 def _handle_track_followup(session_stats: dict) -> None:
-    _run_leaf_submenu("Track & Follow Up", _build_track_followup_choices, session_stats)
+    """Goes straight to the Career Dashboard -- "Browse & Manage Jobs" and
+    "Career Dashboard" both launched the exact same dashboard_module.run(),
+    so the submenu that used to sit here (_build_track_followup_choices)
+    was a choice between two identical options, not a real fork."""
+    _run_with_chain("career_dashboard", session_stats)
 
 
 # Main-menu entries that navigate into a category submenu rather than
