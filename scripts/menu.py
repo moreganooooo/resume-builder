@@ -3229,7 +3229,10 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
     # two skip the clamp entirely rather than risk a rushed, lossy
     # checkbox port -- everything else about the action (banner, footer,
     # chain-offer afterward) stays the same.
-    _skip_scroll_region = {"tailor_pick", "coverletter_pick"}
+    # bootstrap also needs to skip the scroll region since its Bubble Tea UI
+    # can't render in a clamped region either, causing a silent hang while
+    # subprocess.run() waits for the Go binary that never renders anything.
+    _skip_scroll_region = {"tailor_pick", "coverletter_pick", "bootstrap"}
 
     is_interactive = value in interactive_actions
     title = action_titles.get(value)
