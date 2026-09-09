@@ -1085,8 +1085,6 @@ def _handle_bootstrap() -> bool:
                 "Build the bullet-bank now?",
                 default=True,
             )
-            if create_bullet is None:
-                return False
 
             data = {
                 "profile_name": profile_name.strip(),
