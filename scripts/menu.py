@@ -1021,21 +1021,23 @@ def _run_go_bootstrap_wizard() -> tuple[bool, dict | None]:
 
 def _handle_bootstrap() -> bool:
     import shutil
+    import traceback
 
     import profile_paths
 
     is_existing = _profile_is_set_up()
 
     if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
-        # Try the Go wizard first; fall back to the Python-native
-        # questionary flow on ANY failure (Go missing, build broken,
-        # unparseable output) rather than only when Go is absent.
-        go_ok, go_data = _run_go_bootstrap_wizard()
-        if go_ok and go_data is None:
-            return False  # user cancelled the wizard
-        if go_ok and go_data is not None:
-            data = go_data
-        else:
+        try:
+            # Try the Go wizard first; fall back to the Python-native
+            # questionary flow on ANY failure (Go missing, build broken,
+            # unparseable output) rather than only when Go is absent.
+            go_ok, go_data = _run_go_bootstrap_wizard()
+            if go_ok and go_data is None:
+                return False  # user cancelled the wizard
+            if go_ok and go_data is not None:
+                data = go_data
+            else:
             cli_art.console.print()
             cli_art.console.print(
                 f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
@@ -1162,6 +1164,12 @@ def _handle_bootstrap() -> bool:
             if data.get("create_bullet"):
                 # Automatically run express auto-pilot onboarding!
                 return bootstrap_menu._run_express_setup(interactive=False)
+
+        except Exception as e:
+            cli_art.console.print(f"\n[red]Error in bootstrap wizard:[/red] {e}")
+            cli_art.console.print(f"[yellow]Traceback:[/yellow]")
+            cli_art.console.print(traceback.format_exc())
+            return False
 
     # Continue with the existing detailed bootstrap menu (phase selection, etc.)
     return bootstrap_menu.run_bootstrap_menu()
