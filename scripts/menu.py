@@ -1028,16 +1028,22 @@ def _handle_bootstrap() -> bool:
     is_existing = _profile_is_set_up()
 
     if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
+        print(f"[DEBUG] Entering bootstrap - profile is_set_up: {is_existing}")
         try:
             # Try the Go wizard first; fall back to the Python-native
             # questionary flow on ANY failure (Go missing, build broken,
             # unparseable output) rather than only when Go is absent.
+            print(f"[DEBUG] About to call _run_go_bootstrap_wizard()")
             go_ok, go_data = _run_go_bootstrap_wizard()
+            print(f"[DEBUG] Got go_ok={go_ok}, go_data={go_data is not None}")
             if go_ok and go_data is None:
+                print(f"[DEBUG] User cancelled Go wizard")
                 return False  # user cancelled the wizard
             if go_ok and go_data is not None:
+                print(f"[DEBUG] Using Go wizard data")
                 data = go_data
             else:
+                print(f"[DEBUG] Falling back to questionary wizard")
                 cli_art.console.print()
                 cli_art.console.print(
                     f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
