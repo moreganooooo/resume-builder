@@ -338,17 +338,23 @@ class _SkillMatrixSkip(Exception):
 def _compute_skill_matrix_for_jd(path: str) -> None:
     """Compute and persist evaluation["skill_matrix"] for the JD at `path`.
 
+    Scores each JD skill against the candidate's own VERIFIED skills
+    (verified_tools.json, embedded offline by embed_verified_skills.py) --
+    not the bullet bank. Whether a bullet exists demonstrating a skill is
+    a separate question this matrix does not answer; a skill counts here
+    the moment it's added as a verified skill, same as the user sees it
+    in the Skills Bank Builder.
+
     Raises `_SkillMatrixSkip(message)` for expected non-error skip cases
-    (not evaluated / no skills extracted / missing embeddings file) and
-    lets any other exception (e.g. a Gemini API failure) propagate as-is
-    so callers can distinguish "nothing to do" from "something broke".
+    (not evaluated / no skills extracted / verified skills not embedded
+    yet) and lets any other exception (e.g. a Gemini API failure)
+    propagate as-is so callers can distinguish "nothing to do" from
+    "something broke".
     """
     import json
-    import os
 
     import jd_manager
     import numpy as np
-    import profile_paths
     from embed_bullet_bank import BATCH_SIZE, embed_batch
     from vector_store import cosine_similarity_matrix
 
@@ -387,26 +393,26 @@ def _compute_skill_matrix_for_jd(path: str) -> None:
     if not skill_names:
         raise _SkillMatrixSkip("No named skills extracted for this JD.")
 
-    kb_dir = profile_paths.kb_dir()
-    emb_npy = os.path.join(kb_dir, "bullet_vectors_ge2_d768.npy")
-    if not os.path.exists(emb_npy):
+    verified_vecs = _load_verified_skill_reference_vectors()
+    if verified_vecs is None:
         raise _SkillMatrixSkip(
-            "Missing bullet bank embeddings. Run `resume doctor` to check your setup."
+            "No verified skills embedded yet. Run Settings & Upkeep -> "
+            "Refresh Skill Embeddings first."
         )
-
-    embs = np.load(emb_npy)
 
     skill_vecs = []
     for i in range(0, len(skill_names), BATCH_SIZE):
         batch = skill_names[i : i + BATCH_SIZE]
         skill_vecs.extend(embed_batch(batch))
 
-    reference = _coverage_reference(embs)
+    reference = _coverage_reference(verified_vecs)
 
     skill_matrix = []
     for name, vec in zip(skill_names, skill_vecs):
         if vec:
-            scores = cosine_similarity_matrix(np.array(vec, dtype=np.float32), embs)
+            scores = cosine_similarity_matrix(
+                np.array(vec, dtype=np.float32), verified_vecs
+            )
             max_score = float(np.max(scores)) if len(scores) > 0 else 0.0
             coverage_pct = _coverage_percentile(max_score, reference)
             skill_matrix.append({"skill": name, "coverage": coverage_pct})
@@ -491,19 +497,20 @@ def _batch_matrix(jobs_path: str, max_jobs: int = 30) -> int:
 # own 844-bullet corpus on 2026-08-24, the similarity between two RANDOMLY
 # CHOSEN bullets had a median of 0.727, and 5% of unrelated pairs already
 # exceeded 0.85. Because the matrix scores a skill by its MAX similarity
-# over the whole bank, an affine rescale of raw cosine is degenerate: the
-# earlier (x - 0.50) / 0.35 mapping pinned 95% of queries at 100% and never
-# returned less than 63.9%, so the bar could not express a gap -- the one
-# thing a "Skills Gap Matrix" exists to show.
+# over the whole reference set, an affine rescale of raw cosine is
+# degenerate: the earlier (x - 0.50) / 0.35 mapping pinned 95% of queries
+# at 100% and never returned less than 63.9%, so the bar could not express
+# a gap -- the one thing a "Skills Gap Matrix" exists to show.
 #
-# Ranking against the corpus's own best-match distribution sidesteps the
-# problem: it needs no hand-tuned constants, and it re-calibrates itself as
-# the bullet bank grows or the embedding model changes.
+# Ranking against the reference set's own best-match distribution
+# sidesteps the problem: it needs no hand-tuned constants, and it
+# re-calibrates itself as verified skills are added/removed or the
+# embedding model changes.
 def _load_verified_skill_reference_vectors():
     """Cached embeddings of every verified tool/skill NAME (short phrases),
     built offline by embed_verified_skills.py. Returns None if the cache
-    doesn't exist yet, so callers can fall back to the older bullet-to-
-    bullet reference rather than failing.
+    doesn't exist yet -- callers treat that as "nothing to compute
+    against yet" and skip rather than fail.
     """
     import os
 
@@ -517,38 +524,20 @@ def _load_verified_skill_reference_vectors():
     return vecs if len(vecs) > 0 else None
 
 
-def _coverage_reference(embs):
+def _coverage_reference(verified_skill_vecs):
     """Distribution of best-match similarity a SKILL PHRASE should be
-    ranked against.
-
-    Prefers each verified tool/skill name's own best match against the
-    bullet bank (a short-phrase-to-bullet comparison, the same shape of
-    comparison a JD's extracted skill names get) -- this is an
-    apples-to-apples calibration, unlike bullet-to-bullet similarity.
-
-    Measured on the real corpus: bullet-to-bullet similarity has a floor
-    around 0.72 (full sentences in a similar style score high against
-    each other almost regardless of content), while a genuinely strong
-    skill-phrase match often lands around 0.65-0.71 -- below that floor,
-    which pinned real matches at 0% coverage. Falls back to bullet-to-
-    bullet self-similarity only when the verified-skill cache doesn't
-    exist yet (see embed_verified_skills.py).
+    ranked against: each verified skill's own best match against every
+    OTHER verified skill (diagonal masked so a skill never matches
+    itself). This is deliberately skill-name-to-skill-name, the same
+    shape of comparison a JD's extracted skill names get against those
+    same verified names -- apples to apples, and it makes no reference to
+    the bullet bank at all (a skill counting as "covered" here means the
+    candidate has claimed it as a verified skill, not that a bullet
+    happens to demonstrate it -- those are different questions).
     """
     import numpy as np
 
-    skill_vecs = _load_verified_skill_reference_vectors()
-    if skill_vecs is not None:
-        from vector_store import cosine_similarity_matrix
-
-        scores = [
-            float(np.max(cosine_similarity_matrix(v.astype(np.float32), embs)))
-            for v in skill_vecs
-        ]
-        return np.sort(np.array(scores, dtype=np.float32))
-
-    # Fallback: each bullet's similarity to its nearest OTHER bullet --
-    # i.e. what a strong match looks like within the bullet bank itself.
-    sims = embs @ embs.T
+    sims = verified_skill_vecs @ verified_skill_vecs.T
     np.fill_diagonal(sims, -1.0)
     return np.sort(sims.max(axis=1))
 

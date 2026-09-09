@@ -113,6 +113,48 @@ class TestFindAndClear(unittest.TestCase):
         titles = {f["title"] for f in findings}
         self.assertEqual(titles, {"Flat Role"})
 
+    def test_find_all_matrices_flags_any_nonempty_matrix(self):
+        self._write_jd(
+            "flat.json",
+            {
+                "job_title": "Flat Role",
+                "company_name": "Acme",
+                "_evaluation": {
+                    "recommendation": "Pursue",
+                    "composite_score": 3.5,
+                    "skill_matrix": [{"skill": "Salesforce", "coverage": 0}],
+                },
+            },
+        )
+        self._write_jd(
+            "healthy.json",
+            {
+                "job_title": "Healthy Role",
+                "company_name": "Beta",
+                "_evaluation": {
+                    "recommendation": "Pursue",
+                    "composite_score": 4.0,
+                    "skill_matrix": [{"skill": "SQL", "coverage": 62.0}],
+                },
+            },
+        )
+        self._write_jd(
+            "no_matrix.json",
+            {
+                "job_title": "No Matrix Yet",
+                "company_name": "Gamma",
+                "_evaluation": {
+                    "recommendation": "Pursue",
+                    "composite_score": 4.0,
+                    "skill_matrix": [],
+                },
+            },
+        )
+
+        findings = csm.find_all_matrices()
+        titles = {f["title"] for f in findings}
+        self.assertEqual(titles, {"Flat Role", "Healthy Role"})
+
     def test_clear_matrix_empties_skill_matrix_field(self):
         path = self._write_jd(
             "flat.json",
