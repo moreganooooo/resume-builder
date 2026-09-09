@@ -332,6 +332,70 @@ def _handle_scan_pending_skills() -> None:
     return True
 
 
+def _handle_refresh_skill_embeddings() -> bool:
+    """Settings & Upkeep -> Refresh Skill Embeddings.
+
+    Re-embeds every verified_tools.json name into the Skills Gap Matrix's
+    calibration reference (embed_verified_skills.py). Run this after
+    adding/removing skills so newly-added ones can actually be matched --
+    it does not touch any job's own cached skill_matrix, which is what
+    Recompute Stale Skill Gap Matrices below is for."""
+    import embed_verified_skills
+
+    embed_verified_skills.main()
+    maintenance.record_run("embed_verified_skills")
+    _pause_and_return()
+    return True
+
+
+def _handle_clear_stale_skill_matrices() -> bool:
+    """Settings & Upkeep -> Recompute Stale (0%) Skill Gap Matrices.
+
+    dashboard_actions._batch_matrix() (the dashboard's "[M]" bulk action)
+    only computes a matrix for a job that doesn't have one yet, so it never
+    refreshes a job that was already scored before verified_tools.json
+    changed -- even if every entry in its cached matrix reads a flat 0%.
+    This clears exactly those flat matrices so the dashboard's bulk action
+    treats them as missing and regenerates them with current skills."""
+    import clear_stale_skill_matrices
+
+    findings = clear_stale_skill_matrices.find_flat_matrices()
+    if not findings:
+        cli_art.console.print(
+            f"\n  {cli_art.SUCCESS} No flat (all-0%) skill matrices found.\n",
+            soft_wrap=True,
+        )
+        _pause_and_return()
+        return True
+
+    cli_art.console.print(
+        f"\n  Found [cyan]{len(findings)}[/cyan] job(s) with a flat skill matrix:\n",
+        soft_wrap=True,
+    )
+    for f in findings:
+        cli_art.console.print(f"    [{f['company']}] {f['title']}", soft_wrap=True)
+
+    if cli_art.confirm(
+        f"\nClear these {len(findings)} matrix cache(s) so they get "
+        "recomputed with your current skills?",
+        default=True,
+    ):
+        import profile_paths
+
+        profile = profile_paths.active_profile()
+        for f in findings:
+            clear_stale_skill_matrices.clear_matrix(f["identifier"], profile)
+        cli_art.console.print(
+            f"\n  {cli_art.SUCCESS} Cleared {len(findings)}. Run the dashboard's "
+            '"[M]" bulk skills gap matrix action (or press "m" on a single '
+            "job) to regenerate them.\n",
+            soft_wrap=True,
+        )
+        maintenance.record_run("clear_stale_skill_matrices")
+    _pause_and_return()
+    return True
+
+
 def _handle_manage_location() -> bool:
     """Settings & Upkeep -> Location & Commute Radius."""
     import location_settings
@@ -442,6 +506,14 @@ def _build_settings_upkeep_choices() -> list:
         questionary.Choice(
             title=_icon_title("resume", "↳ Scan Pending Pipeline for Skills to Verify"),
             value="scan_pending_skills",
+        ),
+        questionary.Choice(
+            title=_icon_title("complete", "↳ Refresh Skill Embeddings"),
+            value="refresh_skill_embeddings",
+        ),
+        questionary.Choice(
+            title=_icon_title("warning", "↳ Recompute Stale (0%) Skill Gap Matrices"),
+            value="clear_stale_skill_matrices",
         ),
         questionary.Choice(
             title=_icon_title(
@@ -2043,6 +2115,12 @@ def _handle_settings_upkeep() -> bool:
             continue
         if choice == "scan_pending_skills":
             _handle_scan_pending_skills()
+            continue
+        if choice == "refresh_skill_embeddings":
+            _handle_refresh_skill_embeddings()
+            continue
+        if choice == "clear_stale_skill_matrices":
+            _handle_clear_stale_skill_matrices()
             continue
         if choice == "manage_scraping":
             _handle_manage_scraping()
