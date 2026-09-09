@@ -1020,12 +1020,14 @@ def _run_go_bootstrap_wizard() -> tuple[bool, dict | None]:
 
 
 def _handle_bootstrap() -> bool:
+    print(f"[DEBUG] _handle_bootstrap() called!")
     import shutil
     import traceback
 
     import profile_paths
 
     is_existing = _profile_is_set_up()
+    print(f"[DEBUG] _profile_is_set_up() returned: {is_existing}")
 
     if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
         print(f"[DEBUG] Entering bootstrap - profile is_set_up: {is_existing}")
