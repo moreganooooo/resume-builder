@@ -1007,41 +1007,16 @@ def _run_go_bootstrap_wizard() -> tuple[bool, dict | None]:
     (True, None) means the user deliberately cancelled and nothing should
     run. cmd/bootstrap/main.go exits 130 on huh.ErrUserAborted precisely
     so those two cases can be told apart -- treating a cancel as an error
-    is what made backing out of the wizard look like a crash."""
-    import shutil
-    import subprocess
+    is what made backing out of the wizard look like a crash.
 
-    dashboard_dir = os.path.join(
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "dashboard"
-    )
-    if shutil.which("go") is None or not os.path.isdir(dashboard_dir):
-        return False, None
-
-    # Prefer a compiled binary over `go run`, which recompiles on every
-    # launch -- same pattern as dashboard.py/charm_prompt.py.
-    bin_path = os.path.join(dashboard_dir, "bin", "bootstrap")
-    if not os.path.exists(bin_path):
-        os.makedirs(os.path.dirname(bin_path), exist_ok=True)
-        build = subprocess.run(
-            ["go", "build", "-o", bin_path, "./cmd/bootstrap"],
-            cwd=dashboard_dir,
-            capture_output=True,
-            text=True,
-        )
-        if build.returncode != 0:
-            return False, None
-
-    result = subprocess.run(
-        [bin_path], cwd=dashboard_dir, capture_output=True, text=True
-    )
-    if result.returncode == _BOOTSTRAP_GO_CANCELLED:
-        return True, None
-    if result.returncode != 0:
-        return False, None
-    try:
-        return True, json.loads(result.stdout.strip())
-    except json.JSONDecodeError:
-        return False, None
+    NOTE (2026-09-09): The Go bootstrap binary has a hang/deadlock issue
+    with Huh v2 on this system (hangs indefinitely when form.Run() is called,
+    appears to be waiting for a terminal event that never arrives). This is
+    a known issue with Huh's initialization in certain terminal/subprocess
+    contexts. Disabled for now - always fall back to questionary wizard.
+    """
+    # Temporarily disabled due to hang issue - always use questionary fallback
+    return False, None
 
 
 def _handle_bootstrap() -> bool:
