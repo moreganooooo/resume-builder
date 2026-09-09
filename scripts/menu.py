@@ -2580,14 +2580,16 @@ def _handle_manage_profiles():
             # Launch the bootstrap wizard for a new profile
             import bootstrap_bullet_bank
 
-            new_name = questionary.text(
-                "New profile name (e.g., 'dom'):",
-                style=cli_art.QUESTIONARY_STYLE,
-                validate=lambda text: (
-                    True if text.strip() != "" else "Profile name cannot be empty."
-                ),
-            ).ask()
-            if not new_name:
+            # cli_art.text(), not raw questionary -- every interactive
+            # prompt routes through the Go/huh binary so it renders
+            # consistently with the rest of the menu (and survives the
+            # DECSTBM scroll region _run_with_chain sets for
+            # non-interactive actions).
+            # cli_art.text() has no validate= hook (charm_prompt's huh
+            # binding takes message/default only), so the empty-name case
+            # is handled here rather than in the prompt.
+            new_name = cli_art.text("New profile name (e.g., 'dom'):")
+            if not new_name or not new_name.strip():
                 continue
             new_name = new_name.strip()
 
@@ -2599,10 +2601,14 @@ def _handle_manage_profiles():
             # Create the new profile
             try:
                 bootstrap_bullet_bank.create_new_profile(new_name)
-                cli_art.display_success(f"Profile '{new_name}' created! You can now switch to it.")
+                cli_art.display_success(
+                    f"Profile '{new_name}' created! You can now switch to it."
+                )
 
                 # Ask if they want to switch to the new profile now
-                if cli_art.confirm(f"Switch to profile '{new_name}' now?", default=True):
+                if cli_art.confirm(
+                    f"Switch to profile '{new_name}' now?", default=True
+                ):
                     profile_paths.set_active_profile(new_name)
                     cli_art.display_success(f"Switched to profile '{new_name}'.")
                     cli_art.console.print(
@@ -3399,17 +3405,41 @@ def run_interactive_menu() -> None:
                 cli_art.display_exit_footer()
                 break
 
-            if os.environ.get("RESUME_GUEST_MODE") and choice != "bootstrap":
+            # Two ways to reach the menu without a usable profile, and both
+            # must be blocked here. Guest mode is the self-identified new
+            # person who chose "look around first". The second is subtler:
+            # a fresh clone ships profiles/morgan/ (its board_scanner YAML
+            # is tracked), so _default_profile() resolves to "morgan",
+            # _confirm_active_profile() offers it as the DEFAULT choice,
+            # and pressing Enter selects a real directory that has no
+            # knowledge base -- setting RESUME_PROFILE without ever arming
+            # guest mode. Every profile-scoped action then raised
+            # ImportError at the user instead of a prompt. Mirrors the
+            # same condition _build_choices() already uses to decide
+            # whether to SHOW "New User? Start Here!".
+            if choice != "bootstrap" and (
+                os.environ.get("RESUME_GUEST_MODE") or not _profile_is_set_up()
+            ):
                 cli_art.console.print(
                     f'[{theme.BRAND}]Take a look around! Choose "New User? Start Here!" when you\'re '
                     f"ready to set up your own profile -- nothing else runs until then.[/{theme.BRAND}]"
                 )
                 continue
 
-            if choice in _SUBMENUS:
-                _SUBMENUS[choice](session_stats)
-            else:
-                _run_with_chain(choice, session_stats)
+            # A handler raising is a bug, but it must not dump a traceback
+            # into the alternate screen buffer and kill the session -- the
+            # menu is the one surface a non-technical user has, and losing
+            # it to a stack trace reads as "the program is broken".
+            try:
+                if choice in _SUBMENUS:
+                    _SUBMENUS[choice](session_stats)
+                else:
+                    _run_with_chain(choice, session_stats)
+            except KeyboardInterrupt:
+                cli_art.console.print(f"\n[{theme.MUTED}]Cancelled.[/{theme.MUTED}]")
+            except Exception as exc:  # noqa: BLE001 -- see comment above
+                cli_art.friendly_error(exc, f"running {choice}")
+                _pause_and_return()
 
             if os.environ.get("RESUME_GUEST_MODE") and os.environ.get("RESUME_PROFILE"):
                 os.environ.pop("RESUME_GUEST_MODE", None)

@@ -250,6 +250,87 @@ class TestMenuProfileGate(unittest.TestCase):
         self.assertEqual(os.environ.get("RESUME_PROFILE"), "test_profile")
 
 
+class TestUnsetUpProfileBlocksRealActions(unittest.TestCase):
+    """A profile that EXISTS but has no knowledge base must be gated too.
+
+    A fresh clone ships profiles/morgan/ (its board_scanner YAML is
+    tracked), so _default_profile() resolves to "morgan" and
+    _confirm_active_profile() offers it as the DEFAULT choice. Pressing
+    Enter selects a real directory with no knowledge base and sets
+    RESUME_PROFILE without ever arming guest mode -- so the guest-mode
+    guard did not fire and every profile-scoped action reached the user as
+    a raw ImportError traceback instead of a prompt.
+    """
+
+    def setUp(self):
+        self._orig_guest = os.environ.pop("RESUME_GUEST_MODE", None)
+
+    def tearDown(self):
+        if self._orig_guest is not None:
+            os.environ["RESUME_GUEST_MODE"] = self._orig_guest
+        else:
+            os.environ.pop("RESUME_GUEST_MODE", None)
+
+    def test_non_bootstrap_choice_is_blocked_when_profile_is_not_set_up(self):
+        with (
+            patch("cli_art.select", side_effect=["evaluate_all", "exit"]),
+            patch("menu._profile_is_set_up", return_value=False),
+            patch("menu._run_with_chain") as mock_run,
+            patch("menu._confirm_active_profile"),
+            patch("menu._prompt_for_update"),
+            patch("cli_art.display_main_banner"),
+        ):
+            menu.run_interactive_menu()
+        mock_run.assert_not_called()
+
+    def test_bootstrap_is_still_reachable_when_profile_is_not_set_up(self):
+        with (
+            patch("cli_art.select", side_effect=["bootstrap", "exit"]),
+            patch("menu._profile_is_set_up", return_value=False),
+            patch("menu._run_with_chain") as mock_run,
+            patch("menu._confirm_active_profile"),
+            patch("menu._prompt_for_update"),
+            patch("cli_art.display_main_banner"),
+        ):
+            menu.run_interactive_menu()
+        mock_run.assert_called_once_with("bootstrap", unittest.mock.ANY)
+
+    def test_set_up_profile_is_not_blocked(self):
+        with (
+            patch("cli_art.select", side_effect=["evaluate_all", "exit"]),
+            patch("menu._profile_is_set_up", return_value=True),
+            patch("menu._run_with_chain") as mock_run,
+            patch("menu._confirm_active_profile"),
+            patch("menu._prompt_for_update"),
+            patch("cli_art.display_main_banner"),
+        ):
+            menu.run_interactive_menu()
+        mock_run.assert_called_once_with("evaluate_all", unittest.mock.ANY)
+
+
+class TestMenuSurvivesHandlerCrash(unittest.TestCase):
+    """A handler raising must not kill the session with a traceback.
+
+    There was no try/except around _HANDLERS[value]() nor around
+    menu.run_interactive_menu() in cli.py, so any handler exception dumped
+    a stack trace into the alternate screen buffer and ended the program.
+    """
+
+    def test_handler_exception_is_reported_and_menu_continues(self):
+        with (
+            patch("cli_art.select", side_effect=["evaluate_all", "exit"]),
+            patch("menu._profile_is_set_up", return_value=True),
+            patch("menu._run_with_chain", side_effect=ImportError("boom")),
+            patch("menu._confirm_active_profile"),
+            patch("menu._prompt_for_update"),
+            patch("menu._pause_and_return"),
+            patch("cli_art.display_main_banner"),
+            patch("cli_art.friendly_error") as mock_err,
+        ):
+            menu.run_interactive_menu()
+        mock_err.assert_called_once()
+
+
 class TestGuestModeBlocksRealActions(unittest.TestCase):
 
     def setUp(self):
@@ -262,11 +343,19 @@ class TestGuestModeBlocksRealActions(unittest.TestCase):
         else:
             os.environ["RESUME_GUEST_MODE"] = self._orig_guest
 
+    # run_interactive_menu() calls _prompt_for_update(), which does a real
+    # `git fetch origin main`. Unmocked, that passes on an up-to-date
+    # checkout and FAILS on one that is merely behind: real updates are
+    # found, the "Pull the latest changes?" confirm has no tty, and the
+    # test dies with EOFError. That makes these two tests fail for anyone
+    # whose clone has gone stale -- and `resume doctor` runs the suite, so
+    # a new user's first health check reports FAILED for no real reason.
     def test_non_bootstrap_choice_is_blocked_in_guest_mode(self):
         with (
             patch("cli_art.select", side_effect=["evaluate_all", "exit"]),
             patch("menu._run_with_chain") as mock_run,
             patch("menu._confirm_active_profile"),
+            patch("menu._prompt_for_update"),
             patch("cli_art.display_main_banner"),
         ):
             menu.run_interactive_menu()
@@ -277,6 +366,7 @@ class TestGuestModeBlocksRealActions(unittest.TestCase):
             patch("cli_art.select", side_effect=["bootstrap", "exit"]),
             patch("menu._run_with_chain") as mock_run,
             patch("menu._confirm_active_profile"),
+            patch("menu._prompt_for_update"),
             patch("cli_art.display_main_banner"),
         ):
             menu.run_interactive_menu()
