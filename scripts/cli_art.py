@@ -356,7 +356,7 @@ def display_main_banner(
         body.append(SUBTITLE, style="bold")
         body.append(stats_line, style=theme.INFO)
         if skill_scan_reminder:
-            body.append(skill_scan_reminder, style=theme.WARNING)
+            body.append(Text.from_markup(skill_scan_reminder))
         return Panel(body, border_style=theme.BRAND, box=box.DOUBLE, padding=(1, 2))
 
     if (
