@@ -1041,22 +1041,25 @@ def _handle_bootstrap() -> bool:
                 f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
             )
 
-            profile_name = questionary.text(
-                "Profile name (e.g., 'morgan'):",
-                style=cli_art.QUESTIONARY_STYLE,
-                validate=lambda text: (
-                    True if text.strip() != "" else "Profile name cannot be empty."
-                ),
-            ).ask()
+            # Use simple input instead of questionary.text to avoid rendering issues
+            profile_name = input("Profile name (e.g., 'morgan'): ").strip()
             if not profile_name:
                 return False
 
-            source_choice = questionary.select(
-                "Source of your career data:",
-                choices=["Resume PDF", "LinkedIn export (JSON)", "Manual markdown"],
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
+            # Use simple select without questionary to avoid rendering issues
+            print("Source of your career data:")
+            print("  1. Resume PDF")
+            print("  2. LinkedIn export (JSON)")
+            print("  3. Manual markdown")
+            source_input = input("Choose (1-3): ").strip()
+            source_map_by_num = {
+                "1": "Resume PDF",
+                "2": "LinkedIn export (JSON)",
+                "3": "Manual markdown",
+            }
+            source_choice = source_map_by_num.get(source_input)
             if not source_choice:
+                cli_art.console.print("[red]Invalid choice[/red]")
                 return False
 
             source_map = {
@@ -1068,18 +1071,21 @@ def _handle_bootstrap() -> bool:
 
             ingest_path = ""
             if source_choice_val != "manual":
-                # Simple text input for file path instead of broken file picker
+                # Simple text input for file path (avoid questionary)
                 file_type = source_choice_val.upper()
-                ingest_path = questionary.text(
-                    f"Path to your {file_type} file (e.g., ~/Documents/Resume.pdf):",
-                    style=cli_art.QUESTIONARY_STYLE,
-                    validate=lambda p: (
-                        True if p and os.path.exists(os.path.expanduser(p))
-                        else f"File not found: {p}"
-                    ),
-                ).ask()
-                if not ingest_path:
-                    return False
+                while True:
+                    ingest_path = input(
+                        f"Path to your {file_type} file (e.g., ~/Documents/Resume.pdf): "
+                    ).strip()
+                    if not ingest_path:
+                        return False
+                    expanded_path = os.path.expanduser(ingest_path)
+                    if os.path.exists(expanded_path):
+                        ingest_path = expanded_path  # Use expanded path
+                        break
+                    else:
+                        print(f"[!] File not found: {ingest_path}")
+                        print("    Try again with the full path, or press Ctrl+C to cancel")
 
             # Default to True for bullet bank generation
             # (questionary prompts have been unreliable, so just proceed)
