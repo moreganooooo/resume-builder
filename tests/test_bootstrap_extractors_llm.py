@@ -240,6 +240,54 @@ class TestGenerateFromUpload(unittest.TestCase):
         mock_client.files.upload.assert_called_once_with(file="/tmp/fake.pdf")
         mock_client.models.generate_content.assert_called_once()
 
+    @patch("bootstrap_extractors.time.sleep")
+    @patch("bootstrap_extractors.genai.Client")
+    def test_retries_a_transient_503_and_then_succeeds(
+        self, mock_client_cls, mock_sleep
+    ):
+        from google.genai import errors as genai_errors
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.files.upload.return_value = "uploaded-file-handle"
+        transient_error = genai_errors.ServerError(
+            503, {"error": {"message": "high demand"}}
+        )
+        mock_client.models.generate_content.side_effect = [
+            transient_error,
+            MagicMock(text='{"achievements": []}'),
+        ]
+
+        result = bootstrap_extractors._generate_from_upload(
+            "/tmp/fake.pdf", "system prompt", bootstrap_extractors.RawAchievementList
+        )
+
+        self.assertEqual(result, '{"achievements": []}')
+        self.assertEqual(mock_client.models.generate_content.call_count, 2)
+        mock_sleep.assert_called_once()
+
+    @patch("bootstrap_extractors.time.sleep")
+    @patch("bootstrap_extractors.genai.Client")
+    def test_permanent_error_raises_without_retrying(self, mock_client_cls, mock_sleep):
+        from google.genai import errors as genai_errors
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.files.upload.return_value = "uploaded-file-handle"
+        mock_client.models.generate_content.side_effect = genai_errors.ClientError(
+            400, {"error": {"message": "bad request"}}
+        )
+
+        with self.assertRaises(bootstrap_extractors.IngestionAPIError):
+            bootstrap_extractors._generate_from_upload(
+                "/tmp/fake.pdf",
+                "system prompt",
+                bootstrap_extractors.RawAchievementList,
+            )
+
+        mock_client.models.generate_content.assert_called_once()
+        mock_sleep.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

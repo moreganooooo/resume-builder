@@ -1,6 +1,8 @@
 import os
+import random
 import shutil
 import subprocess
+import time
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -109,6 +111,7 @@ import sys
 from typing import Literal, Optional
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel, Field
 
@@ -116,7 +119,12 @@ if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
 import cli_art
-from gemini_client import GeminiClient  # noqa: E402
+from gemini_client import (  # noqa: E402
+    BASE_BACKOFF_SECS,
+    MAX_BACKOFF_SECS,
+    RETRYABLE,
+    GeminiClient,
+)
 
 EXTRACTION_MODEL = "gemini-3.1-flash-lite"
 # Gemma models 500 on every Files-API upload (measured 2026-09-09 against a
@@ -274,36 +282,75 @@ def _api_key() -> str | None:
     return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 
 
+UPLOAD_MAX_RETRIES = 5
+
+
 def _generate_from_upload(path: str, system_prompt: str, response_schema) -> str | None:
     """Uploads a PDF/image file directly to Gemini and returns raw response
     text. GeminiClient's REST client has no file-upload support, so this
     uses the google-genai SDK client directly -- the same proven pattern
-    ingest.py already uses for its single-resume parse."""
+    ingest.py already uses for its single-resume parse.
+
+    The google-genai SDK raises google.genai.errors.APIError (with a
+    .code attribute) on a non-2xx response rather than returning a
+    requests.Response, so GeminiClient.generate()'s own retry loop can't
+    be reused directly -- this mirrors its backoff/RETRYABLE logic
+    instead of duplicating a second copy of the constants. Without this,
+    a transient 500/503 (measured live: Gemini intermittently 500s on
+    file uploads under load) raised immediately and only got retried on
+    a whole separate run_ingestion() call, not within the same one."""
     client = genai.Client(api_key=_api_key())
-    uploaded = client.files.upload(file=path)
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
         response_mime_type="application/json",
         response_schema=response_schema,
         temperature=0.0,
     )
-    response = client.models.generate_content(
-        model=UPLOAD_MODEL,
-        contents=[uploaded, "Extract the requested information."],
-        config=config,
-    )
-    if response.text is None:
-        # Every call site below only null-checks its *text*-extraction
-        # branch, not this one -- an upload response with no text (safety
-        # block, empty candidate) used to fall through to `raw or {}`,
-        # silently checkpointing as "done" with zero results instead of
-        # "failed" and retryable. Same "outcome, not the attempt" reasoning
-        # as the sibling None-checks in this file.
-        raise IngestionAPIError(
-            f"Gemini returned no text for uploaded file {os.path.basename(path)!r} "
-            "-- possibly blocked by safety filters or a transient failure."
-        )
-    return response.text
+    last_error: Exception | None = None
+    for attempt in range(UPLOAD_MAX_RETRIES):
+        try:
+            uploaded = client.files.upload(file=path)
+            response = client.models.generate_content(
+                model=UPLOAD_MODEL,
+                contents=[uploaded, "Extract the requested information."],
+                config=config,
+            )
+        except genai_errors.APIError as e:
+            last_error = e
+            if e.code not in RETRYABLE or attempt == UPLOAD_MAX_RETRIES - 1:
+                raise IngestionAPIError(
+                    f"Gemini API call failed while uploading {os.path.basename(path)!r} "
+                    f"(HTTP {e.code}): {e.message}"
+                ) from e
+            sleep_dur = min(
+                BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
+            ) + random.uniform(1, 4)
+            cli_art.console.print(
+                f"    {cli_art.WARNING} Gemini upload HTTP {e.code}. Waiting "
+                f"{sleep_dur:.1f}s before retry {attempt + 1}/{UPLOAD_MAX_RETRIES}...",
+                soft_wrap=True,
+            )
+            time.sleep(sleep_dur)
+            continue
+
+        if response.text is None:
+            # Every call site below only null-checks its *text*-extraction
+            # branch, not this one -- an upload response with no text
+            # (safety block, empty candidate) used to fall through to
+            # `raw or {}`, silently checkpointing as "done" with zero
+            # results instead of "failed" and retryable. Same "outcome,
+            # not the attempt" reasoning as the sibling None-checks in
+            # this file.
+            raise IngestionAPIError(
+                f"Gemini returned no text for uploaded file {os.path.basename(path)!r} "
+                "-- possibly blocked by safety filters or a transient failure."
+            )
+        return response.text
+
+    # Unreachable: the loop above always either returns or raises.
+    raise IngestionAPIError(
+        f"Gemini API call failed while uploading {os.path.basename(path)!r}"
+    ) from last_error
 
 
 def classify_document_type(
