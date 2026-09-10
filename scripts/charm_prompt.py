@@ -272,6 +272,26 @@ def text(message: str, default: str = "") -> str | None:
     return data["value"]
 
 
+def password(message: str) -> str | None:
+    """Masked text() -- same huh.Input, rendered with EchoMode(password)
+    (dots instead of the typed value) via the "masked" spec flag, so a
+    pasted secret (an API key, a cookie string) is never echoed back to
+    the terminal. Falls back to questionary.password() when Go is
+    unavailable, same degrade-gracefully contract as every other function
+    here."""
+    if not _go_available():
+        return questionary.password(message, style=cli_art.QUESTIONARY_STYLE).ask()
+    spec = {"type": "text", "message": message, "masked": True}
+    try:
+        data = _run_prompt(spec)
+    except RuntimeError as e:
+        _warn_and_degrade(e)
+        return questionary.password(message, style=cli_art.QUESTIONARY_STYLE).ask()
+    if data is None:
+        return None
+    return data["value"]
+
+
 def file_picker(
     message: str,
     start_dir: str | None = None,
