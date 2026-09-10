@@ -31,6 +31,7 @@ if __name__ == "__main__" and not _profile_paths_preflight.preflight_profile():
 import batch_evaluate
 import bootstrap_bullet_bank
 import bootstrap_menu
+import bootstrap_profile
 import build_sample
 import bullet_bank_menu
 import charm_prompt
@@ -1240,13 +1241,45 @@ def _handle_update_knowledge() -> bool:
         if not files:
             return False
 
+    cli_art.console.print()
+    cli_art.console.print(
+        f"Found {len(files)} document(s). What would you like to update with them?"
+    )
+    cli_art.console.print(
+        "  [dim]Bullet Bank[/dim] -- your extracted, tagged achievement bullets "
+        "used to build tailored resumes."
+    )
+    cli_art.console.print(
+        "  [dim]profile.yml[/dim] -- your identity, contact info, target job "
+        "titles, and tone/voice settings."
+    )
+    cli_art.console.print(
+        "  [dim]cv.md[/dim] -- your polished master resume draft, assembled "
+        "from your bullet bank."
+    )
+    cli_art.console.print(
+        "  [dim]Background & Voice Guide[/dim] -- career-history context and "
+        "writing-voice examples that shape how bullets get rewritten."
+    )
+    cli_art.console.print()
+
     scope_choices = cli_art.checkbox(
-        f"Found {len(files)} document(s). What would you like to update with them?",
+        "Select one or more:",
         choices=[
             questionary.Choice(title="Bullet Bank", value="bullets", checked=True),
             questionary.Choice(
-                title="Profile & Background Documents (cv.md, profile.yml, background guide)",
-                value="profile",
+                title="profile.yml (identity, target roles, tone)",
+                value=bootstrap_profile.PROFILE_TARGET_PROFILE_YML,
+                checked=True,
+            ),
+            questionary.Choice(
+                title="cv.md (master resume draft)",
+                value=bootstrap_profile.PROFILE_TARGET_CV_MD,
+                checked=True,
+            ),
+            questionary.Choice(
+                title="Background & Voice Guide",
+                value=bootstrap_profile.PROFILE_TARGET_BACKGROUND_GUIDE,
                 checked=True,
             ),
         ],
@@ -1254,7 +1287,17 @@ def _handle_update_knowledge() -> bool:
     if not scope_choices:
         cli_art.console.print("Nothing selected -- nothing to update.")
         return False
-    scope = "both" if len(scope_choices) == 2 else scope_choices[0]
+
+    profile_targets = {
+        c for c in scope_choices if c in bootstrap_profile.ALL_PROFILE_TARGETS
+    }
+    update_bullets = "bullets" in scope_choices
+    if update_bullets and profile_targets:
+        scope = "both"
+    elif profile_targets:
+        scope = "profile"
+    else:
+        scope = "bullets"
 
     proceed = charm_prompt.confirm(
         f"Ready to process {len(files)} document(s)?",
@@ -1267,7 +1310,10 @@ def _handle_update_knowledge() -> bool:
     script_path = os.path.join(
         bootstrap_bullet_bank.SCRIPT_DIR, "bootstrap_bullet_bank.py"
     )
-    result = subprocess.run([sys.executable, script_path, "--scope", scope])
+    cmd = [sys.executable, script_path, "--scope", scope]
+    if profile_targets:
+        cmd += ["--profile-targets", ",".join(sorted(profile_targets))]
+    result = subprocess.run(cmd)
     return result.returncode == 0
 
 
@@ -2455,6 +2501,13 @@ def _handle_edit_title_filters(filters_path):
 
         cli_art.console.print(
             "These keywords filter all standard job board listings.\n"
+            "[dim]Positive = a word that should appear in a job TITLE for it to "
+            'be worth reviewing (e.g. "Marketing", "Copywriter", "Product"). '
+            "Negative = a word that disqualifies a title outright, even if a "
+            'positive keyword also matched (e.g. "Intern", "Director", '
+            '"Sales"). Titles are checked against BOTH lists, not the full '
+            "job description -- keep entries short and generic rather than "
+            "exact phrases.[/dim]\n"
         )
 
         pos = title_filter.get("positive") or []
@@ -2492,7 +2545,9 @@ def _handle_edit_title_filters(filters_path):
             break
 
         if act == "add_pos":
-            k = cli_art.text("Enter positive title keyword:")
+            k = cli_art.text(
+                'Enter positive title keyword (e.g. "Marketing", not a full title):'
+            )
             if k and k.strip():
                 pos.append(k.strip())
                 title_filter["positive"] = sorted(list(set(pos)))
@@ -2504,7 +2559,9 @@ def _handle_edit_title_filters(filters_path):
                 cli_art.cli_info("Positive filter updated!")
                 time.sleep(1)
         elif act == "add_neg":
-            k = cli_art.text("Enter negative title keyword:")
+            k = cli_art.text(
+                'Enter negative title keyword (e.g. "Intern", "Director"):'
+            )
             if k and k.strip():
                 neg.append(k.strip())
                 title_filter["negative"] = sorted(list(set(neg)))

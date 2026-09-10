@@ -187,7 +187,7 @@ class TestMainCallsProfileSetup(unittest.TestCase):
 
         bootstrap_bullet_bank.main()
 
-        mock_profile_setup.assert_called_once_with(dry_run=False)
+        mock_profile_setup.assert_called_once_with(dry_run=False, targets=None)
         mock_run_ingestion.assert_called_once()
         mock_run_full_pipeline.assert_called_once()
 
@@ -218,7 +218,7 @@ class TestMainCallsProfileSetup(unittest.TestCase):
 
         bootstrap_bullet_bank.main()
 
-        mock_profile_setup.assert_called_once_with(dry_run=True)
+        mock_profile_setup.assert_called_once_with(dry_run=True, targets=None)
         mock_run_full_pipeline.assert_not_called()
 
 
