@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Diagnostic script to test menu prompts with Dom's profile."""
-import sys
+
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-os.environ['RESUME_PROFILE'] = 'dom'
+os.environ["RESUME_PROFILE"] = "dom"
 
-import cli_art
 import charm_prompt
+import cli_art
 
 print("=== Testing Dom's profile menu interactions ===\n")
 
@@ -20,7 +21,7 @@ try:
         choices=[
             {"label": "Option A", "value": "a"},
             {"label": "Option B", "value": "b"},
-        ]
+        ],
     )
     print(f"Result: {result}")
 except Exception as e:
@@ -34,7 +35,7 @@ try:
         choices=[
             {"label": "Option A", "value": "a"},
             {"label": "Option B", "value": "b"},
-        ]
+        ],
     )
     print(f"Result: {result}")
 except Exception as e:
@@ -43,8 +44,14 @@ except Exception as e:
 # Test 3: Check Go binary directly
 print("\nTest 3: Go binary status")
 import shutil
+
 print(f"Go available: {shutil.which('go') is not None}")
-prompt_bin = '/Users/morganescott/resume-builder/dashboard/bin/prompt'
+prompt_bin = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "dashboard",
+    "bin",
+    "prompt",
+)
 print(f"Prompt binary exists: {os.path.exists(prompt_bin)}")
 print(f"Prompt binary executable: {os.access(prompt_bin, os.X_OK)}")
 

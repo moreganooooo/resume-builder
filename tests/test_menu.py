@@ -41,10 +41,15 @@ class TestChoicesAndHandlers(unittest.TestCase):
     # menu._build_choices() into one of the category submenu builders
     # below. See menu.py's _build_choices() docstring for the full tree.
 
-    def test_main_menu_has_the_approved_seven_item_tree(self):
+    def test_main_menu_has_the_approved_eight_item_tree(self):
         # questionary.Separator is (surprisingly) a subclass of Choice, so
         # this excludes it explicitly rather than filtering "isinstance
         # Choice" (a no-op against Separator).
+        #
+        # "update_knowledge" (Drop New Knowledge) was restored here from
+        # the Bullet Bank submenu -- it's a frequently-used action, not a
+        # rebuild maintenance step, so burying it one level down cost more
+        # than the flat list gained.
         values = [
             c.value
             for c in menu._build_choices()
@@ -58,6 +63,7 @@ class TestChoicesAndHandlers(unittest.TestCase):
                 "build_documents",
                 "bullet_bank",
                 "track_followup",
+                "update_knowledge",
                 "settings_upkeep",
                 "help",
                 "exit",

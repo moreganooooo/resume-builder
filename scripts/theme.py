@@ -100,6 +100,7 @@ _NERD_ICONS = {
     "exit": "",  # nf-fa-power_off
     "location": "",  # nf-fa-map_marker -- place/commute
     "filter": "",  # nf-fa-filter -- exclusion gates (language, travel)
+    "knowledge": "",  # nf-fa-upload -- adding new source material
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
@@ -135,6 +136,7 @@ _UNICODE_ICONS = {
     "gem": "✦",  # U+2726 four-pointed star
     "location": "⌂",  # U+2302 house -- place/commute (never the pin emoji)
     "filter": "▽",  # U+25BD white down triangle -- a funnel, i.e. exclusion
+    "knowledge": "⇪",  # U+21EA upward arrow from bar -- adding new material
     "prev": "❮",  # U+276E angle quote left
     "next": "❯",  # U+276F angle quote right
     "back": "❮",  # U+276E angle quote left, same as prev
@@ -210,6 +212,7 @@ _ICON_COLORS = {
     "gem": WARNING,  # gold
     "location": INFO,  # light blue
     "filter": INFO,  # light blue -- same family as location, a sibling gate
+    "knowledge": BRAND,  # blue, same family as bullet_bank -- a sibling action
     "prev": BRAND_ACCENT,  # purple, matches existing pagination style
     "next": BRAND_ACCENT,  # purple, matches existing pagination style
     "back": BRAND_ACCENT,  # purple, matches existing pagination style
