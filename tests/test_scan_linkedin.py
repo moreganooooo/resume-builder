@@ -213,6 +213,61 @@ class TestScanLinkedinCookieAndQueries(unittest.TestCase):
             [scan_linkedin.OnSiteOrRemoteFilters.REMOTE],
         )
 
+    def test_build_queries_uses_default_experience_and_type_filters(self):
+        """With no per-profile overrides, the resolved filters match the
+        original hardcoded defaults."""
+        with (
+            patch(
+                "scan_linkedin.content_settings.read_linkedin_experience_levels",
+                return_value=list(
+                    scan_linkedin.content_settings.DEFAULT_LINKEDIN_EXPERIENCE_LEVELS
+                ),
+            ),
+            patch("scan_linkedin.content_settings.read_settings", return_value={}),
+        ):
+            [query] = scan_linkedin._build_queries(10, ["Marketing Director"])
+        self.assertCountEqual(
+            query.options.filters.experience,
+            [
+                scan_linkedin.ExperienceLevelFilters.ENTRY_LEVEL,
+                scan_linkedin.ExperienceLevelFilters.ASSOCIATE,
+                scan_linkedin.ExperienceLevelFilters.MID_SENIOR,
+            ],
+        )
+        self.assertCountEqual(
+            query.options.filters.type,
+            [
+                scan_linkedin.TypeFilters.FULL_TIME,
+                scan_linkedin.TypeFilters.PART_TIME,
+                scan_linkedin.TypeFilters.CONTRACT,
+                scan_linkedin.TypeFilters.TEMPORARY,
+            ],
+        )
+
+    def test_build_queries_honors_profile_experience_and_employment_overrides(self):
+        with (
+            patch(
+                "scan_linkedin.content_settings.read_linkedin_experience_levels",
+                return_value=["director", "executive"],
+            ),
+            patch(
+                "scan_linkedin.content_settings.read_settings",
+                return_value={"employment_type": ["contract_to_hire", "internship"]},
+            ),
+        ):
+            [query] = scan_linkedin._build_queries(10, ["Marketing Director"])
+        self.assertCountEqual(
+            query.options.filters.experience,
+            [
+                scan_linkedin.ExperienceLevelFilters.DIRECTOR,
+                scan_linkedin.ExperienceLevelFilters.EXECUTIVE,
+            ],
+        )
+        self.assertCountEqual(
+            query.options.filters.type,
+            [scan_linkedin.TypeFilters.CONTRACT, scan_linkedin.TypeFilters.INTERNSHIP],
+        )
+
     def test_muted_scraper_logger_silences_and_restores_level(self):
         """The li:scraper logger is silenced for the duration of the
         context and restored to whatever it was before, even on error."""

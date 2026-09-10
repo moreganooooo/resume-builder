@@ -355,8 +355,34 @@ class TestReportJobBoardReadiness(BootstrapProfileTestCase):
     def test_runs_without_error_on_bare_profile(self):
         # No .env, no .linkedin_cookie, no tracked_companies.yml -- every
         # source should report as needing setup except Indeed, and this
-        # must not raise.
-        bootstrap_profile.report_job_board_readiness()
+        # must not raise. dry_run=True so the interactive "discover
+        # employers now?" offer (added when tracked_count == 0) doesn't
+        # block on stdin.
+        bootstrap_profile.report_job_board_readiness(dry_run=True)
+
+    def test_dry_run_skips_discover_offer(self):
+        with patch("bootstrap_profile.cli_art.confirm") as mock_confirm:
+            bootstrap_profile.report_job_board_readiness(dry_run=True)
+            mock_confirm.assert_not_called()
+
+    @patch("discover_local_employers.append_entries", return_value="/tmp/backup.yml")
+    @patch(
+        "discover_local_employers.tracked_companies_path", return_value="/tmp/tc.yml"
+    )
+    @patch(
+        "discover_local_employers.discover",
+        return_value=[{"name": "Acme", "provider": "greenhouse", "postings": 3}],
+    )
+    @patch("bootstrap_profile.cli_art.confirm", side_effect=[True, True])
+    def test_offers_and_tracks_discovered_employers_when_none_tracked(
+        self, mock_confirm, mock_discover, mock_path, mock_append
+    ):
+        bootstrap_profile.report_job_board_readiness(dry_run=False)
+
+        mock_discover.assert_called_once()
+        mock_append.assert_called_once_with(
+            [{"name": "Acme", "provider": "greenhouse", "postings": 3}], "/tmp/tc.yml"
+        )
 
 
 class TestWriteProfileYml(BootstrapProfileTestCase):
@@ -1410,17 +1436,75 @@ class TestCollectLinkedinSearchQueries(unittest.TestCase):
         with (
             patch("bootstrap_profile.questionary.confirm") as mock_confirm,
             patch("bootstrap_profile.questionary.text") as mock_text,
+            patch("bootstrap_profile.questionary.checkbox") as mock_checkbox,
         ):
-            mock_confirm.return_value.ask.return_value = True
+            # wants_custom=True, then decline the per-query workplace/location
+            # override offer for each of the two entered terms.
+            mock_confirm.return_value.ask.side_effect = [True, False, False]
             mock_text.return_value.ask.side_effect = [
                 "Email OR Campaign",
                 "Lifecycle",
                 "",
             ]
+            # Seniority-level checkbox at the end -- return the default
+            # selection so nothing gets written to scan_filters.yml.
+            mock_checkbox.return_value.ask.return_value = list(
+                bootstrap_profile.content_settings.DEFAULT_LINKEDIN_EXPERIENCE_LEVELS
+            )
             result = bootstrap_profile.collect_linkedin_search_queries(
                 ["Marketing Manager"]
             )
         self.assertEqual(result, ["Email OR Campaign", "Lifecycle"])
+
+    def test_per_query_override_produces_dict_entry(self):
+        with (
+            patch("bootstrap_profile.questionary.confirm") as mock_confirm,
+            patch("bootstrap_profile.questionary.text") as mock_text,
+            patch("bootstrap_profile.questionary.checkbox") as mock_checkbox,
+        ):
+            # wants_custom=True, then accept the override offer for the one
+            # entered term.
+            mock_confirm.return_value.ask.side_effect = [True, True]
+            mock_text.return_value.ask.side_effect = [
+                "Product Marketing",
+                "Austin, TX",
+                "",
+            ]
+            mock_checkbox.return_value.ask.side_effect = [
+                ["onsite", "hybrid"],
+                list(
+                    bootstrap_profile.content_settings.DEFAULT_LINKEDIN_EXPERIENCE_LEVELS
+                ),
+            ]
+            result = bootstrap_profile.collect_linkedin_search_queries(
+                ["Marketing Manager"]
+            )
+        self.assertEqual(
+            result,
+            [
+                {
+                    "query": "Product Marketing",
+                    "workplace_mode": ["onsite", "hybrid"],
+                    "location": "Austin, TX",
+                }
+            ],
+        )
+
+    def test_non_default_seniority_selection_is_saved(self):
+        with (
+            patch("bootstrap_profile.questionary.confirm") as mock_confirm,
+            patch("bootstrap_profile.questionary.text") as mock_text,
+            patch("bootstrap_profile.questionary.checkbox") as mock_checkbox,
+            patch("bootstrap_profile.content_settings.write_settings") as mock_write,
+            patch("bootstrap_profile.content_settings.read_settings", return_value={}),
+        ):
+            mock_confirm.return_value.ask.side_effect = [True, False]
+            mock_text.return_value.ask.side_effect = ["Lifecycle", ""]
+            mock_checkbox.return_value.ask.return_value = ["director", "executive"]
+            bootstrap_profile.collect_linkedin_search_queries(["Marketing Manager"])
+        mock_write.assert_called_once_with(
+            {"linkedin_experience_levels": ["director", "executive"]}
+        )
 
 
 class TestCollectSituationalRoles(BootstrapProfileTestCase):
