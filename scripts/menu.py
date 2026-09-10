@@ -806,6 +806,16 @@ def _confirm_active_profile(force: bool = False) -> bool:
         # skipped entirely, routing a real new user's documents straight
         # into Morgan's own knowledge_base/.
         os.environ["RESUME_GUEST_MODE"] = "1"
+        # Ask which icon set actually renders correctly on THIS terminal
+        # before the wizard runs, not after -- run_interactive_menu()'s own
+        # call to this (line ~3381) happens only once _confirm_active_profile()
+        # returns, which for this exact path is after the whole bootstrap
+        # wizard has already finished. Without this, a brand-new user's
+        # entire onboarding renders with theme.py's guessed default (Nerd
+        # Font, since isatty() is true) and every icon shows as a tofu box
+        # if their terminal lacks the font -- reported after a real
+        # onboarding session (2026-09-10).
+        _confirm_icon_set()
         _handle_bootstrap()
         if os.environ.get("RESUME_PROFILE"):
             os.environ.pop("RESUME_GUEST_MODE", None)
