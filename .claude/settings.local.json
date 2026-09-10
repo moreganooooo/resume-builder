@@ -115,7 +115,11 @@
       "Bash(yarn cache *)",
       "Bash(brew cleanup *)",
       "Bash(rtk du *)",
-      "Bash(docker system *)"
+      "Bash(docker system *)",
+      "Bash(xargs -0 ls -lS)",
+      "Bash(timeout 5 /Users/morganescott/resume-builder/dashboard/bin/prompt '{\"type\":\"select\",\"message\":\"Test\",\"options\":[{\"label\":\"Option 1\",\"value\":\"opt1\"}]}' 2>&1 || echo \"Exit code: $?\")",
+      "Bash(bash /tmp/check_profiles.sh)",
+      "Bash(chmod +x /tmp/test_go_binary.sh)"
     ]
   },
   "enableAllProjectMcpServers": true,
