@@ -298,10 +298,12 @@ def collect_identity(dry_run: bool = False) -> dict:
         }
 
     full_name = _confirm_text("Full name:", guessed.full_name)
-    email = _confirm_text("Email:", guessed.email)
-    phone = _confirm_text("Phone:", guessed.phone)
-    location = _confirm_text("Location (city, state):", guessed.location)
-    linkedin_url = _confirm_text("LinkedIn URL:", guessed.linkedin_url)
+    email = _confirm_text("Email (e.g. jane.doe@gmail.com):", guessed.email)
+    phone = _confirm_text("Phone (e.g. (555) 123-4567):", guessed.phone)
+    location = _confirm_text("Location (e.g. Austin, TX):", guessed.location)
+    linkedin_url = _confirm_text(
+        "LinkedIn URL (e.g. linkedin.com/in/janedoe):", guessed.linkedin_url
+    )
     portfolio_url = _confirm_text(
         "Portfolio URL (optional, press Enter to skip):", guessed.portfolio_url
     )

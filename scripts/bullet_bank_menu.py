@@ -480,26 +480,7 @@ def _handle_choice(choice: str) -> None:
 
 
 def _build_choices() -> list:
-    choices = [
-        # "Drop New Knowledge" (was a separate main-menu entry before the
-        # 2026-08 menu collapse) -- moved in here since it's the step that
-        # feeds new source documents into this very rebuild pipeline.
-        # Deliberately not part of STAGES/MAINTENANCE/_ALL_ENTRIES -- it
-        # doesn't have a script/output pair for _stage_status() to track,
-        # it's a distinct action dispatched straight to menu.py's own
-        # handler (see run_bullet_bank_menu()'s "update_knowledge" branch).
-        questionary.Choice(
-            title=[
-                ("class:text", "Drop New Knowledge  "),
-                (
-                    "class:description",
-                    "(add new source documents, then choose what to rebuild)",
-                ),
-            ],
-            value="update_knowledge",
-        ),
-        questionary.Separator(" "),
-    ]
+    choices = []
     for stage in STAGES:
         choices.append(
             questionary.Choice(
@@ -527,6 +508,7 @@ def _build_choices() -> list:
 
     standalone = [entry for entry in MAINTENANCE if entry["after_stage"] is None]
     if standalone:
+        choices.append(questionary.Separator(" "))
         choices.append(
             questionary.Separator("── Ongoing Maintenance (optional, run anytime) ──")
         )
@@ -541,6 +523,7 @@ def _build_choices() -> list:
                 )
             )
 
+    choices.append(questionary.Separator(" "))
     choices.append(questionary.Choice(title="Back to Main Menu", value="__back__"))
     return choices
 
@@ -569,11 +552,4 @@ def run_bullet_bank_menu() -> None:
 
         if not choice or choice == "__back__":
             return
-        if choice == "update_knowledge":
-            # Deferred import: menu.py imports this module, so importing
-            # menu at this module's top level would be circular -- safe
-            # here since it only runs once both modules are already fully
-            # loaded (mirrors bootstrap_menu.py's own _run_phase0()).
-            menu._handle_update_knowledge()
-            continue
         _handle_choice(choice)

@@ -31,6 +31,7 @@ def _listdir_only_source_docs(names):
     return _stub
 
 
+import bootstrap_profile  # noqa: E402
 import bullet_bank_menu  # noqa: E402
 import menu  # noqa: E402
 
@@ -38,10 +39,15 @@ import menu  # noqa: E402
 class TestUpdateKnowledgeChoiceRegistered(unittest.TestCase):
 
     def test_choice_is_registered(self):
-        # Moved into the Bullet Bank submenu (bullet_bank_menu.py) as part
-        # of the 2026-08 menu collapse -- no longer a flat main-menu entry.
-        values = [c.value for c in bullet_bank_menu._build_choices()]
+        # Moved back to a flat main-menu entry (was buried in the Bullet
+        # Bank submenu after the 2026-08 menu collapse; restored to the
+        # main menu since it's a frequently-used action, not a rebuild
+        # maintenance step).
+        values = [c.value for c in menu._build_choices()]
         self.assertIn("update_knowledge", values)
+        self.assertNotIn(
+            "update_knowledge", [c.value for c in bullet_bank_menu._build_choices()]
+        )
 
     def test_handler_registered(self):
         self.assertIn("update_knowledge", menu._HANDLERS)
@@ -199,7 +205,10 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
         mock_intro,
         mock_run,
     ):
-        mock_checkbox.return_value.ask.return_value = ["bullets", "profile"]
+        mock_checkbox.return_value.ask.return_value = [
+            "bullets",
+            bootstrap_profile.PROFILE_TARGET_PROFILE_YML,
+        ]
         mock_confirm.return_value = True
         mock_run.return_value = MagicMock(returncode=0)
 
@@ -257,7 +266,9 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
         mock_intro,
         mock_run,
     ):
-        mock_checkbox.return_value.ask.return_value = ["profile"]
+        mock_checkbox.return_value.ask.return_value = [
+            bootstrap_profile.PROFILE_TARGET_PROFILE_YML
+        ]
         mock_confirm.return_value = True
         mock_run.return_value = MagicMock(returncode=0)
 
@@ -303,7 +314,10 @@ class TestHandleUpdateKnowledgeWithFiles(unittest.TestCase):
         mock_confirm,
         mock_run,
     ):
-        mock_checkbox.return_value.ask.return_value = ["bullets", "profile"]
+        mock_checkbox.return_value.ask.return_value = [
+            "bullets",
+            bootstrap_profile.PROFILE_TARGET_PROFILE_YML,
+        ]
         mock_confirm.return_value = False
         result = menu._handle_update_knowledge()
         self.assertFalse(result)

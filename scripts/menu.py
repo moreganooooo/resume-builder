@@ -139,6 +139,16 @@ def _build_choices() -> list:
         ),
         questionary.Choice(
             title=[
+                *_icon_title("knowledge", "Drop New Knowledge  "),
+                (
+                    "class:description",
+                    "(Add new source documents, then choose what to rebuild)",
+                ),
+            ],
+            value="update_knowledge",
+        ),
+        questionary.Choice(
+            title=[
                 *_icon_title("utility", "Settings & Upkeep  "),
                 (
                     "class:description",
@@ -501,6 +511,7 @@ def _build_settings_upkeep_choices() -> list:
             title=_icon_title("utility", f"↳ Run Doctor Checks {last_run_label}"),
             value="doctor",
         ),
+        questionary.Separator(" "),
         questionary.Choice(
             title=_icon_title("bullet_bank", "↳ View & Manage Profile Skills"),
             value="manage_skills",
@@ -517,6 +528,7 @@ def _build_settings_upkeep_choices() -> list:
             title=_icon_title("warning", "↳ Recompute Stale (0%) Skill Gap Matrices"),
             value="clear_stale_skill_matrices",
         ),
+        questionary.Separator(" "),
         questionary.Choice(
             title=_icon_title(
                 "discovery", "↳ Manage Scraping, Boards & Search Queries"
@@ -546,6 +558,7 @@ def _build_settings_upkeep_choices() -> list:
             title=_icon_title("evaluate", "↳ Discover Local Employers with ATS Boards"),
             value="discover_employers",
         ),
+        questionary.Separator(" "),
         questionary.Choice(
             title=_icon_title("save", "↳ Writing Voice & Samples"),
             value="manage_voice",
@@ -554,6 +567,7 @@ def _build_settings_upkeep_choices() -> list:
             title=_icon_title("build", "↳ Generate Sample Resume + Cover Letter (QA)"),
             value="build_sample",
         ),
+        questionary.Separator(" "),
         questionary.Choice(
             title=_icon_title("next", "↳ Check for GitHub Updates"),
             value="check_updates",
@@ -562,6 +576,7 @@ def _build_settings_upkeep_choices() -> list:
             title=_icon_title("prev", "↳ Manage Profiles (Rename / Delete)"),
             value="manage_profiles",
         ),
+        questionary.Separator(" "),
         questionary.Choice(title="Back", value="back"),
     ]
 
