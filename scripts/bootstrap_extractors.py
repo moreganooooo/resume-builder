@@ -119,7 +119,11 @@ import cli_art
 from gemini_client import GeminiClient  # noqa: E402
 
 EXTRACTION_MODEL = "gemini-3.1-flash-lite"
-UPLOAD_MODEL = "gemma-4-31b-it"
+# Gemma models 500 on every Files-API upload (measured 2026-09-09 against a
+# real PDF) -- Gemini is the only family here that actually supports
+# multimodal file input, so uploads must use the same model as text
+# extraction, not the text-only rewrite model.
+UPLOAD_MODEL = EXTRACTION_MODEL
 
 
 class RawAchievement(BaseModel):

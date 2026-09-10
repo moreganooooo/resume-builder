@@ -1853,6 +1853,19 @@ def checkbox(message: str, choices, **kwargs):
     return charm_prompt.checkbox(message, choices)
 
 
+def password(message: str) -> str | None:
+    """questionary.password() with this app's style applied, or upgraded to
+    Charm (masked huh.Input). Same DECSTBM rendering problem as text() --
+    a raw questionary.password() under menu.py's leaf-action scroll region
+    renders nothing, which is what made a fresh profile's API-key entry
+    look broken rather than just invisible."""
+    import sys
+
+    if "unittest" in sys.modules:
+        return questionary.password(message, style=QUESTIONARY_STYLE).ask()
+    return charm_prompt.password(message)
+
+
 def file_picker(
     message: str, start_dir: str | None = None, allowed_extensions: list | None = None
 ) -> str | None:

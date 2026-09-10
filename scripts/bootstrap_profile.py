@@ -191,38 +191,27 @@ def _guess_recommendations(checkpoint: dict, dry_run: bool = False) -> list:
 
 
 def _confirm_text(label: str, guessed) -> str:
-    return (
-        questionary.text(
-            label, default=guessed or "", style=cli_art.QUESTIONARY_STYLE
-        ).ask()
-        or ""
-    )
+    return cli_art.text(label, default=guessed or "") or ""
 
 
 def _confirm_roles(label: str, guessed: list) -> list:
     if not guessed:
-        extra = (
-            questionary.text(
-                f"{label} (comma-separated, optional)",
-                default="",
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
-            or ""
-        )
+        extra = cli_art.text(f"{label} (comma-separated, optional)", default="") or ""
         return [r.strip() for r in extra.split(",") if r.strip()]
     choices = [questionary.Choice(title=r, value=r, checked=True) for r in guessed]
     kept = (
-        questionary.checkbox(
-            label, choices=choices, style=cli_art.QUESTIONARY_STYLE
-        ).ask()
+        cli_art.checkbox(
+            f"{label} we detected -- uncheck any that don't fit, or leave as-is",
+            choices=choices,
+        )
         or []
     )
     extra = (
-        questionary.text(
-            f"Add any more {label.lower()} (comma-separated, optional)",
+        cli_art.text(
+            f"Anything missing? Add more {label.lower()} (comma-separated, or "
+            "press Enter to move on)",
             default="",
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        )
         or ""
     )
     kept.extend(r.strip() for r in extra.split(",") if r.strip())
@@ -282,11 +271,7 @@ def collect_identity(dry_run: bool = False) -> dict:
     )
     secondary_roles = _confirm_roles("Secondary target roles:", secondary_guess)
 
-    remote_preference = questionary.confirm(
-        "Are you remote-only?",
-        default=True,
-        style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
+    remote_preference = cli_art.confirm("Are you remote-only?", default=True)
 
     return {
         "full_name": full_name,
@@ -318,7 +303,11 @@ def collect_voice_calibration_example(dry_run: bool = False) -> str:
     return (
         _confirm_text(
             "A short, real sentence or two in your own voice (optional -- used "
-            "to calibrate tone during resume critique; press Enter to skip):",
+            "to calibrate tone during resume critique; press Enter to skip). "
+            "This is just a quick quote typed here -- if you'd rather have a "
+            "fuller writing sample drawn from a document, drop it in your "
+            "source documents folder and this wizard's later 'Writing Voice "
+            "& Samples' step will draft from it instead:",
             None,
         )
         or ""
@@ -538,11 +527,11 @@ def write_profile_yml(
     NOT write) if an existing file's overwrite is declined; True
     otherwise."""
     if os.path.exists(PROFILE_YML_PATH):
-        overwrite = questionary.confirm(
+        overwrite = cli_art.confirm(
             f"{PROFILE_YML_PATH} already exists -- overwrite it with a freshly regenerated version? "
             "(Any manual edits you've made since onboarding will be lost.)",
             default=False,
-        ).ask()
+        )
         if not overwrite:
             cli_art.cli_info("Keeping the existing profile.yml unchanged.")
             return False
@@ -1091,7 +1080,7 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
         cli_art.console.print("\n--- Draft cv.md ---\n")
         cli_art.console.print(content)
         cli_art.console.print("\n--- End draft ---\n")
-        choice = questionary.select(
+        choice = cli_art.select(
             "What would you like to do with this draft?",
             choices=[
                 questionary.Choice(title="Accept it as-is", value="accept"),
@@ -1100,8 +1089,7 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
                     title="Skip -- I'll write my own later", value="skip"
                 ),
             ],
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        )
         if choice == "regenerate":
             # A real regenerate request -- start every bullet over rather
             # than replaying cached results from the draft just rejected.
@@ -1169,7 +1157,7 @@ def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
             draft or "(nothing drafted -- no usable source text found)"
         )
         cli_art.console.print("\n--- End draft ---\n")
-        choice = questionary.select(
+        choice = cli_art.select(
             "What would you like to do with this draft?",
             choices=[
                 questionary.Choice(title="Accept it as-is", value="accept"),
@@ -1178,8 +1166,7 @@ def write_background_guide(checkpoint: dict, dry_run: bool = False) -> None:
                     title="Skip -- I'll write my own later", value="skip"
                 ),
             ],
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        )
         if choice == "regenerate":
             draft = bootstrap_extractors.draft_background_guide(source_texts)
             continue
@@ -1247,7 +1234,7 @@ def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
             or "(nothing drafted -- no usable writing-sample text found; this is optional, skip freely)"
         )
         cli_art.console.print("\n--- End draft ---\n")
-        choice = questionary.select(
+        choice = cli_art.select(
             "What would you like to do with this draft?",
             choices=[
                 questionary.Choice(title="Accept it as-is", value="accept"),
@@ -1256,8 +1243,7 @@ def write_voice_anchors(checkpoint: dict, dry_run: bool = False) -> None:
                     title="Skip -- optional, I'll add my own later", value="skip"
                 ),
             ],
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        )
         if choice == "regenerate":
             draft = bootstrap_extractors.draft_voice_anchors(source_texts)
             continue
@@ -1295,11 +1281,10 @@ def _collect_secret_now_or_later(
             f"{env_file} doesn't have its own copy yet -- each profile needs one so credentials "
             f"aren't silently shared across profiles.)"
         )
-        use_shell_value = questionary.confirm(
+        use_shell_value = cli_art.confirm(
             f"Use the {prompt_label} already in your shell for this profile too?",
             default=True,
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        )
         if use_shell_value:
             os.makedirs(os.path.dirname(env_file), exist_ok=True)
             set_key(env_file, var_name, shell_default)
@@ -1309,11 +1294,7 @@ def _collect_secret_now_or_later(
             "Okay -- you'll be asked for a value for this profile instead."
         )
 
-    set_now = questionary.confirm(
-        f"Enter your {prompt_label} now?",
-        default=True,
-        style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
+    set_now = cli_art.confirm(f"Enter your {prompt_label} now?", default=True)
     if not set_now:
         cli_art.cli_info(
             f"No problem -- add it later by editing {env_file} (create it if it doesn't exist) and adding a line:"
@@ -1321,17 +1302,28 @@ def _collect_secret_now_or_later(
         cli_art.console.print(f"    {var_name}=your-value-here")
         return False
 
-    value = questionary.password(
-        f"Paste your {prompt_label}:", style=cli_art.QUESTIONARY_STYLE
-    ).ask()
+    value = cli_art.password(f"Paste your {prompt_label}:")
     if not value or not value.strip():
         cli_art.cli_info(
             "No value entered -- add it later the same way (see instructions above)."
         )
         return False
 
+    # Some API-key pages (and copy/paste habits) wrap the value in quotes.
+    # set_key() wraps whatever it's given in ITS OWN quotes, so a pasted
+    # '"AIzaSy..."' becomes a value that still has the inner quotes once
+    # dotenv strips the outer pair -- a key that looks right in the file
+    # and fails every API call. Strip one matching pair before saving.
+    clean_value = value.strip()
+    if (
+        len(clean_value) >= 2
+        and clean_value[0] == clean_value[-1]
+        and clean_value[0] in "\"'"
+    ):
+        clean_value = clean_value[1:-1].strip()
+
     os.makedirs(os.path.dirname(env_file), exist_ok=True)
-    set_key(env_file, var_name, value.strip())
+    set_key(env_file, var_name, clean_value)
     cli_art.console.print(
         f"  {theme.colorize_icon('success')} Saved {var_name} to {env_file}.",
         soft_wrap=True,
@@ -1387,13 +1379,12 @@ def collect_secrets(dry_run: bool = False) -> dict:
 
     jobright_set = bool(profile_env.get("JOBRIGHT_COOKIE_STRING"))
     if not jobright_set:
-        wants_jobright = questionary.confirm(
+        wants_jobright = cli_art.confirm(
             "\nOptional: set up JobRight scanning now? (only needed for "
             "`resume scan --source jobright` -- skip this if you'll only use "
             "LinkedIn scanning, or aren't scanning for jobs yet)",
             default=False,
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        )
         if wants_jobright:
             jobright_set = _collect_secret_now_or_later(
                 "JOBRIGHT_COOKIE_STRING",
@@ -1449,12 +1440,11 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
         )
         cli_art.console.print()
 
-    wants_custom = questionary.confirm(
+    wants_custom = cli_art.confirm(
         "Set up your own custom search terms now instead? (optional, and not permanent -- "
         "you can always add/edit these later)",
         default=False,
-        style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
+    )
     if not wants_custom:
         cli_art.cli_info(
             f'Using your target roles as-is for now. To fine-tune later, edit {PROFILE_YML_PATH}\'s linkedin_search_queries: field (boolean strings like "Email OR Campaign").'
@@ -1466,10 +1456,7 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
     )
     queries = []
     while True:
-        q = questionary.text(
-            f"Search term {len(queries) + 1} (blank to finish):",
-            style=cli_art.QUESTIONARY_STYLE,
-        ).ask()
+        q = cli_art.text(f"Search term {len(queries) + 1} (blank to finish):")
         if not q or not q.strip():
             break
         queries.append(q.strip())
@@ -1516,12 +1503,11 @@ def collect_situational_roles(dry_run: bool = False) -> list:
         )
         return []
 
-    selected = questionary.checkbox(
+    selected = cli_art.checkbox(
         "Any of these past roles you'd only want to show up for specific kinds "
         "of jobs? (space to select, enter to confirm; leave blank for none)",
         choices=[questionary.Choice(title=c, value=c) for c in companies],
-        style=cli_art.QUESTIONARY_STYLE,
-    ).ask()
+    )
     if not selected:
         cli_art.cli_info("None selected -- every past role will show on every resume.")
         return []
@@ -1530,20 +1516,18 @@ def collect_situational_roles(dry_run: bool = False) -> list:
     for company in selected:
         cli_art.console.print()
         display_name = (
-            questionary.text(
+            cli_art.text(
                 f'Display name for "{company}" (blank to keep as-is):',
                 default=company,
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
+            )
             or company
         )
         kw_raw = (
-            questionary.text(
+            cli_art.text(
                 f'Trigger keywords for "{company}" -- comma-separated words/phrases '
                 "a job description would need to mention for this role to be "
-                'considered (e.g. "animal welfare, animal shelter, veterinary"):',
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
+                'considered (e.g. "animal welfare, animal shelter, veterinary"):'
+            )
             or ""
         )
         trigger_keywords = [kw.strip() for kw in kw_raw.split(",") if kw.strip()]
@@ -1597,13 +1581,12 @@ def write_situational_roles(roles: list, dry_run: bool = False) -> None:
         except (yaml.YAMLError, OSError):
             existing = {}
         if existing.get("roles"):
-            overwrite = questionary.confirm(
+            overwrite = cli_art.confirm(
                 f"{path} already has situational roles configured -- overwrite "
                 "with what you just entered? (Any existing entries not "
                 "re-entered here will be lost.)",
                 default=False,
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
+            )
             if not overwrite:
                 cli_art.cli_info(
                     "Keeping the existing situational_roles.yaml unchanged."
