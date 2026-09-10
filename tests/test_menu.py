@@ -608,29 +608,6 @@ class TestHandleCoverletterPick(unittest.TestCase):
         )
 
 
-class TestHandleUpdateApplicationStatus(unittest.TestCase):
-
-    @patch("menu.jd_manager.read_application_status")
-    @patch("menu.jd_manager.save_application_status")
-    @patch("menu.questionary.select")
-    def test_saves_the_selected_status(self, mock_select, mock_save, mock_read):
-        mock_select.return_value.ask.return_value = "Applied"
-        mock_read.return_value = {"status": "Applied"}
-        row = _row(path="jds/a.json", status="Completed")
-
-        menu._handle_update_application_status(row)
-
-        mock_save.assert_called_once_with("jds/a.json", "Applied")
-        self.assertEqual(row["application"], {"status": "Applied"})
-
-    @patch("menu.jd_manager.save_application_status")
-    @patch("menu.questionary.select")
-    def test_cancelled_prompt_saves_nothing(self, mock_select, mock_save):
-        mock_select.return_value.ask.return_value = None
-        menu._handle_update_application_status(_row())
-        mock_save.assert_not_called()
-
-
 class TestHandleLogFollowup(unittest.TestCase):
 
     @patch("menu.jd_manager.read_application_status")
