@@ -61,6 +61,12 @@ type Spec struct {
 	DefaultValue     string   `json:"default_value,omitempty"`
 	CurrentDirectory string   `json:"current_directory,omitempty"`
 	AllowedTypes     []string `json:"allowed_types,omitempty"`
+	// Masked, "text"-only, renders the input with huh's password EchoMode
+	// (dots instead of the typed characters) -- for secrets like an API
+	// key, where echoing the raw paste back to the terminal both leaks it
+	// over-the-shoulder and, in a screen-recorded onboarding session,
+	// into the recording.
+	Masked bool `json:"masked,omitempty"`
 }
 
 // Result is the answer, encoded to stdout JSON. Exactly one field is
@@ -147,6 +153,9 @@ func runText(t theme.Theme, spec Spec) (Result, error) {
 	field := huh.NewInput().
 		Title(spec.Message).
 		Value(&answer)
+	if spec.Masked {
+		field = field.EchoMode(huh.EchoModePassword)
+	}
 	form := newForm(t, huh.NewGroup(field))
 	if err := form.Run(); err != nil {
 		return Result{}, err
@@ -162,6 +171,12 @@ func runFilePicker(t theme.Theme, spec Spec) (Result, error) {
 	var answer string
 	field := huh.NewFilePicker().
 		Title(spec.Message).
+		// huh's own keybindings aren't discoverable from the picker itself
+		// (arrows just move the highlighted row; entering a folder needs
+		// -> or l, not Enter) -- this was reported as "arrows show
+		// confusing unrecognized options" by a brand-new user. Spelling
+		// it out here is cheaper than retraining muscle memory.
+		Description("↑↓ move · → or l open folder · ← or h go up · Enter select file").
 		FileAllowed(true).
 		DirAllowed(false).
 		ShowSize(true).
