@@ -11,6 +11,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
@@ -301,6 +302,39 @@ class TestRoleTrackSettings(_TempYaml):
             evaluation=evaluation, role_track_settings=settings
         )
         self.assertNotEqual(rescored["recommendation"], "Skip")
+
+
+class TestGuidedScoringWeightsSetup(_TempYaml):
+    def test_writes_clamped_weights_into_file(self):
+        path = self._write(BASE)
+        with (
+            patch.object(cs, "scan_filters_path", return_value=path),
+            patch(
+                "content_settings.cli_art.select", side_effect=["low_stress", "strong"]
+            ),
+        ):
+            cs.run_guided_scoring_weights_setup()
+
+        weights = cs.read_settings(path)["scoring_weights"]
+        for key, value in weights.items():
+            lo, hi = cs._GUIDED_WEIGHT_BOUNDS[key]
+            self.assertGreaterEqual(value, lo)
+            self.assertLessEqual(value, hi)
+        self.assertEqual(weights["funnel_friction_nudge"], 2)
+
+    def test_cancelling_first_question_writes_nothing(self):
+        path = self._write(BASE)
+        before = self._read(path)
+        with (
+            patch.object(cs, "scan_filters_path", return_value=path),
+            patch("content_settings.cli_art.select", side_effect=[None]),
+        ):
+            cs.run_guided_scoring_weights_setup()
+        self.assertEqual(self._read(path), before)
+
+    def test_missing_scan_filters_file_does_not_raise(self):
+        with patch.object(cs, "scan_filters_path", return_value="/nonexistent/x.yml"):
+            cs.run_guided_scoring_weights_setup()
 
 
 class TestMenuWiring(unittest.TestCase):

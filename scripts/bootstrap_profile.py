@@ -360,6 +360,156 @@ def collect_identity(dry_run: bool = False) -> dict:
     }
 
 
+def collect_deal_breakers(dry_run: bool = False) -> list:
+    """Free-text list of hard no's for a role (profile.yml's
+    deal_breakers:), e.g. "On-site required", "Below $90K". Distinct from
+    the structured, enforced gates in scan_filters.yml (location radius,
+    travel ceiling, employment type, pay floor) -- this is prose for a
+    human (or the LLM evaluator) to read, not something board_scanner
+    parses, so it's fine to leave sparse or empty."""
+    if dry_run:
+        cli_art.cli_info("[DRY RUN] would collect deal-breakers.")
+        return []
+    cli_art.console.print()
+    cli_art.console.print(
+        "[dim]Deal-breakers are things that would make you turn down a role "
+        'outright -- e.g. "On-site or hybrid required", "Below $90K", '
+        '"No PTO." These are read by the fit evaluator alongside the '
+        "structured filters (location radius, pay floor, travel ceiling, "
+        "employment type) you can set up next. Optional.[/dim]"
+    )
+    return _confirm_roles("Deal-breakers:", [])
+
+
+def offer_settings_screens(dry_run: bool = False) -> None:
+    """Offers the existing Settings & Upkeep screens most relevant to a
+    first-time profile, right after the profile.yml fields they extend
+    are collected -- rather than leaving them undiscovered until someone
+    stumbles into Settings later. Each is genuinely optional and already
+    has its own "Back" option, so a no-op answer here costs nothing."""
+    if dry_run:
+        cli_art.cli_info(
+            "[DRY RUN] would offer location radius, pay/travel/hours, and "
+            "skills-review setup screens."
+        )
+        return
+
+    cli_art.console.print()
+    if cli_art.confirm(
+        "Set up your commute radius and location filters now? (Settings & "
+        "Upkeep > Location, can change any time)",
+        default=True,
+    ):
+        import location_settings
+
+        location_settings.run_location_settings()
+
+    cli_art.console.print()
+    if cli_art.confirm(
+        "Set your pay floor, travel ceiling, accepted employment types, and "
+        "IC-vs-manager preference now? (Settings & Upkeep > Language & "
+        "travel, can change any time)",
+        default=True,
+    ):
+        import content_settings
+
+        content_settings.run_content_settings()
+
+    cli_art.console.print()
+    if cli_art.confirm(
+        "Answer a few quick questions to tune how postings get scored "
+        "(low-stress vs. stretch roles, remote-competition sensitivity)? "
+        "(Settings & Upkeep > Scoring Weights, can change any time)",
+        default=True,
+    ):
+        import content_settings
+
+        content_settings.run_guided_scoring_weights_setup()
+
+    cli_art.console.print()
+    if cli_art.confirm(
+        "Review the skills/tools pulled from your documents and add any "
+        "that were missed? (Settings & Upkeep > Skills, can change any "
+        "time)",
+        default=True,
+    ):
+        import skills_menu
+
+        skills_menu.run_skills_menu()
+
+
+def report_job_board_readiness() -> None:
+    """Prints which job-board sources will work right away vs. need extra
+    setup -- read-only, no prompts. Indeed (via JobSpy) and any ATS board
+    already listed in tracked_companies.yml need nothing beyond what
+    bootstrap already collected. LinkedIn, Jobright, and the ATS
+    Brave-search discovery sweep each need a separate secret/cookie that
+    bootstrap does NOT collect today, so this exists to surface that gap
+    rather than let someone discover it only when a scan silently skips
+    a source."""
+    env_path = os.path.join(profile_paths.profile_root(), ".env")
+    env_text = ""
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            env_text = f.read()
+    has_jobright = "JOBRIGHT_COOKIE_STRING=" in env_text and not re.search(
+        r"^JOBRIGHT_COOKIE_STRING=\s*$", env_text, re.MULTILINE
+    )
+    has_brave = "BRAVE_API_KEY=" in env_text and not re.search(
+        r"^BRAVE_API_KEY=\s*$", env_text, re.MULTILINE
+    )
+    has_linkedin_cookie = os.path.exists(
+        os.path.join(profile_paths.profile_root(), ".linkedin_cookie")
+    )
+    tracked_companies_path = os.path.join(
+        profile_paths.board_scanner_dir(), "tracked_companies.yml"
+    )
+    tracked_count = 0
+    if os.path.exists(tracked_companies_path):
+        with open(tracked_companies_path, "r", encoding="utf-8") as f:
+            tracked = yaml.safe_load(f) or []
+        tracked_count = len(tracked) if isinstance(tracked, list) else 0
+
+    cli_art.console.print()
+    cli_art.console.rule("Job board readiness", style="dim")
+    cli_art.cli_info(f"{cli_art.SUCCESS} Indeed -- works now, no setup needed.")
+    if tracked_count:
+        cli_art.cli_info(
+            f"{cli_art.SUCCESS} ATS boards -- {tracked_count} company board(s) "
+            "already tracked in tracked_companies.yml."
+        )
+    else:
+        cli_art.cli_info(
+            f"{cli_art.WARNING} ATS boards -- none tracked yet. Run "
+            "'Discover Local Employers' from the main menu to find and add some."
+        )
+    if has_linkedin_cookie:
+        cli_art.cli_info(f"{cli_art.SUCCESS} LinkedIn -- cookie found, ready to scan.")
+    else:
+        cli_art.cli_info(
+            f"{cli_art.WARNING} LinkedIn -- needs a logged-in Chrome session "
+            "the scanner can read from; no cookie file set up yet."
+        )
+    if has_jobright:
+        cli_art.cli_info(f"{cli_art.SUCCESS} Jobright -- cookie configured.")
+    else:
+        cli_art.cli_info(
+            f"{cli_art.WARNING} Jobright -- needs JOBRIGHT_COOKIE_STRING in "
+            "your .env to scan this source. Optional."
+        )
+    if has_brave:
+        cli_art.cli_info(
+            f"{cli_art.SUCCESS} ATS discovery search -- Brave API key set."
+        )
+    else:
+        cli_art.cli_info(
+            f"{cli_art.WARNING} ATS discovery search -- needs BRAVE_API_KEY in "
+            "your .env to find new ATS boards by search. Optional; tracked "
+            "boards above still scan without it."
+        )
+    cli_art.console.print()
+
+
 def collect_voice_calibration_example(dry_run: bool = False) -> str:
     """A short, real quote in the candidate's own voice, used only by
     evaluate_recruiter.md's role-rules block for tone calibration --
@@ -540,7 +690,7 @@ companies_previously_applied: []
 deal_breakers:
   # Things that would make a role a bad fit, with the specific reason.
   # Example: "On-site or hybrid required -- remote-only availability"
-  - ""
+{deal_breakers_yaml}
 
 proof_points: []
   # Your single best, most specific hero metric per major achievement.
@@ -589,6 +739,7 @@ def write_profile_yml(
     taxonomy,
     linkedin_search_queries: list = None,
     voice_calibration_example: str = "",
+    deal_breakers: list = None,
 ) -> bool:
     """Writes profile.yml. Unlike write_cv_md()/write_background_guide()/
     write_voice_anchors(), this has no accept/regenerate/skip preview loop
@@ -627,6 +778,7 @@ def write_profile_yml(
         location_flexibility="Remote only" if identity.get("remote_preference") else "",
         remote_required=str(bool(identity.get("remote_preference"))).lower(),
         voice_calibration_example=voice_calibration_example or "",
+        deal_breakers_yaml=_yaml_string_list(deal_breakers or [""]),
     )
     os.makedirs(os.path.dirname(PROFILE_YML_PATH), exist_ok=True)
     with atomic_write(PROFILE_YML_PATH, encoding="utf-8") as f:
@@ -1716,6 +1868,7 @@ def run_profile_setup(dry_run: bool = False, targets: set = None) -> dict:
         "tags_generated": 0,
         "linkedin_search_queries": 0,
         "situational_roles": 0,
+        "deal_breakers": 0,
     }
 
     if PROFILE_TARGET_PROFILE_YML in targets:
@@ -1732,12 +1885,14 @@ def run_profile_setup(dry_run: bool = False, targets: set = None) -> dict:
         )
         situational_roles = collect_situational_roles(dry_run=dry_run)
         voice_calibration_example = collect_voice_calibration_example(dry_run=dry_run)
+        deal_breakers = collect_deal_breakers(dry_run=dry_run)
         write_profile_yml(
             identity,
             recommendations,
             taxonomy,
             linkedin_search_queries,
             voice_calibration_example=voice_calibration_example,
+            deal_breakers=deal_breakers,
         )
         write_portals_yml(identity)
         write_situational_roles(situational_roles, dry_run=dry_run)
@@ -1749,8 +1904,11 @@ def run_profile_setup(dry_run: bool = False, targets: set = None) -> dict:
                 "tags_generated": len(taxonomy.tags),
                 "linkedin_search_queries": len(linkedin_search_queries),
                 "situational_roles": len(situational_roles),
+                "deal_breakers": len(deal_breakers),
             }
         )
+        offer_settings_screens(dry_run=dry_run)
+        report_job_board_readiness()
 
     # background guide + voice anchors before cv.md, not after:
     # rewrite_bullets.KnowledgeBase (which write_cv_md()'s bullet-polishing

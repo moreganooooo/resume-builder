@@ -723,11 +723,19 @@ def run_scoring_weights_settings() -> None:
             for key in _SCORING_WEIGHTS_KEYS
         ]
         + [
+            questionary.Choice(
+                "Guided setup (answer a few plain-language questions instead)",
+                value="guided",
+            ),
             questionary.Choice("Reset all to defaults", value="reset"),
             questionary.Choice("Back", value="back"),
         ],
     )
     if action in (None, "back"):
+        return
+
+    if action == "guided":
+        run_guided_scoring_weights_setup()
         return
 
     if action == "reset":
@@ -768,6 +776,122 @@ def run_scoring_weights_settings() -> None:
     )
 
 
+# Clamped range per key -- a guided answer is a multiplier applied to
+# DEFAULT_SCORING_WEIGHTS and then clamped into this range, so no
+# combination of plain-language answers can zero out or dominate the
+# other signals the way an unbounded raw edit could.
+_GUIDED_WEIGHT_BOUNDS = {
+    "stress_signal_penalty_per_category": (0.10, 0.40),
+    "stress_signal_max_penalty": (0.30, 1.00),
+    "low_stress_bonus": (0.20, 0.60),
+    "stretch_gap_penalty_per_item": (0.10, 0.30),
+    "stretch_gap_max_penalty": (0.40, 1.00),
+    "funnel_friction_nudge": (0, 2),
+}
+
+
+def _clamp_weight(key: str, value: float):
+    lo, hi = _GUIDED_WEIGHT_BOUNDS[key]
+    clamped = max(lo, min(hi, value))
+    return int(round(clamped)) if key == "funnel_friction_nudge" else round(clamped, 2)
+
+
+def run_guided_scoring_weights_setup() -> None:
+    """A few plain-language questions in place of editing the six raw
+    scoring_weights numbers directly -- built because someone unfamiliar
+    with the scoring system has no way to know what a reasonable value
+    for, say, stretch_gap_max_penalty even looks like, and a free-form
+    edit there has no safety rail against one preference swamping every
+    other signal in composite_score.
+
+    Every answer is a multiplier applied to DEFAULT_SCORING_WEIGHTS and
+    then clamped into _GUIDED_WEIGHT_BOUNDS -- deliberately not applied
+    to whatever is currently set, so re-running this always lands in the
+    same well-understood range regardless of prior manual edits. The raw
+    editor (run_scoring_weights_settings) is still there for anyone who
+    wants finer control than these bounds allow."""
+    path = scan_filters_path()
+    if not os.path.exists(path):
+        cli_art.console.print(
+            f"{cli_art.WARNING} No scan_filters.yml for this profile yet.",
+            soft_wrap=True,
+        )
+        return
+
+    import questionary
+
+    cli_art.console.print()
+    cli_art.console.print(
+        "[dim]A few questions to tune how postings get ranked -- each answer "
+        "nudges a scoring weight within a safe range, so no single "
+        "preference can throw off the overall balance.[/dim]"
+    )
+
+    stress_choice = cli_art.select(
+        "How much should low-stress roles be favored over stretch/growth roles?",
+        choices=[
+            questionary.Choice(
+                "Strongly prefer calm, low-stress roles", value="low_stress"
+            ),
+            questionary.Choice("Balanced -- no strong preference", value="balanced"),
+            questionary.Choice(
+                "I'm open to some stretch/growth even if it's more demanding",
+                value="stretch_ok",
+            ),
+        ],
+    )
+    if stress_choice is None:
+        return
+
+    friction_choice = cli_art.select(
+        "How much does remote-role competition matter to you? (Remote "
+        "postings typically draw a much larger applicant pool than onsite ones.)",
+        choices=[
+            questionary.Choice("Doesn't matter to me", value="off"),
+            questionary.Choice("Somewhat -- use the default nudge", value="default"),
+            questionary.Choice(
+                "A lot -- I want onsite/hybrid roles favored more strongly",
+                value="strong",
+            ),
+        ],
+    )
+    if friction_choice is None:
+        return
+
+    stress_multiplier = {"low_stress": 1.3, "balanced": 1.0, "stretch_ok": 0.75}[
+        stress_choice
+    ]
+    stretch_multiplier = {"low_stress": 0.75, "balanced": 1.0, "stretch_ok": 1.3}[
+        stress_choice
+    ]
+    friction_value = {"off": 0, "default": 1, "strong": 2}[friction_choice]
+
+    weights = {}
+    for key in (
+        "stress_signal_penalty_per_category",
+        "stress_signal_max_penalty",
+        "low_stress_bonus",
+    ):
+        weights[key] = _clamp_weight(
+            key, DEFAULT_SCORING_WEIGHTS[key] * stress_multiplier
+        )
+    for key in ("stretch_gap_penalty_per_item", "stretch_gap_max_penalty"):
+        weights[key] = _clamp_weight(
+            key, DEFAULT_SCORING_WEIGHTS[key] * stretch_multiplier
+        )
+    weights["funnel_friction_nudge"] = _clamp_weight(
+        "funnel_friction_nudge", friction_value
+    )
+
+    current = read_settings(path)
+    current["scoring_weights"] = weights
+    write_settings(current, path)
+    cli_art.console.print(
+        f"{cli_art.SUCCESS} Scoring weights updated: {describe_scoring_weights(weights)}",
+        soft_wrap=True,
+    )
+
+
 __all__ = [
     "DEFAULT_ROLE_TRACK_SETTINGS",
     "DEFAULT_SCORING_WEIGHTS",
@@ -782,6 +906,7 @@ __all__ = [
     "read_scoring_weights",
     "read_settings",
     "run_content_settings",
+    "run_guided_scoring_weights_setup",
     "run_scoring_weights_settings",
     "scan_filters_path",
     "write_settings",
