@@ -1066,21 +1066,17 @@ def _handle_bootstrap() -> bool:
                 f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
             )
 
-            profile_name = questionary.text(
-                "Profile name (e.g., 'morgan'):",
-                style=cli_art.QUESTIONARY_STYLE,
-                validate=lambda text: (
-                    True if text.strip() != "" else "Profile name cannot be empty."
-                ),
-            ).ask()
-            if not profile_name:
+            profile_name = cli_art.text("Profile name (e.g., 'morgan'):")
+            if not profile_name or not profile_name.strip():
+                cli_art.console.print(
+                    f"{cli_art.WARNING} Profile name cannot be empty."
+                )
                 return False
 
-            source_choice = questionary.select(
+            source_choice = cli_art.select(
                 "Source of your career data:",
                 choices=["Resume PDF", "LinkedIn export (JSON)", "Manual markdown"],
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
+            )
             if not source_choice:
                 return False
 
@@ -1101,13 +1097,7 @@ def _handle_bootstrap() -> bool:
                 if not ingest_path:
                     return False
 
-            create_bullet = questionary.confirm(
-                "Build the bullet-bank now?",
-                default=True,
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
-            if create_bullet is None:
-                return False
+            create_bullet = cli_art.confirm("Build the bullet-bank now?", default=True)
 
             data = {
                 "profile_name": profile_name.strip(),
@@ -1118,29 +1108,44 @@ def _handle_bootstrap() -> bool:
 
         name = data.get("profile_name")
         if name:
-            try:
-                bootstrap_bullet_bank.create_new_profile(name)
-            except ValueError as exc:
-                cli_art.friendly_error(
-                    exc,
-                    "creating the new profile",
-                    fix="Use only letters, digits, underscores, and hyphens in the profile name, then try New User Setup again.",
-                )
-                return False
-            except FileExistsError as exc:
-                # create_new_profile() refuses to overwrite an existing
-                # profile. Only ValueError was caught here, so retyping a
-                # name that already exists crashed the whole menu.
-                cli_art.friendly_error(
-                    exc,
-                    "creating the new profile",
-                    fix=(
-                        "That profile already exists. Pick a different name, or "
-                        "restart and choose it from the profile picker instead of "
-                        "creating it again."
-                    ),
-                )
-                return False
+            # A profile created moments earlier via Settings & Upkeep >
+            # Manage Profiles > Add (e.g. to set up a second user before
+            # handing them the wizard) already has this exact directory --
+            # empty, but real. create_new_profile() would raise
+            # FileExistsError on it every time, forcing a duplicate profile
+            # under a second name just to get past the wizard. Skip
+            # creation and continue setup on the existing hollow profile
+            # instead; only a profile that's already been through setup
+            # (_profile_is_set_up()) is left alone as a real conflict.
+            already_hollow = os.path.isdir(
+                os.path.join(profile_paths.PROFILES_DIR, name)
+            ) and not _profile_is_set_up(name)
+            if not already_hollow:
+                try:
+                    bootstrap_bullet_bank.create_new_profile(name)
+                except ValueError as exc:
+                    cli_art.friendly_error(
+                        exc,
+                        "creating the new profile",
+                        fix="Use only letters, digits, underscores, and hyphens in the profile name, then try New User Setup again.",
+                    )
+                    return False
+                except FileExistsError as exc:
+                    # create_new_profile() refuses to overwrite an existing,
+                    # already-set-up profile. Only ValueError was caught
+                    # here, so retyping a name that already exists crashed
+                    # the whole menu.
+                    cli_art.friendly_error(
+                        exc,
+                        "creating the new profile",
+                        fix=(
+                            "That profile already exists and has already been "
+                            "set up. Pick a different name, or restart and "
+                            "choose it from the profile picker instead of "
+                            "creating it again."
+                        ),
+                    )
+                    return False
             profile_paths.set_active_profile(name)
 
             source_path = data.get("ingest_path")

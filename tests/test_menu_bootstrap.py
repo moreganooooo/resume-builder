@@ -237,12 +237,11 @@ class TestHandleBootstrapIngestAndFallback(unittest.TestCase):
         )
         self.assertTrue(os.path.isfile(os.path.join(dest_dir, "sample_resume.pdf")))
 
-    @patch("menu.cli_art.confirm", return_value=False)
+    @patch("menu.cli_art.confirm")
     @patch("menu.bootstrap_menu._run_express_setup", return_value=True)
     @patch("menu.picker.interactive_file_picker")
-    @patch("menu.questionary.confirm")
-    @patch("menu.questionary.select")
-    @patch("menu.questionary.text")
+    @patch("menu.cli_art.select")
+    @patch("menu.cli_art.text")
     @patch("menu._run_go_bootstrap_wizard", return_value=(False, None))
     @patch("menu._profile_is_set_up", return_value=False)
     def test_handle_bootstrap_python_fallback_when_go_fails(
@@ -251,21 +250,26 @@ class TestHandleBootstrapIngestAndFallback(unittest.TestCase):
         mock_go_wizard,
         mock_text,
         mock_select,
-        mock_confirm,
         mock_picker,
         mock_express_setup,
-        mock_cli_confirm,
+        mock_confirm,
     ):
-        # cli_art.confirm is mocked False separately (not via mock_confirm)
-        # to decline the "add other writing samples?" follow-up prompt
-        # (_pick_and_copy_source_documents) -- without this, mock_confirm's
-        # blanket True answer plus mock_picker's constant sample_pdf return
-        # never gives that loop a way to terminate (regression test:
-        # this combination previously spun forever, see git history).
-        mock_text.return_value.ask.return_value = "py_fallback_prof"
-        mock_select.return_value.ask.return_value = "Resume PDF"
+        # _handle_bootstrap() migrated off raw questionary onto
+        # cli_art.text/select/confirm (see menu.py's DECSTBM/scroll-region
+        # comments) -- mock those directly rather than the underlying
+        # questionary module, which the real code no longer calls.
+        # cli_art.confirm answers False for "add other writing samples?"
+        # (_pick_and_copy_source_documents) but True for "Build the
+        # bullet-bank now?" -- a blanket True on both, combined with
+        # mock_picker's constant sample_pdf return, never gives that loop a
+        # way to terminate (regression test: this combination previously
+        # spun forever, see git history).
+        mock_text.return_value = "py_fallback_prof"
+        mock_select.return_value = "Resume PDF"
         mock_picker.return_value = self.sample_pdf
-        mock_confirm.return_value.ask.return_value = True
+        mock_confirm.side_effect = (
+            lambda message, **kwargs: "writing samples" not in message
+        )
 
         result = menu._handle_bootstrap()
         self.assertTrue(result)
