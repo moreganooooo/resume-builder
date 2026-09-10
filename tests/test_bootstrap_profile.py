@@ -206,6 +206,135 @@ class TestCollectIdentityDryRun(BootstrapProfileTestCase):
         self.assertEqual(identity["secondary_roles"], [])
 
 
+class TestLoadExistingIdentity(BootstrapProfileTestCase):
+
+    def test_returns_empty_dict_when_no_profile_yml(self):
+        self.assertEqual(bootstrap_profile._load_existing_identity(), {})
+
+    def test_reads_candidate_and_target_roles_from_existing_file(self):
+        os.makedirs(os.path.dirname(bootstrap_profile.PROFILE_YML_PATH), exist_ok=True)
+        with open(bootstrap_profile.PROFILE_YML_PATH, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "candidate": {
+                        "full_name": "Jamie Rivera",
+                        "email": "jamie@example.com",
+                        "linkedin": "linkedin.com/in/jamierivera",
+                    },
+                    "target_roles": {
+                        "primary": ["Marketing Manager"],
+                        "secondary": ["Content Strategist"],
+                    },
+                    "location": {"remote_required": True},
+                },
+                f,
+            )
+        existing = bootstrap_profile._load_existing_identity()
+        self.assertEqual(existing["full_name"], "Jamie Rivera")
+        self.assertEqual(existing["linkedin_url"], "linkedin.com/in/jamierivera")
+        self.assertEqual(existing["primary_roles"], ["Marketing Manager"])
+        self.assertEqual(existing["secondary_roles"], ["Content Strategist"])
+        self.assertTrue(existing["remote_preference"])
+
+    def test_dry_run_identity_falls_back_to_existing_profile_when_no_fresh_guess(self):
+        # No timeline/checkpoint content this run -- fresh extraction finds
+        # nothing, so an existing profile.yml's values should surface
+        # instead of leaving the field blank.
+        os.makedirs(os.path.dirname(bootstrap_profile.PROFILE_YML_PATH), exist_ok=True)
+        with open(bootstrap_profile.PROFILE_YML_PATH, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "candidate": {"full_name": "Jamie Rivera"},
+                    "target_roles": {"primary": ["Marketing Manager"]},
+                },
+                f,
+            )
+        self._write_timeline([])
+        self._write_checkpoint({})
+
+        identity = bootstrap_profile.collect_identity(dry_run=True)
+        self.assertEqual(identity["full_name"], "Jamie Rivera")
+        self.assertEqual(identity["primary_roles"], ["Marketing Manager"])
+
+
+class TestRunProfileSetupTargets(BootstrapProfileTestCase):
+
+    def test_only_writes_selected_targets(self):
+        self._write_timeline([])
+        self._write_checkpoint({})
+        with (
+            patch("bootstrap_profile.collect_identity") as mock_identity,
+            patch("bootstrap_profile.write_profile_yml") as mock_write_profile,
+            patch("bootstrap_profile.write_portals_yml"),
+            patch("bootstrap_profile.write_situational_roles"),
+            patch("bootstrap_profile.seed_scan_filters_from_target_roles"),
+            patch("bootstrap_profile.write_verified_ledger"),
+            patch("bootstrap_profile.write_background_guide") as mock_background,
+            patch("bootstrap_profile.write_voice_anchors") as mock_voice_anchors,
+            patch("bootstrap_profile.write_cv_md") as mock_cv_md,
+            patch("bootstrap_profile.collect_linkedin_search_queries", return_value=[]),
+            patch("bootstrap_profile._guess_recommendations", return_value=[]),
+            patch(
+                "bootstrap_profile.bootstrap_extractors.generate_tag_taxonomy"
+            ) as mock_taxonomy,
+            patch("bootstrap_profile.collect_situational_roles", return_value=[]),
+            patch(
+                "bootstrap_profile.collect_voice_calibration_example", return_value=""
+            ),
+        ):
+            mock_identity.return_value = {
+                "full_name": "Jamie Rivera",
+                "primary_roles": [],
+                "secondary_roles": [],
+            }
+            mock_taxonomy.return_value.tags = []
+
+            bootstrap_profile.run_profile_setup(
+                dry_run=False, targets={bootstrap_profile.PROFILE_TARGET_CV_MD}
+            )
+
+            mock_cv_md.assert_called_once()
+            mock_write_profile.assert_not_called()
+            mock_background.assert_not_called()
+            mock_voice_anchors.assert_not_called()
+
+    def test_defaults_to_all_targets_when_unspecified(self):
+        self._write_timeline([])
+        self._write_checkpoint({})
+        with (
+            patch("bootstrap_profile.collect_identity") as mock_identity,
+            patch("bootstrap_profile.write_profile_yml") as mock_write_profile,
+            patch("bootstrap_profile.write_portals_yml"),
+            patch("bootstrap_profile.write_situational_roles"),
+            patch("bootstrap_profile.seed_scan_filters_from_target_roles"),
+            patch("bootstrap_profile.write_verified_ledger"),
+            patch("bootstrap_profile.write_background_guide") as mock_background,
+            patch("bootstrap_profile.write_voice_anchors"),
+            patch("bootstrap_profile.write_cv_md") as mock_cv_md,
+            patch("bootstrap_profile.collect_linkedin_search_queries", return_value=[]),
+            patch("bootstrap_profile._guess_recommendations", return_value=[]),
+            patch(
+                "bootstrap_profile.bootstrap_extractors.generate_tag_taxonomy"
+            ) as mock_taxonomy,
+            patch("bootstrap_profile.collect_situational_roles", return_value=[]),
+            patch(
+                "bootstrap_profile.collect_voice_calibration_example", return_value=""
+            ),
+        ):
+            mock_identity.return_value = {
+                "full_name": "Jamie Rivera",
+                "primary_roles": [],
+                "secondary_roles": [],
+            }
+            mock_taxonomy.return_value.tags = []
+
+            bootstrap_profile.run_profile_setup(dry_run=False, targets=None)
+
+            mock_cv_md.assert_called_once()
+            mock_write_profile.assert_called_once()
+            mock_background.assert_called_once()
+
+
 class TestWriteProfileYml(BootstrapProfileTestCase):
 
     def test_writes_candidate_and_target_roles(self):

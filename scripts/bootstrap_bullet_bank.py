@@ -685,6 +685,15 @@ def main():
         "runs regardless of scope, since it's what processes the new files.",
     )
     parser.add_argument(
+        "--profile-targets",
+        default=None,
+        help="Comma-separated subset of bootstrap_profile.ALL_PROFILE_TARGETS "
+        '("profile_yml,cv_md,background_guide") -- only meaningful when '
+        '--scope includes "profile". Lets "Update My Knowledge" update just '
+        "one of profile.yml/cv.md/the background guide instead of all three. "
+        "Defaults to all three when --scope is profile/both and this is unset.",
+    )
+    parser.add_argument(
         "--force-overwrite-clean-bank",
         action="store_true",
         help=(
@@ -704,7 +713,14 @@ def main():
     print_ingestion_summary(summary)
 
     if args.scope in ("profile", "both"):
-        bootstrap_profile.run_profile_setup(dry_run=args.dry_run)
+        profile_targets = (
+            set(t.strip() for t in args.profile_targets.split(",") if t.strip())
+            if args.profile_targets
+            else None
+        )
+        bootstrap_profile.run_profile_setup(
+            dry_run=args.dry_run, targets=profile_targets
+        )
 
     if args.dry_run:
         cli_art.print_literal("\n--dry-run set: skipping the six-stage pipeline.")

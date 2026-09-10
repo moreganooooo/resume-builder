@@ -190,6 +190,36 @@ def _guess_recommendations(checkpoint: dict, dry_run: bool = False) -> list:
     return quotes
 
 
+def _load_existing_identity() -> dict:
+    """Reads candidate/target_roles/location straight from an existing
+    profile.yml, if one exists -- used as the fallback default when
+    "Update My Knowledge" re-runs identity collection. Without this, a
+    re-run only had fresh per-document extraction guesses to offer as
+    defaults (empty whenever this run's new documents didn't happen to
+    contain a resume/LinkedIn export), so a returning user saw their
+    already-answered fields reset to blank instead of pre-filled with
+    what they already told the program."""
+    if not os.path.exists(PROFILE_YML_PATH):
+        return {}
+    with open(PROFILE_YML_PATH, encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    candidate = data.get("candidate") or {}
+    target_roles = data.get("target_roles") or {}
+    location = data.get("location") or {}
+    return {
+        "full_name": candidate.get("full_name") or "",
+        "email": candidate.get("email") or "",
+        "phone": candidate.get("phone") or "",
+        "location": candidate.get("location") or "",
+        "linkedin_url": candidate.get("linkedin") or "",
+        "portfolio_url": candidate.get("portfolio_url") or "",
+        "extra_link": candidate.get("extra_link") or "",
+        "primary_roles": target_roles.get("primary") or [],
+        "secondary_roles": target_roles.get("secondary") or [],
+        "remote_preference": bool(location.get("remote_required")),
+    }
+
+
 def _confirm_text(label: str, guessed) -> str:
     return cli_art.text(label, default=guessed or "") or ""
 
@@ -223,6 +253,25 @@ def collect_identity(dry_run: bool = False) -> dict:
     timeline = _load_timeline()
     guessed = _guess_contact_info(checkpoint, dry_run=dry_run)
     primary_guess = _guess_primary_roles(timeline)
+    # Fresh per-document extraction wins when it found something; an
+    # already-answered field from a prior run fills in the rest, so
+    # "Update My Knowledge" shows the user what they already told the
+    # program instead of a blank field. See _load_existing_identity()'s
+    # docstring for why this matters.
+    existing = _load_existing_identity()
+    for field in (
+        "full_name",
+        "email",
+        "phone",
+        "location",
+        "linkedin_url",
+        "portfolio_url",
+    ):
+        if not getattr(guessed, field, None) and existing.get(field):
+            setattr(guessed, field, existing[field])
+    existing_extra_link = existing.get("extra_link") or ""
+    if not primary_guess and existing.get("primary_roles"):
+        primary_guess = existing["primary_roles"]
 
     if dry_run:
         cli_art.cli_info("[DRY RUN] would confirm identity fields:")
@@ -256,9 +305,17 @@ def collect_identity(dry_run: bool = False) -> dict:
         "Portfolio URL (optional, press Enter to skip):", guessed.portfolio_url
     )
     extra_link = _confirm_text(
-        "Any other portfolio/work-sample link? (optional, press Enter to skip):", None
+        "Any other portfolio/work-sample link? (optional, press Enter to skip):",
+        existing_extra_link,
     )
 
+    cli_art.console.print()
+    cli_art.console.print(
+        "[dim]Primary target roles are the exact job titles you'd apply to "
+        'today -- e.g. "Product Marketing Manager", "Senior Copywriter." '
+        "These drive job-board searches and scoring, so keep them specific "
+        "and few (2-4 is typical).[/dim]"
+    )
     primary_roles = _confirm_roles("Primary target roles:", primary_guess)
 
     achievements_text = _achievements_summary_text()
@@ -269,9 +326,25 @@ def collect_identity(dry_run: bool = False) -> dict:
         if primary_roles
         else []
     )
+    cli_art.console.print()
+    cli_art.console.print(
+        "[dim]Secondary target roles are near-miss or stretch titles you'd "
+        'also consider -- e.g. a step up ("Senior Marketing Manager"), a '
+        'step sideways ("Content Strategist"), or a title you\'re open to '
+        "but wouldn't chase first. Fine to leave empty.[/dim]"
+    )
     secondary_roles = _confirm_roles("Secondary target roles:", secondary_guess)
 
-    remote_preference = cli_art.confirm("Are you remote-only?", default=True)
+    cli_art.console.print()
+    cli_art.console.print(
+        "[dim]This only affects the location filter used when scanning for "
+        "new postings -- it excludes onsite/hybrid roles outright. You can "
+        "change it later in Settings & Upkeep.[/dim]"
+    )
+    remote_preference = cli_art.confirm(
+        "Are you remote-only (no onsite/hybrid roles)?",
+        default=existing.get("remote_preference", True),
+    )
 
     return {
         "full_name": full_name,
@@ -1603,33 +1676,82 @@ def write_situational_roles(roles: list, dry_run: bool = False) -> None:
         f.write(content)
 
 
-def run_profile_setup(dry_run: bool = False) -> dict:
+# The three independently-selectable outputs "Update My Knowledge" can
+# target -- kept as an explicit allowlist (not e.g. free-form filenames)
+# so menu.py's checkbox choices and this function's dispatch can never
+# drift apart. PROFILE_YML_TARGETS is what each target actually writes,
+# surfaced to the menu so the checkbox descriptions stay accurate without
+# hand-duplicating the list.
+PROFILE_TARGET_PROFILE_YML = "profile_yml"
+PROFILE_TARGET_CV_MD = "cv_md"
+PROFILE_TARGET_BACKGROUND_GUIDE = "background_guide"
+ALL_PROFILE_TARGETS = (
+    PROFILE_TARGET_PROFILE_YML,
+    PROFILE_TARGET_CV_MD,
+    PROFILE_TARGET_BACKGROUND_GUIDE,
+)
+
+
+def run_profile_setup(dry_run: bool = False, targets: set = None) -> dict:
+    """Runs the identity/profile collection steps and writes whichever of
+    profile.yml, cv.md, and the background/voice guide are in `targets`
+    (default: all three, i.e. the original monolithic behavior). Identity
+    (name/contact/target roles) is always collected since both profile.yml
+    and cv.md need it, but the profile.yml-only inputs (recommendations,
+    tag taxonomy, situational roles, LinkedIn search queries, voice
+    calibration example) are only collected when profile.yml is actually
+    a target -- no sense asking those questions if the user only wants to
+    refresh cv.md."""
+    if targets is None:
+        targets = set(ALL_PROFILE_TARGETS)
+
     checkpoint = _load_checkpoint()
     identity = collect_identity(dry_run=dry_run)
-    linkedin_search_queries = collect_linkedin_search_queries(
-        identity["primary_roles"], dry_run=dry_run
-    )
-    recommendations = _guess_recommendations(checkpoint, dry_run=dry_run)
-    achievements_text = _achievements_summary_text()
-    taxonomy = bootstrap_extractors.generate_tag_taxonomy(
-        identity["primary_roles"],
-        identity["secondary_roles"],
-        achievements_text,
-        dry_run=dry_run,
-    )
-    situational_roles = collect_situational_roles(dry_run=dry_run)
-    voice_calibration_example = collect_voice_calibration_example(dry_run=dry_run)
-    write_profile_yml(
-        identity,
-        recommendations,
-        taxonomy,
-        linkedin_search_queries,
-        voice_calibration_example=voice_calibration_example,
-    )
-    write_portals_yml(identity)
-    write_situational_roles(situational_roles, dry_run=dry_run)
-    seed_scan_filters_from_target_roles(identity)
-    write_verified_ledger(dry_run=dry_run)
+
+    result = {
+        "full_name": identity["full_name"],
+        "primary_roles": len(identity["primary_roles"]),
+        "secondary_roles": len(identity["secondary_roles"]),
+        "recommendations_found": 0,
+        "tags_generated": 0,
+        "linkedin_search_queries": 0,
+        "situational_roles": 0,
+    }
+
+    if PROFILE_TARGET_PROFILE_YML in targets:
+        linkedin_search_queries = collect_linkedin_search_queries(
+            identity["primary_roles"], dry_run=dry_run
+        )
+        recommendations = _guess_recommendations(checkpoint, dry_run=dry_run)
+        achievements_text = _achievements_summary_text()
+        taxonomy = bootstrap_extractors.generate_tag_taxonomy(
+            identity["primary_roles"],
+            identity["secondary_roles"],
+            achievements_text,
+            dry_run=dry_run,
+        )
+        situational_roles = collect_situational_roles(dry_run=dry_run)
+        voice_calibration_example = collect_voice_calibration_example(dry_run=dry_run)
+        write_profile_yml(
+            identity,
+            recommendations,
+            taxonomy,
+            linkedin_search_queries,
+            voice_calibration_example=voice_calibration_example,
+        )
+        write_portals_yml(identity)
+        write_situational_roles(situational_roles, dry_run=dry_run)
+        seed_scan_filters_from_target_roles(identity)
+        write_verified_ledger(dry_run=dry_run)
+        result.update(
+            {
+                "recommendations_found": len(recommendations),
+                "tags_generated": len(taxonomy.tags),
+                "linkedin_search_queries": len(linkedin_search_queries),
+                "situational_roles": len(situational_roles),
+            }
+        )
+
     # background guide + voice anchors before cv.md, not after:
     # rewrite_bullets.KnowledgeBase (which write_cv_md()'s bullet-polishing
     # loop uses) loads both user-background-guide.md and voice-anchors.md
@@ -1637,16 +1759,16 @@ def run_profile_setup(dry_run: bool = False) -> dict:
     # rewrite prompt too (unlike the background guide, which is currently
     # loaded but not yet wired into one) -- if cv.md is drafted first,
     # every bullet gets polished with neither available yet, since neither
-    # file exists until these steps run.
-    write_background_guide(checkpoint, dry_run=dry_run)
-    write_voice_anchors(checkpoint, dry_run=dry_run)
-    write_cv_md(identity, dry_run=dry_run)
-    return {
-        "full_name": identity["full_name"],
-        "primary_roles": len(identity["primary_roles"]),
-        "secondary_roles": len(identity["secondary_roles"]),
-        "recommendations_found": len(recommendations),
-        "tags_generated": len(taxonomy.tags),
-        "linkedin_search_queries": len(linkedin_search_queries),
-        "situational_roles": len(situational_roles),
-    }
+    # file exists until these steps run. This ordering must hold even when
+    # cv.md and the background guide are selected independently, so a
+    # cv.md-only re-run still benefits from whatever background guide
+    # already exists on disk (write_background_guide's own preview loop
+    # is skipped, not the file).
+    if PROFILE_TARGET_BACKGROUND_GUIDE in targets:
+        write_background_guide(checkpoint, dry_run=dry_run)
+        write_voice_anchors(checkpoint, dry_run=dry_run)
+
+    if PROFILE_TARGET_CV_MD in targets:
+        write_cv_md(identity, dry_run=dry_run)
+
+    return result
