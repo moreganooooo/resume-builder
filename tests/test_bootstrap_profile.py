@@ -320,6 +320,9 @@ class TestRunProfileSetupTargets(BootstrapProfileTestCase):
             patch(
                 "bootstrap_profile.collect_voice_calibration_example", return_value=""
             ),
+            patch("bootstrap_profile.collect_deal_breakers", return_value=[]),
+            patch("bootstrap_profile.offer_settings_screens"),
+            patch("bootstrap_profile.report_job_board_readiness"),
         ):
             mock_identity.return_value = {
                 "full_name": "Jamie Rivera",
@@ -333,6 +336,27 @@ class TestRunProfileSetupTargets(BootstrapProfileTestCase):
             mock_cv_md.assert_called_once()
             mock_write_profile.assert_called_once()
             mock_background.assert_called_once()
+
+
+class TestCollectDealBreakers(BootstrapProfileTestCase):
+
+    def test_dry_run_returns_empty_without_prompting(self):
+        self.assertEqual(bootstrap_profile.collect_deal_breakers(dry_run=True), [])
+
+    @patch("bootstrap_profile._confirm_roles", return_value=["No on-site required"])
+    def test_delegates_to_confirm_roles(self, mock_confirm_roles):
+        result = bootstrap_profile.collect_deal_breakers(dry_run=False)
+        mock_confirm_roles.assert_called_once()
+        self.assertEqual(result, ["No on-site required"])
+
+
+class TestReportJobBoardReadiness(BootstrapProfileTestCase):
+
+    def test_runs_without_error_on_bare_profile(self):
+        # No .env, no .linkedin_cookie, no tracked_companies.yml -- every
+        # source should report as needing setup except Indeed, and this
+        # must not raise.
+        bootstrap_profile.report_job_board_readiness()
 
 
 class TestWriteProfileYml(BootstrapProfileTestCase):
@@ -1688,6 +1712,9 @@ class TestWriteVoiceAnchors(BootstrapProfileTestCase):
 
 class TestRunProfileSetup(BootstrapProfileTestCase):
 
+    @patch("bootstrap_profile.report_job_board_readiness")
+    @patch("bootstrap_profile.offer_settings_screens")
+    @patch("bootstrap_profile.collect_deal_breakers", return_value=[])
     @patch("bootstrap_profile.collect_voice_calibration_example", return_value="")
     @patch("bootstrap_profile.write_voice_anchors")
     @patch("bootstrap_profile.write_background_guide")
@@ -1714,6 +1741,9 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
         mock_write_bg,
         mock_write_voice,
         mock_collect_voice_calibration,
+        mock_collect_deal_breakers,
+        mock_offer_settings,
+        mock_job_board_readiness,
     ):
         mock_collect_identity.return_value = {
             "full_name": "Jamie Rivera",
