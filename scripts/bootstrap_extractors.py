@@ -292,6 +292,17 @@ def _generate_from_upload(path: str, system_prompt: str, response_schema) -> str
         contents=[uploaded, "Extract the requested information."],
         config=config,
     )
+    if response.text is None:
+        # Every call site below only null-checks its *text*-extraction
+        # branch, not this one -- an upload response with no text (safety
+        # block, empty candidate) used to fall through to `raw or {}`,
+        # silently checkpointing as "done" with zero results instead of
+        # "failed" and retryable. Same "outcome, not the attempt" reasoning
+        # as the sibling None-checks in this file.
+        raise IngestionAPIError(
+            f"Gemini returned no text for uploaded file {os.path.basename(path)!r} "
+            "-- possibly blocked by safety filters or a transient failure."
+        )
     return response.text
 
 
