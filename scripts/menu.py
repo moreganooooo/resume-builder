@@ -1007,137 +1007,122 @@ def _run_go_bootstrap_wizard() -> tuple[bool, dict | None]:
     (True, None) means the user deliberately cancelled and nothing should
     run. cmd/bootstrap/main.go exits 130 on huh.ErrUserAborted precisely
     so those two cases can be told apart -- treating a cancel as an error
-    is what made backing out of the wizard look like a crash.
+    is what made backing out of the wizard look like a crash."""
+    import shutil
+    import subprocess
 
-    NOTE (2026-09-09): The Go bootstrap binary has a hang/deadlock issue
-    with Huh v2 on this system (hangs indefinitely when form.Run() is called,
-    appears to be waiting for a terminal event that never arrives). This is
-    a known issue with Huh's initialization in certain terminal/subprocess
-    contexts. Disabled for now - always fall back to questionary wizard.
-    """
-    # Temporarily disabled due to hang issue - always use questionary fallback
-    return False, None
+    dashboard_dir = os.path.join(
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..")), "dashboard"
+    )
+    if shutil.which("go") is None or not os.path.isdir(dashboard_dir):
+        return False, None
+
+    # Prefer a compiled binary over `go run`, which recompiles on every
+    # launch -- same pattern as dashboard.py/charm_prompt.py.
+    bin_path = os.path.join(dashboard_dir, "bin", "bootstrap")
+    if not os.path.exists(bin_path):
+        os.makedirs(os.path.dirname(bin_path), exist_ok=True)
+        build = subprocess.run(
+            ["go", "build", "-o", bin_path, "./cmd/bootstrap"],
+            cwd=dashboard_dir,
+            capture_output=True,
+            text=True,
+        )
+        if build.returncode != 0:
+            return False, None
+
+    result = subprocess.run(
+        [bin_path], cwd=dashboard_dir, capture_output=True, text=True
+    )
+    if result.returncode == _BOOTSTRAP_GO_CANCELLED:
+        return True, None
+    if result.returncode != 0:
+        return False, None
+    try:
+        return True, json.loads(result.stdout.strip())
+    except json.JSONDecodeError:
+        return False, None
 
 
 def _handle_bootstrap() -> bool:
-    print(f"[DEBUG] _handle_bootstrap() called!")
     import shutil
-    import traceback
 
     import profile_paths
 
     is_existing = _profile_is_set_up()
-    print(f"[DEBUG] _profile_is_set_up() returned: {is_existing}")
 
     if not is_existing or os.environ.get("RESUME_GUEST_MODE"):
-        print(f"[DEBUG] Entering bootstrap - profile is_set_up: {is_existing}")
-        try:
-            # Try the Go wizard first; fall back to the Python-native
-            # questionary flow on ANY failure (Go missing, build broken,
-            # unparseable output) rather than only when Go is absent.
-            print(f"[DEBUG] About to call _run_go_bootstrap_wizard()")
-            go_ok, go_data = _run_go_bootstrap_wizard()
-            print(f"[DEBUG] Got go_ok={go_ok}, go_data={go_data is not None}")
-            if go_ok and go_data is None:
-                print(f"[DEBUG] User cancelled Go wizard")
-                return False  # user cancelled the wizard
-            if go_ok and go_data is not None:
-                print(f"[DEBUG] Using Go wizard data")
-                data = go_data
-            else:
-                print(f"[DEBUG] Falling back to questionary wizard")
-                try:
-                    cli_art.console.print()
-                    print(f"[DEBUG] After console.print()")
-                    cli_art.console.print(
-                        f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
-                    )
-                    print(f"[DEBUG] After wizard title")
-                except Exception as e:
-                    print(f"[DEBUG] Exception in console.print: {e}")
-                    import traceback
-                    traceback.print_exc()
+        # Try the Go wizard first; fall back to the Python-native
+        # questionary flow on ANY failure (Go missing, build broken,
+        # unparseable output) rather than only when Go is absent.
+        go_ok, go_data = _run_go_bootstrap_wizard()
+        if go_ok and go_data is None:
+            return False  # user cancelled the wizard
+        if go_ok and go_data is not None:
+            data = go_data
+        else:
+            cli_art.console.print()
+            cli_art.console.print(
+                f"[{theme.BRAND}]✦ Using the terminal setup wizard ✦[/{theme.BRAND}]"
+            )
 
-                # Use simple input instead of questionary.text to avoid rendering issues
-                print(f"[DEBUG] About to prompt for profile name")
-                profile_name = input("Profile name (e.g., 'morgan'): ").strip()
-                print(f"[DEBUG] Got profile name: {profile_name}")
-                if not profile_name:
+            profile_name = cli_art.text("Profile name (e.g., 'morgan'):")
+            if not profile_name or not profile_name.strip():
+                cli_art.console.print(
+                    f"{cli_art.WARNING} Profile name cannot be empty."
+                )
+                return False
+
+            source_choice = cli_art.select(
+                "Source of your career data:",
+                choices=["Resume PDF", "LinkedIn export (JSON)", "Manual markdown"],
+            )
+            if not source_choice:
+                return False
+
+            source_map = {
+                "Resume PDF": "pdf",
+                "LinkedIn export (JSON)": "linkedin",
+                "Manual markdown": "manual",
+            }
+            source_choice_val = source_map[source_choice]
+
+            ingest_path = ""
+            if source_choice_val != "manual":
+                allowed_exts = [".pdf"] if source_choice_val == "pdf" else [".json"]
+                ingest_path = cli_art.file_picker(
+                    f"Browse and select your source {source_choice_val.upper()} file:",
+                    allowed_extensions=allowed_exts,
+                )
+                if not ingest_path:
                     return False
 
-                # Use simple select without questionary to avoid rendering issues
-                print("Source of your career data:")
-                print("  1. Resume PDF")
-                print("  2. LinkedIn export (JSON)")
-                print("  3. Manual markdown")
-                source_input = input("Choose (1-3): ").strip()
-                source_map_by_num = {
-                    "1": "Resume PDF",
-                    "2": "LinkedIn export (JSON)",
-                    "3": "Manual markdown",
-                }
-                source_choice = source_map_by_num.get(source_input)
-                if not source_choice:
-                    cli_art.console.print("[red]Invalid choice[/red]")
-                    return False
+            create_bullet = cli_art.confirm("Build the bullet-bank now?", default=True)
 
-                source_map = {
-                    "Resume PDF": "pdf",
-                    "LinkedIn export (JSON)": "linkedin",
-                    "Manual markdown": "manual",
-                }
-                source_choice_val = source_map[source_choice]
+            data = {
+                "profile_name": profile_name.strip(),
+                "source_choice": source_choice_val,
+                "ingest_path": ingest_path,
+                "create_bullet": bool(create_bullet),
+            }
 
-                ingest_path = ""
-                if source_choice_val != "manual":
-                    print(f"[DEBUG] Entering file path input section", flush=True)
-                    # Simple text input for file path (avoid questionary)
-                    file_type = source_choice_val.upper()
-                    while True:
-                        print(f"[DEBUG] In while loop, about to call input()", flush=True)
-                        try:
-                            ingest_path = input(
-                                f"Path to your {file_type} file (e.g., ~/Documents/Resume.pdf): "
-                            ).strip()
-                            print(f"[DEBUG] User entered path: {ingest_path}", flush=True)
-                        except Exception as e:
-                            print(f"[DEBUG] Exception during input(): {e}", flush=True)
-                            raise
-                        if not ingest_path:
-                            print(f"[DEBUG] Empty path, returning False", flush=True)
-                            return False
-                        expanded_path = os.path.expanduser(ingest_path)
-                        print(f"[DEBUG] Expanded path: {expanded_path}", flush=True)
-                        print(f"[DEBUG] File exists: {os.path.exists(expanded_path)}", flush=True)
-                        if os.path.exists(expanded_path):
-                            ingest_path = expanded_path  # Use expanded path
-                            print(f"[DEBUG] File found, breaking loop")
-                            break
-                        else:
-                            print(f"[!] File not found: {ingest_path}")
-                            print("    Try again with the full path, or press Ctrl+C to cancel")
-
-                # Default to True for bullet bank generation
-                # (questionary prompts have been unreliable, so just proceed)
-                create_bullet = True
-
-                data = {
-                    "profile_name": profile_name.strip(),
-                    "source_choice": source_choice_val,
-                    "ingest_path": ingest_path,
-                    "create_bullet": create_bullet,
-                }
-                print(f"[DEBUG] Created data dict: {data}")
-
-            print(f"[DEBUG] About to create profile...")
-            name = data.get("profile_name")
-            print(f"[DEBUG] Got name: {name}")
-            if name:
-                print(f"[DEBUG] Name is: {name}")
+        name = data.get("profile_name")
+        if name:
+            # A profile created moments earlier via Settings & Upkeep >
+            # Manage Profiles > Add (e.g. to set up a second user before
+            # handing them the wizard) already has this exact directory --
+            # empty, but real. create_new_profile() would raise
+            # FileExistsError on it every time, forcing a duplicate profile
+            # under a second name just to get past the wizard. Skip
+            # creation and continue setup on the existing hollow profile
+            # instead; only a profile that's already been through setup
+            # (_profile_is_set_up()) is left alone as a real conflict.
+            already_hollow = os.path.isdir(
+                os.path.join(profile_paths.PROFILES_DIR, name)
+            ) and not _profile_is_set_up(name)
+            if not already_hollow:
                 try:
-                    print(f"[DEBUG] Creating profile for: {name}")
                     bootstrap_bullet_bank.create_new_profile(name)
-                    print(f"[DEBUG] Profile created successfully")
                 except ValueError as exc:
                     cli_art.friendly_error(
                         exc,
@@ -1146,64 +1131,58 @@ def _handle_bootstrap() -> bool:
                     )
                     return False
                 except FileExistsError as exc:
-                    # create_new_profile() refuses to overwrite an existing
-                    # profile. Only ValueError was caught here, so retyping a
-                    # name that already exists crashed the whole menu.
+                    # create_new_profile() refuses to overwrite an existing,
+                    # already-set-up profile. Only ValueError was caught
+                    # here, so retyping a name that already exists crashed
+                    # the whole menu.
                     cli_art.friendly_error(
                         exc,
                         "creating the new profile",
                         fix=(
-                            "That profile already exists. Pick a different name, or "
-                            "restart and choose it from the profile picker instead of "
+                            "That profile already exists and has already been "
+                            "set up. Pick a different name, or restart and "
+                            "choose it from the profile picker instead of "
                             "creating it again."
                         ),
                     )
                     return False
-                profile_paths.set_active_profile(name)
+            profile_paths.set_active_profile(name)
 
-                source_path = data.get("ingest_path")
-                if source_path and os.path.exists(source_path):
-                    dest_dir = os.path.join(
-                        profile_paths.PROFILES_DIR,
-                        name,
-                        "knowledge_base",
-                        "bootstrap",
-                        "source_documents",
-                    )
-                    os.makedirs(dest_dir, exist_ok=True)
-                    shutil.copy(source_path, dest_dir)
-                    cli_art.cli_info(
-                        f"Copied source document: {os.path.basename(source_path)} to your profile's source_documents folder."
-                    )
+            source_path = data.get("ingest_path")
+            if source_path and os.path.exists(source_path):
+                dest_dir = os.path.join(
+                    profile_paths.PROFILES_DIR,
+                    name,
+                    "knowledge_base",
+                    "bootstrap",
+                    "source_documents",
+                )
+                os.makedirs(dest_dir, exist_ok=True)
+                shutil.copy(source_path, dest_dir)
+                cli_art.cli_info(
+                    f"Copied source document: {os.path.basename(source_path)} to your profile's source_documents folder."
+                )
 
-                    dest_dir_for_extras = dest_dir
-                else:
-                    dest_dir_for_extras = os.path.join(
-                        profile_paths.PROFILES_DIR,
-                        name,
-                        "knowledge_base",
-                        "bootstrap",
-                        "source_documents",
-                    )
+                dest_dir_for_extras = dest_dir
+            else:
+                dest_dir_for_extras = os.path.join(
+                    profile_paths.PROFILES_DIR,
+                    name,
+                    "knowledge_base",
+                    "bootstrap",
+                    "source_documents",
+                )
 
-                # Skip second document prompt due to unreliable confirm prompts
-                # Users can add more documents later via "Update My Knowledge"
-                # if cli_art.confirm(
-                #     "Add any other writing samples or documents (recommendation "
-                #     "letters, certifications, past cover letters, etc.)?",
-                #     default=False,
-                # ):
-                #     _pick_and_copy_source_documents(dest_dir_for_extras)
+            if cli_art.confirm(
+                "Add any other writing samples or documents (recommendation "
+                "letters, certifications, past cover letters, etc.)?",
+                default=False,
+            ):
+                _pick_and_copy_source_documents(dest_dir_for_extras)
 
-                if data.get("create_bullet"):
-                    # Automatically run express auto-pilot onboarding!
-                    return bootstrap_menu._run_express_setup(interactive=False)
-
-        except Exception as e:
-            cli_art.console.print(f"\n[red]Error in bootstrap wizard:[/red] {e}")
-            cli_art.console.print(f"[yellow]Traceback:[/yellow]")
-            cli_art.console.print(traceback.format_exc())
-            return False
+            if data.get("create_bullet"):
+                # Automatically run express auto-pilot onboarding!
+                return bootstrap_menu._run_express_setup(interactive=False)
 
     # Continue with the existing detailed bootstrap menu (phase selection, etc.)
     return bootstrap_menu.run_bootstrap_menu()
@@ -3255,10 +3234,7 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
     # two skip the clamp entirely rather than risk a rushed, lossy
     # checkbox port -- everything else about the action (banner, footer,
     # chain-offer afterward) stays the same.
-    # bootstrap also needs to skip the scroll region since its Bubble Tea UI
-    # can't render in a clamped region either, causing a silent hang while
-    # subprocess.run() waits for the Go binary that never renders anything.
-    _skip_scroll_region = {"tailor_pick", "coverletter_pick", "bootstrap"}
+    _skip_scroll_region = {"tailor_pick", "coverletter_pick"}
 
     is_interactive = value in interactive_actions
     title = action_titles.get(value)
