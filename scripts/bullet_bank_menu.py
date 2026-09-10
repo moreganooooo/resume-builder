@@ -459,7 +459,7 @@ def _handle_choice(choice: str) -> None:
     # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
     import shutil
 
-    columns, rows = shutil.get_terminal_size()
+    _, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
     sys.stdout.flush()
