@@ -1,0 +1,13 @@
+# board_scanner's "ats" source: companies to check directly on their own
+# ATS (Greenhouse/Ashby/Lever/Recruitee/SmartRecruiters/Workable/Workday).
+# Empty to start -- add companies as you find them worth tracking. Each
+# entry needs a name and a careers_url and/or api URL; provider is
+# auto-detected from the URL (see scan_ats.py's _resolve_provider_id) --
+# only set it explicitly for a non-obvious case. See
+# profiles/morgan/board_scanner/tracked_companies.yml for a real
+# worked example with 400 entries.
+#
+# - name: Acme Corp
+#   careers_url: https://boards.greenhouse.io/acme
+#   enabled: true
+tracked_companies: []

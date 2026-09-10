@@ -1,0 +1,11 @@
+# board_scanner's "ats" source: Brave-search sweep queries for
+# discovering companies NOT already in tracked_companies.yml. Empty to
+# start -- needs BRAVE_API_KEY in this profile's .env to do anything.
+# See profiles/morgan/board_scanner/search_queries.yml for real worked
+# examples (mostly "site:boards.greenhouse.io ... remote" style
+# per-ATS-platform sweeps scoped to target keywords).
+#
+# - name: Greenhouse sweep
+#   query: 'site:boards.greenhouse.io "your target keyword" remote'
+#   enabled: true
+search_queries: []
