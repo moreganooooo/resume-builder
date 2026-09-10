@@ -18,6 +18,7 @@ import re
 import time
 
 import cli_art
+import content_settings
 import profile_paths
 import requests
 from bs4 import BeautifulSoup
@@ -271,6 +272,58 @@ _WORKPLACE_MODE_FILTERS = {
 _DEFAULT_WORKPLACE_MODES = ["remote"]
 _DEFAULT_LOCATION = "United States"
 
+_EXPERIENCE_FILTER_MAP = {
+    "internship": ExperienceLevelFilters.INTERNSHIP,
+    "entry_level": ExperienceLevelFilters.ENTRY_LEVEL,
+    "associate": ExperienceLevelFilters.ASSOCIATE,
+    "mid_senior": ExperienceLevelFilters.MID_SENIOR,
+    "director": ExperienceLevelFilters.DIRECTOR,
+    "executive": ExperienceLevelFilters.EXECUTIVE,
+}
+_DEFAULT_EXPERIENCE_LEVELS = [
+    ExperienceLevelFilters.ENTRY_LEVEL,
+    ExperienceLevelFilters.ASSOCIATE,
+    ExperienceLevelFilters.MID_SENIOR,
+]
+
+# content_settings.EMPLOYMENT_LABELS' vocabulary, mapped onto LinkedIn's
+# own native TypeFilters -- contract_to_hire has no direct equivalent, so
+# it folds into CONTRACT.
+_TYPE_FILTER_MAP = {
+    "full_time": TypeFilters.FULL_TIME,
+    "part_time": TypeFilters.PART_TIME,
+    "contract": TypeFilters.CONTRACT,
+    "contract_to_hire": TypeFilters.CONTRACT,
+    "temporary": TypeFilters.TEMPORARY,
+    "internship": TypeFilters.INTERNSHIP,
+}
+_DEFAULT_TYPE_FILTERS = [
+    TypeFilters.FULL_TIME,
+    TypeFilters.PART_TIME,
+    TypeFilters.CONTRACT,
+    TypeFilters.TEMPORARY,
+]
+
+
+def _resolve_experience_filters() -> list:
+    levels = content_settings.read_linkedin_experience_levels()
+    resolved = [
+        _EXPERIENCE_FILTER_MAP[level]
+        for level in levels
+        if level in _EXPERIENCE_FILTER_MAP
+    ]
+    return resolved or list(_DEFAULT_EXPERIENCE_LEVELS)
+
+
+def _resolve_type_filters() -> list:
+    employment = content_settings.read_settings().get("employment_type")
+    if not employment:
+        return list(_DEFAULT_TYPE_FILTERS)
+    resolved = {
+        _TYPE_FILTER_MAP[value] for value in employment if value in _TYPE_FILTER_MAP
+    }
+    return list(resolved) or list(_DEFAULT_TYPE_FILTERS)
+
 
 @contextlib.contextmanager
 def _muted_scraper_logger():
@@ -325,17 +378,8 @@ def _build_queries(job_limit: int, search_terms: list) -> list:
             relevance=RelevanceFilters.RELEVANT,
             time=TimeFilters.DAY,
             on_site_or_remote=on_site_or_remote,
-            experience=[
-                ExperienceLevelFilters.ENTRY_LEVEL,
-                ExperienceLevelFilters.ASSOCIATE,
-                ExperienceLevelFilters.MID_SENIOR,
-            ],
-            type=[
-                TypeFilters.FULL_TIME,
-                TypeFilters.PART_TIME,
-                TypeFilters.CONTRACT,
-                TypeFilters.TEMPORARY,
-            ],
+            experience=_resolve_experience_filters(),
+            type=_resolve_type_filters(),
         )
 
         return Query(

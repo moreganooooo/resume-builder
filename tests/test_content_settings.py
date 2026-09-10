@@ -74,6 +74,46 @@ class TestReadSettings(_TempYaml):
         self.assertEqual(cs.read_settings("/nonexistent/scan_filters.yml"), {})
 
 
+class TestLinkedinExperienceLevels(_TempYaml):
+    def test_round_trip(self):
+        path = self._write(BASE)
+        cs.write_settings(
+            {"linkedin_experience_levels": ["director", "executive"]}, path
+        )
+        self.assertEqual(
+            cs.read_settings(path),
+            {"linkedin_experience_levels": ["director", "executive"]},
+        )
+
+    def test_comments_and_unrelated_keys_survive(self):
+        path = self._write(BASE)
+        cs.write_settings(
+            {"languages": ["en"], "linkedin_experience_levels": ["mid_senior"]}, path
+        )
+        text = self._read(path)
+        self.assertIn("# Body-text gates", text)
+        data = yaml.safe_load(text)
+        self.assertEqual(data["enabled_boards"], ["remoteok"])
+
+    def test_dropping_the_key_returns_it_to_inert(self):
+        path = self._write(BASE)
+        cs.write_settings({"linkedin_experience_levels": ["director"]}, path)
+        cs.write_settings({}, path)
+        self.assertNotIn("linkedin_experience_levels", cs.read_settings(path))
+
+    def test_read_accessor_falls_back_to_default_when_unset(self):
+        path = self._write(NO_FILTERS)
+        self.assertEqual(
+            cs.read_linkedin_experience_levels(path),
+            cs.DEFAULT_LINKEDIN_EXPERIENCE_LEVELS,
+        )
+
+    def test_read_accessor_returns_override_when_set(self):
+        path = self._write(BASE)
+        cs.write_settings({"linkedin_experience_levels": ["internship"]}, path)
+        self.assertEqual(cs.read_linkedin_experience_levels(path), ["internship"])
+
+
 class TestDescribe(unittest.TestCase):
     def test_unset_filters_read_as_any(self):
         self.assertEqual(

@@ -48,6 +48,7 @@ CV_DRAFT_CHECKPOINT_PATH = os.path.join(KB_DIR, "bootstrap", "cv_draft_checkpoin
 import bootstrap_bullet_bank  # noqa: E402
 import bootstrap_extractors  # noqa: E402
 import cli_art  # noqa: E402
+import content_settings  # noqa: E402
 import theme  # noqa: E402
 from rewrite_bullets import (  # noqa: E402
     RULES_DIR,
@@ -438,7 +439,7 @@ def offer_settings_screens(dry_run: bool = False) -> None:
         skills_menu.run_skills_menu()
 
 
-def report_job_board_readiness() -> None:
+def report_job_board_readiness(dry_run: bool = False) -> None:
     """Prints which job-board sources will work right away vs. need extra
     setup -- read-only, no prompts. Indeed (via JobSpy) and any ATS board
     already listed in tracked_companies.yml need nothing beyond what
@@ -508,6 +509,39 @@ def report_job_board_readiness() -> None:
             "boards above still scan without it."
         )
     cli_art.console.print()
+
+    if tracked_count == 0 and not dry_run:
+        if cli_art.confirm(
+            "Search for local employers with public ATS boards now? (optional -- "
+            "finds companies near you whose own careers pages can be scanned "
+            "for the full job text, not just aggregator teasers)",
+            default=False,
+        ):
+            import discover_local_employers
+
+            hits = discover_local_employers.discover()
+            if not hits:
+                cli_art.cli_info(
+                    f"{cli_art.WARNING} No local employers with a public ATS board found."
+                )
+            else:
+                cli_art.cli_info(
+                    f"Found {len(hits)} local employer(s) with a public board:"
+                )
+                for hit in hits:
+                    cli_art.cli_info(
+                        f"    {hit['name']}  ({hit['provider']} -- "
+                        f"{hit['postings']} open role(s))"
+                    )
+                if cli_art.confirm(
+                    f"Track these {len(hits)} employer(s)?", default=True
+                ):
+                    path = discover_local_employers.tracked_companies_path()
+                    backup = discover_local_employers.append_entries(hits, path)
+                    cli_art.cli_info(
+                        f"{cli_art.SUCCESS} Added {len(hits)}. Backup: {backup}"
+                    )
+            cli_art.console.print()
 
 
 def collect_voice_calibration_example(dry_run: bool = False) -> str:
@@ -588,6 +622,29 @@ def _yaml_string_list(items: list, indent: str = "    ") -> str:
     if not items:
         return f"{indent}[]"
     return "\n".join(f'{indent}- "{item}"' for item in items)
+
+
+def _yaml_linkedin_queries(items: list, indent: str = "  ") -> str:
+    """Renders linkedin_search_queries: entries -- each is either a plain
+    string (the common case) or a dict with query/workplace_mode/location
+    overrides (scan_linkedin._build_queries() already parses both shapes;
+    see that module's docstring)."""
+    if not items:
+        return f"{indent}[]"
+    lines = []
+    for item in items:
+        if isinstance(item, dict):
+            lines.append(f'{indent}- query: "{item["query"]}"')
+            modes = item.get("workplace_mode")
+            if modes:
+                lines.append(f"{indent}  workplace_mode:")
+                lines.extend(f'{indent}    - "{mode}"' for mode in modes)
+            location = item.get("location")
+            if location:
+                lines.append(f'{indent}  location: "{location}"')
+        else:
+            lines.append(f'{indent}- "{item}"')
+    return "\n".join(lines)
 
 
 def _yaml_tags(taxonomy) -> str:
@@ -770,7 +827,7 @@ def write_profile_yml(
         extra_link=identity["extra_link"],
         primary_roles_yaml=_yaml_string_list(identity["primary_roles"]),
         secondary_roles_yaml=_yaml_string_list(identity["secondary_roles"]),
-        linkedin_search_queries_yaml=_yaml_string_list(
+        linkedin_search_queries_yaml=_yaml_linkedin_queries(
             linkedin_search_queries or [], indent="  "
         ),
         tags_yaml=_yaml_tags(taxonomy),
@@ -1684,9 +1741,69 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
         q = cli_art.text(f"Search term {len(queries) + 1} (blank to finish):")
         if not q or not q.strip():
             break
-        queries.append(q.strip())
+        entry = q.strip()
+        wants_override = cli_art.confirm(
+            f'Restrict "{entry}" to specific workplace modes or a location, instead of '
+            "the nationwide remote default? (optional)",
+            default=False,
+        )
+        if wants_override:
+            modes = (
+                cli_art.checkbox(
+                    "Workplace modes to search (leave all unchecked for remote-only):",
+                    choices=[
+                        questionary.Choice(title="Remote", value="remote"),
+                        questionary.Choice(title="Onsite", value="onsite"),
+                        questionary.Choice(title="Hybrid", value="hybrid"),
+                    ],
+                )
+                or []
+            )
+            location = cli_art.text(
+                "Location for this search (blank for nationwide 'United States'):",
+                default="",
+            )
+            entry_dict = {"query": entry}
+            if modes:
+                entry_dict["workplace_mode"] = modes
+            if location and location.strip():
+                entry_dict["location"] = location.strip()
+            queries.append(entry_dict if len(entry_dict) > 1 else entry)
+        else:
+            queries.append(entry)
     if not queries:
         cli_art.cli_info("No terms entered -- falling back to target roles.")
+        return queries
+
+    experience_choices = [
+        questionary.Choice(
+            title=label,
+            value=key,
+            checked=key in content_settings.DEFAULT_LINKEDIN_EXPERIENCE_LEVELS,
+        )
+        for key, label in content_settings.LINKEDIN_EXPERIENCE_LABELS.items()
+    ]
+    selected_levels = (
+        cli_art.checkbox(
+            "Seniority levels to include across every LinkedIn search "
+            "(default: Entry level, Associate, Mid-Senior):",
+            choices=experience_choices,
+        )
+        or []
+    )
+    if selected_levels and set(selected_levels) != set(
+        content_settings.DEFAULT_LINKEDIN_EXPERIENCE_LEVELS
+    ):
+        current = content_settings.read_settings()
+        current["linkedin_experience_levels"] = selected_levels
+        content_settings.write_settings(current)
+        cli_art.cli_info(
+            "Saved LinkedIn seniority filter: "
+            + ", ".join(
+                content_settings.LINKEDIN_EXPERIENCE_LABELS.get(level) or level
+                for level in selected_levels
+            )
+        )
     return queries
 
 
@@ -1908,7 +2025,7 @@ def run_profile_setup(dry_run: bool = False, targets: set = None) -> dict:
             }
         )
         offer_settings_screens(dry_run=dry_run)
-        report_job_board_readiness()
+        report_job_board_readiness(dry_run=dry_run)
 
     # background guide + voice anchors before cv.md, not after:
     # rewrite_bullets.KnowledgeBase (which write_cv_md()'s bullet-polishing

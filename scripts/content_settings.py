@@ -44,6 +44,12 @@ _EMPLOYMENT_RE = re.compile(
     re.MULTILINE,
 )
 
+_LINKEDIN_EXPERIENCE_RE = re.compile(
+    r"^linkedin_experience_levels:[ \t]*\n(?:[ \t]*-[^\n]*\n)*"
+    r"|^linkedin_experience_levels:[^\n]*\n",
+    re.MULTILINE,
+)
+
 # A nested mapping rather than a scalar or a list, so this consumes the
 # indented lines under the key. Pay and hours share one block because
 # they answer one question -- "what does this role have to be worth?" --
@@ -100,6 +106,24 @@ EMPLOYMENT_LABELS = {
     "temporary": "Temporary / seasonal",
     "internship": "Internship / apprenticeship",
 }
+
+# LinkedIn's own native scraper filter (linkedin_jobs_scraper's
+# ExperienceLevelFilters) -- distinct from employment_type above, which
+# is FULL_TIME/PART_TIME/etc., not seniority. Only meaningful to
+# scan_linkedin.py; kept here anyway since scan_filters.yml is the one
+# place per-profile scan config already lives. Default mirrors what
+# scan_linkedin.py hardcoded before this setting existed, so an
+# unedited profile scans identically to before.
+LINKEDIN_EXPERIENCE_LABELS = {
+    "internship": "Internship",
+    "entry_level": "Entry level",
+    "associate": "Associate",
+    "mid_senior": "Mid-Senior level",
+    "director": "Director",
+    "executive": "Executive",
+}
+
+DEFAULT_LINKEDIN_EXPERIENCE_LEVELS = ["entry_level", "associate", "mid_senior"]
 
 TRAVEL_CHOICES = [
     (0, "None -- only postings that say no travel"),
@@ -189,6 +213,11 @@ def read_settings(path: str | None = None) -> dict:
         settings["employment_type"] = [
             str(value).strip().lower() for value in employment
         ]
+    linkedin_experience = data.get("linkedin_experience_levels")
+    if isinstance(linkedin_experience, list) and linkedin_experience:
+        settings["linkedin_experience_levels"] = [
+            str(value).strip().lower() for value in linkedin_experience
+        ]
     pay = data.get("compensation")
     if isinstance(pay, dict):
         # Only the keys the gates actually read, so a stray key in the
@@ -237,6 +266,14 @@ def read_role_track_settings(path: str | None = None) -> dict:
     return merged
 
 
+def read_linkedin_experience_levels(path: str | None = None) -> list:
+    """DEFAULT_LINKEDIN_EXPERIENCE_LEVELS unless a profile override is set --
+    what scan_linkedin.py actually reads for LinkedIn's own native
+    experience-level filter."""
+    overrides = read_settings(path).get("linkedin_experience_levels")
+    return list(overrides) if overrides else list(DEFAULT_LINKEDIN_EXPERIENCE_LEVELS)
+
+
 def describe_scoring_weights(weights: dict | None) -> str:
     """One line for the menu header -- only mentions keys that differ
     from the default, since the common case is "unedited"."""
@@ -276,6 +313,15 @@ def describe(settings: dict) -> str:
         parts.append(f"hours: {hours}")
     if (settings.get("role_track") or {}).get("exclude_manager"):
         parts.append("role track: IC-only (manager roles excluded)")
+    linkedin_experience = settings.get("linkedin_experience_levels")
+    if linkedin_experience:
+        parts.append(
+            "LinkedIn seniority: "
+            + ", ".join(
+                LINKEDIN_EXPERIENCE_LABELS.get(value) or value
+                for value in linkedin_experience
+            )
+        )
     return "; ".join(parts)
 
 
@@ -377,6 +423,15 @@ def write_settings(settings: dict, path: str | None = None) -> None:
         updated = _replace_or_append(updated, _EMPLOYMENT_RE, block)
     else:
         updated = _EMPLOYMENT_RE.sub("", updated, count=1)
+
+    linkedin_experience = settings.get("linkedin_experience_levels")
+    if linkedin_experience:
+        block = "linkedin_experience_levels:\n" + "".join(
+            f"- {value}\n" for value in linkedin_experience
+        )
+        updated = _replace_or_append(updated, _LINKEDIN_EXPERIENCE_RE, block)
+    else:
+        updated = _LINKEDIN_EXPERIENCE_RE.sub("", updated, count=1)
 
     pay = settings.get("compensation") or {}
     pay = {k: pay[k] for k in _COMPENSATION_KEYS if pay.get(k) not in (None, "")}
@@ -895,7 +950,9 @@ def run_guided_scoring_weights_setup() -> None:
 __all__ = [
     "DEFAULT_ROLE_TRACK_SETTINGS",
     "DEFAULT_SCORING_WEIGHTS",
+    "DEFAULT_LINKEDIN_EXPERIENCE_LEVELS",
     "EMPLOYMENT_LABELS",
+    "LINKEDIN_EXPERIENCE_LABELS",
     "SCORING_WEIGHT_LABELS",
     "describe_pay",
     "describe_scoring_weights",
@@ -904,6 +961,7 @@ __all__ = [
     "describe",
     "read_role_track_settings",
     "read_scoring_weights",
+    "read_linkedin_experience_levels",
     "read_settings",
     "run_content_settings",
     "run_guided_scoring_weights_setup",
