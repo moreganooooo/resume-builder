@@ -1346,7 +1346,6 @@ def _handle_add_manual_jd() -> bool:
     import datetime
     import uuid
 
-    import jd_manager
     import profile_paths
     from atomic_write import atomic_write
 
@@ -1976,7 +1975,7 @@ def _handle_run_doctor() -> None:
 
     import profile_paths
 
-    columns, rows = shutil.get_terminal_size()
+    _, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
     sys.stdout.flush()
@@ -2139,7 +2138,7 @@ def _handle_build_sample() -> None:
     # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
     import shutil
 
-    columns, rows = shutil.get_terminal_size()
+    _, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
     sys.stdout.flush()
@@ -2977,7 +2976,7 @@ def _handle_check_updates() -> bool:
     # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
     import shutil
 
-    columns, rows = shutil.get_terminal_size()
+    _, rows = shutil.get_terminal_size()
     sys.stdout.write(f"\x1b[5;{rows-1}r")
     sys.stdout.write("\x1b[5;1H")
     sys.stdout.flush()
@@ -3359,7 +3358,7 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
 
             if value not in _skip_scroll_region:
                 # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
-                columns, rows = shutil.get_terminal_size()
+                _, rows = shutil.get_terminal_size()
                 sys.stdout.write(f"\x1b[5;{rows-1}r")
                 sys.stdout.write("\x1b[5;1H")
                 sys.stdout.flush()
@@ -3425,7 +3424,7 @@ def _should_use_alt_screen() -> bool:
         return False
     # Graceful auto-detection: if terminal is at least 24 rows tall, we can go fullscreen!
     # This prevents the scrolling overflow issue on standard terminal screens.
-    columns, rows = shutil.get_terminal_size()
+    _, rows = shutil.get_terminal_size()
     return rows >= 24
 
 
