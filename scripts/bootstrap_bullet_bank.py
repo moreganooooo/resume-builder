@@ -246,7 +246,7 @@ def _process_one_file(path: str, filename: str, dry_run: bool = False) -> dict:
         else bootstrap_extractors.extract_local_text(path, kind)
     )
     doc_type = bootstrap_extractors.classify_document_type(
-        filename, text, dry_run=dry_run
+        filename, text, dry_run=dry_run, upload_path=(path if text is None else None)
     )
 
     if doc_type == "certificate":
