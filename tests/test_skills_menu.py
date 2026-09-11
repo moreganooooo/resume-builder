@@ -50,12 +50,11 @@ class TestAddSkillCancellation(unittest.TestCase):
             self.assertEqual(data["tools"], [])
 
     def test_cancel_at_category_prompt_writes_nothing(self):
-        with (
-            patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_autocomplete,
-        ):
-            mock_text.return_value.ask.return_value = "ChatGPT"
-            mock_autocomplete.return_value.ask.return_value = None
+        # Category is now cli_art.text() too (no cli_art/charm_prompt
+        # autocomplete equivalent to questionary.autocomplete()) -- it's
+        # the second .text().ask() call, right after name.
+        with patch("questionary.text") as mock_text:
+            mock_text.return_value.ask.side_effect = ["ChatGPT", None]
             data = {"tools": []}
             skills_menu._add_skill(data)
             self.assertEqual(data["tools"], [])
@@ -63,11 +62,9 @@ class TestAddSkillCancellation(unittest.TestCase):
     def test_cancel_at_confidence_prompt_writes_nothing(self):
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_autocomplete,
             patch("questionary.select") as mock_select,
         ):
-            mock_text.return_value.ask.return_value = "ChatGPT"
-            mock_autocomplete.return_value.ask.return_value = "AI Tools"
+            mock_text.return_value.ask.side_effect = ["ChatGPT", "AI Tools"]
             mock_select.return_value.ask.return_value = None
             data = {"tools": []}
             skills_menu._add_skill(data)
@@ -76,13 +73,11 @@ class TestAddSkillCancellation(unittest.TestCase):
     def test_cancel_at_evidence_count_prompt_writes_nothing(self):
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_autocomplete,
             patch("questionary.select") as mock_select,
         ):
-            mock_autocomplete.return_value.ask.return_value = "AI Tools"
             mock_select.return_value.ask.return_value = "Expert"
-            # First .text().ask() call is the name, second is evidence count.
-            mock_text.return_value.ask.side_effect = ["ChatGPT", None]
+            # name, category, evidence count.
+            mock_text.return_value.ask.side_effect = ["ChatGPT", "AI Tools", None]
             data = {"tools": []}
             skills_menu._add_skill(data)
             self.assertEqual(data["tools"], [])
@@ -90,13 +85,16 @@ class TestAddSkillCancellation(unittest.TestCase):
     def test_cancel_at_use_notes_prompt_writes_nothing(self):
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_autocomplete,
             patch("questionary.select") as mock_select,
         ):
-            mock_autocomplete.return_value.ask.return_value = "AI Tools"
             mock_select.return_value.ask.return_value = "Expert"
-            # name, evidence_count, use_notes
-            mock_text.return_value.ask.side_effect = ["ChatGPT", "3", None]
+            # name, category, evidence_count, use_notes
+            mock_text.return_value.ask.side_effect = [
+                "ChatGPT",
+                "AI Tools",
+                "3",
+                None,
+            ]
             data = {"tools": []}
             skills_menu._add_skill(data)
             self.assertEqual(data["tools"], [])
@@ -104,14 +102,13 @@ class TestAddSkillCancellation(unittest.TestCase):
     def test_cancel_at_references_prompt_writes_nothing(self):
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_autocomplete,
             patch("questionary.select") as mock_select,
         ):
-            mock_autocomplete.return_value.ask.return_value = "AI Tools"
             mock_select.return_value.ask.return_value = "Expert"
-            # name, evidence_count, use_notes, tr_references
+            # name, category, evidence_count, use_notes, tr_references
             mock_text.return_value.ask.side_effect = [
                 "ChatGPT",
+                "AI Tools",
                 "3",
                 "Used it daily",
                 None,
@@ -125,13 +122,12 @@ class TestAddSkillCancellation(unittest.TestCase):
         prompt is answered, a tool really does get appended."""
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_autocomplete,
             patch("questionary.select") as mock_select,
         ):
-            mock_autocomplete.return_value.ask.return_value = "AI Tools"
             mock_select.return_value.ask.return_value = "Expert"
             mock_text.return_value.ask.side_effect = [
                 "ChatGPT",
+                "AI Tools",
                 "3",
                 "Used it daily",
                 "profile.yml",
@@ -205,16 +201,15 @@ class TestSkillsMenuFullSuite(unittest.TestCase):
         """Test successfully adding a skill with all inputs."""
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_auto,
             patch("questionary.select") as mock_select,
         ):
             mock_text.return_value.ask.side_effect = [
                 "Tableau",
+                "Analytics",
                 "5",
                 "Built enterprise reports",
                 "TR-001, TR-002",
             ]
-            mock_auto.return_value.ask.return_value = "Analytics"
             mock_select.return_value.ask.return_value = "Advanced"
 
             data = {"tools": []}
@@ -247,16 +242,15 @@ class TestSkillsMenuFullSuite(unittest.TestCase):
         # Successful edit
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_auto,
             patch("questionary.select") as mock_select,
         ):
             mock_text.return_value.ask.side_effect = [
                 "NewName",
+                "NewCat",
                 "4",
                 "Extensive work",
                 "TR-003",
             ]
-            mock_auto.return_value.ask.return_value = "NewCat"
             mock_select.return_value.ask.return_value = "Expert"
 
             skills_menu._edit_skill(data, "tool_001")
@@ -363,27 +357,20 @@ class TestSkillsMenuFullSuite(unittest.TestCase):
             skills_menu._edit_skill(data, "tool_001")
             self.assertEqual(data["tools"][0]["name"], "Python")
 
-        with (
-            patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_auto,
-        ):
-            mock_text.return_value.ask.return_value = "Python 3"
-            mock_auto.return_value.ask.return_value = None
+        # Cancel at category -- now the second .text().ask() call (no
+        # cli_art/charm_prompt autocomplete equivalent to
+        # questionary.autocomplete(), so category went through cli_art.text()).
+        with patch("questionary.text") as mock_text:
+            mock_text.return_value.ask.side_effect = ["Python 3", None]
             skills_menu._edit_skill(data, "tool_001")
             self.assertEqual(data["tools"][0]["name"], "Python")
 
+        # Cancel at confidence
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_auto,
             patch("questionary.select") as mock_select,
         ):
-            mock_text.return_value.ask.side_effect = [
-                "Python 3",
-                "invalid_number",
-                "Notes",
-                "TR-1",
-            ]
-            mock_auto.return_value.ask.return_value = "Dev"
+            mock_text.return_value.ask.side_effect = ["Python 3", "Dev"]
             mock_select.return_value.ask.return_value = None
             skills_menu._edit_skill(data, "tool_001")
             self.assertEqual(data["tools"][0]["name"], "Python")
@@ -391,11 +378,9 @@ class TestSkillsMenuFullSuite(unittest.TestCase):
         # Cancel at evidence_count
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_auto,
             patch("questionary.select") as mock_select,
         ):
-            mock_text.return_value.ask.side_effect = ["Python 3", None]
-            mock_auto.return_value.ask.return_value = "Dev"
+            mock_text.return_value.ask.side_effect = ["Python 3", "Dev", None]
             mock_select.return_value.ask.return_value = "Expert"
             skills_menu._edit_skill(data, "tool_001")
             self.assertEqual(data["tools"][0]["name"], "Python")
@@ -403,11 +388,9 @@ class TestSkillsMenuFullSuite(unittest.TestCase):
         # Cancel at use_notes
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_auto,
             patch("questionary.select") as mock_select,
         ):
-            mock_text.return_value.ask.side_effect = ["Python 3", "2", None]
-            mock_auto.return_value.ask.return_value = "Dev"
+            mock_text.return_value.ask.side_effect = ["Python 3", "Dev", "2", None]
             mock_select.return_value.ask.return_value = "Expert"
             skills_menu._edit_skill(data, "tool_001")
             self.assertEqual(data["tools"][0]["name"], "Python")
@@ -415,11 +398,15 @@ class TestSkillsMenuFullSuite(unittest.TestCase):
         # Cancel at tr_references
         with (
             patch("questionary.text") as mock_text,
-            patch("questionary.autocomplete") as mock_auto,
             patch("questionary.select") as mock_select,
         ):
-            mock_text.return_value.ask.side_effect = ["Python 3", "2", "Notes", None]
-            mock_auto.return_value.ask.return_value = "Dev"
+            mock_text.return_value.ask.side_effect = [
+                "Python 3",
+                "Dev",
+                "2",
+                "Notes",
+                None,
+            ]
             mock_select.return_value.ask.return_value = "Expert"
             skills_menu._edit_skill(data, "tool_001")
             self.assertEqual(data["tools"][0]["name"], "Python")
