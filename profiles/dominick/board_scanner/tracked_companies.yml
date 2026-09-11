@@ -10,4 +10,8 @@
 # - name: Acme Corp
 #   careers_url: https://boards.greenhouse.io/acme
 #   enabled: true
-tracked_companies: []
+tracked_companies:
+- name: The Hearst Corporation
+  careers_url: https://boards.greenhouse.io/hearst
+  api: https://boards-api.greenhouse.io/v1/boards/hearst/jobs
+  enabled: true
