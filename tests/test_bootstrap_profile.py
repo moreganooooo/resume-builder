@@ -206,6 +206,98 @@ class TestCollectIdentityDryRun(BootstrapProfileTestCase):
         self.assertEqual(identity["secondary_roles"], [])
 
 
+class TestCollectIdentityReviewAndRedo(BootstrapProfileTestCase):
+    """Regression coverage for the review-and-redo loop: collect_identity()
+    used to commit all 9 sequential answers with no way to correct an
+    earlier one short of finishing the whole wizard and re-running this
+    step from scratch. Primary/secondary roles are kept empty on both
+    passes in these tests specifically so _confirm_roles() stays on its
+    "no guessed roles" (text-only) branch on every pass -- a non-empty
+    result would flip it to the checkbox branch on the next pass, which is
+    exercised separately elsewhere."""
+
+    def _blank_checkpoint_and_timeline(self):
+        self._write_timeline([])
+        self._write_checkpoint({})
+
+    def test_confirming_first_pass_returns_immediately(self):
+        self._blank_checkpoint_and_timeline()
+        with (
+            patch("bootstrap_profile.questionary.text") as mock_text,
+            patch("bootstrap_profile.questionary.confirm") as mock_confirm,
+        ):
+            mock_text.return_value.ask.side_effect = [
+                "Jamie Rivera",  # full name
+                "jamie@example.com",  # email
+                "555-0001",  # phone
+                "Austin, TX",  # location
+                "linkedin.com/in/jamie",  # linkedin
+                "",  # portfolio
+                "",  # extra link
+                "",  # primary roles (text-only branch, guessed empty)
+                "",  # secondary roles (text-only branch, guessed empty)
+            ]
+            # remote-only confirm, then "Everything look right?"
+            mock_confirm.return_value.ask.side_effect = [True, True]
+
+            identity = bootstrap_profile.collect_identity()
+
+        self.assertEqual(mock_text.call_count, 9)
+        self.assertEqual(mock_confirm.call_count, 2)
+        self.assertEqual(identity["full_name"], "Jamie Rivera")
+        self.assertEqual(identity["email"], "jamie@example.com")
+
+    def test_declining_review_reprompts_with_previous_answers_as_defaults(self):
+        self._blank_checkpoint_and_timeline()
+        with (
+            patch("bootstrap_profile.questionary.text") as mock_text,
+            patch("bootstrap_profile.questionary.confirm") as mock_confirm,
+        ):
+            mock_text.return_value.ask.side_effect = [
+                # Pass 1 -- email has a typo.
+                "Jamie Rivera",
+                "jamie@wrong.com",
+                "555-0001",
+                "Austin, TX",
+                "linkedin.com/in/jamie",
+                "",
+                "",
+                "",
+                "",
+                # Pass 2 -- only email is corrected; everything else is
+                # re-typed identically (a mocked .ask() ignores `default`,
+                # it doesn't "press Enter" on its own, so the redo pass
+                # still needs a value for every field).
+                "Jamie Rivera",
+                "jamie@example.com",
+                "555-0001",
+                "Austin, TX",
+                "linkedin.com/in/jamie",
+                "",
+                "",
+                "",
+                "",
+            ]
+            # Pass 1: remote-only confirm, then decline the review.
+            # Pass 2: remote-only confirm, then accept the review.
+            mock_confirm.return_value.ask.side_effect = [True, False, True, True]
+
+            identity = bootstrap_profile.collect_identity()
+
+        self.assertEqual(mock_text.call_count, 18)
+        self.assertEqual(mock_confirm.call_count, 4)
+        self.assertEqual(identity["email"], "jamie@example.com")
+
+        # The redo pass's full_name prompt must default to pass 1's own
+        # answer, not the original (blank) guess -- this is the actual
+        # "previous answers are pre-filled" behavior, not just that a
+        # second pass happened.
+        pass_two_full_name_call = mock_text.call_args_list[9]
+        self.assertEqual(pass_two_full_name_call.kwargs["default"], "Jamie Rivera")
+        pass_two_email_call = mock_text.call_args_list[10]
+        self.assertEqual(pass_two_email_call.kwargs["default"], "jamie@wrong.com")
+
+
 class TestLoadExistingIdentity(BootstrapProfileTestCase):
 
     def test_returns_empty_dict_when_no_profile_yml(self):
@@ -308,6 +400,7 @@ class TestRunProfileSetupTargets(BootstrapProfileTestCase):
             patch("bootstrap_profile.write_situational_roles"),
             patch("bootstrap_profile.seed_scan_filters_from_target_roles"),
             patch("bootstrap_profile.write_verified_ledger"),
+            patch("bootstrap_profile.stage_candidate_facts", return_value=0),
             patch("bootstrap_profile.write_background_guide") as mock_background,
             patch("bootstrap_profile.write_voice_anchors"),
             patch("bootstrap_profile.write_cv_md") as mock_cv_md,
@@ -709,6 +802,36 @@ class TestSeedScanFiltersFromTargetRoles(BootstrapProfileTestCase):
         )
         self.assertFalse(result)
         self.assertFalse(os.path.exists(self.scan_filters_path))
+
+    def test_preserves_other_top_level_keys_not_in_its_own_template(self):
+        # Regression test: this used to rebuild the whole file from a
+        # title_filter/location_filter-only template via a full atomic_write,
+        # silently discarding any OTHER top-level key already present --
+        # location: (commute radius), scoring_weights:, languages: -- the
+        # moment this ran with an empty title_filter (e.g. "Update My
+        # Knowledge" on a profile whose target roles were left blank, so
+        # this keeps firing on every later run after Settings & Upkeep
+        # configuration has already been added in between).
+        self._write_scaffold()
+        with open(self.scan_filters_path, "a", encoding="utf-8") as f:
+            f.write(
+                'location:\n  zip: "14068"\n  radius_miles: 10\n'
+                "  workplace_mode: any\n"
+                "languages:\n- en\n"
+                "scoring_weights:\n  low_stress_bonus: 0.4\n"
+            )
+
+        result = bootstrap_profile.seed_scan_filters_from_target_roles(
+            self._identity(["Marketing Manager"])
+        )
+
+        self.assertTrue(result)
+        with open(self.scan_filters_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        self.assertIn("Marketing Manager", data["title_filter"]["positive"])
+        self.assertEqual(data["location"]["zip"], "14068")
+        self.assertEqual(data["languages"], ["en"])
+        self.assertEqual(data["scoring_weights"]["low_stress_bonus"], 0.4)
 
 
 class TestWriteVerifiedLedger(BootstrapProfileTestCase):
@@ -1551,12 +1674,48 @@ class TestCollectSituationalRoles(BootstrapProfileTestCase):
         with (
             patch("bootstrap_profile.questionary.checkbox") as mock_checkbox,
             patch("bootstrap_profile.questionary.text") as mock_text,
+            patch("bootstrap_profile.questionary.confirm") as mock_confirm,
         ):
             mock_checkbox.return_value.ask.return_value = ["Humane Society"]
             mock_text.return_value.ask.side_effect = [
                 "Humane Society of Greater KC",  # display name
                 "animal welfare, animal shelter",  # keywords
             ]
+            mock_confirm.return_value.ask.return_value = True
+            result = bootstrap_profile.collect_situational_roles()
+
+        self.assertEqual(
+            result,
+            [
+                {
+                    "display_name": "Humane Society of Greater KC",
+                    "bank_tag": "Humane Society",
+                    "trigger_keywords": ["animal welfare", "animal shelter"],
+                }
+            ],
+        )
+
+    def test_redo_a_role_reprompts_with_previous_answers_as_defaults(self):
+        self._write_timeline(
+            [{"company": "Humane Society", "title": "Volunteer Coordinator"}]
+        )
+        with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, "w", encoding="utf-8") as f:
+            f.write("Role / Company,Bullet Point\nHumane Society,Did a thing\n")
+
+        with (
+            patch("bootstrap_profile.questionary.checkbox") as mock_checkbox,
+            patch("bootstrap_profile.questionary.text") as mock_text,
+            patch("bootstrap_profile.questionary.confirm") as mock_confirm,
+        ):
+            mock_checkbox.return_value.ask.return_value = ["Humane Society"]
+            mock_text.return_value.ask.side_effect = [
+                "Typo'd Name",  # display name, first pass
+                "animal welfare",  # keywords, first pass
+                "Humane Society of Greater KC",  # display name, redo
+                "animal welfare, animal shelter",  # keywords, redo
+            ]
+            # First "Look right?" is declined (redo), second is accepted.
+            mock_confirm.return_value.ask.side_effect = [False, True]
             result = bootstrap_profile.collect_situational_roles()
 
         self.assertEqual(
@@ -1580,9 +1739,11 @@ class TestCollectSituationalRoles(BootstrapProfileTestCase):
         with (
             patch("bootstrap_profile.questionary.checkbox") as mock_checkbox,
             patch("bootstrap_profile.questionary.text") as mock_text,
+            patch("bootstrap_profile.questionary.confirm") as mock_confirm,
         ):
             mock_checkbox.return_value.ask.return_value = ["Humane Society"]
             mock_text.return_value.ask.side_effect = ["Humane Society", ""]
+            mock_confirm.return_value.ask.return_value = True
             result = bootstrap_profile.collect_situational_roles()
 
         self.assertEqual(result, [])
@@ -1692,7 +1853,23 @@ class TestWriteBackgroundGuide(BootstrapProfileTestCase):
     @patch("bootstrap_profile.bootstrap_extractors.draft_background_guide")
     def test_accepts_draft_and_writes_file(self, mock_draft, mock_select):
         self._touch_source("resume.txt")
-        self._write_checkpoint({"resume.txt": {"status": "done", "doc_type": "resume"}})
+        self._write_checkpoint(
+            {
+                "resume.txt": {
+                    "status": "done",
+                    "doc_type": "resume",
+                    "work_experience": [
+                        {
+                            "company": "Acme Corp",
+                            "title": "Marketer",
+                            "start_date": "2020",
+                            "end_date": "2022",
+                            "achievements": ["Grew email list by 40%"],
+                        }
+                    ],
+                }
+            }
+        )
         mock_draft.return_value = "A marketer who blends writing and systems thinking."
         mock_select.return_value.ask.return_value = "accept"
 
@@ -1728,6 +1905,38 @@ class TestWriteBackgroundGuide(BootstrapProfileTestCase):
             mock_select.assert_not_called()
             mock_draft.assert_called_once()
 
+    def test_pdf_sourced_document_still_contributes_source_text(self):
+        # Regression test: a PDF (or image) document never has local text
+        # to re-read -- _resolve_text_or_upload() returns text=None for
+        # those, upload_path instead -- so no source .txt file is written
+        # here at all, only a checkpoint entry shaped the way real
+        # ingestion of an uploaded PDF resume actually produces one
+        # (work_experience from the Files-API extraction, no source file
+        # on disk). Gathering source texts used to re-open the original
+        # path and got nothing back for exactly this case, which is why an
+        # all-PDF document set produced an empty background guide.
+        checkpoint = {
+            "resume.pdf": {
+                "status": "done",
+                "doc_type": "resume",
+                "work_experience": [
+                    {
+                        "company": "Acme Corp",
+                        "title": "Marketer",
+                        "start_date": "2020",
+                        "end_date": "2022",
+                        "achievements": ["Grew email list by 40%"],
+                    }
+                ],
+            }
+        }
+
+        texts = bootstrap_profile._gather_background_source_texts(checkpoint)
+
+        self.assertEqual(len(texts), 1)
+        self.assertIn("Acme Corp", texts[0])
+        self.assertIn("Grew email list by 40%", texts[0])
+
 
 class TestWriteVoiceAnchors(BootstrapProfileTestCase):
 
@@ -1736,7 +1945,13 @@ class TestWriteVoiceAnchors(BootstrapProfileTestCase):
     def test_accepts_draft_and_writes_file(self, mock_draft, mock_select):
         self._touch_source("cover_letter.txt")
         self._write_checkpoint(
-            {"cover_letter.txt": {"status": "done", "doc_type": "other"}}
+            {
+                "cover_letter.txt": {
+                    "status": "done",
+                    "doc_type": "other",
+                    "achievements": [{"raw_text": "A real first-person writing sample."}],
+                }
+            }
         )
         mock_draft.return_value = "### Why this role\n\nSomething genuine.\n"
         mock_select.return_value.ask.return_value = "accept"
@@ -1780,14 +1995,15 @@ class TestWriteVoiceAnchors(BootstrapProfileTestCase):
         # has no dedicated doc_type and usually classifies as "other" --
         # _gather_background_source_texts() deliberately excludes "other",
         # but voice anchors need exactly this kind of first-person text.
-        self._touch_source("essay.txt")
-        with open(
-            os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, "essay.txt"),
-            "w",
-            encoding="utf-8",
-        ) as f:
-            f.write("A real first-person writing sample.")
-        checkpoint = {"essay.txt": {"status": "done", "doc_type": "other"}}
+        checkpoint = {
+            "essay.txt": {
+                "status": "done",
+                "doc_type": "other",
+                "achievements": [
+                    {"raw_text": "A real first-person writing sample."}
+                ],
+            }
+        }
 
         texts = bootstrap_profile._gather_voice_anchor_source_texts(checkpoint)
 
@@ -1804,6 +2020,7 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
     @patch("bootstrap_profile.write_background_guide")
     @patch("bootstrap_profile.write_cv_md")
     @patch("bootstrap_profile.write_verified_ledger")
+    @patch("bootstrap_profile.stage_candidate_facts", return_value=0)
     @patch("bootstrap_profile.seed_scan_filters_from_target_roles")
     @patch("bootstrap_profile.write_portals_yml")
     @patch("bootstrap_profile.write_profile_yml")
@@ -1820,6 +2037,7 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
         mock_write_profile,
         mock_write_portals,
         mock_seed_scan_filters,
+        mock_stage_facts,
         mock_write_ledger,
         mock_write_cv,
         mock_write_bg,
@@ -1844,6 +2062,7 @@ class TestRunProfileSetup(BootstrapProfileTestCase):
         mock_write_portals.assert_called_once()
         mock_seed_scan_filters.assert_called_once()
         mock_write_ledger.assert_called_once()
+        mock_stage_facts.assert_called_once()
         mock_write_cv.assert_called_once()
         mock_write_bg.assert_called_once()
         mock_write_voice.assert_called_once()

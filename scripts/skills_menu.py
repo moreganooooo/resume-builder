@@ -170,34 +170,35 @@ def _display_skills_dashboard(tools: list):
 def _add_skill(data: dict):
     tools = data.setdefault("tools", [])
 
-    name = questionary.text("Skill/Tool Name (e.g. Asana, ChatGPT):").ask()
+    name = cli_art.text("Skill/Tool Name (e.g. Asana, ChatGPT):")
     if not name or not name.strip():
         return
     name = name.strip()
 
-    # Suggest existing categories
+    # Suggest existing categories -- shown inline since cli_art/charm_prompt
+    # has no autocomplete primitive (questionary.autocomplete() has no Go/huh
+    # counterpart the way select/checkbox/text/confirm/password do).
     existing_categories = sorted(
         list({t.get("category", "") for t in tools if t.get("category")})
     )
-    category = questionary.autocomplete(
-        "Category:",
-        choices=existing_categories,
-        validate=lambda x: len(x.strip()) > 0 or "Category cannot be empty.",
-    ).ask()
-    if not category:
+    category_hint = (
+        f" (existing: {', '.join(existing_categories)})" if existing_categories else ""
+    )
+    category = cli_art.text(f"Category{category_hint}:")
+    if not category or not category.strip():
         return
     category = category.strip()
 
-    confidence = questionary.select(
+    confidence = cli_art.select(
         "Confidence/Fluency level:",
         choices=["Expert", "Advanced", "Proficient", "Working Knowledge", "Familiar"],
-    ).ask()
+    )
     if not confidence:
         return
 
-    evidence_count_str = questionary.text(
+    evidence_count_str = cli_art.text(
         "Evidence Count (number of projects/roles using this):", default="1"
-    ).ask()
+    )
     if evidence_count_str is None:
         cli_art.console.print(
             f"{cli_art.WARNING} Skill creation cancelled.", soft_wrap=True
@@ -209,7 +210,7 @@ def _add_skill(data: dict):
     except ValueError:
         evidence_count = 1
 
-    use_notes = questionary.text("Use Notes (how you have used this skill/tool):").ask()
+    use_notes = cli_art.text("Use Notes (how you have used this skill/tool):")
     if use_notes is None:
         cli_art.console.print(
             f"{cli_art.WARNING} Skill creation cancelled.", soft_wrap=True
@@ -217,10 +218,10 @@ def _add_skill(data: dict):
         return
     use_notes = use_notes.strip()
 
-    tr_references_str = questionary.text(
+    tr_references_str = cli_art.text(
         "Evidence/Project References (comma-separated, e.g. TR-0007, profile.yml):",
         default="profile.yml",
-    ).ask()
+    )
     if tr_references_str is None:
         cli_art.console.print(
             f"{cli_art.WARNING} Skill creation cancelled.", soft_wrap=True
@@ -254,30 +255,33 @@ def _edit_skill(data: dict, tool_id: str):
         f"\n[bold cyan]Editing Skill: {tool.get('name')}[/bold cyan]\n"
     )
 
-    name = questionary.text("Skill/Tool Name:", default=tool.get("name", "")).ask()
+    name = cli_art.text("Skill/Tool Name:", default=tool.get("name", ""))
     if not name or not name.strip():
         return
 
     existing_categories = sorted(
         list({t.get("category", "") for t in tools if t.get("category")})
     )
-    category = questionary.autocomplete(
-        "Category:", choices=existing_categories, default=tool.get("category", "")
-    ).ask()
-    if not category:
+    category_hint = (
+        f" (existing: {', '.join(existing_categories)})" if existing_categories else ""
+    )
+    category = cli_art.text(
+        f"Category{category_hint}:", default=tool.get("category", "")
+    )
+    if not category or not category.strip():
         return
 
-    confidence = questionary.select(
+    confidence = cli_art.select(
         "Confidence/Fluency level:",
         choices=["Expert", "Advanced", "Proficient", "Working Knowledge", "Familiar"],
         default=tool.get("confidence", "Proficient"),
-    ).ask()
+    )
     if not confidence:
         return
 
-    evidence_count_str = questionary.text(
+    evidence_count_str = cli_art.text(
         "Evidence Count:", default=str(tool.get("evidence_count", 1))
-    ).ask()
+    )
     if evidence_count_str is None:
         cli_art.console.print(
             f"{cli_art.WARNING} Skill edit cancelled.", soft_wrap=True
@@ -288,7 +292,7 @@ def _edit_skill(data: dict, tool_id: str):
     except ValueError:
         evidence_count = tool.get("evidence_count", 1)
 
-    use_notes = questionary.text("Use Notes:", default=tool.get("use_notes", "")).ask()
+    use_notes = cli_art.text("Use Notes:", default=tool.get("use_notes", ""))
     if use_notes is None:
         cli_art.console.print(
             f"{cli_art.WARNING} Skill edit cancelled.", soft_wrap=True
@@ -296,9 +300,9 @@ def _edit_skill(data: dict, tool_id: str):
         return
 
     refs_default = ", ".join(tool.get("tr_references", []))
-    tr_references_str = questionary.text(
+    tr_references_str = cli_art.text(
         "Evidence/Project References (comma-separated):", default=refs_default
-    ).ask()
+    )
     if tr_references_str is None:
         cli_art.console.print(
             f"{cli_art.WARNING} Skill edit cancelled.", soft_wrap=True
@@ -451,10 +455,7 @@ def run_skills_menu():
             import facts_manager
 
             facts_manager.display_facts_inventory()
-            questionary.text(
-                "Press Enter to return to Skills & Facts menu...",
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
+            cli_art.text("Press Enter to return to Skills & Facts menu...")
             continue
 
         if action == "manage_dismissed":

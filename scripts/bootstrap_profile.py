@@ -297,70 +297,128 @@ def collect_identity(dry_run: bool = False) -> dict:
             "remote_preference": False,
         }
 
-    full_name = _confirm_text("Full name:", guessed.full_name)
-    email = _confirm_text("Email (e.g. jane.doe@gmail.com):", guessed.email)
-    phone = _confirm_text("Phone (e.g. (555) 123-4567):", guessed.phone)
-    location = _confirm_text("Location (e.g. Austin, TX):", guessed.location)
-    linkedin_url = _confirm_text(
-        "LinkedIn URL (e.g. linkedin.com/in/janedoe):", guessed.linkedin_url
-    )
-    portfolio_url = _confirm_text(
-        "Portfolio URL (optional, press Enter to skip):", guessed.portfolio_url
-    )
-    extra_link = _confirm_text(
-        "Any other portfolio/work-sample link? (optional, press Enter to skip):",
-        existing_extra_link,
-    )
-
-    cli_art.console.print()
-    cli_art.console.print(
-        "[dim]Primary target roles are the exact job titles you'd apply to "
-        'today -- e.g. "Product Marketing Manager", "Senior Copywriter." '
-        "These drive job-board searches and scoring, so keep them specific "
-        "and few (2-4 is typical).[/dim]"
-    )
-    primary_roles = _confirm_roles("Primary target roles:", primary_guess)
-
-    achievements_text = _achievements_summary_text()
-    secondary_guess = (
-        bootstrap_extractors.suggest_secondary_roles(
-            primary_roles, achievements_text, dry_run=dry_run
-        )
-        if primary_roles
-        else []
-    )
-    cli_art.console.print()
-    cli_art.console.print(
-        "[dim]Secondary target roles are near-miss or stretch titles you'd "
-        'also consider -- e.g. a step up ("Senior Marketing Manager"), a '
-        'step sideways ("Content Strategist"), or a title you\'re open to '
-        "but wouldn't chase first. Fine to leave empty.[/dim]"
-    )
-    secondary_roles = _confirm_roles("Secondary target roles:", secondary_guess)
-
-    cli_art.console.print()
-    cli_art.console.print(
-        "[dim]This only affects the location filter used when scanning for "
-        "new postings -- it excludes onsite/hybrid roles outright. You can "
-        "change it later in Settings & Upkeep.[/dim]"
-    )
-    remote_preference = cli_art.confirm(
-        "Are you remote-only (no onsite/hybrid roles)?",
-        default=existing.get("remote_preference", True),
-    )
-
-    return {
-        "full_name": full_name,
-        "email": email,
-        "phone": phone,
-        "location": location,
-        "linkedin_url": linkedin_url,
-        "portfolio_url": portfolio_url,
-        "extra_link": extra_link,
-        "primary_roles": primary_roles,
-        "secondary_roles": secondary_roles,
-        "remote_preference": bool(remote_preference),
+    # This is the single densest sequential-entry point in the whole wizard
+    # (9 fields/prompts in a row) with no way to correct an earlier answer
+    # except finishing everything and re-running the whole step from
+    # scratch. Wrapping it in a review-and-redo loop instead: collect
+    # everything once, show it all back, and either accept it or go
+    # through the same prompts again with what was just typed pre-filled
+    # as the new defaults -- so fixing one wrong field doesn't mean
+    # retyping the other eight. `defaults` starts from the guessed/existing
+    # values and gets replaced with the previous pass's own answers on a
+    # redo; `secondary_defaults` is tracked separately from `defaults` so a
+    # redo reuses the already-typed secondary roles instead of spending a
+    # second suggest_secondary_roles() API call.
+    defaults = {
+        "full_name": guessed.full_name,
+        "email": guessed.email,
+        "phone": guessed.phone,
+        "location": guessed.location,
+        "linkedin_url": guessed.linkedin_url,
+        "portfolio_url": guessed.portfolio_url,
+        "extra_link": existing_extra_link,
+        "primary_roles": primary_guess,
+        "remote_preference": existing.get("remote_preference", True),
     }
+    secondary_defaults = None  # None means "not yet suggested this session"
+
+    while True:
+        full_name = _confirm_text("Full name:", defaults["full_name"])
+        email = _confirm_text("Email (e.g. jane.doe@gmail.com):", defaults["email"])
+        phone = _confirm_text("Phone (e.g. (555) 123-4567):", defaults["phone"])
+        location = _confirm_text("Location (e.g. Austin, TX):", defaults["location"])
+        linkedin_url = _confirm_text(
+            "LinkedIn URL (e.g. linkedin.com/in/janedoe):", defaults["linkedin_url"]
+        )
+        portfolio_url = _confirm_text(
+            "Portfolio URL (optional, press Enter to skip):",
+            defaults["portfolio_url"],
+        )
+        extra_link = _confirm_text(
+            "Any other portfolio/work-sample link? (optional, press Enter to skip):",
+            defaults["extra_link"],
+        )
+
+        cli_art.console.print()
+        cli_art.console.print(
+            "[dim]Primary target roles are the exact job titles you'd apply to "
+            'today -- e.g. "Product Marketing Manager", "Senior Copywriter." '
+            "These drive job-board searches and scoring, so keep them specific "
+            "and few (2-4 is typical).[/dim]"
+        )
+        primary_roles = _confirm_roles("Primary target roles:", defaults["primary_roles"])
+
+        if secondary_defaults is None:
+            achievements_text = _achievements_summary_text()
+            secondary_defaults = (
+                bootstrap_extractors.suggest_secondary_roles(
+                    primary_roles, achievements_text, dry_run=dry_run
+                )
+                if primary_roles
+                else []
+            )
+        cli_art.console.print()
+        cli_art.console.print(
+            "[dim]Secondary target roles are near-miss or stretch titles you'd "
+            'also consider -- e.g. a step up ("Senior Marketing Manager"), a '
+            'step sideways ("Content Strategist"), or a title you\'re open to '
+            "but wouldn't chase first. Fine to leave empty.[/dim]"
+        )
+        secondary_roles = _confirm_roles("Secondary target roles:", secondary_defaults)
+
+        cli_art.console.print()
+        cli_art.console.print(
+            "[dim]This only affects the location filter used when scanning for "
+            "new postings -- it excludes onsite/hybrid roles outright. You can "
+            "change it later in Settings & Upkeep.[/dim]"
+        )
+        remote_preference = cli_art.confirm(
+            "Are you remote-only (no onsite/hybrid roles)?",
+            default=defaults["remote_preference"],
+        )
+
+        result = {
+            "full_name": full_name,
+            "email": email,
+            "phone": phone,
+            "location": location,
+            "linkedin_url": linkedin_url,
+            "portfolio_url": portfolio_url,
+            "extra_link": extra_link,
+            "primary_roles": primary_roles,
+            "secondary_roles": secondary_roles,
+            "remote_preference": bool(remote_preference),
+        }
+
+        cli_art.console.print()
+        cli_art.console.rule("Review your answers", style="dim")
+        cli_art.cli_info(f"Full name:       {result['full_name'] or '(blank)'}")
+        cli_art.cli_info(f"Email:           {result['email'] or '(blank)'}")
+        cli_art.cli_info(f"Phone:           {result['phone'] or '(blank)'}")
+        cli_art.cli_info(f"Location:        {result['location'] or '(blank)'}")
+        cli_art.cli_info(f"LinkedIn URL:    {result['linkedin_url'] or '(blank)'}")
+        cli_art.cli_info(f"Portfolio URL:   {result['portfolio_url'] or '(blank)'}")
+        cli_art.cli_info(f"Other link:      {result['extra_link'] or '(blank)'}")
+        cli_art.cli_info(
+            f"Primary roles:   {', '.join(result['primary_roles']) or '(none)'}"
+        )
+        cli_art.cli_info(
+            f"Secondary roles: {', '.join(result['secondary_roles']) or '(none)'}"
+        )
+        cli_art.cli_info(
+            f"Remote-only:     {'Yes' if result['remote_preference'] else 'No'}"
+        )
+        cli_art.console.print()
+
+        if cli_art.confirm("Everything look right?", default=True):
+            return result
+
+        cli_art.cli_info(
+            "No problem -- let's go through it again. Your previous answers are "
+            "pre-filled, so press Enter to keep anything that was already right."
+        )
+        defaults = {**defaults, **result}
+        secondary_defaults = result["secondary_roles"]
 
 
 def collect_deal_breakers(dry_run: bool = False) -> list:
@@ -892,22 +950,17 @@ def write_portals_yml(identity: dict) -> None:
         f.write(content)
 
 
-_SCAN_FILTERS_SEED_TEMPLATE = """# board_scanner's "boards"/"ats" sources: title/location prefilter
-# applied before a listing becomes a JD file. positive seeded from your
-# target roles during bootstrap -- add near-miss titles you keep seeing
-# as you scan real postings. Empty negative/block lists are permissive
-# by design. See profiles/morgan/board_scanner/scan_filters.yml for a
-# real worked example (100+ positive terms, 300+ negative terms).
-title_filter:
-  positive:
-{positive_yaml}
-  negative: []
-location_filter:
-  always_allow:
-{always_allow_yaml}
-  block:
-{block_yaml}
-"""
+# Same nested-mapping block convention content_settings.py's own
+# _SCORING_WEIGHTS_RE/_COMPENSATION_RE use: consumes every further-indented
+# line under the key, stopping at the next top-level (column-0) key.
+_TITLE_FILTER_RE = re.compile(
+    r"^title_filter:[ \t]*\n(?:[ \t]+[^\n]*\n|[ \t]*\n(?=[ \t]+\S))*",
+    re.MULTILINE,
+)
+
+
+def _render_title_filter_block(positive: list) -> str:
+    return "title_filter:\n  positive:\n" + _yaml_string_list(positive) + "\n  negative: []\n"
 
 
 def seed_scan_filters_from_target_roles(identity: dict) -> bool:
@@ -926,27 +979,39 @@ def seed_scan_filters_from_target_roles(identity: dict) -> bool:
     prompt via orchestrator.KB_ALLOWLIST, not the file scan_boards.py
     actually reads for gating (profile_paths.board_scanner_dir()/
     scan_filters.yml). Returns whether it actually wrote anything, mostly
-    for tests -- callers don't need to check it."""
+    for tests -- callers don't need to check it.
+
+    Edits ONLY the title_filter: block in place, the same
+    replace-in-place-not-whole-file convention content_settings.py/
+    location_settings.py already use for this exact file -- this used to
+    rebuild the entire file from a title_filter/location_filter-only
+    template via a full atomic_write, silently discarding any OTHER
+    top-level key already present (location:, scoring_weights:,
+    languages:, any comments) the moment this ran. On a truly fresh
+    profile that's a no-op (nothing else is there yet), but on "Update My
+    Knowledge" for an established profile whose target roles were left
+    empty (title_filter never got seeded, so this keeps firing on every
+    later run), it would have silently erased Settings & Upkeep
+    configuration -- commute radius, pay/travel/scoring settings -- set up
+    in between runs."""
     path = os.path.join(profile_paths.board_scanner_dir(), "scan_filters.yml")
     if not os.path.exists(path):
         return False
     with open(path, "r", encoding="utf-8") as f:
-        existing = yaml.safe_load(f) or {}
+        original = f.read()
+        existing = yaml.safe_load(original) or {}
     title_filter = existing.get("title_filter") or {}
     if title_filter.get("positive") or title_filter.get("negative"):
         return False
 
     title_seed = identity["primary_roles"] + identity["secondary_roles"]
-    location_filter = existing.get("location_filter") or {}
-    content = _SCAN_FILTERS_SEED_TEMPLATE.format(
-        positive_yaml=_yaml_string_list(title_seed),
-        always_allow_yaml=_yaml_string_list(
-            location_filter.get("always_allow") or ["Remote"]
-        ),
-        block_yaml=_yaml_string_list(location_filter.get("block") or []),
-    )
+    block = _render_title_filter_block(title_seed)
+    if _TITLE_FILTER_RE.search(original):
+        updated = _TITLE_FILTER_RE.sub(block, original, count=1)
+    else:
+        updated = original.rstrip("\n") + "\n" + block
     with atomic_write(path, encoding="utf-8") as f:
-        f.write(content)
+        f.write(updated)
     return True
 
 
@@ -1133,6 +1198,31 @@ def write_verified_ledger(dry_run: bool = False) -> None:
     if _seed_only_if_absent(RECRUITER_PATTERNS_PATH):
         with atomic_write(RECRUITER_PATTERNS_PATH, encoding="utf-8") as f:
             json.dump(empty_recruiter_patterns, f, indent=2)
+
+
+def stage_candidate_facts(dry_run: bool = False) -> int:
+    """Runs the D10 fact-staging extraction (bootstrap_extractors.
+    extract_and_stage_facts_chunked) over the same attributed achievements
+    text write_verified_ledger() already builds, and returns how many new
+    facts landed in staged_facts.json.
+
+    This step existed in bootstrap_extractors.py (extract_and_stage_facts)
+    but was never actually called from anywhere in the bootstrap flow --
+    every new profile's "Review Staged Career Facts (D10 Gate)" screen in
+    Settings & Upkeep > Skills showed 0 entries regardless of how much
+    source material was ingested, because nothing had ever populated
+    staged_facts.json in the first place. Called from run_profile_setup()
+    right after write_verified_ledger(), which already guarantees
+    verified_facts.json exists (empty) by this point -- staging never
+    writes there directly; a human still has to promote each fact via
+    facts_manager.review_staged_facts_interactive()."""
+    if dry_run:
+        cli_art.cli_info("[DRY RUN] would extract and stage candidate career facts.")
+        return 0
+    achievements_text = _achievements_summary_text_by_employer()
+    if not achievements_text:
+        return 0
+    return bootstrap_extractors.extract_and_stage_facts_chunked(achievements_text)
 
 
 def _build_cv_draft_rows() -> list:
@@ -1395,9 +1485,37 @@ def write_cv_md(identity: dict, dry_run: bool = False) -> None:
         f.write(content if choice == "accept" else "")
 
 
+def _checkpoint_entry_text(result: dict) -> str:
+    """Renders one already-ingested document's extracted content as plain
+    text, drawn from the structured data Phase 0 (classify_document_type /
+    extract_resume_timeline_and_achievements / extract_achievements) already
+    produced for it -- never by re-reading the source file. A PDF or image
+    document has no local text to re-read (_resolve_text_or_upload returns
+    text=None for those, upload_path instead), so gathering source texts by
+    re-resolving each path silently dropped every PDF/image-derived document
+    from the background guide and voice anchors: an all-PDF source set (a
+    resume plus a few scanned notes, a common real case) produced an empty
+    source_texts list and "no usable source text found" even though
+    extraction itself had succeeded and populated the checkpoint. Reusing the
+    checkpoint sidesteps that entirely, since it's already extracted plain
+    text regardless of the original file format."""
+    doc_type = result.get("doc_type")
+    if doc_type in ("resume", "linkedin_export"):
+        lines = []
+        for entry in result.get("work_experience", []):
+            header = (
+                f"{entry.get('title') or ''} at {entry.get('company') or ''} "
+                f"({entry.get('start_date') or '?'} - {entry.get('end_date') or '?'})"
+            ).strip()
+            lines.append(header)
+            lines.extend(f"- {b}" for b in entry.get("achievements", []))
+        return "\n".join(lines)
+    return "\n".join(a.get("raw_text", "") for a in result.get("achievements", []))
+
+
 def _gather_background_source_texts(checkpoint: dict) -> list:
     texts = []
-    for filename, result in sorted(checkpoint.items()):
+    for _filename, result in sorted(checkpoint.items()):
         if result.get("status") != "done":
             continue
         if result.get("doc_type") not in (
@@ -1407,8 +1525,7 @@ def _gather_background_source_texts(checkpoint: dict) -> list:
             "achievement_notes",
         ):
             continue
-        path = os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename)
-        text, _upload_path = _resolve_text_or_upload(path)
+        text = _checkpoint_entry_text(result)
         if text:
             texts.append(text)
     return texts
@@ -1470,7 +1587,7 @@ def _gather_voice_anchor_source_texts(checkpoint: dict) -> list:
     there -- but it's exactly the kind of first-person writing voice
     anchors need."""
     texts = []
-    for filename, result in sorted(checkpoint.items()):
+    for _filename, result in sorted(checkpoint.items()):
         if result.get("status") != "done":
             continue
         if result.get("doc_type") not in (
@@ -1481,8 +1598,7 @@ def _gather_voice_anchor_source_texts(checkpoint: dict) -> list:
             "other",
         ):
             continue
-        path = os.path.join(bootstrap_bullet_bank.SOURCE_DOCS_DIR, filename)
-        text, _upload_path = _resolve_text_or_upload(path)
+        text = _checkpoint_entry_text(result)
         if text:
             texts.append(text)
     return texts
@@ -1809,6 +1925,107 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
     return queries
 
 
+def collect_excluded_roles(dry_run: bool = False) -> list:
+    """Asks which discovered "roles" aren't real employers at all -- e.g. a
+    "Seeking new opportunities, here's how I stayed busy" placeholder entry
+    someone added to their old resume to cover a gap, not an actual job.
+    Runs BEFORE collect_situational_roles() so an excluded entry is already
+    gone from the timeline by the time that step re-reads the same company
+    list (_build_cv_draft_rows()) and never shows up as a checkbox choice
+    there either -- without this ordering the wizard would happily let
+    someone configure keyword triggers for a fake employer.
+
+    Selecting a role here doesn't delete its bullets: apply_excluded_roles()
+    re-tags them onto the existing 'Misc. / Unassigned' catch-all bucket
+    (the same one bootstrap_timeline.match_to_timeline() already falls back
+    to for a bullet it can't attribute to any real company) so the content
+    is kept as general material rather than lost or left attached to a
+    company that never existed."""
+    if dry_run:
+        cli_art.cli_info("[DRY RUN] would confirm which past roles to exclude.")
+        return []
+
+    companies = [row["company"] for row in _build_cv_draft_rows() if row["company"]]
+    if not companies:
+        return []
+
+    cli_art.cli_info("")
+    cli_art.console.rule("Not actually a role?", style="dim")
+    cli_art.console.print()
+    cli_art.cli_info(
+        "Sometimes an old resume has an entry that isn't really a job -- e.g. "
+        'a "Seeking new opportunities" placeholder covering a gap. Pick any '
+        "of these that should be dropped as an employer; their bullets are "
+        "kept (re-tagged as general material, not tied to a fake company) "
+        "rather than lost."
+    )
+    cli_art.console.print()
+
+    selected = cli_art.checkbox(
+        "Any of these that aren't real roles/employers? (space to select, "
+        "enter to confirm; leave blank for none)",
+        choices=[questionary.Choice(title=c, value=c) for c in companies],
+    )
+    return list(selected) if selected else []
+
+
+def _write_timeline_json(timeline: list) -> None:
+    os.makedirs(os.path.dirname(bootstrap_bullet_bank.TIMELINE_PATH), exist_ok=True)
+    with atomic_write(bootstrap_bullet_bank.TIMELINE_PATH, encoding="utf-8") as f:
+        json.dump(timeline, f, indent=2)
+
+
+def _retag_bullet_bank_companies(excluded: list) -> None:
+    """Re-tags every bullet-bank row whose 'Role / Company' is in `excluded`
+    to 'Misc. / Unassigned' rather than deleting the rows -- a role that
+    turns out not to be a real employer still has genuine bullets worth
+    keeping, just not attributed to a company that never existed. Touches
+    both the Phase 0 draft CSV and the downstream bullet-bank-clean.csv, so
+    a role excluded after Phase 0 already promoted rows into the clean bank
+    doesn't leave stale company names behind there."""
+    if not excluded:
+        return
+    excluded_set = set(excluded)
+    for csv_path in (
+        bootstrap_bullet_bank.DRAFT_CSV_PATH,
+        bootstrap_bullet_bank.BULLET_BANK_CLEAN_PATH,
+    ):
+        if not os.path.exists(csv_path):
+            continue
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames
+            rows = list(reader)
+        changed = False
+        for row in rows:
+            if row.get("Role / Company") in excluded_set:
+                row["Role / Company"] = "Misc. / Unassigned"
+                changed = True
+        if changed:
+            with atomic_write(csv_path, newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+
+
+def apply_excluded_roles(excluded: list, dry_run: bool = False) -> None:
+    """Removes each excluded company's timeline entry (so it stops rendering
+    as a fake employer on cv.md/profile.yml) and re-tags its bullet-bank
+    rows onto 'Misc. / Unassigned' instead of dropping them."""
+    if not excluded:
+        return
+    if dry_run:
+        cli_art.cli_info(
+            f"[DRY RUN] would exclude {len(excluded)} role(s) from the timeline "
+            "and re-tag their bullets to 'Misc. / Unassigned'."
+        )
+        return
+    excluded_set = set(excluded)
+    timeline = [e for e in _load_timeline() if e.get("company") not in excluded_set]
+    _write_timeline_json(timeline)
+    _retag_bullet_bank_companies(excluded)
+
+
 def collect_situational_roles(dry_run: bool = False) -> list:
     """Confirms/collects "situational" roles -- past jobs specific enough
     that they should only show up on a tailored resume when the JD
@@ -1858,23 +2075,46 @@ def collect_situational_roles(dry_run: bool = False) -> list:
 
     roles = []
     for company in selected:
-        cli_art.console.print()
-        display_name = (
-            cli_art.text(
-                f'Display name for "{company}" (blank to keep as-is):',
-                default=company,
+        # Per-role confirm-and-redo: each role's two fields (display name +
+        # keywords) loop until confirmed, instead of committing immediately
+        # -- a typo on role 2 of 4 used to mean finishing the whole wizard
+        # and re-running this entire step (re-picking every checkbox, and
+        # re-typing every OTHER role's answers too) just to fix it.
+        display_name_default = company
+        keywords_default = ""
+        while True:
+            cli_art.console.print()
+            display_name = (
+                cli_art.text(
+                    f'Display name for "{company}" (blank to keep as-is):',
+                    default=display_name_default,
+                )
+                or company
             )
-            or company
-        )
-        kw_raw = (
-            cli_art.text(
-                f'Trigger keywords for "{company}" -- comma-separated words/phrases '
-                "a job description would need to mention for this role to be "
-                'considered (e.g. "animal welfare, animal shelter, veterinary"):'
+            kw_raw = (
+                cli_art.text(
+                    f'Trigger keywords for "{company}" -- comma-separated words/phrases '
+                    "a job description would need to mention for this role to be "
+                    'considered (e.g. "animal welfare, animal shelter, veterinary"):',
+                    default=keywords_default,
+                )
+                or ""
             )
-            or ""
-        )
-        trigger_keywords = [kw.strip() for kw in kw_raw.split(",") if kw.strip()]
+            trigger_keywords = [kw.strip() for kw in kw_raw.split(",") if kw.strip()]
+
+            cli_art.cli_info(f'  Display name: "{display_name}"')
+            cli_art.cli_info(
+                "  Trigger keywords: "
+                + (
+                    ", ".join(trigger_keywords)
+                    or "(none -- this role will show on every resume)"
+                )
+            )
+            if cli_art.confirm("Look right?", default=True):
+                break
+            cli_art.cli_info("No problem -- let's redo this one.")
+            display_name_default, keywords_default = display_name, kw_raw
+
         if not trigger_keywords:
             cli_art.cli_info(
                 f'No keywords entered for "{company}" -- skipping it (it will '
@@ -1987,7 +2227,9 @@ def run_profile_setup(dry_run: bool = False, targets: set = None) -> dict:
         "tags_generated": 0,
         "linkedin_search_queries": 0,
         "situational_roles": 0,
+        "excluded_roles": 0,
         "deal_breakers": 0,
+        "staged_facts": 0,
     }
 
     if PROFILE_TARGET_PROFILE_YML in targets:
@@ -2002,6 +2244,8 @@ def run_profile_setup(dry_run: bool = False, targets: set = None) -> dict:
             achievements_text,
             dry_run=dry_run,
         )
+        excluded_roles = collect_excluded_roles(dry_run=dry_run)
+        apply_excluded_roles(excluded_roles, dry_run=dry_run)
         situational_roles = collect_situational_roles(dry_run=dry_run)
         voice_calibration_example = collect_voice_calibration_example(dry_run=dry_run)
         deal_breakers = collect_deal_breakers(dry_run=dry_run)
@@ -2017,15 +2261,24 @@ def run_profile_setup(dry_run: bool = False, targets: set = None) -> dict:
         write_situational_roles(situational_roles, dry_run=dry_run)
         seed_scan_filters_from_target_roles(identity)
         write_verified_ledger(dry_run=dry_run)
+        staged_facts_count = stage_candidate_facts(dry_run=dry_run)
         result.update(
             {
                 "recommendations_found": len(recommendations),
                 "tags_generated": len(taxonomy.tags),
                 "linkedin_search_queries": len(linkedin_search_queries),
                 "situational_roles": len(situational_roles),
+                "excluded_roles": len(excluded_roles),
                 "deal_breakers": len(deal_breakers),
+                "staged_facts": staged_facts_count,
             }
         )
+        if staged_facts_count and not dry_run:
+            cli_art.cli_info(
+                f"{cli_art.SUCCESS} Staged {staged_facts_count} candidate fact(s) for "
+                "review -- Settings & Upkeep > Skills > Review Staged Career Facts "
+                "(D10 Gate)."
+            )
         offer_settings_screens(dry_run=dry_run)
         report_job_board_readiness(dry_run=dry_run)
 

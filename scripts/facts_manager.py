@@ -17,7 +17,6 @@ from typing import Any, Dict, List, Optional
 
 import cli_art
 import profile_paths
-import questionary
 import theme
 from atomic_write import atomic_write
 
@@ -402,7 +401,7 @@ def review_staged_facts_interactive(profile: Optional[str] = None) -> Dict[str, 
         )
 
         try:
-            choice = questionary.select(
+            choice = cli_art.select(
                 f"Action for '{sf.get('label')}':",
                 choices=[
                     "✓ Accept & Verify (Promote to verified_facts.json)",
@@ -412,8 +411,7 @@ def review_staged_facts_interactive(profile: Optional[str] = None) -> Dict[str, 
                     "★ Accept All Remaining",
                     "⏹ Exit Review",
                 ],
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask()
+            )
         except Exception:
             choice = "⏭ Skip (Keep staged for later)"
 
@@ -438,33 +436,27 @@ def review_staged_facts_interactive(profile: Optional[str] = None) -> Dict[str, 
                 )
 
         elif "Edit & Accept" in choice:
-            new_label = questionary.text(
-                "Fact Label:",
-                default=sf.get("label", ""),
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask() or sf.get("label", "")
+            new_label = cli_art.text(
+                "Fact Label:", default=sf.get("label", "")
+            ) or sf.get("label", "")
 
-            new_claim = questionary.text(
-                "Fact Claim:",
-                default=sf.get("claim", ""),
-                style=cli_art.QUESTIONARY_STYLE,
-            ).ask() or sf.get("claim", "")
+            new_claim = cli_art.text(
+                "Fact Claim:", default=sf.get("claim", "")
+            ) or sf.get("claim", "")
 
             new_caveat = (
-                questionary.text(
+                cli_art.text(
                     "Caveat / Scope Limits (optional):",
                     default=sf.get("caveat", ""),
-                    style=cli_art.QUESTIONARY_STYLE,
-                ).ask()
+                )
                 or ""
             )
 
             new_category = (
-                questionary.text(
+                cli_art.text(
                     "Category:",
                     default=sf.get("category", "general"),
-                    style=cli_art.QUESTIONARY_STYLE,
-                ).ask()
+                )
                 or "general"
             )
 
