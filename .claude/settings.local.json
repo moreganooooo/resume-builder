@@ -119,7 +119,14 @@
       "Bash(xargs -0 ls -lS)",
       "Bash(timeout 5 /Users/morganescott/resume-builder/dashboard/bin/prompt '{\"type\":\"select\",\"message\":\"Test\",\"options\":[{\"label\":\"Option 1\",\"value\":\"opt1\"}]}' 2>&1 || echo \"Exit code: $?\")",
       "Bash(bash /tmp/check_profiles.sh)",
-      "Bash(chmod +x /tmp/test_go_binary.sh)"
+      "Bash(chmod +x /tmp/test_go_binary.sh)",
+      "Bash(timeout 10 git ls-remote origin HEAD)",
+      "Bash(git rev-list *)",
+      "Bash(git config *)",
+      "Bash(git pack-refs *)",
+      "Bash(git prune *)",
+      "Bash(git fsck *)",
+      "Bash(GIT_TRACE=1 git push origin main)"
     ]
   },
   "enableAllProjectMcpServers": true,
