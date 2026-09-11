@@ -138,7 +138,7 @@ class TestMultiDocumentConsolidation(BootstrapEndToEndTestCase):
         self._touch("recommendation_letter.txt")
         self._touch("cert.txt")
 
-        def classify_side_effect(filename, text, dry_run=False):
+        def classify_side_effect(filename, text, dry_run=False, upload_path=None):
             return {
                 "resume.txt": "resume",
                 "recommendation_letter.txt": "recommendation_letter",

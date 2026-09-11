@@ -2,6 +2,7 @@ import os
 import random
 import shutil
 import subprocess
+import tempfile
 import time
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -221,6 +222,20 @@ become resume bullet points later. Follow these rules strictly:
   period are both explicitly stated near the achievement. Use "medium" when
   attribution is implied but not explicit. Use "low" when there is no
   attribution context at all.
+- Be liberal, not conservative, about what counts. A described project,
+  system, or piece of research counts as an achievement even when it's
+  presented as a technical write-up rather than a bragging bullet -- a
+  GitHub-style architecture breakdown, a "Key Features"/"Methodology"
+  section, a repository description. Do not require the word "achievement"
+  or a bulleted "Impact:"/"Result:" line before something counts. If a
+  document describes several distinct achievements/projects, extract ALL of
+  them, not just the most obviously bullet-shaped ones -- do not stop at a
+  "representative sample."
+- When genuinely unsure whether something clears the bar, include it rather
+  than drop it. A human reviews every extracted entry before it reaches a
+  real resume, so a borderline inclusion costs one quick "no" later; a
+  dropped real achievement costs the achievement outright, with no way to
+  recover it after this pass.
 """
 
 _EXTRACTION_PROMPTS = {
@@ -250,11 +265,31 @@ listed, extract the company name, job title, start/end dates as written,
 and every achievement bullet under that role, verbatim or lightly
 rephrased for clarity only.
 
-Separately, if this document also lists any certifications or credentials
-(e.g. a "Certifications" section), extract those into the certifications
-list instead of treating them as achievement bullets -- a credential isn't
-an achievement. Do not invent an issuer or date if the document doesn't
-state one; use null instead.
+If the resume lists an academic program (a degree, e.g. "B.S., Chemistry"
+or "Ph.D. Program") with an institution name and start/end dates, treat
+that the same way as a job: its own entry, with the institution as the
+company and the degree/program as the title.
+
+The certifications list is ONLY for a professional certification, license,
+or credential issued by a recognized certifying body that the candidate
+holds or earned (e.g. "PMP", "AWS Certified Solutions Architect", "CPA", a
+state professional license). Do not invent an issuer or date if the
+document doesn't state one; use null instead.
+
+A patent, award, honor, scholarship, grant, or "___ of the Year"-style
+recognition is NOT a certification, even when the resume groups it under a
+heading like "Achievements" or "Awards" -- these are notable achievements,
+not credentials. Extract each one as an achievement bullet under whichever
+entry (job or academic program) it belongs to, the same as any other
+achievement bullet -- connect it to the right entry using the institution/
+company name stated in the achievement itself, or nearby dates, the same
+"obvious dots" connection described above (e.g. a patent mentioned near a
+company's own bullets, or an award naming the institution directly). If a
+patent or award truly names or implies no company/institution anywhere in
+the document, attach it to whichever entry is the closest fit rather than
+inventing one -- and if nothing is even a reasonable fit, it's better to
+leave it out than to file it under certifications, where it would read as
+a credential the candidate holds rather than a one-time honor.
 """
 
 _CERTIFICATE_PROMPT = """
@@ -305,6 +340,24 @@ def _generate_from_upload(path: str, system_prompt: str, response_schema) -> str
         response_mime_type="application/json",
         response_schema=response_schema,
         temperature=0.0,
+        # gemini_client.GeminiClient.generate() already pins this to MINIMAL
+        # for every "flash-lite" call (B46/P5#1) -- confirmed live that this
+        # tier's default thinking level isn't always MINIMAL and has shifted
+        # once before (Gemini 3.5 Flash rollout). This SDK-based upload path
+        # never got that same pin, so a large/dense source PDF could spend
+        # enough of its output-token budget on unsuppressed thinking to
+        # truncate the JSON achievement list mid-object -- GeminiClient.
+        # parse_json()'s _salvage_fields() fallback then silently recovers
+        # only the complete objects before the cutoff and returns that
+        # partial list with no error, which is exactly how a 49-page,
+        # achievement-dense source document (confirmed: 22+ distinct
+        # "Action: ..." achievement lines alone, spread across the doc)
+        # came back with only 16 achievements extracted.
+        thinking_config=(
+            types.ThinkingConfig(thinking_level=types.ThinkingLevel.MINIMAL)
+            if "flash-lite" in UPLOAD_MODEL.lower()
+            else None
+        ),
     )
     last_error: Exception | None = None
     for attempt in range(UPLOAD_MAX_RETRIES):
@@ -353,42 +406,128 @@ def _generate_from_upload(path: str, system_prompt: str, response_schema) -> str
     ) from last_error
 
 
+# A single extraction call over a long, densely multi-topic PDF tends to
+# summarize/select rather than exhaustively enumerate -- content that isn't
+# formatted like a bulleted "Achievement:/Impact:" line (e.g. a GitHub-
+# README-style project writeup) loses out to more clearly-patterned content,
+# even with a "be liberal" prompt instruction, simply because the model is
+# reading dozens of unrelated topics in one pass and has to choose what's
+# salient. Splitting a large PDF into page-range chunks and extracting each
+# one independently removes that competition: each chunk gets full model
+# attention rather than one topic competing against every other topic in
+# the document for a limited "selection budget." Confirmed live: a 49-page
+# "research report" mixing two jobs, two patents, two personal projects,
+# teaching history, and pages of unrelated company-fit research came back
+# with only 14-16 achievements in one shot -- missing an entire personal
+# project (a GitHub NLP pipeline) presented as an architecture writeup
+# rather than a bulleted accomplishment.
+PDF_CHUNK_PAGE_SIZE = 10
+# Below this, splitting only adds upload latency/cost for no benefit -- a
+# resume, cover letter, or rec letter is almost never this long.
+PDF_CHUNK_PAGE_THRESHOLD = 15
+
+
+def _split_pdf_for_extraction(path: str) -> list[str]:
+    """Splits `path` into PDF_CHUNK_PAGE_SIZE-page chunks (written to temp
+    files) when it's a PDF longer than PDF_CHUNK_PAGE_THRESHOLD pages;
+    returns [path] unchanged for anything else (non-PDF uploads, a PDF
+    pypdf can't open, or one already short enough). Adjacent chunks share
+    one page of overlap so an achievement whose supporting detail (e.g. an
+    "Impact:" line right after its heading) happens to fall on a page
+    boundary is still visible together in at least one chunk -- callers
+    dedupe on raw_text, so the resulting cross-chunk repeat is harmless.
+
+    Callers must clean up every returned path that isn't `path` itself
+    (see _cleanup_pdf_chunks())."""
+    if not path.lower().endswith(".pdf"):
+        return [path]
+    try:
+        import pypdf
+
+        reader = pypdf.PdfReader(path)
+        total_pages = len(reader.pages)
+    except Exception:
+        return [path]
+    if total_pages <= PDF_CHUNK_PAGE_THRESHOLD:
+        return [path]
+
+    tmp_dir = tempfile.mkdtemp(prefix="resume_builder_pdf_chunk_")
+    chunk_paths = []
+    start = 0
+    chunk_index = 0
+    while start < total_pages:
+        end = min(start + PDF_CHUNK_PAGE_SIZE, total_pages)
+        writer = pypdf.PdfWriter()
+        for i in range(start, end):
+            writer.add_page(reader.pages[i])
+        chunk_path = os.path.join(tmp_dir, f"chunk_{chunk_index:03d}.pdf")
+        with open(chunk_path, "wb") as f:
+            writer.write(f)
+        chunk_paths.append(chunk_path)
+        chunk_index += 1
+        if end >= total_pages:
+            break
+        start = end - 1  # one page of overlap with the next chunk
+    return chunk_paths
+
+
+def _cleanup_pdf_chunks(chunk_paths: list[str], original_path: str) -> None:
+    if len(chunk_paths) == 1 and chunk_paths[0] == original_path:
+        return
+    for p in chunk_paths:
+        shutil.rmtree(os.path.dirname(p), ignore_errors=True)
+        break  # every chunk shares the same tmp_dir
+
+
 def classify_document_type(
-    filename: str, text: str | None, dry_run: bool = False
+    filename: str,
+    text: str | None,
+    dry_run: bool = False,
+    upload_path: str | None = None,
 ) -> str:
     """Classifies a document by filename heuristic first; falls back to an
-    LLM call over its text only when a heuristic doesn't match AND text is
-    available. PDFs/images (text=None) with no filename match default to
-    'achievement_notes' rather than spending a second multimodal API call
-    just to classify -- most real filenames aren't that ambiguous, and this
-    keeps ingestion cost proportionate."""
+    LLM call when a heuristic doesn't match. For a PDF/image (text=None),
+    that fallback call goes through the same Files-API upload path
+    extraction itself uses, rather than defaulting to 'achievement_notes'
+    unclassified -- a PDF resume/LinkedIn-export/rec-letter whose filename
+    doesn't happen to contain a heuristic keyword ("Dominick_2024.pdf")
+    used to silently default to the generic achievement-extraction prompt
+    instead of the much richer resume-timeline extraction, undercounting
+    both bullets and the timeline entries later steps (company attribution,
+    the background guide) depend on. Without upload_path (a caller that
+    truly has neither text nor a file to upload) still falls back to
+    'achievement_notes' rather than erroring."""
     lowered = filename.lower()
     for keywords, doc_type in _FILENAME_HEURISTICS:
         if any(kw in lowered for kw in keywords):
             return doc_type
 
-    if text is None:
+    if text is None and upload_path is None:
         return "achievement_notes"
 
     if dry_run:
         cli_art.print_literal(
-            f"[DRY RUN] would classify {cli_art._escape_markup(filename)!r} via LLM over its text sample."
+            f"[DRY RUN] would classify {cli_art._escape_markup(filename)!r} via LLM over its "
+            + ("uploaded file." if text is None else "text sample.")
         )
         return "other"
 
-    sample = text[:2000]
-    raw, _ = GeminiClient.generate(
-        model=EXTRACTION_MODEL,
-        system_instruction=_CLASSIFY_PROMPT,
-        contents=f"Filename: {filename}\n\nContent sample:\n{sample}",
-        response_schema=DocumentClassification,
-        temperature=0.0,
-    )
+    if text is None:
+        raw = _generate_from_upload(upload_path, _CLASSIFY_PROMPT, DocumentClassification)
+    else:
+        sample = text[:2000]
+        raw, _ = GeminiClient.generate(
+            model=EXTRACTION_MODEL,
+            system_instruction=_CLASSIFY_PROMPT,
+            contents=f"Filename: {filename}\n\nContent sample:\n{sample}",
+            response_schema=DocumentClassification,
+            temperature=0.0,
+        )
     if raw is None:
         raise IngestionAPIError(
             f"Gemini API call failed while classifying {filename!r} -- see the WARNING above for the status code."
         )
-    data = GeminiClient.parse_json(raw)
+    data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
     return data.get("doc_type", "other")
 
 
@@ -416,20 +555,41 @@ def extract_achievements(
         return []
 
     if upload_path is not None:
-        raw = _generate_from_upload(upload_path, system_prompt, RawAchievementList)
-    else:
-        raw, _ = GeminiClient.generate(
-            model=EXTRACTION_MODEL,
-            system_instruction=system_prompt,
-            contents=text,
-            response_schema=RawAchievementList,
-            temperature=0.0,
-        )
-        if raw is None:
-            raise IngestionAPIError(
-                f"Gemini API call failed while extracting achievements (doc_type={doc_type!r}) -- "
-                "see the WARNING above for the status code."
+        chunk_paths = _split_pdf_for_extraction(upload_path)
+        if len(chunk_paths) > 1:
+            cli_art.print_literal(
+                f"    Large document ({len(chunk_paths)} chunks) -- extracting each "
+                "chunk separately for more thorough coverage."
             )
+        achievements: list[RawAchievement] = []
+        seen_raw_text: set = set()
+        try:
+            for chunk_path in chunk_paths:
+                raw = _generate_from_upload(chunk_path, system_prompt, RawAchievementList)
+                data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
+                for a in data.get("achievements", []):
+                    item = RawAchievement(**a)
+                    key = item.raw_text.strip().lower()
+                    if key in seen_raw_text:
+                        continue
+                    seen_raw_text.add(key)
+                    achievements.append(item)
+        finally:
+            _cleanup_pdf_chunks(chunk_paths, upload_path)
+        return achievements
+
+    raw, _ = GeminiClient.generate(
+        model=EXTRACTION_MODEL,
+        system_instruction=system_prompt,
+        contents=text,
+        response_schema=RawAchievementList,
+        temperature=0.0,
+    )
+    if raw is None:
+        raise IngestionAPIError(
+            f"Gemini API call failed while extracting achievements (doc_type={doc_type!r}) -- "
+            "see the WARNING above for the status code."
+        )
     data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
     return [RawAchievement(**a) for a in data.get("achievements", [])]
 
@@ -1029,3 +1189,38 @@ def extract_and_stage_facts(
     return facts_manager.stage_facts(
         candidate_facts=candidate_facts, profile=profile, source=source
     )
+
+
+def extract_and_stage_facts_chunked(
+    achievements_text: str,
+    *,
+    profile: str | None = None,
+    source: str = "ai_extraction",
+    dry_run: bool = False,
+) -> int:
+    """extract_and_stage_facts(), but safe for a full career's worth of
+    achievement text the way extract_ledger_entries_chunked() is -- one
+    call over everything would silently see only the first
+    ~6000 characters. Reuses the same _chunk_lines()/LEDGER_CHUNK_CHARS
+    split so a person with several companies' worth of bullets doesn't
+    have later companies dropped from staging entirely.
+
+    No chunk-level dedup logic is needed here the way the ledger's chunked
+    version needs one: facts_manager.stage_facts() reloads staged_facts.json
+    from disk on every call and dedupes against whatever is already staged
+    (see its seen_keys build), so staging chunk 2 after chunk 1 already
+    wrote to disk correctly skips anything chunk 1 already added."""
+    if dry_run:
+        cli_art.print_literal(
+            "[DRY RUN] would extract and stage candidate career facts (D10 gate)."
+        )
+        return 0
+    if not achievements_text.strip():
+        return 0
+
+    total_staged = 0
+    for chunk in _chunk_lines(achievements_text, LEDGER_CHUNK_CHARS):
+        total_staged += extract_and_stage_facts(
+            text=chunk, profile=profile, source=source, dry_run=dry_run
+        )
+    return total_staged

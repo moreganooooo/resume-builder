@@ -1,5 +1,7 @@
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -9,6 +11,20 @@ SCRIPTS_DIR = os.path.join(
 sys.path.insert(0, SCRIPTS_DIR)
 
 import bootstrap_extractors  # noqa: E402
+import pypdf  # noqa: E402
+
+
+def _make_pdf(num_pages: int) -> str:
+    """A real multi-page PDF for exercising _split_pdf_for_extraction()
+    against actual pypdf page counts, not a mock."""
+    writer = pypdf.PdfWriter()
+    for _ in range(num_pages):
+        writer.add_blank_page(width=72, height=72)
+    tmp_dir = tempfile.mkdtemp()
+    path = os.path.join(tmp_dir, "source.pdf")
+    with open(path, "wb") as f:
+        writer.write(f)
+    return path
 
 
 class TestClassifyDocumentType(unittest.TestCase):
@@ -240,6 +256,36 @@ class TestGenerateFromUpload(unittest.TestCase):
         mock_client.files.upload.assert_called_once_with(file="/tmp/fake.pdf")
         mock_client.models.generate_content.assert_called_once()
 
+    @patch("bootstrap_extractors.genai.Client")
+    def test_pins_thinking_level_to_minimal_for_flash_lite(self, mock_client_cls):
+        # Regression test: gemini_client.GeminiClient.generate() (the
+        # text-based REST path) already pins thinkingLevel to MINIMAL for
+        # every "flash-lite" call (B46/P5#1) because this tier's default
+        # thinking level isn't always MINIMAL and has shifted before. This
+        # SDK-based upload path never got that same pin, so a large/dense
+        # source PDF could burn enough of its output-token budget on
+        # unsuppressed thinking to truncate the JSON achievement list
+        # mid-object -- silently recovered as a partial result by
+        # GeminiClient.parse_json()'s _salvage_fields() fallback, with no
+        # error surfaced.
+        from google.genai import types
+
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_client.files.upload.return_value = "uploaded-file-handle"
+        mock_client.models.generate_content.return_value = MagicMock(
+            text='{"achievements": []}'
+        )
+
+        bootstrap_extractors._generate_from_upload(
+            "/tmp/fake.pdf", "system prompt", bootstrap_extractors.RawAchievementList
+        )
+
+        _, kwargs = mock_client.models.generate_content.call_args
+        thinking_config = kwargs["config"].thinking_config
+        self.assertIsNotNone(thinking_config)
+        self.assertEqual(thinking_config.thinking_level, types.ThinkingLevel.MINIMAL)
+
     @patch("bootstrap_extractors.time.sleep")
     @patch("bootstrap_extractors.genai.Client")
     def test_retries_a_transient_503_and_then_succeeds(
@@ -287,6 +333,124 @@ class TestGenerateFromUpload(unittest.TestCase):
 
         mock_client.models.generate_content.assert_called_once()
         mock_sleep.assert_not_called()
+
+
+class TestSplitPdfForExtraction(unittest.TestCase):
+    """Regression coverage for the large-PDF under-extraction bug: a single
+    call over a long, multi-topic PDF summarizes/selects rather than
+    exhaustively enumerating achievements -- confirmed live on a 49-page
+    document that dropped an entire personal project. Splitting into
+    page-range chunks gives each topic its own extraction pass."""
+
+    def setUp(self):
+        self._cleanup_dirs = []
+        self.addCleanup(self._remove_dirs)
+
+    def _remove_dirs(self):
+        for d in self._cleanup_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def _track(self, path: str) -> str:
+        self._cleanup_dirs.append(os.path.dirname(path))
+        return path
+
+    def test_short_pdf_is_not_split(self):
+        path = self._track(_make_pdf(5))
+        self.assertEqual(bootstrap_extractors._split_pdf_for_extraction(path), [path])
+
+    def test_pdf_at_threshold_is_not_split(self):
+        path = self._track(_make_pdf(bootstrap_extractors.PDF_CHUNK_PAGE_THRESHOLD))
+        self.assertEqual(bootstrap_extractors._split_pdf_for_extraction(path), [path])
+
+    def test_non_pdf_is_never_split(self):
+        path = "/tmp/some_notes.txt"
+        self.assertEqual(bootstrap_extractors._split_pdf_for_extraction(path), [path])
+
+    def test_unopenable_pdf_falls_back_to_original_path(self):
+        self.assertEqual(
+            bootstrap_extractors._split_pdf_for_extraction("/nonexistent/fake.pdf"),
+            ["/nonexistent/fake.pdf"],
+        )
+
+    def test_large_pdf_is_split_with_one_page_overlap(self):
+        path = self._track(_make_pdf(25))
+        chunks = bootstrap_extractors._split_pdf_for_extraction(path)
+        try:
+            self.assertGreater(len(chunks), 1)
+            page_counts = [len(pypdf.PdfReader(c).pages) for c in chunks]
+            # 25 pages, chunk size 10, 1-page overlap: 0-9, 9-18, 18-24.
+            self.assertEqual(page_counts, [10, 10, 7])
+            for c in chunks:
+                self.assertTrue(os.path.exists(c))
+        finally:
+            bootstrap_extractors._cleanup_pdf_chunks(chunks, path)
+        for c in chunks:
+            self.assertFalse(os.path.exists(c))
+
+    def test_cleanup_leaves_single_unchunked_path_untouched(self):
+        path = self._track(_make_pdf(3))
+        bootstrap_extractors._cleanup_pdf_chunks([path], path)
+        self.assertTrue(os.path.exists(path))
+
+
+class TestExtractAchievementsFromLargePdf(unittest.TestCase):
+    """extract_achievements() end-to-end over a real multi-chunk PDF:
+    verifies every chunk actually gets its own extraction call, results
+    from every chunk are merged, and exact cross-chunk repeats (expected
+    from the 1-page overlap) are deduped rather than double-counted."""
+
+    def setUp(self):
+        self.path = _make_pdf(25)
+        self.addCleanup(shutil.rmtree, os.path.dirname(self.path), ignore_errors=True)
+
+    @patch("bootstrap_extractors._generate_from_upload")
+    def test_merges_and_dedupes_across_chunks(self, mock_upload):
+        mock_upload.side_effect = [
+            '{"achievements": [{"raw_text": "Built pipeline A", "confidence": "high"}, '
+            '{"raw_text": "Shared boundary achievement", "confidence": "medium"}]}',
+            '{"achievements": [{"raw_text": "Shared boundary achievement", "confidence": "medium"}, '
+            '{"raw_text": "Built dashboard B", "confidence": "high"}]}',
+            '{"achievements": [{"raw_text": "Built dashboard B", "confidence": "high"}, '
+            '{"raw_text": "Led project C", "confidence": "low"}]}',
+        ]
+
+        result = bootstrap_extractors.extract_achievements(
+            "other", upload_path=self.path
+        )
+
+        self.assertEqual(mock_upload.call_count, 3)
+        raw_texts = sorted(a.raw_text for a in result)
+        self.assertEqual(
+            raw_texts,
+            [
+                "Built dashboard B",
+                "Built pipeline A",
+                "Led project C",
+                "Shared boundary achievement",
+            ],
+        )
+
+    @patch("bootstrap_extractors._generate_from_upload")
+    def test_temp_chunks_cleaned_up_after_extraction(self, mock_upload):
+        mock_upload.return_value = '{"achievements": []}'
+        real_split = bootstrap_extractors._split_pdf_for_extraction
+        captured = {}
+
+        def spy_split(path):
+            chunks = real_split(path)
+            captured["chunks"] = chunks
+            return chunks
+
+        with patch(
+            "bootstrap_extractors._split_pdf_for_extraction", side_effect=spy_split
+        ):
+            bootstrap_extractors.extract_achievements("other", upload_path=self.path)
+
+        self.assertGreater(len(captured["chunks"]), 1)
+        for c in captured["chunks"]:
+            self.assertFalse(os.path.exists(c))
+        # The original file survives (it's the caller's, not a temp chunk).
+        self.assertTrue(os.path.exists(self.path))
 
 
 if __name__ == "__main__":
