@@ -392,12 +392,31 @@ def append_entries(hits: list, path: str) -> str:
     load-bearing prose about how provider resolution works, and
     yaml.safe_dump would delete all of it (the same trap
     location_settings.py documents).
+
+    render_entries() emits flush-left `- name: ...` items, which is only
+    valid appended directly after a bare `tracked_companies:` key (see
+    profiles/morgan/board_scanner/tracked_companies.yml for the real,
+    400-entry convention this matches). A freshly-scaffolded profile
+    instead starts from `tracked_companies: []`
+    (bootstrap_bullet_bank.create_new_profile()'s empty-profile scaffold)
+    -- appending flush-left items straight after that inline empty list
+    produced two sibling root-level YAML constructs (a mapping followed by
+    a bare sequence), a parse error that broke every later read of the
+    file silently until something happened to load it. Block-ify that one
+    line first so the appended items become the key's actual children.
     """
     backup = f"{path}.bak-{time.strftime('%Y%m%d-%H%M%S')}"
     shutil.copy2(path, backup)
 
     with open(path, "r", encoding="utf-8") as handle:
         original = handle.read()
+    original = re.sub(
+        r"^tracked_companies:\s*\[\s*\]\s*$",
+        "tracked_companies:",
+        original,
+        count=1,
+        flags=re.MULTILINE,
+    )
     updated = original.rstrip("\n") + "\n" + render_entries(hits)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(updated)
