@@ -351,6 +351,38 @@ class TestAuditProgress(unittest.TestCase):
         ):
             self.assertEqual(bullet_bank_menu._audit_progress(), (1, 3))
 
+    def test_duplicate_raw_rows_do_not_report_as_permanently_pending(self):
+        # Regression test: audit_bullet_bank.py's resume-from-checkpoint
+        # logic skips a raw row whenever its exact Bullet Point text
+        # already appears in the audited output -- deliberately, to avoid
+        # re-scoring identical text (e.g. the same achievement extracted
+        # twice from overlapping source documents, not yet collapsed by
+        # the cluster stage that runs after this one). Counting raw ROWS
+        # here instead of unique TEXT used to report those duplicates as
+        # permanently "pending" even though they will never be processed
+        # and nothing is actually stuck.
+        self._write_csv(
+            self.raw_path,
+            [
+                {"Bullet Point": "a"},
+                {"Bullet Point": "a"},  # exact duplicate of the row above
+                {"Bullet Point": "b"},
+            ],
+            ["Bullet Point"],
+        )
+        self._write_csv(
+            self.audited_path,
+            [{"Bullet Point": "a"}, {"Bullet Point": "b"}],
+            ["Bullet Point"],
+        )
+        with (
+            patch.object(bullet_bank_menu, "RAW_CSV", self.raw_path),
+            patch.object(bullet_bank_menu, "AUDITED_CSV", self.audited_path),
+        ):
+            # 2 unique bullet texts total ("a", "b"), both already audited
+            # -- fully done, not "1 of 3 rows, 1 stuck pending forever."
+            self.assertEqual(bullet_bank_menu._audit_progress(), (2, 2))
+
 
 class TestRewriteProgress(unittest.TestCase):
 

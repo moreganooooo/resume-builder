@@ -14,10 +14,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rewrite_bullets import (  # noqa: E402
     KB_DIR,
+    MAX_GEMMA_FILTER_ROWS,
     RULES_DIR,
     SCORING_DIR,
     KnowledgeBase,
     RulesBundle,
+    extract_cv_section,
     filter_claims_by_tags,
     filter_json_entries_by_tags,
     filter_projects_by_employer,
@@ -117,28 +119,108 @@ class TestFilterJsonEntriesByTags(unittest.TestCase):
         self.assertEqual(len(filtered), 2)
 
     def test_load_json_entries_reads_list_under_key(self):
-        path = os.path.join(KB_DIR, "verified_metrics.json")
-        if not os.path.exists(path):
-            import tempfile
+        # Always isolated -- never read the active profile's real
+        # verified_metrics.json. A prior version of this test fell back to
+        # the real file whenever one happened to exist, and asserted a
+        # "category" field: real ledgers built by refresh_verified_ledger.py
+        # use "label" instead, so this failed on any profile with real
+        # metrics data (id/label/value/employer), not because the data was
+        # broken, but because the test depended on which profile was active
+        # (see CLAUDE.md's "tests must not depend on who is operating the
+        # checkout").
+        import tempfile
 
-            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
-                json.dump(
-                    {"metrics": [{"category": "email", "metric": "74% open rate"}]}, f
-                )
-                temp_path = f.name
-            try:
-                entries = load_json_entries(temp_path, "metrics")
-                self.assertIsInstance(entries, list)
-                self.assertGreater(len(entries), 0)
-                self.assertIn("category", entries[0])
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-        else:
-            entries = load_json_entries(path, "metrics")
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(
+                {"metrics": [{"category": "email", "metric": "74% open rate"}]}, f
+            )
+            temp_path = f.name
+        try:
+            entries = load_json_entries(temp_path, "metrics")
             self.assertIsInstance(entries, list)
             self.assertGreater(len(entries), 0)
             self.assertIn("category", entries[0])
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+
+CV_MD_FIXTURE = """# Dominick Colosimo
+
+## Lead Data Scientist — mIQroTech Inc. (May 2021 - May 2022)
+- Automated AWS-based ETL pipelines.
+
+## Wardrobe Consultant — Men's Wearhouse (Aug 2019 - May 2021)
+- Assisted clients in professional wardrobe planning.
+
+## Teaching Assistant — Pennsylvania State University (Aug 2015 - May 2017)
+- Led lab instruction for 120+ students per semester.
+"""
+
+
+class TestExtractCvSection(unittest.TestCase):
+    """Regression coverage: two independent bugs made this a no-op for
+    every profile bootstrapped through the current pipeline -- (1)
+    fixed_content.py's CV_SECTION_KEYWORDS is scaffolded empty for every
+    new profile and nothing auto-populates it, so the old code's ONLY
+    matching path never fired; (2) even hand-filled, the old regex only
+    split on "### " (level 3) headings, but _assemble_cv_draft() actually
+    generates "## Title — Company (dates)" (level 2), so the split never
+    found a real boundary either. Confirmed live: a real profile's cv.md
+    was being sent in full (16,030 chars) for every company, on every
+    Gemma rewrite call."""
+
+    def _empty_keywords_module(self):
+        module = type(sys)("fixed_content_fixture")
+        module.CV_SECTION_KEYWORDS = []
+        return module
+
+    def test_matches_level_2_heading_with_no_keywords_configured(self):
+        # The actual bug: CV_SECTION_KEYWORDS empty (the real, scaffolded
+        # default for every new profile), level-2 headings (what cv.md
+        # generation actually produces).
+        with patch(
+            "rewrite_bullets.profile_paths.fixed_content_module",
+            return_value=self._empty_keywords_module(),
+        ):
+            section = extract_cv_section(CV_MD_FIXTURE, "mIQroTech Inc.")
+        self.assertIn("Automated AWS-based ETL pipelines", section)
+        self.assertNotIn("Wardrobe planning", section)
+        self.assertLess(len(section), len(CV_MD_FIXTURE))
+
+    def test_no_match_falls_back_to_full_text(self):
+        with patch(
+            "rewrite_bullets.profile_paths.fixed_content_module",
+            return_value=self._empty_keywords_module(),
+        ):
+            section = extract_cv_section(CV_MD_FIXTURE, "A Company Not In The CV")
+        self.assertEqual(section, CV_MD_FIXTURE)
+
+    def test_hand_curated_keyword_override_still_wins(self):
+        module = self._empty_keywords_module()
+        module.CV_SECTION_KEYWORDS = [(["miqro"], "Wardrobe Consultant")]
+        with patch(
+            "rewrite_bullets.profile_paths.fixed_content_module",
+            return_value=module,
+        ):
+            # role_company itself wouldn't automatically match "Wardrobe
+            # Consultant" -- only the hand-curated keyword entry can.
+            section = extract_cv_section(CV_MD_FIXTURE, "mIQroTech Inc.")
+        self.assertIn("Assisted clients in professional wardrobe planning", section)
+
+    def test_still_supports_legacy_level_3_headings(self):
+        legacy_cv = CV_MD_FIXTURE.replace("## ", "### ")
+        with patch(
+            "rewrite_bullets.profile_paths.fixed_content_module",
+            return_value=self._empty_keywords_module(),
+        ):
+            section = extract_cv_section(legacy_cv, "mIQroTech Inc.")
+        self.assertIn("Automated AWS-based ETL pipelines", section)
+        self.assertNotIn("Wardrobe planning", section)
+
+    def test_empty_inputs_return_unchanged(self):
+        self.assertEqual(extract_cv_section("", "mIQroTech Inc."), "")
+        self.assertEqual(extract_cv_section(CV_MD_FIXTURE, ""), CV_MD_FIXTURE)
 
 
 class TestKnowledgeBaseGemmaTier(unittest.TestCase):
@@ -176,6 +258,23 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
                 "name": "Strategy LLC Brand Identity",
             },
         ]
+        # Same reasoning as projects_entries above: these tests assert
+        # employer scoping and a hard row cap, so they need to control the
+        # tools list outright rather than depend on whatever's real.
+        # Deliberately nonsense tool names -- real-sounding ones (e.g.
+        # "Figma") risk colliding with the sandbox persona's own fictional
+        # cv.md content, which is included in the segment regardless of
+        # this fixture and would produce a false pass/fail unrelated to
+        # the employer-scoping logic under test.
+        cls.kb.tools_entries = [
+            {"employer": "Treering Yearbooks", "name": "ZorqTool9000"},
+            {"employer": "Element 8 / Strategy LLC", "name": "VexbinPlatform"},
+        ]
+        cls.kb.facts_entries = [
+            {"label": f"Fact {i}", "claim": f"claim {i}", "confidence": "High"}
+            for i in range(MAX_GEMMA_FILTER_ROWS + 3)
+        ]
+        cls.kb.gemma_static_prefix = cls.kb._build_gemma_static_prefix()
 
     def test_gemma_static_prefix_excludes_profile(self):
         # profile.yml is dropped entirely from Gemma's tier -- its trimmed
@@ -184,12 +283,23 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
             self.assertNotIn(self.kb.profile, self.kb.gemma_static_prefix)
 
     def test_gemma_static_prefix_includes_guardrails_and_voice(self):
-        if self.kb.verified_facts:
-            self.assertIn("VERIFIED FACTS", self.kb.gemma_static_prefix)
-        if self.kb.verified_tools:
-            self.assertIn("VERIFIED TOOLS", self.kb.gemma_static_prefix)
+        self.assertIn("VERIFIED FACTS", self.kb.gemma_static_prefix)
         if self.kb.voice_anchors:
             self.assertIn("VOICE ANCHORS", self.kb.gemma_static_prefix)
+
+    def test_gemma_static_prefix_excludes_verified_tools(self):
+        # verified_tools.json mixes multiple employers exactly like
+        # verified_projects.json does -- it must only ever reach a Gemma
+        # rewrite prompt via the per-bullet, employer-filtered segment
+        # bundle (test_gemma_segment_scopes_tools_to_own_employer below),
+        # never the prefix shared byte-for-byte across every bullet.
+        self.assertNotIn("VERIFIED TOOLS", self.kb.gemma_static_prefix)
+
+    def test_gemma_static_prefix_caps_verified_facts(self):
+        # 8 facts_entries fixture, MAX_GEMMA_FILTER_ROWS (5) cap -- the 3
+        # beyond the cap must not appear.
+        self.assertIn("Fact 0", self.kb.gemma_static_prefix)
+        self.assertNotIn("Fact 7", self.kb.gemma_static_prefix)
 
     def test_gemma_static_prefix_smaller_than_full(self):
         self.assertLess(len(self.kb.gemma_static_prefix), len(self.kb.static_prefix))
@@ -211,6 +321,32 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
             "Inside Sales Team", "[email]"
         )
         self.assertNotIn("VERIFIED PROJECTS", gemma_block)
+
+    def test_gemma_segment_scopes_tools_to_own_employer(self):
+        # Same cross-employer leakage class as verified_projects -- see
+        # tools_entries fixture in setUpClass (ZorqTool9000/Treering,
+        # VexbinPlatform/Element 8). A Treering bullet's Gemma segment
+        # must see ZorqTool9000 and never VexbinPlatform, and vice versa.
+        df = pd.DataFrame(
+            {
+                "Role / Company": ["Treering Yearbooks", "Element 8 / Strategy LLC"],
+                "Tags": ["[email]", "[brand]"],
+            }
+        )
+        self.kb.warm_segment_cache(df)
+
+        treering_block = self.kb.context_block_for_bullet_gemma(
+            "Treering Yearbooks", "[email]"
+        )
+        self.assertIn("VERIFIED TOOLS", treering_block)
+        self.assertIn("ZorqTool9000", treering_block)
+        self.assertNotIn("VexbinPlatform", treering_block)
+
+        strategy_block = self.kb.context_block_for_bullet_gemma(
+            "Element 8 / Strategy LLC", "[brand]"
+        )
+        self.assertIn("VexbinPlatform", strategy_block)
+        self.assertNotIn("ZorqTool9000", strategy_block)
 
     def test_context_block_for_bullet_gemma_returns_slim_segment(self):
         df = pd.DataFrame(

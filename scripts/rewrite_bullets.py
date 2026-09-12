@@ -740,8 +740,41 @@ def _claim_tag_keywords_map() -> dict:
 
 
 def extract_cv_section(cv_text: str, role_company: str) -> str:
+    """Narrows cv.md down to just this bullet's own company section, so
+    the rewrite prompt (both tiers, but Gemma's 16k TPM budget feels it
+    far more) carries one role's worth of resume instead of the whole
+    document on every single bullet.
+
+    Two bugs used to make this a no-op for every profile bootstrapped
+    through the current pipeline, not just an edge case: (1) it only ever
+    matched via fixed_content.py's CV_SECTION_KEYWORDS, a hand-curated
+    list that bootstrap_bullet_bank.create_new_profile() scaffolds EMPTY
+    for every new profile and nothing ever auto-populates -- so
+    matched_heading was always None and this returned the full document,
+    unconditionally, on every call. (2) even with that list hand-filled,
+    the regex only split on "### " (level 3) headings, but
+    bootstrap_profile._assemble_cv_draft() -- the thing that actually
+    writes cv.md -- generates "## Title — Company (dates)" (level 2), so
+    the split never found a single real boundary either. Confirmed live:
+    a real profile's per-bullet Gemma segment was sending its full
+    16,030-char cv.md for every company, on every bullet, contributing
+    roughly 4,000 tokens per call toward the free tier's 16k Gemma TPM cap.
+
+    Now tries the hand-curated CV_SECTION_KEYWORDS override first (so an
+    existing profile's manual entries, e.g. for a nickname the automatic
+    match below can't see, still win), then falls back to matching
+    role_company directly against each section's own heading line, using
+    the same token-normalized comparison filter_projects_by_employer()
+    already uses -- so this works out of the box, with no manual setup,
+    for any profile whose cv.md was generated the normal way."""
     if not cv_text or not role_company:
         return cv_text
+
+    # Splits on level-2 OR level-3 markdown headings. Bootstrap-generated
+    # cv.md uses level 2; level 3 is still supported for a hand-maintained
+    # file using that older convention.
+    sections = re.split(r"(?=^#{2,3} )", cv_text, flags=re.MULTILINE)
+
     rc_lower = role_company.lower()
     fixed_content = profile_paths.fixed_content_module()
     matched_heading = None
@@ -749,12 +782,18 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
         if any(kw in rc_lower for kw in keywords):
             matched_heading = heading
             break
-    if not matched_heading:
-        return cv_text
-    sections = re.split(r"(?=^### )", cv_text, flags=re.MULTILINE)
-    for section in sections:
-        if matched_heading.lower() in section[:60].lower():
-            return section.strip()
+    if matched_heading:
+        for section in sections:
+            if matched_heading.lower() in section[:60].lower():
+                return section.strip()
+
+    rc_tokens = _employer_tokens(role_company)
+    if rc_tokens:
+        for section in sections:
+            heading_line = section.split("\n", 1)[0].lower()
+            if any(rt in heading_line for rt in rc_tokens):
+                return section.strip()
+
     return cv_text
 
 
@@ -892,6 +931,11 @@ class KnowledgeBase:
         self.metrics_entries = load_json_entries(KB_VERIFIED_METRICS, "metrics")
         self.projects_entries = load_json_entries(KB_VERIFIED_PROJECTS, "projects")
         self.verified_tools = load_json_file(KB_VERIFIED_TOOLS, "verified_tools.json")
+        # Parsed-entries forms, for the Gemma-tier filtering below -- kept
+        # alongside the pre-serialized load_json_file() strings above,
+        # which the FULL (flash-lite) static prefix still uses whole.
+        self.facts_entries = load_json_entries(KB_VERIFIED_FACTS, "facts")
+        self.tools_entries = load_json_entries(KB_VERIFIED_TOOLS, "tools")
         self.recruiter_patterns = load_json_file(
             KB_RECRUITER_PATTERNS, "recruiter_memory_patterns.json"
         )
@@ -962,22 +1006,46 @@ class KnowledgeBase:
     def _build_gemma_static_prefix(self) -> str:
         """Slim static tier for Gemma only -- see docs/superpowers/specs/
         2026-07-15-gemma-slim-context-design.md. Keeps only guardrails
-        (verified_facts, verified_tools) and voice_anchors (small, directly
-        serves rewrite quality). Drops profile.yml entirely -- that's
-        strategic career-positioning content, not needed to rewrite a
-        single existing bullet."""
+        (verified_facts) and voice_anchors (small, directly serves rewrite
+        quality). Drops profile.yml entirely -- that's strategic
+        career-positioning content, not needed to rewrite a single
+        existing bullet.
+
+        verified_tools is deliberately NOT included here -- see
+        _build_gemma_segment_bundle(), which injects it per-bullet,
+        filtered to that bullet's own employer via
+        filter_projects_by_employer() (same function verified_projects
+        already uses, and the same reasoning: it mixes multiple
+        employers, so including it whole risked the identical
+        cross-company leakage verified_projects was already fixed for).
+
+        verified_facts stays here (it has no per-employer field the way
+        tools/projects do -- a patent or degree isn't scoped to one job),
+        but is capped to MAX_GEMMA_FILTER_ROWS, highest-confidence first,
+        rather than included whole. Both verified_facts and verified_tools
+        were previously sent in FULL on every single Gemma call with no
+        size limit at all -- unlike every other KB source in this class,
+        which already gets a per-bullet tag/employer filter capped at
+        MAX_GEMMA_FILTER_ROWS. On this profile specifically, verified_facts
+        alone (35 entries) ran to roughly 2,700 tokens and verified_tools
+        (58 entries) another roughly 1,100 -- resent on every bullet,
+        every retry attempt, eating directly into Gemma's 16k TPM free-tier
+        cap alongside the rest of the prompt and the output budget."""
         sections = []
-        if self.verified_facts:
+        if self.facts_entries:
+            confidence_rank = {"high": 0, "medium": 1, "low": 2}
+            ranked_facts = sorted(
+                self.facts_entries,
+                key=lambda f: confidence_rank.get(
+                    str(f.get("confidence", "")).lower(), 3
+                ),
+            )
+            capped_facts = ranked_facts[:MAX_GEMMA_FILTER_ROWS]
             sections.append(
                 "=== VERIFIED FACTS (high-confidence claims — use freely) ===\n"
                 "These are the only facts about this candidate's career that are evidence-backed.\n"
-                "Do NOT invent facts outside this list.\n" + self.verified_facts
-            )
-        if self.verified_tools:
-            sections.append(
-                "=== VERIFIED TOOLS (HF002 guard — only claim tools listed here) ===\n"
-                "Never claim proficiency with any tool not present in this list.\n"
-                + self.verified_tools
+                "Do NOT invent facts outside this list.\n"
+                + json.dumps(capped_facts, ensure_ascii=False, separators=(",", ":"))
             )
         if self.voice_anchors:
             sections.append(
@@ -1031,6 +1099,24 @@ class KnowledgeBase:
                 + json.dumps(
                     filtered_projects, ensure_ascii=False, separators=(",", ":")
                 )
+            )
+
+        # filter_projects_by_employer() only actually looks at an
+        # "employer" field -- verified_tools.json entries have the exact
+        # same {name, employer} shape as verified_projects.json ones, so
+        # this is a real reuse, not a misnomer. Same reasoning as the
+        # projects filter above: without this, verified_tools was sent in
+        # FULL (all 58 entries on this profile) in the Gemma STATIC
+        # prefix, uncapped, on every single call -- see
+        # _build_gemma_static_prefix()'s docstring.
+        filtered_tools = filter_projects_by_employer(
+            self.tools_entries, role_company
+        )[:MAX_GEMMA_FILTER_ROWS]
+        if filtered_tools:
+            sections.append(
+                f"=== VERIFIED TOOLS ({role_company} only, HF002 guard) ===\n"
+                "Never claim proficiency with any tool not present in this list.\n"
+                + json.dumps(filtered_tools, ensure_ascii=False, separators=(",", ":"))
             )
 
         if is_deep_evidence_bullet(role_company, self.deep_evidence_keywords):
@@ -1511,6 +1597,7 @@ def best_version(
 
 KEEPER_COLS = [
     "Bullet Point",
+    "original_bullet",
     "Role / Company",
     "Tags",
     "accuracy_score",
@@ -1552,6 +1639,7 @@ def load_or_init_keepers(path: str, df_map: "pd.DataFrame") -> "pd.DataFrame":
         df_map["manager_test"].str.strip().str.upper() == "PASS"
     )
     df_seed = df_map[mask].copy()
+    df_seed["original_bullet"] = df_seed["Bullet Point"]
     df_seed["source"] = "original"
     df_seed["rewrite_attempts"] = 0
     df_seed["rewrite_reasoning"] = ""
@@ -1660,6 +1748,14 @@ def load_already_processed(
                 done |= set(df_k["Bullet Point"].dropna().str.strip())
             if "final_bullet" in df_k.columns:
                 done |= set(df_k["final_bullet"].dropna().str.strip())
+            # original_bullet is what actually matches a future run's raw
+            # target text (Bullet Point here holds the FINAL rewritten
+            # text, not what was fed in) -- see the comment where
+            # keeper_row is built in main(). Older rows written before
+            # this column existed just contribute nothing extra here,
+            # same as before.
+            if "original_bullet" in df_k.columns:
+                done |= set(df_k["original_bullet"].dropna().str.strip())
             cli_art.console.print(
                 f"   {theme.colorize_icon('hint')} Keepers CSV: {len(df_k)} rows added to done set.",
                 soft_wrap=True,
@@ -2046,6 +2142,19 @@ def main():
 
             keeper_row = {
                 "Bullet Point": result["final_bullet"],
+                # source_cluster_id alone can't be trusted to identify "the
+                # same achievement" across runs -- cluster_id is a content
+                # hash of the WHOLE bank, so it legitimately changes
+                # whenever the bank's content changes (an edit, a dedup
+                # pass, a fresh document ingested), and single_linkage_
+                # cluster()'s membership/representative-election can also
+                # shift between runs even when nothing relevant changed.
+                # Keeping the literal original text this row was rewritten
+                # FROM means a future run can recognize "I've already
+                # turned this exact achievement into a keeper" by text,
+                # independent of whatever cluster_id it happens to carry
+                # this time.
+                "original_bullet": str(row["Bullet Point"]).strip(),
                 "Role / Company": row.get("Role / Company", ""),
                 "Tags": row.get("Tags", ""),
                 "source": result.get("source", "rewrite"),
