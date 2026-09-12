@@ -202,6 +202,36 @@ class TestSkillGapScanReminderText(unittest.TestCase):
         self.assertIn("Skill Gap Scan", text)
 
 
+class TestPersonalNarrativeReminderText(unittest.TestCase):
+    """Never depends on whatever profile is actually active during a test
+    run -- both profile_paths.kb_dir() and bootstrap_profile's own check
+    are patched directly, same isolation reasoning as everywhere else
+    this repo's tests touch profile-scoped state."""
+
+    @patch("os.path.isdir", return_value=True)
+    @patch(
+        "bootstrap_profile.blank_personal_narrative_fields",
+        return_value=["Headline", "Superpowers"],
+    )
+    def test_blank_fields_return_a_reminder(self, mock_blank, mock_isdir):
+        text = cli_art._personal_narrative_reminder_text()
+        self.assertIn("2 personal narrative field(s)", text)
+        self.assertIn("Settings & Upkeep", text)
+
+    @patch("os.path.isdir", return_value=True)
+    @patch("bootstrap_profile.blank_personal_narrative_fields", return_value=[])
+    def test_nothing_blank_returns_empty(self, mock_blank, mock_isdir):
+        self.assertEqual(cli_art._personal_narrative_reminder_text(), "")
+
+    @patch("os.path.isdir", return_value=False)
+    def test_no_knowledge_base_yet_returns_empty(self, mock_isdir):
+        # Same reasoning as the skill-gap reminder: a fresh clone's first
+        # launch has no knowledge base yet, so there's nothing to nudge
+        # about -- this must not raise even though
+        # bootstrap_profile/profile_paths aren't mocked here.
+        self.assertEqual(cli_art._personal_narrative_reminder_text(), "")
+
+
 class TestDisplayStatsLine(unittest.TestCase):
 
     @patch("cli_art.jd_manager.count_completed_resumes", return_value=2)

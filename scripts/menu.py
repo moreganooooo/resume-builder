@@ -262,6 +262,23 @@ def _scoring_weights_label() -> str:
         return ""
 
 
+def _personal_narrative_label() -> str:
+    """How many of the deliberately-manual profile.yml fields
+    (narrative, superpowers, background_context, deal_breakers,
+    industries_of_genuine_fit) are still blank, shown inline for the
+    same reason the other Settings entries display theirs."""
+    try:
+        import bootstrap_profile
+
+        total = len(bootstrap_profile.PERSONAL_NARRATIVE_FIELDS)
+        blank = len(bootstrap_profile.blank_personal_narrative_fields())
+        if blank == 0:
+            return "(all filled in)"
+        return f"({total - blank}/{total} filled in)"
+    except Exception:
+        return ""
+
+
 def _handle_manage_content_filters() -> bool:
     """Settings & Upkeep -> Role & Travel Limits."""
     import content_settings
@@ -499,6 +516,82 @@ def _handle_manage_voice() -> bool:
             continue
 
 
+def _edit_narrative_list_field(label: str, getter, setter) -> None:
+    """Add/remove sub-loop for one of PERSONAL_NARRATIVE_FIELDS' list
+    fields (superpowers, deal_breakers, industries_of_genuine_fit)."""
+    while True:
+        items = getter()
+        choices = [
+            questionary.Choice(title=f"Remove: {item}", value=("remove", i))
+            for i, item in enumerate(items)
+        ]
+        choices.append(
+            questionary.Choice(title="+ Add new item", value=("add", None))
+        )
+        choices.append(questionary.Choice(title="Back", value=("back", None)))
+
+        result = cli_art.select(label, choices=choices)
+        if not result or result[0] == "back":
+            return
+        action, idx = result
+
+        if action == "add":
+            new_item = cli_art.text("New item (a real example, not a category):")
+            if new_item and new_item.strip():
+                setter(items + [new_item.strip()])
+            continue
+
+        if action == "remove":
+            del items[idx]
+            setter(items)
+            continue
+
+
+def _handle_manage_narrative() -> bool:
+    """Settings & Upkeep -> Personal Narrative & Story.
+
+    Edits the profile.yml fields deliberately left for the candidate to
+    fill in themselves -- narrative.headline/exit_story, superpowers,
+    background_context, deal_breakers, industries_of_genuine_fit (see
+    bootstrap_profile.PERSONAL_NARRATIVE_FIELDS). These aren't just
+    resume flavor text: several of them (background_context, narrative,
+    superpowers, deal_breakers) are part of orchestrator.py's
+    AUDIT_PROFILE_KEEP, so a real per-JD evaluation call sees them too --
+    leaving them blank isn't wrong (never auto-generated on purpose,
+    since only the candidate can supply this), just a missed opportunity
+    for a more grounded evaluation and a stronger "why [company]?"
+    cover-letter section."""
+    import bootstrap_profile
+
+    while True:
+        choices = []
+        for label, getter, setter, kind in bootstrap_profile.PERSONAL_NARRATIVE_FIELDS:
+            current = getter()
+            if kind == "scalar":
+                preview = f'"{current}"' if current else "(not set)"
+            else:
+                preview = f"{len(current)} item(s)" if current else "(not set)"
+            choices.append(questionary.Choice(title=f"{label} {preview}", value=label))
+        choices.append(questionary.Choice(title="Back", value="back"))
+
+        choice = cli_art.select("Personal Narrative & Story", choices=choices)
+        if not choice or choice == "back":
+            return True
+
+        label, getter, setter, kind = next(
+            f for f in bootstrap_profile.PERSONAL_NARRATIVE_FIELDS if f[0] == choice
+        )
+        if kind == "scalar":
+            new_value = cli_art.text(f"{label}:", default=getter())
+            if new_value is None:
+                continue
+            setter(new_value.strip())
+            cli_art.cli_info(f"{label} saved.")
+        else:
+            _edit_narrative_list_field(label, getter, setter)
+        continue
+
+
 def _build_settings_upkeep_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why
     (the last-run label below is itself state that can change between
@@ -562,6 +655,13 @@ def _build_settings_upkeep_choices() -> list:
         questionary.Choice(
             title=_icon_title("save", "↳ Writing Voice & Samples"),
             value="manage_voice",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "knowledge",
+                f"↳ Personal Narrative & Story {_personal_narrative_label()}",
+            ),
+            value="manage_narrative",
         ),
         questionary.Choice(
             title=_icon_title("build", "↳ Generate Sample Resume + Cover Letter (QA)"),
@@ -2003,6 +2103,9 @@ def _handle_settings_upkeep() -> bool:
             continue
         if choice == "manage_voice":
             _handle_manage_voice()
+            continue
+        if choice == "manage_narrative":
+            _handle_manage_narrative()
             continue
         if choice == "build_sample":
             _handle_build_sample()

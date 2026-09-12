@@ -678,6 +678,166 @@ def set_voice_calibration_example(value: str) -> None:
         f.write(content)
 
 
+# --- Personal narrative fields (Settings & Upkeep -> Personal Narrative
+# & Story) -----------------------------------------------------------
+# These are the profile.yml fields that are deliberately never
+# auto-generated -- narrative.headline/exit_story, superpowers,
+# background_context, deal_breakers, industries_of_genuine_fit all read
+# "often come from your own self-reflection or feedback you've
+# received" in the bootstrap scaffold itself. But they aren't just
+# resume flavor text: background_context/narrative/superpowers/
+# deal_breakers are part of AUDIT_PROFILE_KEEP (orchestrator.py), so a
+# real per-JD evaluation call sees them too. Get/set pairs here mirror
+# get_/set_voice_calibration_example()'s targeted-substitution approach
+# (never a yaml.safe_load/dump round-trip, which would silently strip
+# every one of profile.yml's hand-written comments).
+
+
+def _get_profile_scalar(field: str, parent: str = None) -> str:
+    if not os.path.exists(PROFILE_YML_PATH):
+        return ""
+    with open(PROFILE_YML_PATH, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    node = data
+    if parent:
+        node = data.get(parent)
+        if not isinstance(node, dict):
+            node = {}
+    return node.get(field) or ""
+
+
+def _set_profile_scalar(field: str, value: str, indent: str = "") -> None:
+    """Replaces a scalar field's `field: "..."` YAML line in place. A
+    field with no existing line to replace (an old profile.yml predating
+    it) gets one appended instead -- `indent` reproduces its nesting
+    depth for that case; an existing line's own indent is always reused
+    when one is found, regardless of what's passed."""
+    if not os.path.exists(PROFILE_YML_PATH):
+        raise FileNotFoundError(f"No profile.yml at {PROFILE_YML_PATH} yet.")
+    with open(PROFILE_YML_PATH, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    escaped = json.dumps(value or "")
+    pattern = re.compile(rf'^([ \t]*){re.escape(field)}:\s*".*"\s*$', re.MULTILINE)
+    match = pattern.search(content)
+    if match:
+        content = pattern.sub(f"{match.group(1)}{field}: {escaped}", content, count=1)
+    else:
+        content = content.rstrip("\n") + f"\n{indent}{field}: {escaped}\n"
+
+    with atomic_write(PROFILE_YML_PATH, encoding="utf-8") as f:
+        f.write(content)
+
+
+def _get_profile_list(field: str) -> list:
+    if not os.path.exists(PROFILE_YML_PATH):
+        return []
+    with open(PROFILE_YML_PATH, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    items = data.get(field) or []
+    return [i.strip() for i in items if isinstance(i, str) and i.strip()]
+
+
+def _set_profile_list(field: str, items: list) -> None:
+    """Replaces a top-level YAML list field via block substitution,
+    same reasoning as _set_profile_scalar. An empty list is still
+    written as one blank entry (`- ""`), matching the bootstrap
+    scaffold's own convention for an unfilled list field."""
+    if not os.path.exists(PROFILE_YML_PATH):
+        raise FileNotFoundError(f"No profile.yml at {PROFILE_YML_PATH} yet.")
+    with open(PROFILE_YML_PATH, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    cleaned = [i.strip() for i in items if i and i.strip()] or [""]
+    rendered = "\n".join(f"  - {json.dumps(i)}" for i in cleaned)
+    new_block = f"{field}:\n{rendered}\n"
+
+    pattern = re.compile(
+        rf"^{re.escape(field)}:[ \t]*\n(?:(?:[ \t]+[^\n]*|[ \t]*)\n)*", re.MULTILINE
+    )
+    if pattern.search(content):
+        content = pattern.sub(new_block, content, count=1)
+    else:
+        content = content.rstrip("\n") + f"\n\n{new_block}"
+
+    with atomic_write(PROFILE_YML_PATH, encoding="utf-8") as f:
+        f.write(content)
+
+
+def get_narrative_headline() -> str:
+    return _get_profile_scalar("headline", parent="narrative")
+
+
+def set_narrative_headline(value: str) -> None:
+    _set_profile_scalar("headline", value, indent="  ")
+
+
+def get_narrative_exit_story() -> str:
+    return _get_profile_scalar("exit_story", parent="narrative")
+
+
+def set_narrative_exit_story(value: str) -> None:
+    _set_profile_scalar("exit_story", value, indent="  ")
+
+
+def get_background_context() -> str:
+    return _get_profile_scalar("background_context")
+
+
+def set_background_context(value: str) -> None:
+    _set_profile_scalar("background_context", value)
+
+
+def get_superpowers() -> list:
+    return _get_profile_list("superpowers")
+
+
+def set_superpowers(items: list) -> None:
+    _set_profile_list("superpowers", items)
+
+
+def get_deal_breakers() -> list:
+    return _get_profile_list("deal_breakers")
+
+
+def set_deal_breakers(items: list) -> None:
+    _set_profile_list("deal_breakers", items)
+
+
+def get_industries_of_genuine_fit() -> list:
+    return _get_profile_list("industries_of_genuine_fit")
+
+
+def set_industries_of_genuine_fit(items: list) -> None:
+    _set_profile_list("industries_of_genuine_fit", items)
+
+
+# Every human-only field surfaced by the banner reminder and editable
+# from the Personal Narrative & Story settings menu -- one list so the
+# two stay in sync by construction rather than by remembering to update
+# both places whenever a field is added.
+PERSONAL_NARRATIVE_FIELDS = [
+    ("Headline", get_narrative_headline, set_narrative_headline, "scalar"),
+    ("Exit story", get_narrative_exit_story, set_narrative_exit_story, "scalar"),
+    ("Background context", get_background_context, set_background_context, "scalar"),
+    ("Superpowers", get_superpowers, set_superpowers, "list"),
+    ("Deal breakers", get_deal_breakers, set_deal_breakers, "list"),
+    (
+        "Industries of genuine fit",
+        get_industries_of_genuine_fit,
+        set_industries_of_genuine_fit,
+        "list",
+    ),
+]
+
+
+def blank_personal_narrative_fields() -> list:
+    """Names of PERSONAL_NARRATIVE_FIELDS entries that are still empty --
+    used by the main banner to remind a returning user these are worth
+    filling in, without ever fabricating content on their behalf."""
+    return [label for label, getter, _, _ in PERSONAL_NARRATIVE_FIELDS if not getter()]
+
+
 def _yaml_string_list(items: list, indent: str = "    ") -> str:
     if not items:
         return f"{indent}[]"
@@ -793,9 +953,9 @@ superpowers:
   # often come from your own self-reflection or feedback you've received.
   - ""
 
-background_context: >
-  A paragraph on how your background came together -- the different
-  tracks/experiences that combine into what you do now.
+# A paragraph on how your background came together -- the different
+# tracks/experiences that combine into what you do now.
+background_context: ""
 
 industries_of_genuine_fit:
   # Industries or company types where you'd genuinely want to work.
@@ -1239,16 +1399,32 @@ def _build_cv_draft_rows() -> list:
     ordered = sorted(timeline, key=lambda e: e.get("end_date") or "", reverse=True)
     result = []
     seen_companies = set()
+    bullets_assigned = set()
     for entry in ordered:
         company = entry["company"]
         seen_companies.add(company)
+        # A company can legitimately have more than one timeline entry --
+        # two separate stints at the same employer (e.g. Data Scientist
+        # 2018-2019, then Lead Data Scientist 2021-2022). Bullets are only
+        # tagged with a company, not which stint they belong to, so there
+        # is no reliable way to split the pool between entries -- but
+        # attaching the WHOLE pool to every entry for that company used to
+        # render the same achievements twice on cv.md, once per stint.
+        # Attach the full pool to only the most recent entry (`ordered` is
+        # sorted by end_date descending); an earlier stint's header still
+        # appears, just without a duplicate copy of every bullet under it.
+        if company in bullets_assigned:
+            bullets = []
+        else:
+            bullets = by_company.get(company, [])
+            bullets_assigned.add(company)
         result.append(
             {
                 "company": company,
                 "title": entry.get("title") or "",
                 "start_date": entry.get("start_date") or "",
                 "end_date": entry.get("end_date") or "",
-                "bullets": by_company.get(company, []),
+                "bullets": bullets,
             }
         )
     for company, bullets in by_company.items():
