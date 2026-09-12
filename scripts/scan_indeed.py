@@ -66,6 +66,8 @@ import os
 
 import cli_art
 import location_settings
+import profile_paths
+import yaml
 
 # JobSpy's own default is 50; ours comes from the profile's configured
 # commute radius, and this is only the fallback when none is set.
@@ -113,6 +115,33 @@ def _is_remote(row) -> bool | None:
     return bool(value)
 
 
+def _default_search_term() -> str:
+    """Falls back to the active profile's own configured target roles
+    instead of the fixed "marketing" literal -- scan.run_scan() never
+    threads a search_term through to any fetcher (every real call site
+    invokes fetch(activity=activity) only), so DEFAULT_SEARCH_TERM was
+    the term every real scan actually used, for every profile, regardless
+    of what that profile does. Reads scan_filters.yml's
+    title_filter.positive (seeded from profile.yml's primary/secondary
+    target roles during bootstrap -- see bootstrap_profile.
+    seed_scan_filters_from_target_roles) and uses the first, most
+    specific entry -- JobSpy's search_term is a single string, so
+    covering every configured title would mean a separate scrape call
+    per title, a bigger change than fixing the wrong default. Falls back
+    to DEFAULT_SEARCH_TERM only if scan_filters.yml is missing, unreadable,
+    or genuinely has no positive titles configured yet."""
+    try:
+        path = os.path.join(
+            profile_paths.board_scanner_dir(), "scan_filters.yml"
+        )
+        with open(path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return DEFAULT_SEARCH_TERM
+    positive = (data.get("title_filter") or {}).get("positive") or []
+    return str(positive[0]).strip() if positive else DEFAULT_SEARCH_TERM
+
+
 def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
     """Scrapes Indeed for the active profile's configured location.
 
@@ -139,7 +168,7 @@ def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
         return []
 
     distance = settings.get("radius_miles") or DEFAULT_DISTANCE_MILES
-    term = search_term or DEFAULT_SEARCH_TERM
+    term = search_term or _default_search_term()
 
     if activity is not None:
         activity.start_source(1, label="Fetching")
@@ -217,3 +246,13 @@ def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
 
     logging.info(f"scan_indeed: returning {len(jobs)} listing(s).")
     return jobs
+
+
+def fetch_indeed_tesla_jobs(activity=None) -> list:
+    """A second, company-scoped Indeed search alongside the profile's own
+    default target-role search -- registered as a separate scan.py source
+    ("indeed_tesla") so it runs in addition to, not instead of,
+    fetch_indeed_jobs()'s normal role-based query. Same location/radius/
+    network-failure handling as the default search, just a different
+    search_term."""
+    return fetch_indeed_jobs(search_term="Tesla", activity=activity)

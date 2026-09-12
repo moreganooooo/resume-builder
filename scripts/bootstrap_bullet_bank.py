@@ -516,8 +516,24 @@ def run_ingestion(dry_run: bool = False, force: bool = False) -> dict:
     review_rows = []
 
     for achievement, filename, doc_type in pending_achievements:
-        company, confidence = bootstrap_timeline.match_to_timeline(
+        company, timeline_confidence = bootstrap_timeline.match_to_timeline(
             achievement, timeline, dry_run=dry_run
+        )
+        # An achievement can be low-confidence two independent ways: the
+        # extraction model itself was unsure about the CONTENT
+        # (achievement.confidence, set at extraction time -- e.g. it had to
+        # reach for plausible-sounding detail from thin source text), or
+        # match_to_timeline was unsure which COMPANY it belongs to. Either
+        # one alone is reason enough to route to human review. Checking only
+        # the latter (as this used to) is how achievements the extraction
+        # model itself flagged low-confidence on CONTENT reached
+        # bullet-bank-draft.csv completely unflagged, whenever
+        # match_to_timeline still confidently attributed them to the one
+        # company active in that period.
+        confidence = (
+            "low"
+            if "low" in (timeline_confidence, achievement.confidence)
+            else timeline_confidence
         )
         row = (company, achievement.raw_text, filename, doc_type, confidence)
         matched_rows.append(row)
