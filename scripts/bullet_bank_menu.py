@@ -79,14 +79,28 @@ def _audit_progress():
     if not os.path.exists(RAW_CSV):
         return None
     with open(RAW_CSV, newline="", encoding="utf-8") as f:
-        total = sum(1 for _ in csv.DictReader(f))
+        raw_texts = {str(row.get("Bullet Point")) for row in csv.DictReader(f)}
+    total = len(raw_texts)
     done = 0
     if os.path.exists(AUDITED_CSV):
         # audit_bullet_bank.py flushes to disk after every row and its
-        # output only ever contains rows actually scored so far -- unlike
-        # the other stages, row count IS the progress signal here.
+        # output only ever contains rows actually scored so far, so row
+        # count would be the progress signal here -- EXCEPT that script's
+        # own resume-from-checkpoint logic skips a raw row whenever its
+        # exact Bullet Point text already appears in the audited output
+        # (deliberately: never re-score identical text). A raw bank with
+        # duplicate rows -- e.g. the same achievement re-extracted from
+        # two overlapping source documents, not yet collapsed by the
+        # cluster stage that runs after this one -- always finishes with
+        # fewer audited ROWS than raw ROWS by design, which used to read
+        # here as a permanently-stuck "N pending" for duplicates that will
+        # never be processed, could never shrink, and were not actually
+        # unfinished work. Comparing unique TEXT on both sides instead
+        # matches what audit_bullet_bank.py itself considers "already
+        # scored," so the two can't drift out of sync again.
         with open(AUDITED_CSV, newline="", encoding="utf-8") as f:
-            done = sum(1 for _ in csv.DictReader(f))
+            audited_texts = {str(row.get("Bullet Point")) for row in csv.DictReader(f)}
+        done = len(raw_texts & audited_texts)
     return (done, total)
 
 
@@ -142,6 +156,14 @@ def _rewrite_progress():
         df_k = pd.read_csv(KEEPERS_CSV)
         if "Bullet Point" in df_k.columns:
             done_bullets |= set(df_k["Bullet Point"].dropna().str.strip())
+        # original_bullet (added alongside rewrite_bullets.py's
+        # load_already_processed() fix) holds the raw text a keeper was
+        # rewritten FROM, which is what actually matches a target row's
+        # raw "Bullet Point" -- the keeper's own "Bullet Point" column
+        # holds the FINAL rewritten text instead. Rows written before this
+        # column existed just contribute nothing extra here.
+        if "original_bullet" in df_k.columns:
+            done_bullets |= set(df_k["original_bullet"].dropna().str.strip())
 
     done = int(target["Bullet Point"].astype(str).str.strip().isin(done_bullets).sum())
     return (done, total)
