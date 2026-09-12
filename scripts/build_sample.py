@@ -32,6 +32,25 @@ import profile_paths
 import theme
 
 
+def _resolve_sample_jd_path() -> str:
+    """Prefers a profile-specific fixture (profiles/<name>/sample_jd.txt)
+    over the shared fixtures/sample_jd.txt -- the shared one is a single,
+    permanent, field-specific JD (marketing), so a profile in a different
+    field (e.g. data science) needs its own realistic test JD or nothing
+    in its bullet bank matches and the smoke test proves nothing useful.
+    Falls back to the shared fixture, unchanged, when a profile hasn't
+    added its own -- scoped to the active profile's own directory rather
+    than fixtures/ so this can never affect a profile that hasn't opted
+    in (including whatever profile is active during a test run)."""
+    try:
+        profile_specific = os.path.join(profile_paths.profile_root(), "sample_jd.txt")
+        if os.path.exists(profile_specific):
+            return profile_specific
+    except Exception:
+        pass
+    return SAMPLE_JD_PATH
+
+
 def build_sample() -> dict:
     """Runs a fresh resume + cover letter build against the fixture JD.
     Returns {"resume": {...}, "coverletter": {...}} -- each value is that
@@ -61,13 +80,15 @@ def build_sample() -> dict:
             cli_art.detail(f"Could not initialize logging: {e}", level=cli_art.NORMAL)
             log_path = None
 
-    if not os.path.exists(SAMPLE_JD_PATH):
+    sample_jd_path = _resolve_sample_jd_path()
+
+    if not os.path.exists(sample_jd_path):
         cli_art.console.print(
-            f"  {theme.colorize_icon('error')} Sample fixture not found: {SAMPLE_JD_PATH}",
+            f"  {theme.colorize_icon('error')} Sample fixture not found: {sample_jd_path}",
             soft_wrap=True,
         )
         if logger.handlers:
-            logger.error(f"Sample fixture not found: {SAMPLE_JD_PATH}")
+            logger.error(f"Sample fixture not found: {sample_jd_path}")
         return {"resume": {}, "coverletter": {}}
 
     # Recover the active log file's path even if a prior call in this same
@@ -82,21 +103,21 @@ def build_sample() -> dict:
     # Clear any leftover checkpoint so this is always a full, fresh run --
     # a stale partial checkpoint from an earlier interrupted attempt would
     # silently skip steps this is specifically meant to exercise.
-    job_key = jd_manager.compute_job_key(SAMPLE_JD_PATH)
+    job_key = jd_manager.compute_job_key(sample_jd_path)
     jd_manager.delete_checkpoint(job_key)
 
     engine = orchestrator.ResumeEngine()
 
     cli_art.console.rule("Building Sample Resume", style="dim")
     resume_result = engine.build_tailored_resume(
-        jd_path=SAMPLE_JD_PATH,
+        jd_path=sample_jd_path,
         master_resume={},
         job_key=job_key,
         interactive=True,
     )
 
     cli_art.console.rule("Building Sample Cover Letter", style="dim")
-    coverletter_result = engine.build_tailored_coverletter(SAMPLE_JD_PATH)
+    coverletter_result = engine.build_tailored_coverletter(sample_jd_path)
 
     result = {"resume": resume_result, "coverletter": coverletter_result}
     resume_ok = bool(result["resume"])

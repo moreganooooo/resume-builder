@@ -1,7 +1,9 @@
 """Unit tests for scripts/build_sample.py."""
 
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -12,6 +14,45 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 import build_sample  # noqa: E402
+
+
+class TestResolveSampleJdPath(unittest.TestCase):
+    """A profile-specific fixture (profiles/<name>/sample_jd.txt) should
+    win over the shared, field-specific fixtures/sample_jd.txt -- a
+    profile in a different field needs its own realistic test JD or the
+    smoke test proves nothing (bullet bank content won't match at all)."""
+
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    def test_profile_specific_fixture_wins_when_present(self):
+        profile_specific = os.path.join(self.tmp_dir, "sample_jd.txt")
+        with open(profile_specific, "w", encoding="utf-8") as f:
+            f.write("a real JD")
+        with patch(
+            "build_sample.profile_paths.profile_root", return_value=self.tmp_dir
+        ):
+            self.assertEqual(build_sample._resolve_sample_jd_path(), profile_specific)
+
+    def test_falls_back_to_shared_fixture_when_absent(self):
+        with patch(
+            "build_sample.profile_paths.profile_root", return_value=self.tmp_dir
+        ):
+            self.assertEqual(
+                build_sample._resolve_sample_jd_path(), build_sample.SAMPLE_JD_PATH
+            )
+
+    def test_falls_back_safely_if_profile_root_raises(self):
+        with patch(
+            "build_sample.profile_paths.profile_root",
+            side_effect=RuntimeError("no active profile"),
+        ):
+            self.assertEqual(
+                build_sample._resolve_sample_jd_path(), build_sample.SAMPLE_JD_PATH
+            )
 
 
 class TestBuildSample(unittest.TestCase):
