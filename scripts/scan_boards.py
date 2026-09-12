@@ -57,6 +57,20 @@ import requests
 import work_hours
 import yaml
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+
+# _child_env() (below) forwards os.environ to the Node subprocess for
+# providers needing credentials (adzuna, jooble) -- it can only forward
+# what's actually in os.environ, and nothing else in this module's own
+# import chain guarantees the active profile's .env has been loaded into
+# it. Every caller that happens to import gemini_client first gets this
+# for free as a side effect (it calls load_dotenv() too), which is how
+# this went unnoticed in the normal interactive flow -- but a script that
+# reaches scan_boards without that side effect (e.g. running
+# discover_local_employers.py standalone) saw real, present API keys
+# silently vanish for the child process, misreported as "missing" even
+# though dotenv_values() confirms they're in the file.
+load_dotenv(profile_paths.env_path(), override=True)
 
 # board-scanners/ (repo root) holds only the shared engine code (the Node
 # provider modules + the run_provider.mjs shim) -- generic across every

@@ -88,6 +88,10 @@ SOURCE_FETCHERS = {
     # scan_indeed.py for why it is a Python source and not a Node
     # provider, and why it scrapes only Indeed of JobSpy's five sites.
     "indeed": scan_indeed.fetch_indeed_jobs,
+    # A second, company-scoped Indeed search that runs alongside the
+    # default role-based one above -- not a replacement for it. See
+    # scan_indeed.fetch_indeed_tesla_jobs()'s own docstring.
+    "indeed_tesla": scan_indeed.fetch_indeed_tesla_jobs,
     "boards": scan_boards.fetch_board_jobs,
     "ats": scan_ats.fetch_ats_jobs,
 }

@@ -172,6 +172,34 @@ MAX_BACKOFF_SECS = 90
 # Fallback model used when primary fails repeatedly
 REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
 
+
+def _server_retry_delay_secs(resp) -> float | None:
+    """Reads the server's own cooldown hint off a 429/503, when it sends
+    one -- a free-tier RPM cap (e.g. Gemma's) can be tighter than our
+    guessed BASE_BACKOFF_SECS exponential curve accounts for, especially
+    once per-call prompt/cache size grows. Google's quota errors carry a
+    google.rpc.RetryInfo block in error.details with the real wait time
+    ("19s"); honoring that beats blind exponential backoff that retries
+    well before the quota window actually resets. Returns None (falls
+    back to the exponential curve) if the response has no such hint --
+    plain server errors (500/502/504) don't carry one."""
+    try:
+        details = resp.json().get("error", {}).get("details", [])
+    except (ValueError, AttributeError):
+        return None
+    for d in details:
+        if not isinstance(d, dict):
+            continue
+        if "RetryInfo" not in d.get("@type", ""):
+            continue
+        delay = d.get("retryDelay", "")
+        if isinstance(delay, str) and delay.endswith("s"):
+            try:
+                return float(delay[:-1])
+            except ValueError:
+                return None
+    return None
+
 # Per-model fallback targets: after failure_streak reaches 2 within one
 # generate() call, switch to the mapped model rather than continuing to
 # retry the one that's struggling. gemini-3.1-flash-lite has a 250k TPM
@@ -724,17 +752,25 @@ class GeminiClient:
                     model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
-                sleep_dur = (
-                    0
-                    if (
-                        os.environ.get("CI") == "true"
-                        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
-                    )
-                    else min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
-                    + random.uniform(1, 4)
-                )
+                server_delay = _server_retry_delay_secs(resp)
+                if (
+                    os.environ.get("CI") == "true"
+                    or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+                ):
+                    sleep_dur = 0
+                elif server_delay is not None:
+                    # The server's own RetryInfo hint beats our guessed
+                    # exponential curve -- a small buffer on top since the
+                    # hint is the earliest safe retry time, not a
+                    # guarantee, and free-tier quota windows are unforgiving.
+                    sleep_dur = server_delay + random.uniform(1, 4)
+                else:
+                    sleep_dur = min(
+                        BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
+                    ) + random.uniform(1, 4)
                 cli_art.console.print(
-                    f"    {cli_art.WARNING} HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s (retry {attempt+1}/{max_retries})...",
+                    f"    {cli_art.WARNING} HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s"
+                    f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
                     soft_wrap=True,
                 )
                 time.sleep(sleep_dur)

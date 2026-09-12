@@ -235,6 +235,55 @@ class TestRunIngestionAchievementNotes(BootstrapIngestionTestCase):
             content = f.read()
         self.assertIn("Did something notable", content)
 
+    @patch("bootstrap_bullet_bank.bootstrap_timeline.match_to_timeline")
+    @patch("bootstrap_bullet_bank.bootstrap_extractors.extract_achievements")
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.classify_document_type",
+        return_value="achievement_notes",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.extract_local_text",
+        return_value="some notes",
+    )
+    @patch(
+        "bootstrap_bullet_bank.bootstrap_extractors.detect_file_kind",
+        return_value="text",
+    )
+    def test_low_extraction_confidence_alone_goes_to_review(
+        self,
+        mock_detect,
+        mock_extract_text,
+        mock_classify,
+        mock_extract_achievements,
+        mock_match,
+    ):
+        """The extraction model can be unsure about CONTENT (achievement.
+        confidence) even when match_to_timeline is fully confident about
+        WHICH COMPANY it belongs to -- e.g. only one employer was active in
+        that period, so attribution is easy even though the achievement
+        itself was thinly sourced or invented. Before this fix, only
+        match_to_timeline's confidence gated review, so a low-confidence
+        extraction with an easy company match reached the trusted bank
+        completely unflagged."""
+        self._touch("notes.txt")
+        mock_extract_achievements.return_value = [
+            bootstrap_extractors.RawAchievement(
+                raw_text="Implemented automated CI/CD pipelines using Jenkins and Docker",
+                company_hint=None,
+                date_hint=None,
+                title_hint=None,
+                confidence="low",
+            )
+        ]
+        mock_match.return_value = ("Some Company Inc.", "high")
+
+        summary = bootstrap_bullet_bank.run_ingestion()
+
+        self.assertEqual(summary["flagged"], 1)
+        with open(bootstrap_bullet_bank.REVIEW_CSV_PATH, encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("Jenkins and Docker", content)
+
 
 class TestRunIngestionCertificate(BootstrapIngestionTestCase):
 

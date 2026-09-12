@@ -61,6 +61,64 @@ class TestOriginResolution(unittest.TestCase):
         self.assertEqual(scan_indeed._origin_from_settings({}), "")
 
 
+class TestDefaultSearchTerm(unittest.TestCase):
+    """Regression coverage: scan.run_scan() never threads a search_term
+    through to any fetcher (every real call site invokes
+    fetch(activity=activity) only), so DEFAULT_SEARCH_TERM ("marketing")
+    was silently what every real Indeed scan searched for, on every
+    profile, regardless of that profile's actual target roles."""
+
+    def setUp(self):
+        import tempfile
+
+        self._tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, self._tmp_dir, ignore_errors=True)
+        self._scan_filters_path = os.path.join(self._tmp_dir, "scan_filters.yml")
+        patcher = patch(
+            "scan_indeed.profile_paths.board_scanner_dir",
+            return_value=self._tmp_dir,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _write_filters(self, positive):
+        import yaml
+
+        with open(self._scan_filters_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump({"title_filter": {"positive": positive}}, f)
+
+    def test_uses_first_positive_title(self):
+        self._write_filters(["Data Scientist", "Machine Learning Engineer"])
+        self.assertEqual(scan_indeed._default_search_term(), "Data Scientist")
+
+    def test_falls_back_when_no_positive_titles_configured(self):
+        self._write_filters([])
+        self.assertEqual(
+            scan_indeed._default_search_term(), scan_indeed.DEFAULT_SEARCH_TERM
+        )
+
+    def test_falls_back_when_scan_filters_missing(self):
+        self.assertEqual(
+            scan_indeed._default_search_term(), scan_indeed.DEFAULT_SEARCH_TERM
+        )
+
+    @patch("location_settings.read_settings", return_value=SETTINGS)
+    def test_fetch_indeed_jobs_uses_profiles_own_target_role(self, _):
+        self._write_filters(["Data Scientist", "Machine Learning Engineer"])
+        fake = MagicMock(return_value=frame_of([ROW]))
+        with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
+            scan_indeed.fetch_indeed_jobs()
+        self.assertEqual(fake.call_args.kwargs["search_term"], "Data Scientist")
+
+    @patch("location_settings.read_settings", return_value=SETTINGS)
+    def test_explicit_search_term_still_wins(self, _):
+        self._write_filters(["Data Scientist"])
+        fake = MagicMock(return_value=frame_of([ROW]))
+        with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
+            scan_indeed.fetch_indeed_jobs(search_term="Tesla")
+        self.assertEqual(fake.call_args.kwargs["search_term"], "Tesla")
+
+
 class TestFetchIndeedJobs(unittest.TestCase):
     @patch("location_settings.read_settings", return_value=SETTINGS)
     def test_location_and_radius_reach_jobspy(self, _):
@@ -155,6 +213,27 @@ class TestSourceRegistration(unittest.TestCase):
 
         self.assertIn("indeed", scan.SOURCE_FETCHERS)
         self.assertIs(scan.SOURCE_FETCHERS["indeed"], scan_indeed.fetch_indeed_jobs)
+
+    def test_indeed_tesla_is_a_separate_scan_source(self):
+        import scan
+
+        self.assertIn("indeed_tesla", scan.SOURCE_FETCHERS)
+        self.assertIs(
+            scan.SOURCE_FETCHERS["indeed_tesla"], scan_indeed.fetch_indeed_tesla_jobs
+        )
+        # A distinct source, not an alias for the profile's default search.
+        self.assertIsNot(
+            scan.SOURCE_FETCHERS["indeed_tesla"], scan.SOURCE_FETCHERS["indeed"]
+        )
+
+
+class TestFetchIndeedTeslaJobs(unittest.TestCase):
+    @patch("location_settings.read_settings", return_value=SETTINGS)
+    def test_searches_for_tesla_regardless_of_target_roles(self, _):
+        fake = MagicMock(return_value=frame_of([ROW]))
+        with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
+            scan_indeed.fetch_indeed_tesla_jobs()
+        self.assertEqual(fake.call_args.kwargs["search_term"], "Tesla")
 
 
 if __name__ == "__main__":
