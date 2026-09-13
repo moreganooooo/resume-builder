@@ -1163,7 +1163,16 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   for the menu header, since the common case is unedited. Same pattern
   as `_COMPENSATION_KEYS`: `_SCORING_WEIGHTS_KEYS` is an explicit
   allowlist, so a stray key in the YAML can't silently round-trip
-  through the editor and look supported.
+  through the editor and look supported. **Changing
+  `funnel_friction_nudge` does not touch existing evaluations:**
+  `evaluate_fit()` overwrites the model's own `funnel_friction` subscore
+  with the nudged value and never stores the original, so neither
+  `rescore_evaluation_with_location()` nor arithmetic can undo it (a ±2
+  nudge clamped to 1-5 is not invertible). A nudge change needs affected
+  roles re-evaluated. Measured 2026-09-13: a profile left at
+  `funnel_friction_nudge: 2` had 286 of its 364 remote roles pinned at
+  funnel_friction 1, which is why its top roles showed lower interview
+  odds than a default-weight profile.
 - **Pipeline has full filter parity with Jobs for the audited signals --
   and one filter (`[x]`, experience blockers) that Jobs itself doesn't
   have yet.** `dashboard/internal/model/career.go`'s `CareerApplication`
