@@ -78,7 +78,35 @@ BACKGROUND_TAGS = {}
 
 
 def build_education(achievement_keys: dict = None) -> list:
-    return []
+    """Default Education section: one entry per profile.yml
+    fixed_credentials.education item, in order. Replace this with a
+    hand-written list for per-school locations, extra bullets, or
+    achievement_options choices (see profile_paths.
+    education_achievement_slots()); until then the resume still gets an
+    Education section instead of none at all."""
+    import os
+    import profile_paths
+
+    profile = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        data = profile_paths.profile_yaml(profile) or {}
+    except Exception:
+        return []
+    education = (data.get("fixed_credentials") or {}).get("education") or []
+    entries = []
+    for ed in education:
+        if not isinstance(ed, dict) or not (ed.get("credential") or ed.get("institution")):
+            continue
+        entry = {
+            "degree": ed.get("credential", ""),
+            "institution": ed.get("institution", ""),
+            "location": ed.get("location", ""),
+            "bullets": list(ed.get("bullets") or []),
+        }
+        if ed.get("design_only"):
+            entry["design_only"] = True
+        entries.append(entry)
+    return entries
 '''
 
 _SITUATIONAL_ROLES_SCAFFOLD = """situational_min_bullets: 2

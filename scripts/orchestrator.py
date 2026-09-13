@@ -4871,6 +4871,29 @@ class ResumeEngine:
             if verb is not None:
                 claimed_verbs.add(verb)
 
+        # A situational role (situational_roles.yaml) belongs on the resume
+        # only when the JD cleared its keyword gate -- the caller passes those
+        # candidates' bank_tags in as extra_company_minimums. Every OTHER
+        # situational role is kept out of the general fill: the roster drops
+        # that company later anyway, so each slot spent on it was a slot lost
+        # (a 2026-09-13 build spent 3 of 21 on Men's Wearhouse this way).
+        try:
+            situational_tags = {
+                str(cfg.get("bank_tag", "")).strip()
+                for cfg in situational_roles.load_situational_roles()["roles"].values()
+            } - {""}
+        except Exception:
+            situational_tags = set()
+        excluded_companies = situational_tags - set(extra_company_minimums or {})
+        excluded_values = (
+            df["Role / Company"].fillna("").values
+            if excluded_companies and "Role / Company" in df.columns
+            else None
+        )
+
+        def _excluded(idx: int) -> bool:
+            return excluded_values is not None and excluded_values[idx] in excluded_companies
+
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
             try:
@@ -4935,7 +4958,12 @@ class ResumeEngine:
             if len(selected_idx) >= TOP_K_BULLETS:
                 break
             i = int(i)
-            if i in selected_set or _is_near_duplicate(i) or _collides(i):
+            if (
+                i in selected_set
+                or _excluded(i)
+                or _is_near_duplicate(i)
+                or _collides(i)
+            ):
                 continue
             _take(i)
 
@@ -4945,7 +4973,7 @@ class ResumeEngine:
             if len(selected_idx) >= TOP_K_BULLETS:
                 break
             i = int(i)
-            if i in selected_set or _is_near_duplicate(i):
+            if i in selected_set or _excluded(i) or _is_near_duplicate(i):
                 continue
             _take(i)
 
