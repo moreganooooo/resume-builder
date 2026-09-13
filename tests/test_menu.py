@@ -1208,12 +1208,15 @@ class TestManageProfilesDelete(unittest.TestCase):
         import os
 
         # active_profile() was consulted AFTER deletion, when it can raise.
+        # Patched so the reload it performs cannot repoint real modules at
+        # this test's temporary sandbox for the rest of the suite.
         with (
             patch("menu.cli_art.confirm", return_value=True),
             patch.dict(os.environ, {"RESUME_PROFILE": "sandboxuser"}),
+            patch("profile_paths.clear_active_profile") as mock_clear,
         ):
             menu._handle_manage_profiles()
-            self.assertNotIn("RESUME_PROFILE", os.environ)
+        mock_clear.assert_called_once()
         self.assertFalse(os.path.exists(self.profile_dir))
 
 

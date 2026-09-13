@@ -336,6 +336,24 @@ def set_active_profile(name: str) -> None:
             importlib.reload(sys.modules[module_name])
 
 
+def clear_active_profile() -> None:
+    """Unsets RESUME_PROFILE -- e.g. after deleting the active profile --
+    and reloads the same modules set_active_profile() does, so their
+    import-time paths stop pointing at a profile that no longer exists.
+    A module that cannot reload (no profile left to resolve at all) is
+    left as it was rather than raising out of the menu."""
+    import importlib
+    import sys
+
+    os.environ.pop("RESUME_PROFILE", None)
+    for module_name in _RELOAD_ON_PROFILE_SWITCH:
+        if module_name in sys.modules:
+            try:
+                importlib.reload(sys.modules[module_name])
+            except Exception:  # noqa: BLE001 -- see docstring
+                pass
+
+
 def profile_root(profile: str = None) -> str:
     return os.path.join(PROFILES_DIR, profile or active_profile())
 
