@@ -809,16 +809,22 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
         if any(kw in rc_lower for kw in keywords):
             matched_heading = heading
             break
+    # A section's header is its heading line plus the line after it: in a
+    # "### Title\n**Company** · Location · Period" block the company sits on
+    # line 2, so neither a fixed 60-character window (a long title pushes the
+    # company past it) nor the heading line alone ever saw it.
+    def _header(section: str) -> str:
+        return "\n".join(section.strip().split("\n", 2)[:2]).lower()
+
     if matched_heading:
         for section in sections:
-            if matched_heading.lower() in section[:60].lower():
+            if matched_heading.lower() in _header(section):
                 return section.strip()
 
     rc_tokens = _employer_tokens(role_company)
     if rc_tokens:
         for section in sections:
-            heading_line = section.split("\n", 1)[0].lower()
-            if any(rt in heading_line for rt in rc_tokens):
+            if any(rt in _header(section) for rt in rc_tokens):
                 return section.strip()
 
     return cv_text

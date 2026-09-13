@@ -388,7 +388,12 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
         return cv_text
     sections = re.split(r"(?=^### )", cv_text, flags=re.MULTILINE)
     for section in sections:
-        if matched_heading.lower() in section[:60].lower():
+        # The title AND company lines, not a fixed 60 characters: with a
+        # "### Title\n**Company**" block, a long title pushed the company past
+        # char 60 and the section was never found (e.g. "### Tax
+        # Administrative Assistant (Seasonal)\n**DeJoy, Knauff & Blood**").
+        header = "\n".join(section.strip().split("\n", 2)[:2]).lower()
+        if matched_heading.lower() in header:
             return section.strip()
     return cv_text
 
@@ -3348,6 +3353,46 @@ _ATS_TIER_EMPHASIS = {
 }
 
 
+def build_recommendations_block(recommendations) -> str:
+    """profile.yml's key_recommendations, formatted for the cover-letter
+    builder, or "" when there are none.
+
+    Until 2026-09-13 nothing read key_recommendations at all -- bootstrap
+    wrote it, and both the evaluator and rewriter trims exclude it on
+    purpose (a third party's praise is not evidence of fit or a source of
+    bullet facts). A cover letter is where a short, attributed line from a
+    real reference helps, so this is its one consumer. The quotes are sent
+    verbatim and the model may use at most one, unaltered; validate_coverletter
+    exempts quoted text from its third-person check, since a recommendation
+    naming the candidate is not the letter slipping into third person."""
+    lines = []
+    for rec in recommendations or []:
+        if not isinstance(rec, dict):
+            continue
+        quote = " ".join(str(rec.get("quote") or "").split())
+        name = str(rec.get("name") or "").strip()
+        if not quote or not name:
+            continue
+        attribution = name + (f", {rec['title']}" if rec.get("title") else "")
+        detail = ", ".join(
+            str(x) for x in (rec.get("relationship"), str(rec.get("date") or "")[:4]) if x
+        )
+        lines.append(f'- "{quote}" -- {attribution}' + (f" ({detail})" if detail else ""))
+    if not lines:
+        return ""
+    return (
+        "\n\n=== RECOMMENDATIONS (verbatim, from people who worked with the candidate) ===\n"
+        "Optional. You MAY quote at most ONE short line from below, and only if it directly "
+        "supports something this role asks for: verbatim, inside quotation marks, attributed "
+        "by name and title, woven into a first-person sentence (the letter stays in the "
+        "candidate's voice). Keep it under 30 words; you may shorten it with an ellipsis, but "
+        "never change, combine or paraphrase the words, and never attribute anything not "
+        "listed here. If none fits naturally, use none.\n"
+        + "\n".join(lines)
+        + "\n"
+    )
+
+
 def _build_keyword_block(
     jd_keywords: dict | None, ats_classification: dict | None
 ) -> str:
@@ -5735,9 +5780,16 @@ class ResumeEngine:
 
         keyword_block = _build_keyword_block(jd_keywords, ats_classification)
 
+        try:
+            recommendations_block = build_recommendations_block(
+                (profile_paths.profile_yaml() or {}).get("key_recommendations")
+            )
+        except Exception:
+            recommendations_block = ""
+
         coverletter_prompt = self.load_prompt("tailor_coverletter.md")
         background_context = self.build_audit_static_prefix(include_evidence_guide=True)
-        system_instruction = f"{coverletter_prompt}\n\n{background_context}{research_block}{referral_block}{keyword_block}"
+        system_instruction = f"{coverletter_prompt}\n\n{background_context}{research_block}{referral_block}{keyword_block}{recommendations_block}"
 
         letter_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
