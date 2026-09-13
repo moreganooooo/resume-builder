@@ -102,6 +102,14 @@ class TestEmployerFiltering(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(dle.looks_like_employer(name))
 
+    def test_temp_inside_a_word_is_not_a_staffing_agency(self):
+        # A bare "temp" substring rejected all of these as staffing agencies.
+        for name in ("Temple University", "Tempur Sealy", "Contemporary Art Museum"):
+            with self.subTest(name=name):
+                self.assertTrue(dle.looks_like_employer(name))
+        self.assertFalse(dle.looks_like_employer("Kelly Temps"))
+        self.assertFalse(dle.looks_like_employer("Temporary Solutions Inc"))
+
 
 class TestFindAtsBoard(unittest.TestCase):
     def _response(self, status=200, payload=None):
@@ -206,6 +214,34 @@ tracked_companies:
     def test_existing_names_are_detected(self):
         keys = dle.existing_company_keys(self.path)
         self.assertIn("duolingo", keys)
+
+    def test_names_with_yaml_syntax_survive_the_round_trip(self):
+        import yaml
+
+        # Unquoted, ": " broke the parse and a leading "#" became a comment.
+        hits = [
+            {"name": "Acme: Roofing & Siding", "careers_url": "u1", "api": "a1"},
+            {"name": "#1 Cochran", "careers_url": "u2", "api": "a2"},
+        ]
+        dle.append_entries(hits, self.path)
+        with open(self.path, "r", encoding="utf-8") as handle:
+            data = yaml.safe_load(handle)
+        names = [e["name"] for e in data["tracked_companies"]]
+        self.assertEqual(names, ["Duolingo", "Acme: Roofing & Siding", "#1 Cochran"])
+
+    def test_refuses_to_append_when_the_list_is_not_last(self):
+        # Appending flush-left items after another top-level key would
+        # attach them to the wrong place and break every later scan.
+        with open(self.path, "a", encoding="utf-8") as handle:
+            handle.write("other_key: value\n")
+        with open(self.path, "r", encoding="utf-8") as handle:
+            before = handle.read()
+        with self.assertRaises(ValueError):
+            dle.append_entries(
+                [{"name": "Hearst", "careers_url": "u", "api": "a"}], self.path
+            )
+        with open(self.path, "r", encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), before)
 
 
 if __name__ == "__main__":

@@ -100,6 +100,26 @@ class TestMetricProvenanceCheck(unittest.TestCase):
         )
         self.assertEqual(violations, [])
 
+    def test_company_spelled_differently_in_bank_is_still_matched(self):
+        # The resume carries the KB's spelling and the bank its own; an exact
+        # lookup found no allowed metrics and flagged every real figure.
+        resume_data = self._resume("Architected a content library spanning 100+ assets")
+        bullet_tuples = [
+            ("Architected a library spanning 100+ assets.", "Widgetco Creative, LLC", "content"),
+        ]
+        self.assertEqual(
+            validate_resume._check_metric_provenance(resume_data, bullet_tuples), []
+        )
+
+    def test_plus_marker_does_not_make_a_new_figure(self):
+        resume_data = self._resume("Managed a $20M+ portfolio across the region")
+        bullet_tuples = [
+            ("Managed a $20M portfolio across the region.", "Widgetco Creative", "sales"),
+        ]
+        self.assertEqual(
+            validate_resume._check_metric_provenance(resume_data, bullet_tuples), []
+        )
+
     def test_no_bullet_tuples_is_inert(self):
         resume_data = self._resume("Did some things with 100+ assets")
         self.assertEqual(

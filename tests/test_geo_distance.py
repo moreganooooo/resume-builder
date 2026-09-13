@@ -229,6 +229,33 @@ class TestSuburbCoverage(unittest.TestCase):
         self.assertLess(miles, 20)
 
 
+class TestResolveMetro(unittest.TestCase):
+    def test_linkedin_metro_phrasing_resolves_to_the_core_city(self):
+        for value, city in (
+            ("Los Angeles Metropolitan Area", "Los Angeles, CA"),
+            ("Greater Minneapolis-St. Paul Area", "Minneapolis, MN"),
+            ("San Francisco Bay Area", "San Francisco, CA"),
+            ("New York City Metropolitan Area", "New York, NY"),
+        ):
+            with self.subTest(value=value):
+                self.assertIsNotNone(geo_distance.resolve_location(city))
+                self.assertEqual(
+                    geo_distance.resolve_metro(value),
+                    geo_distance.resolve_location(city),
+                )
+
+    def test_regional_and_bare_names_stay_unresolved(self):
+        # No single core city, or not phrased as a metro area at all.
+        for value in ("Tri-State Area", "Portland", "Austin", "", None):
+            with self.subTest(value=value):
+                self.assertIsNone(geo_distance.resolve_metro(value))
+
+    def test_resolve_location_itself_is_unchanged(self):
+        # The approximate lookup is opt-in; the exact resolver still
+        # declines regional phrases.
+        self.assertIsNone(geo_distance.resolve_location("Greater Austin Area"))
+
+
 class TestMetroAliases(unittest.TestCase):
     """Shorthand a posting uses instead of a city name.
 

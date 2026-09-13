@@ -100,6 +100,10 @@ class TestDefaultSearchTerm(unittest.TestCase):
         self.assertEqual(len(terms), scan_indeed.MAX_SEARCH_TERMS)
         self.assertEqual(terms, ["A", "B", "C"])
 
+    def test_blank_yaml_items_never_become_the_word_none(self):
+        self._write_filters([None, "  ", "Marketing"])
+        self.assertEqual(scan_indeed._default_search_terms(), ["Marketing"])
+
     def test_falls_back_when_no_positive_titles_configured(self):
         self._write_filters([])
         self.assertEqual(
@@ -169,6 +173,13 @@ class TestMultiTermDedup(unittest.TestCase):
         with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
             jobs = scan_indeed.fetch_indeed_jobs()
         self.assertEqual(len(jobs), 2)
+
+    @patch("location_settings.read_settings", return_value=SETTINGS)
+    def test_url_less_listings_are_not_false_duplicates(self, _):
+        batches = [[{"source_url": "", "job_title": "A"}], [{"source_url": "", "job_title": "B"}]]
+        with patch.object(scan_indeed, "_scrape_one_term", side_effect=batches):
+            jobs = scan_indeed.fetch_indeed_jobs()
+        self.assertEqual([j["job_title"] for j in jobs], ["A", "B"])
 
 
 class TestFetchIndeedJobs(unittest.TestCase):

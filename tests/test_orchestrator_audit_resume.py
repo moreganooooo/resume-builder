@@ -39,6 +39,21 @@ def _fail_critique_json():
     )
 
 
+class TestSortAuditedBullets(unittest.TestCase):
+    def test_order_keeps_each_bullet_paired_with_its_company(self):
+        tuples = [("a", "A", ""), ("b", "B", ""), ("c", "C", "")]
+        critiques = [
+            None,
+            json.loads(_fail_critique_json()),
+            json.loads(_pass_critique_json()),
+        ]
+        bullets, order = orchestrator._sort_audited_bullets(["a", "b", "c"], critiques)
+        self.assertEqual(bullets, ["c", "b", "a"])
+        # Applying the same permutation to the tuples must re-align them.
+        realigned = [tuples[i] for i in order]
+        self.assertEqual([(b, c) for b, c, _ in realigned], list(zip(bullets, "CBA")))
+
+
 class TestAuditResume(unittest.TestCase):
 
     def setUp(self):

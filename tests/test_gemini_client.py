@@ -201,13 +201,22 @@ class TestSustainedFailureDetection(unittest.TestCase):
 
 class TestModelFallbackOptOut(unittest.TestCase):
 
+    # Reset through the module as well as the imported name: when another
+    # test module reloads gemini_client, `gemini_client.GeminiClient` becomes
+    # a new class while this file's `GeminiClient` still names the old one --
+    # and generate() counts failures on the live class. Resetting only the
+    # stale name let one test's exhausted retries push the next test over
+    # the SustainedFailureError threshold, but only in a full-suite run.
+    def _reset_client_state(self):
+        for cls in {GeminiClient, gemini_client.GeminiClient}:
+            cls._consecutive_full_failures = 0
+            cls._last_gemma_call_ts = 0.0
+
     def setUp(self):
-        GeminiClient._consecutive_full_failures = 0
-        GeminiClient._last_gemma_call_ts = 0.0
+        self._reset_client_state()
 
     def tearDown(self):
-        GeminiClient._consecutive_full_failures = 0
-        GeminiClient._last_gemma_call_ts = 0.0
+        self._reset_client_state()
 
     def _rate_limited_response(self):
         resp = MagicMock()
@@ -231,6 +240,61 @@ class TestModelFallbackOptOut(unittest.TestCase):
         for call in mock_post.call_args_list:
             self.assertIn("gemma-4-31b-it", call.args[0])
         self.assertEqual(mock_post.call_count, 3)
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
+    def test_grounded_call_never_swaps_even_with_fallback_enabled(self, mock_post):
+        # Grounding quota is per model family (zero for Gemini 3 on the free
+        # tier), so a swap can land on a model with no grounding quota at
+        # all; a grounded call stays on the model it was sent to.
+        server_error = MagicMock()
+        server_error.status_code = 500
+        mock_post.return_value = server_error
+        text, _ = GeminiClient.generate(
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="find the website",
+            max_retries=4,
+            tools=[{"google_search": {}}],
+        )
+        self.assertIsNone(text)
+        for call in mock_post.call_args_list:
+            self.assertIn("gemini-3.1-flash-lite", call.args[0])
+            self.assertNotIn("gemma", call.args[0])
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
+    def test_generate_grounded_returns_text_and_grounding(self, mock_post):
+        # The Maps lookup must SEE the grounding to trust an address.
+        ok = MagicMock()
+        ok.status_code = 200
+        ok.json.return_value = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {"text": "thinking...", "thought": True},
+                            {"text": "140 Otter St"},
+                        ]
+                    },
+                    "groundingMetadata": {"groundingChunks": [{"maps": {"uri": "u"}}]},
+                }
+            ]
+        }
+        server_error = MagicMock()
+        server_error.status_code = 500
+        mock_post.side_effect = [server_error, ok]
+        text, grounding = gemini_client.generate_grounded(
+            "gemini-3.1-flash-lite",
+            "q",
+            tools=[{"google_maps": {}}],
+            tool_config={"retrievalConfig": {}},
+        )
+        self.assertEqual(text, "140 Otter St")
+        self.assertEqual(grounding["groundingChunks"][0]["maps"]["uri"], "u")
+        self.assertEqual(
+            mock_post.call_args.kwargs["json"]["toolConfig"], {"retrievalConfig": {}}
+        )
 
     @patch("gemini_client.time.sleep", lambda *a, **kw: None)
     @patch("gemini_client.requests.post")

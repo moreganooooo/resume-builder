@@ -121,6 +121,250 @@ class TestFetchCompanyPages(unittest.TestCase):
         self.assertLessEqual(len(result), company_research.MAX_TOTAL_CHARS)
 
 
+class TestResearchSuccessHardening(unittest.TestCase):
+    def test_site_rejection_matches_host_suffix_not_substring(self):
+        for bad in (
+            "https://www.linkedin.com/company/acme",
+            "https://job-boards.greenhouse.io/acme",
+            "facebook.com/acmeroofing",
+            "https://x.com/acme",
+        ):
+            with self.subTest(bad=bad):
+                self.assertFalse(company_research.is_usable_company_site(bad))
+        # A substring check let "x.com" reject these real company sites.
+        for good in ("https://www.fedex.com", "box.com", "https://acme.com/about"):
+            with self.subTest(good=good):
+                self.assertTrue(company_research.is_usable_company_site(good))
+
+    def test_deep_link_is_reduced_to_the_origin(self):
+        # Appending /about to a deep link 404'd on every candidate.
+        urls = company_research._candidate_urls("https://acme.com/careers/123?x=1")
+        self.assertIn("https://acme.com/about", urls)
+        self.assertIn("https://acme.com", urls)  # the homepage, tried last
+        self.assertFalse(any("careers/123" in u for u in urls))
+
+    @patch("company_research.requests.get")
+    def test_unreachable_host_stops_after_one_attempt(self, mock_get):
+        mock_get.side_effect = company_research.requests.exceptions.ConnectionError()
+        self.assertEqual(company_research.fetch_company_pages("acme.com"), "")
+        self.assertEqual(mock_get.call_count, 1)
+
+    @patch("company_research.requests.get")
+    def test_sends_a_browser_user_agent(self, mock_get):
+        # The requests default UA is 403'd by most WAFs.
+        mock_get.return_value = _response(status_code=404, text="")
+        company_research.fetch_company_pages("acme.com")
+        ua = mock_get.call_args.kwargs["headers"]["User-Agent"]
+        self.assertIn("Mozilla", ua)
+        self.assertNotIn("python-requests", ua)
+
+
+class TestRenderedFallback(unittest.TestCase):
+    @patch(
+        "company_research.fetch_rendered_text",
+        return_value={"https://acme.com/about": "Acme builds widgets. " * 20},
+    )
+    @patch("company_research.requests.get")
+    def test_thin_but_reachable_site_falls_back_to_rendering(self, mock_get, mock_render):
+        # An empty JS shell answers 200 with no visible text.
+        mock_get.return_value = _response(status_code=200, text="<div id='root'></div>")
+        text = company_research.fetch_company_pages("acme.com")
+        self.assertGreaterEqual(len(text), company_research.MIN_USEFUL_CHARS)
+        self.assertEqual(
+            mock_render.call_args.args[0], ["https://acme.com/about", "https://acme.com"]
+        )
+
+    @patch("company_research.fetch_rendered_text")
+    @patch(
+        "company_research.requests.get",
+        side_effect=company_research.requests.exceptions.ConnectionError(),
+    )
+    def test_unreachable_host_is_not_rendered(self, _get, mock_render):
+        company_research.fetch_company_pages("acme.com")
+        mock_render.assert_not_called()
+
+    def test_renderer_never_launches_a_browser_under_tests(self):
+        with patch.dict(os.environ):
+            os.environ.pop("RESUME_ALLOW_TEST_NETWORK", None)
+            with patch("company_research.subprocess.run") as mock_run:
+                self.assertEqual(
+                    company_research.fetch_rendered_text(["https://acme.com"]), {}
+                )
+        mock_run.assert_not_called()
+
+
+class TestCompanyResearchCache(unittest.TestCase):
+    RESEARCH = {"_research_source": "website", "company_facts": ["Sells things."]}
+
+    def setUp(self):
+        import shutil
+        import tempfile
+
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.cache_file = os.path.join(self.tmp, "cache.json")
+        for target, value in (
+            ("company_research._cache_path", self.cache_file),
+            ("company_research._cache_disabled", False),
+        ):
+            p = patch(target, return_value=value)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_round_trip_is_keyed_on_normalized_company_name(self):
+        company_research.save_cached_research(
+            "Acme Corp", self.RESEARCH, "https://www.acme.com/about"
+        )
+        self.assertEqual(
+            company_research.load_cached_research("ACME corp."), self.RESEARCH
+        )
+
+    def test_jd_text_tier_is_never_cached(self):
+        # Derived from one posting; reusing it for another would leak it.
+        company_research.save_cached_research(
+            "Acme Corp", {"_research_source": "jd_text", "company_facts": ["x"]}
+        )
+        self.assertIsNone(company_research.load_cached_research("Acme Corp"))
+
+    def test_a_different_known_website_is_a_miss(self):
+        # Two companies can share a name; the site is the better identity.
+        company_research.save_cached_research("Acme", self.RESEARCH, "acme.com")
+        self.assertIsNone(
+            company_research.load_cached_research("Acme", "https://acme-industrial.com")
+        )
+        self.assertEqual(
+            company_research.load_cached_research("Acme", "https://www.acme.com"),
+            self.RESEARCH,
+        )
+        # A LinkedIn "website" is not an identity, so it does not veto a hit.
+        self.assertEqual(
+            company_research.load_cached_research(
+                "Acme", "https://www.linkedin.com/company/acme"
+            ),
+            self.RESEARCH,
+        )
+
+    def test_expired_entry_is_a_miss(self):
+        import datetime
+        import json
+
+        company_research.save_cached_research("Acme Corp", self.RESEARCH)
+        with open(self.cache_file, encoding="utf-8") as f:
+            data = json.load(f)
+        old = datetime.datetime.now() - datetime.timedelta(
+            days=company_research.CACHE_TTL_DAYS + 1
+        )
+        data["acme corp"]["saved_at"] = old.isoformat(timespec="seconds")
+        with open(self.cache_file, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        self.assertIsNone(company_research.load_cached_research("Acme Corp"))
+
+
+class TestCacheIsOffForUnisolatedTests(unittest.TestCase):
+    def test_suite_run_in_the_checkout_never_touches_the_real_cache(self):
+        self.assertTrue(company_research._cache_disabled())
+
+
+class TestSearchEngineWebsiteLookup(unittest.TestCase):
+    def _find(self, name, results):
+        with patch("websearch_ddg.search", return_value=results):
+            return company_research._find_website_via_search_engine(name)
+
+    def test_company_name_in_the_host_is_accepted(self):
+        self.assertEqual(
+            self._find("Acorns", [{"url": "https://www.acorns.com/about", "title": "Invest"}]),
+            "https://www.acorns.com",
+        )
+
+    def test_homepage_titled_with_the_name_is_accepted(self):
+        # adr.org carries no trace of "American Arbitration Association".
+        self.assertEqual(
+            self._find(
+                "American Arbitration Association",
+                [{"url": "https://www.adr.org/", "title": "American Arbitration Association | ADR"}],
+            ),
+            "https://www.adr.org",
+        )
+
+    def test_directory_deep_link_titled_with_the_name_is_rejected(self):
+        # Researching the wrong company is worse than researching none.
+        self.assertIsNone(
+            self._find(
+                "A Full Renovation LLC",
+                [
+                    {"url": "https://www.bizapedia.com/fl/a-full-renovation-llc.html",
+                     "title": "A Full Renovation LLC in Tampa, FL"},
+                    {"url": "https://www.somedirectory.com/company/a-full-renovation",
+                     "title": "A Full Renovation LLC - Company Profile"},
+                ],
+            )
+        )
+
+    def test_name_merely_inside_another_companys_domain_is_rejected(self):
+        # Live false positives under plain containment.
+        for name, url in (
+            ("Skill", "https://www.gskill.com/"),
+            ("Sona", "https://sonagrouptours.com/"),
+            ("KOPA", "https://www.m-kopa.com/"),
+        ):
+            with self.subTest(name=name):
+                self.assertIsNone(self._find(name, [{"url": url, "title": "Home"}]))
+
+    def test_title_evidence_needs_a_multi_word_name_and_a_word_boundary(self):
+        # Live false positives: a raw startswith let "Skill" match
+        # "Skillsoft", and a lone generic word matched another company.
+        for name, url, title in (
+            ("Skill", "https://www.skillsoft.com/", "Skillsoft | Transform Your Workforce"),
+            ("Sona", "https://sonagrouptours.com/", "Sona Group Tours"),
+        ):
+            with self.subTest(name=name):
+                self.assertIsNone(self._find(name, [{"url": url, "title": title}]))
+        # A multi-word name must match whole words, not a prefix of one.
+        self.assertIsNone(
+            self._find(
+                "Acme Roof",
+                [{"url": "https://acmeroofingpros.com/", "title": "Acme Roofing Pros"}],
+            )
+        )
+
+    def test_common_affix_around_the_name_is_accepted(self):
+        self.assertEqual(
+            self._find("Ladders", [{"url": "https://www.theladders.com/jobs", "title": "Jobs"}]),
+            "https://www.theladders.com",
+        )
+
+    def test_subdomain_is_trimmed_to_the_main_site(self):
+        # ui.elevenlabs.io (a design system) was matched live.
+        self.assertEqual(
+            self._find("ElevenLabs", [{"url": "https://ui.elevenlabs.io/docs", "title": "UI"}]),
+            "https://elevenlabs.io",
+        )
+
+    def test_skips_a_bad_result_for_the_first_good_one(self):
+        self.assertEqual(
+            self._find(
+                "Alignerr",
+                [
+                    {"url": "https://seamless.ai/b/alignerr-123", "title": "Alignerr | Seamless.AI"},
+                    {"url": "https://alignerr.com/", "title": "Alignerr"},
+                ],
+            ),
+            "https://alignerr.com",
+        )
+
+    @patch("company_research.GeminiClient.generate")
+    def test_find_company_website_uses_the_free_lookup_first(self, mock_generate):
+        with patch(
+            "websearch_ddg.search",
+            return_value=[{"url": "https://www.capitexai.com/", "title": "CapitexAI"}],
+        ):
+            self.assertEqual(
+                company_research.find_company_website("CapitexAI"),
+                "https://www.capitexai.com",
+            )
+        mock_generate.assert_not_called()
+
+
 class TestFindCompanyWebsite(unittest.TestCase):
 
     def test_returns_none_when_company_name_missing(self):

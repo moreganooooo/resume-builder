@@ -433,6 +433,37 @@ def nearest_hub_distance(location: str, origin: str) -> tuple:
     return best_miles, best_hub
 
 
+# How far past the radius a METRO-AREA posting may land before it is
+# rejected. geo_distance.resolve_metro() returns the metro's CORE city, but
+# a metro is an area: a candidate near its edge can be 30-50 miles from that
+# core while the job itself is close by. 50 miles spans core-to-edge for
+# most US metros, so a genuinely far metro ("Greater Austin Area" from
+# Kansas City, ~630 mi) is still rejected while an edge case is kept.
+METRO_SLACK_MILES = 50
+
+
+def nearest_metro_distance(location: str, origin: str) -> tuple:
+    """(miles, hub_text) to the nearest metro-area hub's core city, via
+    geo_distance.resolve_metro(), else (None, ''). Approximate by design --
+    only consulted after nearest_hub_distance() found no exact point, and
+    judged against radius + METRO_SLACK_MILES rather than the radius."""
+    origin_point = geo_distance.resolve_location(origin)
+    if not origin_point:
+        return None, ""
+    best_miles, best_hub = None, ""
+    for hub in split_hubs(location) or [location]:
+        hub_text = strip_workplace_tokens(hub)
+        point = geo_distance.resolve_metro(hub_text)
+        if not point:
+            continue
+        miles = geo_distance.haversine_distance_miles(
+            origin_point[0], origin_point[1], point[0], point[1]
+        )
+        if best_miles is None or miles < best_miles:
+            best_miles, best_hub = miles, hub_text
+    return best_miles, best_hub
+
+
 def origin_from_config(config: dict) -> str:
     """Builds a resolvable origin string from a scan_filters `location:` block.
 
@@ -520,6 +551,10 @@ def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict
                         or location
                     )
                     src = enrichment.get("source") or "enriched"
+                    # Google Maps terms: a Maps-sourced address must carry
+                    # "Google Maps" attribution in proper case, right after it.
+                    if src == "google_maps":
+                        src = "Google Maps"
                     if miles > float(radius):
                         return LocationVerdict(
                             False,
@@ -536,6 +571,25 @@ def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict
 
         miles, hub = nearest_hub_distance(location, origin)
         if miles is None:
+            # No exact point -- try LinkedIn-style metro phrasing ("Greater
+            # Boston Area"). That distance is approximate, so it earns a
+            # distance for nearest-first sorting but is only rejected past
+            # the radius PLUS METRO_SLACK_MILES.
+            metro_miles, metro_hub = nearest_metro_distance(location, origin)
+            if metro_miles is not None:
+                if metro_miles > float(radius) + METRO_SLACK_MILES:
+                    return LocationVerdict(
+                        False,
+                        workplace,
+                        metro_miles,
+                        f"~{metro_miles:.0f} mi (metro area) exceeds {radius} mi radius",
+                    )
+                return LocationVerdict(
+                    True,
+                    workplace,
+                    metro_miles,
+                    f"~{metro_miles:.1f} mi ({metro_hub}, metro area, approximate)",
+                )
             # Unresolvable is NOT far. Surfacing an unknown location is a
             # cheap mistake for a human to spot; silently dropping a
             # commutable role is not.

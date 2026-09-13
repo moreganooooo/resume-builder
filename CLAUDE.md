@@ -184,6 +184,26 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   rest of the CV context, allowing the model to naturally construct grammatically
   perfect, pluralization-safe sentences using the user's authentic voice.
   See `docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md`.
+  **Finding the site is most of the battle (2026-09-13 audit).** Of the 44
+  pending LinkedIn-sourced companies, effectively 0% got a usable site before
+  and 91% after. Why 0: `scan_linkedin.py` copied the LinkedIn company page
+  into `company_website` (it now writes None), and a non-empty
+  `company_website` skipped the website search entirely.
+  `company_research.find_company_website()` now tries DuckDuckGo first
+  (free, no quota) through a strict matcher -- the domain's main label must
+  BE the compacted name (one common affix allowed: theladders.com), or a
+  HOMEPAGE title must open with a multi-word name; plain containment matched
+  gskill.com for "Skill" -- then a grounded Gemma call.
+  `is_usable_company_site()` rejects ATS/social/directory hosts by host
+  SUFFIX (a substring check let "x.com" reject fedex.com).
+  `fetch_company_pages()` sends a browser User-Agent, reduces deep links to
+  the origin, tries the homepage last, stops on an unreachable host, and
+  renders a thin-but-reachable site via `render-page-text.mjs` (headless
+  Chromium, one page at a time). An extraction failure falls through to the
+  next tier rather than returning None. Research is cached per company
+  (`data/<profile>/company_research_cache.json`, 90 days, website/search
+  tiers only -- the JD-text tier is one posting's text; a different known
+  website is a miss; disabled for unisolated tests).
 - **The Go dashboard never reads SQLite.** Every screen is fed by a
   Python-produced file, not `data.db`: Browse & Manage Jobs reads a
   per-launch JSON export (`scripts/dashboard.py` ->
@@ -513,6 +533,24 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   argument evaluation; a test added there WITHOUT that mock will make a
   real billable call. Verify with an instrumented run (patch
   `requests.Session.request` and `httpx.Client.send`), not by reading.
+- **Grounding quota is per model FAMILY on the free tier, and it decides
+  which model a grounded call can use.** Google Search grounding is ZERO
+  for every Gemini 3 model -- every Search call on `gemini-3.1-flash-lite`
+  429'd with a misleading "exceeded your current quota" -- and 1.5K/day
+  for the Gemma 4 models, which DO ground (verified with
+  `groundingMetadata` present). The 2.0/2.5 families have quota but 404
+  for new projects. Map grounding is the reverse: 500/day on
+  `gemini-3.1-flash-lite`/`3.5-flash-lite`. Hence `company_research`'s
+  Search calls run on `gemma-4-31b-it` and the location enricher's Maps
+  call on `gemini-3.1-flash-lite`. `generate()` never swaps models on a
+  call carrying `tools` (a swap lands on a family with no grounding quota),
+  and grounded callers use `generate_grounded()`, which returns the
+  `groundingMetadata` they must check -- an answer with no grounding chunk
+  is the model's memory, and was measurably wrong in testing. Check a
+  model's row on AI Studio's rate-limit page before pointing a grounded
+  call at it. (Tests resetting `GeminiClient` class state must reset it
+  through `gemini_client.GeminiClient` too: a second copy of the class
+  leaked a failure count into a later test, but only in full-suite runs.)
 - **A profile has FOUR roots, and isolating one is not isolating the
   profile.** `profile_paths` exposes `PROFILES_DIR`, `JDS_ROOT`,
   `OUTPUT_ROOT`, and `DATA_ROOT` as separate module constants.
@@ -594,6 +632,18 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `_paginated_checkbox` stays raw questionary on purpose (cross-page
   "still checked" state has no huh equivalent yet) — opted out via
   `_run_with_chain`'s `_skip_scroll_region` set.
+- **A screen that clears itself at the top of its loop must pause after
+  any message it prints.** Under alt-screen, `run_interactive_menu()`,
+  Settings & Upkeep, Manage Profiles, Bullet Bank and Skills all redraw
+  from `\x1b[2J` each iteration, so a result printed just before looping
+  back was erased the instant it drew. That is why Help "did nothing":
+  it is in `_run_with_chain`'s `interactive_actions` (no automatic pause)
+  and only prints a panel. Call `menu._pause_and_return()` (a no-op under
+  `unittest`) after the message, and never put a `_pause_and_return()`
+  after a `try` whose every path returns -- `_handle_check_updates` had
+  one that could never run. Long-running output (Bullet Bank stages,
+  `_run_with_chain` actions) drops out of alt-screen for the run, since
+  alt-screen has no scrollback, and pauses BEFORE re-entering it.
 - **`dashboard/internal/theme/theme.go`'s `HuhTheme()` colors must come
   from this package's own `c()` helper (or a literal
   `charm.land/lipgloss/v2` color), never `github.com/charmbracelet/lipgloss`
@@ -628,6 +678,15 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   block both relaxes the keyword `block:` list (which rejects
   "Onsite"/"Hybrid" outright) and supplies the radius replacing it, so
   the two can never be out of step.
+- **Metro-area phrasing resolves APPROXIMATELY, and only in the filter.**
+  `geo_distance.resolve_location()` still returns None for regional phrases
+  ("Greater Austin Area") -- that contract is tested. `resolve_metro()`
+  maps LinkedIn's metro phrasing (`_METRO_AREAS`, ~35 metros) to the core
+  city, and `evaluate_location()` consults it only after the exact lookup
+  fails: the posting gets a distance for nearest-first sorting, but is
+  rejected only beyond radius + `METRO_SLACK_MILES` (50), since a candidate
+  near a metro's edge can be far from its core while the job is close.
+  Bare city names never match; "Tri-State Area" stays unresolved.
 - **The location gate has exactly one chokepoint.**
   `scan_boards._passes_location_filter()` -- `scan_ats.py` routes through
   it too, so anything added there covers both scanners. A provider whose location format the
@@ -687,6 +746,30 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   disclose no owner, so there the strict slug is the only evidence.
   Detection also requires a NON-EMPTY posting list: SmartRecruiters
   returns 200 with `totalFound: 0` for slugs that do not exist at all.
+  Entries are written double-quoted (a name containing ": " or starting
+  with "#" corrupted the file, breaking every later scan), and
+  `append_entries()` parses the result BEFORE writing, refusing an append
+  that would not land inside the list. The staffing filter matches word
+  STARTS ("temp" as a substring rejected Temple University).
+- **Office addresses from Google Maps carry Google's terms
+  (`location_enricher.py` Step 3).** The old Step 3 never produced an
+  address: it called `GeminiClient.generate_content_with_search()`, which
+  does not exist -- the AttributeError was swallowed by a broad except and
+  the tests mocked the method into existence (0 of 321 cached addresses
+  came from it). `lookup_google_maps_backup()` uses Map grounding with the
+  configured city as the `latLng` bias, reads the address from the Maps
+  source chunk (never the model's prose), requires the place's own name,
+  and places it by US ZIP from the bundled gazetteer, so stored
+  coordinates are ours, not Google's. Terms, all enforced in code: (1)
+  attribution -- the dashboard shows "· Google Maps" after a Maps address
+  and a "Google Maps: <link>" line (`location_source_uri`; the API
+  sometimes sends `uri: ""`, so a documented Maps URLs search link fills
+  in); (2) storage -- a Maps address/ZIP is usable for 30 days
+  (`maps_data_expired()`, checked in the cache, both enrichment queues,
+  and `picker._location_fields`), and the maps link is the long-lived place
+  reference; (3) never plot Maps data on a non-Google map. In tests, mock
+  `gemini_client.generate_grounded` -- a real function; mocking a method
+  that does not exist is exactly how the old bug hid.
 - **A liveness sweep's temp files must be per-run, never a fixed path.**
   `liveness._run_temp_paths()` generates a unique input/output pair for
   every `check-liveness.mjs` spawn. They used to be two module-level

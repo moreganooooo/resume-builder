@@ -629,10 +629,50 @@ class TestLocationFields(unittest.TestCase):
     def test_unresolvable_location_has_no_distance(self):
         # None, never 0 -- the Go side sorts on this, and a zero would
         # place an unknown location at the top of a nearest-first sort.
+        # "Tri-State Area" has no single core city. ("Greater Austin Area"
+        # used to be the example here, but metro phrasing now resolves
+        # approximately via geo_distance.resolve_metro.)
         fields = picker._location_fields(
-            {"location": "Greater Austin Area"}, self.SETTINGS
+            {"location": "Tri-State Area"}, self.SETTINGS
         )
         self.assertIsNone(fields["distance_miles"])
+
+    def _maps_enrichment(self, resolved_at):
+        return {
+            "status": "resolved",
+            "source": "google_maps",
+            "resolved_address": "12 Main St, Springfield, IL 62701",
+            "maps_uri": "https://maps.google.com/maps?cid=1",
+            "resolved_at": resolved_at,
+            "lat": 39.8,
+            "lon": -89.6,
+        }
+
+    def test_google_maps_address_carries_attribution_and_link(self):
+        # Google Maps terms: attribution right after the address, plus a link.
+        import datetime
+
+        fresh = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        fields = picker._location_fields(
+            {"location": "Springfield, IL", "_location_enrichment": self._maps_enrichment(fresh)},
+            self.SETTINGS,
+        )
+        self.assertTrue(fields["location"].endswith("· Google Maps"))
+        self.assertEqual(
+            fields["location_source_uri"], "https://maps.google.com/maps?cid=1"
+        )
+
+    def test_expired_google_maps_address_is_not_shown(self):
+        # Past the 30-day cache limit, Maps data is treated as absent.
+        fields = picker._location_fields(
+            {
+                "location": "Springfield, IL",
+                "_location_enrichment": self._maps_enrichment("2020-01-01T00:00:00Z"),
+            },
+            self.SETTINGS,
+        )
+        self.assertEqual(fields["location"], "Springfield, IL")
+        self.assertEqual(fields["location_source_uri"], "")
 
     def test_missing_location_is_empty_not_none(self):
         fields = picker._location_fields({}, self.SETTINGS)

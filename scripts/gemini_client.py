@@ -94,6 +94,54 @@ def _get_auth_headers() -> dict:
     return {"x-goog-api-key": _get_api_key()}
 
 
+def generate_grounded(
+    model: str,
+    prompt: str,
+    tools: list,
+    tool_config: dict = None,
+    max_retries: int = 3,
+) -> tuple[str | None, dict]:
+    """One grounded call, returning (text, groundingMetadata).
+
+    GeminiClient.generate() returns only text and token usage, but a
+    grounded caller must SEE the grounding to trust the answer -- and, for
+    Google Maps, to keep the Place ID and source link its terms require.
+    Thought parts are dropped from the text. Returns (None, {}) after
+    retrying 429/5xx, or on any other failure; under tests the auth header
+    raises TestNetworkBlockedError, the same fail-closed rule as every other
+    call in this module."""
+    url = f"{BASE_URL}/{model}:generateContent"
+    body = {"contents": [{"parts": [{"text": prompt}]}], "tools": tools}
+    if tool_config:
+        body["toolConfig"] = tool_config
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                url,
+                headers={**_get_auth_headers(), "Content-Type": "application/json"},
+                json=body,
+                timeout=90,
+            )
+        except requests.exceptions.RequestException:
+            response = None
+        if response is not None and response.status_code == 200:
+            try:
+                candidate = (response.json().get("candidates") or [{}])[0]
+            except ValueError:
+                return None, {}
+            parts = (candidate.get("content") or {}).get("parts") or []
+            text = "".join(
+                p.get("text", "")
+                for p in parts
+                if isinstance(p, dict) and not p.get("thought")
+            )
+            return (text.strip() or None), (candidate.get("groundingMetadata") or {})
+        if response is not None and response.status_code not in (429, 500, 502, 503, 504):
+            return None, {}
+        time.sleep(min(5 * 2**attempt, 30))
+    return None, {}
+
+
 class TokenBucketRateLimiter:
     """Thread-safe token-bucket rate limiter for API requests.
 
@@ -557,6 +605,17 @@ class GeminiClient:
             raise ValueError(
                 "generate(): tools (e.g. search grounding) and response_schema cannot be combined in one call."
             )
+        # A grounded call never swaps models. Search-grounding quota is per
+        # model FAMILY on the free tier -- zero for every Gemini 3 model,
+        # 1.5K/day for the Gemma 4 models -- so a MODEL_FALLBACKS swap
+        # (gemma-4-31b-it -> gemini-3.1-flash-lite) trades an intermittent
+        # Gemma 500 for a guaranteed 429, spending the remaining retries on
+        # a model that cannot ground at all. Failing on the original model
+        # lets the caller fall through to its next tier sooner. (Gemma DOES
+        # support Google Search -- verified live 2026-09-13; an earlier
+        # version of this comment said otherwise.)
+        if tools:
+            model_fallback = False
         failure_streak = 0
 
         for attempt in range(max_retries):

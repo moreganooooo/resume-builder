@@ -14,6 +14,16 @@ import questionary
 from atomic_write import atomic_write
 
 
+def _pause() -> None:
+    """run_skills_menu() and _view_skill_details() clear the screen at the
+    top of their loops under alt-screen, so a result message printed right
+    before returning to them was erased the instant it drew -- the same bug
+    menu._handle_help() had."""
+    import menu
+
+    menu._pause_and_return()
+
+
 def _get_verified_tools_path() -> str:
     kb_dir = profile_paths.kb_dir()
     return os.path.join(kb_dir, "verified_tools.json")
@@ -64,6 +74,7 @@ def _save_verified_tools(data: dict) -> bool:
         return True
     except Exception as e:
         cli_art.display_error(f"Failed to save verified_tools.json: {e}")
+        _pause()
         return False
 
 
@@ -103,6 +114,7 @@ def _save_dismissed_skills(names: list) -> bool:
         return True
     except Exception as e:
         cli_art.display_error(f"Failed to save dismissed_skills.json: {e}")
+        _pause()
         return False
 
 
@@ -116,6 +128,7 @@ def _manage_dismissed_skills():
             "during a Pending Pipeline Skill Gap Scan show up here.",
             level=cli_art.NORMAL,
         )
+        _pause()
         return
 
     choices = [questionary.Choice(name, name) for name in dismissed]
@@ -131,6 +144,7 @@ def _manage_dismissed_skills():
         cli_art.display_success(
             f"Restored {len(selected)} skill(s): {', '.join(selected)}"
         )
+        _pause()
 
 
 def _generate_next_id(tools: list) -> str:
@@ -152,15 +166,18 @@ def _display_skills_dashboard(tools: list):
 
     # Display table of skills grouped by category
     categories = {}
+    # `or`, not a .get() default: a key that is PRESENT but null (possible
+    # from a merged/extracted ledger entry) returned None, and sorting None
+    # against str raised TypeError and took the whole Skills screen down.
     for t in tools:
-        cat = t.get("category", "Uncategorized")
+        cat = t.get("category") or "Uncategorized"
         if cat not in categories:
             categories[cat] = []
         categories[cat].append(t)
 
     for cat, items in sorted(categories.items()):
         cli_art.console.print(f"[bold yellow]▪ {cat}[/bold yellow]")
-        for item in sorted(items, key=lambda x: x.get("name", "")):
+        for item in sorted(items, key=lambda x: x.get("name") or ""):
             cli_art.console.print(
                 f"  - [white]{item.get('name')}[/white] ([cyan]{item.get('confidence')}[/cyan])"
             )
@@ -242,6 +259,7 @@ def _add_skill(data: dict):
     tools.append(new_tool)
     if _save_verified_tools(data):
         cli_art.display_success(f"Successfully added skill: '{name}'")
+        _pause()
 
 
 def _edit_skill(data: dict, tool_id: str):
@@ -319,6 +337,7 @@ def _edit_skill(data: dict, tool_id: str):
 
     if _save_verified_tools(data):
         cli_art.display_success(f"Successfully updated skill: '{name.strip()}'")
+        _pause()
 
 
 def _delete_skill(data: dict, tool_id: str):
@@ -336,6 +355,7 @@ def _delete_skill(data: dict, tool_id: str):
         data["tools"] = [t for t in tools if t.get("id") != tool_id]
         if _save_verified_tools(data):
             cli_art.display_success(f"Successfully deleted skill: '{tool.get('name')}'")
+            _pause()
 
 
 def _view_skill_details(data: dict, tool_id: str):
@@ -348,7 +368,9 @@ def _view_skill_details(data: dict, tool_id: str):
     while True:
         sys.stdout.write("\x1b[2J\x1b[H")
         sys.stdout.flush()
-        cli_art.display_compact_banner(f"SKILL DETAILS | {tool.get('name').upper()}")
+        cli_art.display_compact_banner(
+            f"SKILL DETAILS | {(tool.get('name') or 'Unnamed').upper()}"
+        )
         cli_art.display_footer_commands()
         cli_art.console.print()
 
@@ -466,7 +488,8 @@ def run_skills_menu():
             # Build list of skills for selection
             skill_choices = []
             for t in sorted(
-                tools, key=lambda x: (x.get("category", ""), x.get("name", "").lower())
+                tools,
+                key=lambda x: ((x.get("category") or ""), (x.get("name") or "").lower()),
             ):
                 label = f"[{t.get('category')}] {t.get('name')} ({t.get('confidence')})"
                 skill_choices.append(questionary.Choice(label, t.get("id")))

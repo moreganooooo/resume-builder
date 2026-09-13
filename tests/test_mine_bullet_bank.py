@@ -138,6 +138,17 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         self.assertEqual(len(results), 5)
         self.assertNotIn("Mercor", companies)
 
+    @patch("orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0])
+    @patch("orchestrator.TOP_K_BULLETS", 5)
+    def test_embedding_dimension_mismatch_falls_back_instead_of_crashing(
+        self, mock_embed
+    ):
+        # 3-dim JD embedding vs a 6-dim bank (embedding model changed) used
+        # to raise ValueError at the similarity matmul and abort the build.
+        _write_profile_roles(self.tmp_dir, [])
+        results = self.engine.mine_bullet_bank("some JD text", {})
+        self.assertEqual(len(results), 5)
+
 
 class TestMineBulletBankUniqueness(unittest.TestCase):
     """Whole-CV uniqueness (duplicate metrics, duplicate opening verbs) is

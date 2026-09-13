@@ -1274,6 +1274,11 @@ HELP_ENTRIES = [
     ),
     ("resume liveness", "check every pending JD's posting URL, move expired ones out"),
     ("resume polish", "interactively polish an already-generated resume/cover letter"),
+    ("resume dashboard", "open the Career Dashboard (browse jobs, pipeline, follow-ups)"),
+    (
+        "resume sample",
+        "QA smoke test: build a sample resume + cover letter from the fixture JD",
+    ),
     ("resume test", "run the full test suite (compact: dots + summary)"),
     ("resume test -v", "same, but lists every test by name"),
     ("resume test -vv", "same, but shows the app's own logging too"),
@@ -1311,7 +1316,7 @@ def display_playbook() -> None:
         "▣ STEP 3: Apply & Track Effortlessly\n", style=f"bold {theme.BRAND_ACCENT}"
     )
     content.append(
-        "   • Open 'Track & Follow Up' -> 'Career Dashboard' to review and submit.\n",
+        "   • Open 'Track & Follow Up' (the Career Dashboard) to review and submit.\n",
         style=theme.MUTED,
     )
     content.append(

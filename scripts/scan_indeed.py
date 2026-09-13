@@ -146,7 +146,9 @@ def _default_search_terms() -> list:
     except (OSError, yaml.YAMLError):
         return [DEFAULT_SEARCH_TERM]
     positive = (data.get("title_filter") or {}).get("positive") or []
-    terms = [str(p).strip() for p in positive if str(p).strip()]
+    # A bare "-" list item loads as None, and str(None) is "None" -- skip
+    # it before converting or Indeed gets searched for the literal word.
+    terms = [str(p).strip() for p in positive if p is not None and str(p).strip()]
     return terms[:MAX_SEARCH_TERMS] if terms else [DEFAULT_SEARCH_TERM]
 
 
@@ -283,10 +285,14 @@ def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
         batch = _scrape_one_term(term, location, distance)
         batch_urls = set()
         for job in batch:
-            if job["source_url"] in seen_urls:
+            url = job.get("source_url")
+            # A missing URL is not an identity -- "" must never mark
+            # every later URL-less listing as a duplicate.
+            if url and url in seen_urls:
                 continue
             jobs.append(job)
-            batch_urls.add(job["source_url"])
+            if url:
+                batch_urls.add(url)
         seen_urls |= batch_urls
 
     logging.info(

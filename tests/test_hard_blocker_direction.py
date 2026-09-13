@@ -64,6 +64,9 @@ class TestOverQualifiedIsNeverAnExperienceBlocker(unittest.TestCase):
             ]
         )
         self.assertEqual(rescored["experience_blockers"], [])
+        # The persisted list is what the Jobs pane and `resume evaluate`
+        # display, so it must drop the entry too.
+        self.assertEqual(rescored["hard_blockers"], [])
 
     def test_over_qualified_entry_never_forces_a_skip_either(self):
         # years_experience is already carved out of the unconditional
