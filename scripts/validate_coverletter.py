@@ -94,6 +94,10 @@ def _third_person_terms() -> list[str]:
     return terms
 
 
+# A quoted span of 8+ characters, straight or curly quotes.
+_QUOTED_SPAN = re.compile(r'"[^"\n]{8,}"|“[^”\n]{8,}”')
+
+
 def _check_third_person_slip(cover_letter_data: dict) -> list[str]:
     # Blunt heuristic, not a perfect one: a first-person letter addressed
     # generically to "Hiring Team" shouldn't ever need to reference a third
@@ -117,6 +121,10 @@ def _check_third_person_slip(cover_letter_data: dict) -> list[str]:
         + [("sign_off", cover_letter_data.get("sign_off", ""))]
     )
     for field_name, text in haystacks:
+        # A quoted recommendation ("Morgan got it done" -- Ed Roche) names the
+        # candidate by design; that is a reference speaking, not the letter
+        # slipping into third person. Only text outside quotation marks counts.
+        text = _QUOTED_SPAN.sub(" ", text)
         if pattern.search(text):
             violations.append(
                 f"Third-person self-reference found in {field_name}: {text!r}"

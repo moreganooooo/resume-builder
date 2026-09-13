@@ -218,6 +218,24 @@ class TestExtractCvSection(unittest.TestCase):
         self.assertIn("Automated AWS-based ETL pipelines", section)
         self.assertNotIn("Wardrobe planning", section)
 
+    def test_company_on_the_line_after_a_long_title_is_found(self):
+        # "### Title\n**Company**" blocks: a long title pushed the company
+        # past the old 60-character window, and the token fallback only read
+        # the title line -- so the section was never found.
+        cv = (
+            "### Temporary Administrative Assistant / Data Entry Clerk\n"
+            "**Quorvex Staffing** · Kansas City · 2008 – 2010\n\n- Entered forms.\n\n"
+            "### Other Role\n**Elsewhere Inc** · 2011\n\n- Other work.\n"
+        )
+        module = self._empty_keywords_module()
+        with patch("rewrite_bullets.profile_paths.fixed_content_module", return_value=module):
+            self.assertIn("Entered forms", extract_cv_section(cv, "Quorvex Staffing"))
+        module.CV_SECTION_KEYWORDS = [(["quorvex"], "Quorvex Staffing")]
+        with patch("rewrite_bullets.profile_paths.fixed_content_module", return_value=module):
+            section = extract_cv_section(cv, "Quorvex Staffing")
+        self.assertIn("Entered forms", section)
+        self.assertNotIn("Other work", section)
+
     def test_empty_inputs_return_unchanged(self):
         self.assertEqual(extract_cv_section("", "mIQroTech Inc."), "")
         self.assertEqual(extract_cv_section(CV_MD_FIXTURE, ""), CV_MD_FIXTURE)
