@@ -118,6 +118,29 @@ class TestRunScanDedup(unittest.TestCase):
             index=ANY,
         )
 
+    @patch("scan.jd_manager.JDTracker")
+    def test_duplicates_are_archived_after_a_scan(self, _tracker):
+        with (
+            patch.dict(scan.SOURCE_FETCHERS, {"jobright": lambda **kwargs: []}, clear=True),
+            patch("db._is_unisolated_test_write", return_value=False),
+            patch(
+                "dedup_pending_roles.run_deduplication",
+                return_value={"total_archived_duplicates": 2, "total_clusters": 1},
+            ) as mock_dedupe,
+        ):
+            scan.run_scan(["jobright"], verify=False)
+        mock_dedupe.assert_called_once_with(dry_run=False)
+
+    @patch("scan.jd_manager.JDTracker")
+    def test_unisolated_test_run_never_archives_real_jds(self, _tracker):
+        with (
+            patch.dict(scan.SOURCE_FETCHERS, {"jobright": lambda **kwargs: []}, clear=True),
+            patch("db._is_unisolated_test_write", return_value=True),
+            patch("dedup_pending_roles.run_deduplication") as mock_dedupe,
+        ):
+            scan.run_scan(["jobright"], verify=False)
+        mock_dedupe.assert_not_called()
+
 
 class TestRunScanVerify(unittest.TestCase):
 
