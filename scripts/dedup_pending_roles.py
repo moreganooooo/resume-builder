@@ -48,9 +48,32 @@ def run_deduplication(profile: str = None, dry_run: bool = True) -> dict:
 
     db_rows = conn.execute("SELECT * FROM jobs WHERE status = 'pending'").fetchall()
     pending_file_paths = jd_manager.get_pending_jds()
+    # A file-backed job may also have its OWN data.db row, which
+    # jd_manager._sync_jd_to_db() keys by the file's source_job_id, else its
+    # id, else compute_job_key(path). That row mirrors the file rather than
+    # duplicating it, so it is skipped here (the file represents the job);
+    # any OTHER row for the same posting -- a copy under a different id --
+    # still clusters with the file and is archived as a genuine duplicate.
+    own_row_ids = set()
+    for path in pending_file_paths:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                f_data = json.load(f)
+        except Exception:
+            continue
+        if isinstance(f_data, dict):
+            own_row_ids.add(
+                str(
+                    f_data.get("source_job_id")
+                    or f_data.get("id")
+                    or jd_manager.compute_job_key(path)
+                )
+            )
 
     items = {}
     for r in db_rows:
+        if str(r["id"]) in own_row_ids:
+            continue
         meta = json.loads(r["metadata_json"] or "{}")
         eval_data = meta.get("_evaluation") or {}
         score = r["final_score"] or eval_data.get("composite_score") or 0.0
@@ -134,12 +157,19 @@ def run_deduplication(profile: str = None, dry_run: bool = True) -> dict:
     # from four different companies into a single "duplicate" cluster.
     # Pairing with company matches job_key_known()'s existing convention
     # for the same reason (see its docstring).
+    # ...and the same normalized title. URL + company still merged DIFFERENT
+    # roles: live (2026-09-13), "Data Scientist, Level 2" was archived into
+    # "Level 1" at the same employer and "Managing Consultant" into
+    # "Consultant" -- sibling postings sharing a careers-search or listing
+    # URL. Different titles are different openings until proven otherwise;
+    # a missed reworded duplicate costs one evaluation, a lost role costs
+    # an application.
     by_url = {}
     for i, it in items.items():
         u = it["url"]
-        c_norm = it["norm_tc"][0]
-        if u and len(u) > 15 and c_norm:
-            by_url.setdefault((u, c_norm), []).append(i)
+        c_norm, t_norm = it["norm_tc"]
+        if u and len(u) > 15 and c_norm and t_norm:
+            by_url.setdefault((u, c_norm, t_norm), []).append(i)
     for key, ids in by_url.items():
         for o in ids[1:]:
             union(ids[0], o)

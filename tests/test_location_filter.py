@@ -226,6 +226,21 @@ class TestMetroAreas(unittest.TestCase):
         )
 
 
+class TestCountryQualifiedCity(unittest.TestCase):
+    def test_ashby_city_semicolon_country_resolves_and_is_judged(self):
+        # 54 pending roles in this format sat in "kept for review" and
+        # evaded the radius -- a San Francisco onsite role is ~1,500 mi away.
+        verdict = lf.evaluate_location("San Francisco; United States", cfg())
+        self.assertFalse(verdict.passes)
+        self.assertGreater(verdict.distance_miles, 1000)
+
+    def test_ambiguous_city_name_stays_unresolved(self):
+        # Portland exists in 16 states; never guess one.
+        verdict = lf.evaluate_location("Portland; United States", cfg())
+        self.assertTrue(verdict.passes)
+        self.assertIsNone(verdict.distance_miles)
+
+
 class TestHybridPreferred(unittest.TestCase):
     def test_detects_hybrid_preferred_phrasing(self):
         self.assertTrue(lf.mentions_hybrid_preferred("Hybrid schedule preferred."))

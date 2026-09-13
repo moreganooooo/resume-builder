@@ -758,8 +758,14 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   the tests mocked the method into existence (0 of 321 cached addresses
   came from it). `lookup_google_maps_backup()` uses Map grounding with the
   configured city as the `latLng` bias, reads the address from the Maps
-  source chunk (never the model's prose), requires the place's own name,
-  and places it by US ZIP from the bundled gazetteer, so stored
+  source chunk (never the model's prose), and proves identity by WEBSITE:
+  the place's listed Website must be on the company's registrable domain.
+  A name check alone accepted same-named local businesses for remote
+  employers -- live, "Fingerprint" near Buffalo returned IdentoGO and a UPS
+  Store, "Boulevard" returned Boulevard Suites -- and a wrong address makes
+  a remote role look local. With no known company site (the JD's, else the
+  free strict DuckDuckGo lookup), the Maps call is skipped entirely. It
+  places the address by US ZIP from the bundled gazetteer, so stored
   coordinates are ours, not Google's. Terms, all enforced in code: (1)
   attribution -- the dashboard shows "· Google Maps" after a Maps address
   and a "Google Maps: <link>" line (`location_source_uri`; the API
@@ -770,6 +776,22 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   reference; (3) never plot Maps data on a non-Google map. In tests, mock
   `gemini_client.generate_grounded` -- a real function; mocking a method
   that does not exist is exactly how the old bug hid.
+- **Judge the dedupe (`dedup_pending_roles.py`) by distinct postings, and
+  read its RETURNED totals.** A pending posting is usually one JD file plus
+  one or more data.db rows: copies under different ids, plus the file's own
+  row, keyed as `jd_manager._sync_jd_to_db()` keys it (`source_job_id`,
+  else `id`, else a content hash -- never the filename; that own row is
+  skipped, since it mirrors the file). The dedupe keeps one copy per
+  posting, the file when there is one, so a 2026-09-13 `--apply` run
+  dropped pending ROWS 154->65 and 509->96 while distinct pending postings
+  went 154->154 and 458->455. Count across files + rows, never rows alone.
+  The three postings it did lose were sibling roles at one employer that
+  shared a listing URL ("Data Scientist, Level 2" folded into "Level 1",
+  "Managing Consultant" into "Consultant"), so URL clustering now also
+  requires the same normalized title. `__main__` prints only the first 10
+  clusters -- read `total_clusters`/`sample_clusters` from the returned
+  dict -- and don't wire a bulk-archive step into `scan.run_scan()` until
+  its dry run has been checked against real data.
 - **A liveness sweep's temp files must be per-run, never a fixed path.**
   `liveness._run_temp_paths()` generates a unique input/output pair for
   every `check-liveness.mjs` spawn. They used to be two module-level

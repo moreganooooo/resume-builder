@@ -69,6 +69,7 @@ _EXCLUSION_RE = re.compile(
 
 # Tier 2: postings that name several hubs at once.
 _COMPOUND_SPLIT_RE = re.compile(r"\s+or\s+|\s*\|\s*|\s*;\s*|\s+/\s+", re.IGNORECASE)
+_US_COUNTRY_TOKENS = {"usa", "us", "u.s.", "u.s.a.", "united states", "united states of america"}
 
 _STATE_CODES = {code.upper() for code in geo_distance._STATE_CODES}
 _STATE_NAMES = dict(geo_distance._STATE_NAMES)
@@ -416,10 +417,19 @@ def nearest_hub_distance(location: str, origin: str) -> tuple:
     scoring it by the first or the farthest would hide genuinely
     commutable roles.
     """
+    hubs = split_hubs(location)
+    # Ashby's "San Francisco; United States" splits into a bare city and a
+    # country. Re-pair them so the country-qualified form resolves --
+    # geo_distance does that only for a city name unique to one US state.
+    # Unresolved, 54 of one profile's pending roles (OpenAI's SF roles
+    # among them) sat in "kept for review" and evaded a 20-mile radius.
+    us_qualified = any(h.strip().lower() in _US_COUNTRY_TOKENS for h in hubs)
     best_miles, best_hub = None, ""
-    for hub in split_hubs(location):
+    for hub in hubs:
         hub_text = strip_workplace_tokens(hub)
         point = geo_distance.resolve_location(hub_text)
+        if not point and us_qualified and "," not in hub_text:
+            point = geo_distance.resolve_location(f"{hub_text}, United States")
         if not point:
             continue
         origin_point = geo_distance.resolve_location(origin)

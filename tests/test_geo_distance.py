@@ -256,6 +256,19 @@ class TestResolveMetro(unittest.TestCase):
         self.assertIsNone(geo_distance.resolve_location("Greater Austin Area"))
 
 
+class TestCountryQualifiedCity(unittest.TestCase):
+    def test_city_unique_to_one_state_resolves_with_its_country(self):
+        self.assertEqual(
+            geo_distance.resolve_location("Seattle, United States"),
+            geo_distance.resolve_location("Seattle, WA"),
+        )
+
+    def test_ambiguous_or_bare_city_stays_unresolved(self):
+        for value in ("Austin, USA", "Portland, United States", "San Francisco"):
+            with self.subTest(value=value):
+                self.assertIsNone(geo_distance.resolve_location(value))
+
+
 class TestMetroAliases(unittest.TestCase):
     """Shorthand a posting uses instead of a city name.
 
