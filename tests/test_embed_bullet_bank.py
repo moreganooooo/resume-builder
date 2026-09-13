@@ -11,7 +11,27 @@ SCRIPTS_DIR = os.path.join(
 sys.path.insert(0, SCRIPTS_DIR)
 
 import embed_bullet_bank  # noqa: E402
+import gemini_client  # noqa: E402
 from bullet_bank_hash import bullets_sha  # noqa: E402
+
+_ORIG_NETWORK_ENV = None
+
+
+def setUpModule():
+    # embed_batch() now goes through gemini_client's test-network guard.
+    # Every test here that reaches it mocks embed_bullet_bank.requests.post,
+    # so opt in -- same arrangement as tests/test_gemini_client.py. A test
+    # added here WITHOUT that mock would make a real call.
+    global _ORIG_NETWORK_ENV
+    _ORIG_NETWORK_ENV = os.environ.get(gemini_client._TEST_NETWORK_ENV)
+    os.environ[gemini_client._TEST_NETWORK_ENV] = "1"
+
+
+def tearDownModule():
+    if _ORIG_NETWORK_ENV is None:
+        os.environ.pop(gemini_client._TEST_NETWORK_ENV, None)
+    else:
+        os.environ[gemini_client._TEST_NETWORK_ENV] = _ORIG_NETWORK_ENV
 
 
 class TestEmbedBatchLengthGuard(unittest.TestCase):

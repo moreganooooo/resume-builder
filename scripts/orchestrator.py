@@ -1,4 +1,5 @@
 import ast
+import collections
 import copy
 import datetime
 import inspect
@@ -849,9 +850,76 @@ def _confirm_continue_without_keywords() -> bool:
     )
 
 
-def build_verified_skills_context() -> str:
+# A verified-skills ledger at or below this many names is sent to the
+# evaluator whole; above it, only the names the posting mentions are sent
+# (see relevant_skill_names()).
+SKILLS_CONTEXT_FILTER_MIN = 120
+# A token shared by at least this many ledger names ("marketing", "data",
+# "campaign") says nothing about any one skill, so it can't match alone.
+_GENERIC_SKILL_TOKEN_DF = 4
+
+
+def _skill_text(text: str) -> str:
+    """Lowercase, punctuation to spaces (keeping + and # for C++/C#, and a
+    dot only inside a token like outreach.io), padded so a phrase can be
+    found on word boundaries with a plain `in`."""
+    t = re.sub(r"[^a-z0-9+#.]+", " ", str(text).lower())
+    t = re.sub(r"(?<![a-z0-9])\.|\.(?![a-z0-9])", " ", t)
+    return " " + " ".join(t.split()) + " "
+
+
+def _skill_phrases(name: str) -> list:
+    """The ways a skill can appear in a posting: its full name, each
+    parenthetical alias ("Customer relationship management (CRM) systems"
+    -> "crm"), and each slash-separated part ("ETL / pipeline automation")."""
+    outer = re.sub(r"\([^)]*\)", " ", name)
+    parts = [outer] + re.findall(r"\(([^)]*)\)", name)
+    phrases = []
+    for p in parts:
+        for piece in re.split(r"[,/;]| or ", p):
+            s = _skill_text(piece).strip()
+            if s:
+                phrases.append(s)
+    return phrases
+
+
+def relevant_skill_names(names, jd_text: str) -> list:
+    """The ledger names this posting mentions. A name matches when any of
+    its phrases appears in the posting on word boundaries, or when one of
+    its DISTINCTIVE tokens does -- "salesforce" in "Salesforce CRM" -- where
+    distinctive means shared by fewer than _GENERIC_SKILL_TOKEN_DF names and
+    at least 3 characters long. Lexical on purpose: deterministic and free
+    per evaluation, where an embedding match would add an uncached API call
+    to every one."""
+    names = [n for n in names if str(n).strip()]
+    jd = _skill_text(jd_text)
+    if not jd.strip():
+        return sorted(names, key=str.lower)
+    tokens_by_name = {n: set(_skill_text(n).split()) for n in names}
+    df = collections.Counter(t for toks in tokens_by_name.values() for t in toks)
+    matched = []
+    for n in names:
+        if any(len(p) >= 2 and f" {p} " in jd for p in _skill_phrases(n)):
+            matched.append(n)
+            continue
+        if any(
+            len(t) >= 3 and df[t] < _GENERIC_SKILL_TOKEN_DF and f" {t} " in jd
+            for t in tokens_by_name[n]
+        ):
+            matched.append(n)
+    return sorted(matched, key=str.lower)
+
+
+def build_verified_skills_context(jd_text: str = "") -> str:
     """The candidate's own confirmed tools/skills for evaluate_fit()'s user
     content, or "" when there is nothing to say.
+
+    Ledgers only grow -- every skill-gap scan adds the posting skills the
+    candidate confirms -- so above SKILLS_CONTEXT_FILTER_MIN names only the
+    ones this posting mentions are sent. A skill the posting never names
+    cannot raise tools_process_overlap or close a capability gap, and a
+    1,407-name ledger cost ~7,500 tokens on every evaluation. The ledger can
+    keep growing; the block stays the size of what the posting asks for.
 
     `tools_process_overlap` and `capability_gaps` used to be scored purely
     from profile.yml's narrative sections (target_roles/archetypes/
@@ -892,12 +960,27 @@ def build_verified_skills_context() -> str:
     if not names:
         return ""
 
-    return (
-        "=== VERIFIED SKILLS & TOOLS (from verified_tools.json + profile.yml) ===\n"
+    instructions = (
         "This is the candidate's own confirmed toolset -- ground `tools_process_overlap` "
         "in this list rather than inferring it from narrative alone, and do not list "
         "something here as a `capability_gaps`/`stretch_evidence` item.\n"
-        + ", ".join(sorted(names, key=str.lower))
+    )
+    if len(names) <= SKILLS_CONTEXT_FILTER_MIN or not str(jd_text).strip():
+        return (
+            "=== VERIFIED SKILLS & TOOLS (from verified_tools.json + profile.yml) ===\n"
+            + instructions
+            + ", ".join(sorted(names, key=str.lower))
+        )
+
+    matched = relevant_skill_names(names, jd_text)
+    return (
+        f"=== VERIFIED SKILLS & TOOLS relevant to this posting ({len(matched)} of the "
+        f"candidate's {len(names)} confirmed; filtered to what the posting mentions) ===\n"
+        + instructions
+        + "Only confirmed skills this posting names are shown. A requirement not shown may "
+        "still be covered under another name -- weigh the narrative and background before "
+        "listing it as a gap.\n"
+        + (", ".join(matched) if matched else "(none of the confirmed skills are named in this posting)")
     )
 
 
@@ -4885,6 +4968,27 @@ class ResumeEngine:
         except Exception:
             situational_tags = set()
         excluded_companies = situational_tags - set(extra_company_minimums or {})
+        # Same waste, wider net: once a profile has a roster, any bank company
+        # on neither the roster nor this JD's situational candidates -- an
+        # education institution, a retired job, a section label like
+        # "Additional Experience" -- can never land in EXPERIENCE either.
+        try:
+            roster_roles = (self.load_yaml(self.kb_dir, "profile.yml") or {}).get(
+                "roles"
+            ) or []
+        except Exception:
+            roster_roles = []
+        roster_names = {
+            str(r.get(key) or "").strip()
+            for r in roster_roles
+            if isinstance(r, dict)
+            for key in ("company", "name")
+        } - {""}
+        if roster_names and "Role / Company" in df.columns:
+            allowed = roster_names | set(extra_company_minimums or {})
+            excluded_companies |= {
+                c for c in set(df["Role / Company"].fillna("")) if c and c not in allowed
+            }
         excluded_values = (
             df["Role / Company"].fillna("").values
             if excluded_companies and "Role / Company" in df.columns
@@ -5046,7 +5150,7 @@ class ResumeEngine:
                     soft_wrap=True,
                 )
 
-        skills_block = build_verified_skills_context()
+        skills_block = build_verified_skills_context(jd_text)
         if skills_block:
             sections.append(skills_block)
 
