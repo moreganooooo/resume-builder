@@ -25,10 +25,10 @@ if SCRIPT_DIR not in sys.path:
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
 
-# KNOWN ISSUE (deferred, 2026-09-13): these are resolved ONCE at import, so
-# a profile switch mid-session still points them at the OLD profile -- the
-# same bug class JDTracker's TRACKER_CSV had (see CLAUDE.md). Fixing it
-# means turning them into per-call lookups at every use site; not done yet.
+# Resolved at import. A profile switch must go through
+# profile_paths.set_active_profile() (or clear_active_profile()), which
+# reloads this module -- it is in _RELOAD_ON_PROFILE_SWITCH -- so these
+# follow the active profile. Assigning RESUME_PROFILE directly does not.
 JDS_DIR = profile_paths.jds_dir()
 COMPLETED_DIR = os.path.join(JDS_DIR, "completed")
 EXPIRED_DIR = os.path.join(JDS_DIR, "expired")

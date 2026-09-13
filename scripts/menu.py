@@ -2634,7 +2634,9 @@ def _handle_manage_profiles():
                     shutil.rmtree(path)
             cli_art.display_success(f"Profile '{target}' deleted.")
             if was_active:
-                os.environ.pop("RESUME_PROFILE", None)
+                # Not a bare os.environ.pop: modules like jd_manager resolved
+                # their paths at import and must be reloaded too.
+                profile_paths.clear_active_profile()
             _pause_and_return()
 
         elif choice == "rename":
