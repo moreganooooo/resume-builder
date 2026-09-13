@@ -338,5 +338,26 @@ def run_scan(sources: list | None = None, verify: bool = True) -> int:
                     break
             written -= 1
 
+    # Duplicates each cost an evaluation call and clutter every list, so they
+    # are archived right after the scan that brought them in, using the same
+    # clustering as `resume dedupe --apply` (which keeps the file, else the
+    # richest/highest-scoring copy). Its rules were corrected and dry-run
+    # against real data before being wired in here -- see the CLAUDE.md note
+    # on judging a dedupe run. Never for an unisolated test run, which would
+    # archive the developer's real JDs; never fatal to the scan itself.
+    try:
+        import db
+        import dedup_pending_roles
+
+        if not db._is_unisolated_test_write():
+            dedup = dedup_pending_roles.run_deduplication(dry_run=False)
+            if dedup.get("total_archived_duplicates"):
+                cli_art.cli_info(
+                    f"Archived {dedup['total_archived_duplicates']} duplicate "
+                    f"posting(s) across {dedup['total_clusters']} cluster(s)."
+                )
+    except Exception as e:  # noqa: BLE001 -- see comment above
+        logging.warning(f"scan: automatic de-duplication skipped -- {e}")
+
     cli_art.render_scan_report(source_results, written)
     return written
