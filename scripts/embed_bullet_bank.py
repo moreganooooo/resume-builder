@@ -112,8 +112,14 @@ def embed_batch(texts: list) -> list:
             "needs the network."
         )
 
+    # The key is read per call, like every gemini_client request: the
+    # module-level AUTH_HEADERS froze whatever key was in .env at import, so
+    # a long-running job (a 374-role re-score, 2026-09-13) kept embedding on
+    # a rate-limited old key for hours after the key had been switched.
+    headers = {"x-goog-api-key": gemini_client._get_api_key() or API_KEY}
+
     for attempt in range(MAX_RETRIES):
-        resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=120)
+        resp = requests.post(url, json=body, headers=headers, timeout=120)
         if resp.status_code == 429:
             wait = 10 * (2**attempt)
             cli_art.cli_warning(

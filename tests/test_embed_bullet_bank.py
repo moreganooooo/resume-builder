@@ -34,6 +34,22 @@ def tearDownModule():
         os.environ[gemini_client._TEST_NETWORK_ENV] = _ORIG_NETWORK_ENV
 
 
+class TestEmbedBatchReadsKeyPerCall(unittest.TestCase):
+    """A key switched in .env must reach an already-running job: the old
+    module-level AUTH_HEADERS froze the import-time key for hours."""
+
+    @patch("embed_bullet_bank.requests.post")
+    def test_uses_the_key_current_at_call_time(self, mock_post):
+        mock_post.return_value = MagicMock(
+            status_code=200, json=lambda: {"embeddings": [{"values": [0.0]}]}
+        )
+        with patch("gemini_client._get_api_key", return_value="key-after-switch"):
+            embed_bullet_bank.embed_batch(["one"])
+        self.assertEqual(
+            mock_post.call_args.kwargs["headers"]["x-goog-api-key"], "key-after-switch"
+        )
+
+
 class TestEmbedBatchLengthGuard(unittest.TestCase):
     """B20 (phase-9-backlog.md): a response with a missing/short
     "embeddings" key used to silently contribute fewer rows than sent,
