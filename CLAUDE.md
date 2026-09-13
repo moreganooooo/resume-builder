@@ -936,6 +936,21 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   skipped) until rebuilt. `embed_batch()` also reads the API key per call:
   the old module-level header froze the import-time key, so a running job
   kept a switched-out key for hours.
+- **The verified-skills filter exists but ships OFF
+  (`orchestrator.SKILLS_CONTEXT_FILTER_ENABLED`).** A 1,407-name ledger costs
+  ~7,500 tokens per evaluation, and `relevant_skill_names()` cuts that ~92%
+  by sending only skills the posting names. But an A/B on 8 pending roles
+  (each scored full, full again, filtered; `evaluate_fit()` returns without
+  saving, so this is safe to run) moved composite a mean 0.19 and interview
+  odds 0.31, mostly down -- one role 4.30 -> 3.50 with two new capability
+  gaps, another losing 0.8 odds with unchanged overlap. Unresolved which
+  side is right: the new gaps (Reddit ads, app marketing) matched nothing in
+  the ledger, so the full list may be inflating coverage; the odds drop with
+  full overlap suggests the header's "65 of 1,387" framing reads as thin.
+  Also: two full runs minutes apart agreed almost exactly, but a full run
+  hours later differed by 0.3 on the same role -- measure noise across
+  separated runs, not back-to-back, before judging any evaluator change.
+  Re-enable only after a revised filter clears that bar.
 - **A posting's body is full of money that is not the salary
   (`scripts/compensation.py`).** Taking the first dollar figure in a body
   was measured against the real 1,761-body corpus at a $40,000 floor and

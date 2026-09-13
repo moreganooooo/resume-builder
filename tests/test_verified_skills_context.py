@@ -57,9 +57,23 @@ class TestSkillsFilteredToThePosting(unittest.TestCase):
     skills a posting mentions reach the evaluator (a 1,407-name ledger cost
     ~7,500 tokens on every evaluation)."""
 
+    def setUp(self):
+        # The filter ships disabled (SKILLS_CONTEXT_FILTER_ENABLED) pending a
+        # passing A/B; these tests exercise the matching itself.
+        patcher = patch("orchestrator.SKILLS_CONTEXT_FILTER_ENABLED", True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _ledger(self, extra):
         filler = [{"name": f"Filler Skill {i} Marketing"} for i in range(150)]
         return {"tools": filler + [{"name": n} for n in extra]}
+
+    def test_disabled_filter_sends_the_whole_ledger(self):
+        with patch("orchestrator.SKILLS_CONTEXT_FILTER_ENABLED", False):
+            block = self._block(["Figma"], "Needs Salesforce.")
+        self.assertIn("Figma", block)
+        self.assertIn("Filler Skill 3 Marketing", block)
+        self.assertNotIn("relevant to this posting", block)
 
     def _block(self, extra, jd):
         with (

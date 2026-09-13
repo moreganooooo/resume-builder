@@ -859,6 +859,14 @@ def _confirm_continue_without_keywords() -> bool:
 # evaluator whole; above it, only the names the posting mentions are sent
 # (see relevant_skill_names()).
 SKILLS_CONTEXT_FILTER_MIN = 120
+# OFF until a revised filter passes an A/B against the full list. Measured
+# 2026-09-13 on 8 pending roles: filtering moved composite by a mean 0.19 and
+# interview odds by 0.31 -- mostly down -- including one role 4.30 -> 3.50
+# with two new capability gaps. Whether that is the full 1,387-name list
+# inflating overlap or the filter under-crediting synonyms is unresolved;
+# a profile owner happy with its calibration should not get either change
+# silently. CLAUDE.md records the A/B method and the bar a revision must clear.
+SKILLS_CONTEXT_FILTER_ENABLED = False
 # A token shared by at least this many ledger names ("marketing", "data",
 # "campaign") says nothing about any one skill, so it can't match alone.
 _GENERIC_SKILL_TOKEN_DF = 4
@@ -970,7 +978,11 @@ def build_verified_skills_context(jd_text: str = "") -> str:
         "in this list rather than inferring it from narrative alone, and do not list "
         "something here as a `capability_gaps`/`stretch_evidence` item.\n"
     )
-    if len(names) <= SKILLS_CONTEXT_FILTER_MIN or not str(jd_text).strip():
+    if (
+        not SKILLS_CONTEXT_FILTER_ENABLED
+        or len(names) <= SKILLS_CONTEXT_FILTER_MIN
+        or not str(jd_text).strip()
+    ):
         return (
             "=== VERIFIED SKILLS & TOOLS (from verified_tools.json + profile.yml) ===\n"
             + instructions
