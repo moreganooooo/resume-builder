@@ -177,6 +177,42 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         self.assertNotIn("Mercor", companies)
         self.assertEqual(companies.count("Treering Yearbooks"), 5)
 
+    @patch("orchestrator.GeminiClient.embed", return_value=None)
+    @patch("orchestrator.TOP_K_BULLETS", 1)
+    def test_primary_embedding_failure_uses_the_backup_index(self, mock_embed):
+        # Without a backup, a failed JD embedding falls back to the first
+        # TOP_K rows (a Treering bullet here). With a backup index built from
+        # this same bank, the JD is embedded with the backup model and ranked
+        # against THAT index -- so the Mercor-aligned JD picks Mercor.
+        import embed_bullet_bank
+
+        _write_profile_roles(self.tmp_dir, [])
+        for src, dst in zip(
+            embed_bullet_bank.index_paths(self.tmp_dir)[:2],
+            embed_bullet_bank.index_paths(self.tmp_dir, embed_bullet_bank.BACKUP_EMBED_MODEL)[:2],
+        ):
+            shutil.copy(src, dst)
+        with patch(
+            "embed_bullet_bank.embed_batch", return_value=[[0.0, 1.0, 0.0, 0.0, 0.0, 0.0]]
+        ) as mock_backup:
+            results = self.engine.mine_bullet_bank("some JD text", {})
+        self.assertEqual([c for (_, c, _) in results], ["Mercor"])
+        self.assertEqual(mock_backup.call_args.kwargs["model"], embed_bullet_bank.BACKUP_EMBED_MODEL)
+
+    @patch("orchestrator.GeminiClient.embed", return_value=None)
+    @patch("orchestrator.TOP_K_BULLETS", 1)
+    def test_stale_backup_index_is_never_used(self, mock_embed):
+        import embed_bullet_bank
+
+        _write_profile_roles(self.tmp_dir, [])
+        npy, meta, _ = embed_bullet_bank.index_paths(self.tmp_dir, embed_bullet_bank.BACKUP_EMBED_MODEL)
+        shutil.copy(embed_bullet_bank.index_paths(self.tmp_dir)[0], npy)
+        with open(meta, "w") as f:
+            json.dump({"bullets_sha": "some-older-bank"}, f)
+        with patch("embed_bullet_bank.embed_batch") as mock_backup:
+            self.engine.mine_bullet_bank("some JD text", {})
+        mock_backup.assert_not_called()
+
     @patch("orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0])
     @patch("orchestrator.TOP_K_BULLETS", 5)
     def test_embedding_dimension_mismatch_falls_back_instead_of_crashing(

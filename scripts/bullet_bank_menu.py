@@ -268,7 +268,8 @@ STAGES = [
         "key": "embed",
         "number": 6,
         "label": "Embed Bullet Bank (Final Step)",
-        "description": "builds the embeddings real resume builds match against\n",
+        "description": "builds the embeddings real resume builds match against, plus the\n"
+        "backup model's index used when the primary is rate-limited\n",
         "script": "embed_bullet_bank.py",
         "inputs": [KEEPERS_AUDITED_CSV],
         "output": NPY_PATH,

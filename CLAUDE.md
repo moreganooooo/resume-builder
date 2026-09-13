@@ -914,6 +914,28 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   (`KnowledgeBase.company_scoped_context()`), and tells the next attempt
   why. Every cv.md role needs a `### Title` / `**Company**` block, or its
   rewrites get no role context at all.
+- **Two embedding models, two indexes -- never cross them
+  (`embed_bullet_bank.index_paths()`).** `gemini-embedding-001` has its own
+  per-model quota, so it backs up `gemini-embedding-2` when the primary is
+  rate-limited -- but the two models' vectors live in different spaces, and
+  a query embedded by one compared against the other's index returns
+  confident nonsense with no error. Each model keeps its own index
+  (`bullet_vectors_ge2_d768.*` primary, `bullet_vectors_ge1_d768.*` backup).
+  Running `embed_bullet_bank.py` -- the Bullet Bank menu's Embed stage and
+  bootstrap's pipeline both do -- builds the primary and then the backup
+  (`cli()`; a backup failure only warns; `--primary-only` / `--model` build
+  one). `vector_store`'s in-process re-embed calls `main()` and stays
+  primary-only, since a search is waiting on it. A
+  fallback always switches the query AND the index together. Wired into the
+  two hot paths only: `mine_bullet_bank()` (the JD embedding) and
+  `compute_skill_coverage_matrix()` (every evaluation), which now tries each
+  model with `max_retries=2` instead of waiting out a ~150s ladder -- that
+  ladder, on every rate-limited evaluation, is what stalled a 374-role
+  re-score for hours on 2026-09-13. The backup index is content-hash
+  checked like the primary, so after a bank edit it goes stale (and is
+  skipped) until rebuilt. `embed_batch()` also reads the API key per call:
+  the old module-level header froze the import-time key, so a running job
+  kept a switched-out key for hours.
 - **A posting's body is full of money that is not the salary
   (`scripts/compensation.py`).** Taking the first dollar figure in a body
   was measured against the real 1,761-body corpus at a $40,000 floor and
