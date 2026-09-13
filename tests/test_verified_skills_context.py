@@ -52,6 +52,59 @@ class TestBuildVerifiedSkillsContext(unittest.TestCase):
         self.assertEqual(block, "")
 
 
+class TestSkillsFilteredToThePosting(unittest.TestCase):
+    """A ledger only grows, so above SKILLS_CONTEXT_FILTER_MIN names only the
+    skills a posting mentions reach the evaluator (a 1,407-name ledger cost
+    ~7,500 tokens on every evaluation)."""
+
+    def _ledger(self, extra):
+        filler = [{"name": f"Filler Skill {i} Marketing"} for i in range(150)]
+        return {"tools": filler + [{"name": n} for n in extra]}
+
+    def _block(self, extra, jd):
+        with (
+            patch("skills_menu._load_verified_tools", return_value=self._ledger(extra)),
+            patch("profile_paths.profile_yaml", return_value={}),
+        ):
+            return orchestrator.build_verified_skills_context(jd)
+
+    def test_small_ledger_is_sent_whole(self):
+        with (
+            patch(
+                "skills_menu._load_verified_tools",
+                return_value={"tools": [{"name": "Salesforce"}, {"name": "Figma"}]},
+            ),
+            patch("profile_paths.profile_yaml", return_value={}),
+        ):
+            block = orchestrator.build_verified_skills_context("Needs Salesforce.")
+        self.assertIn("Figma", block)
+
+    def test_large_ledger_keeps_only_what_the_posting_names(self):
+        block = self._block(
+            ["Salesforce CRM", "Customer relationship management (CRM) systems",
+             "Outreach.io", "Figma"],
+            "You'll own our Salesforce instance and Outreach.io sequences. CRM experience a plus.",
+        )
+        self.assertIn("relevant to this posting", block)
+        self.assertIn("Salesforce CRM", block)  # distinctive token
+        self.assertIn("Customer relationship management (CRM) systems", block)  # alias
+        self.assertIn("Outreach.io", block)  # dotted name, sentence-final dot
+        self.assertNotIn("Figma", block)
+        self.assertNotIn("Filler Skill", block)
+
+    def test_a_generic_word_never_matches_on_its_own(self):
+        # "marketing" is shared by 150 ledger names; a posting saying it must
+        # not pull all of them in.
+        block = self._block([], "A marketing role.")
+        self.assertNotIn("Filler Skill", block)
+        self.assertIn("none of the confirmed skills", block)
+
+    def test_no_posting_text_falls_back_to_the_whole_ledger(self):
+        block = self._block(["Figma"], "")
+        self.assertIn("Figma", block)
+        self.assertIn("Filler Skill 3 Marketing", block)
+
+
 class TestBlockReachesFitContext(unittest.TestCase):
     def test_the_block_reaches_the_fit_context(self):
         engine = orchestrator.ResumeEngine.__new__(orchestrator.ResumeEngine)

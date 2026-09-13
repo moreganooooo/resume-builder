@@ -894,6 +894,26 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   it. Widening the retry-time metric inventory to fire on widow
   violations was tried and reverted on 2026-08-12 — the model started
   deleting bullets to dodge collisions, breaking per-role minimums.
+  The pool also skips every company that cannot land in EXPERIENCE: once
+  profile.yml has a roster, a bank company on neither the roster nor this
+  JD's situational candidates (a gated-out situational role, a school, a
+  retired job, a section label like "Additional Experience") never takes a
+  slot -- the roster would drop it later, and a sample build spent 3 of 21
+  slots that way.
+- **A bullet rewrite may not import numbers from another job
+  (`rewrite_bullets.foreign_numbers()`).** A 2026-09-13 audit found every
+  one of a profile's 17 Mercor rewrites had become a Treering
+  accomplishment ("1,578 schools", "$3M stale pipeline") still tagged
+  Mercor, plus Treering facts under five other employers. Two causes, both
+  fixed: `extract_cv_section()` returns the WHOLE cv.md when a company has
+  no section, and the segment builders sent that as "CAREER OVERVIEW" (they
+  now send no CV context instead); and nothing checked the output.
+  `process_bullet()` -- shared by `rewrite_bullets.py` and `audit_keepers`
+  Stage 4 -- now rejects, unscored, any rewrite containing a multi-digit
+  number absent from the original bullet and the employer's own context
+  (`KnowledgeBase.company_scoped_context()`), and tells the next attempt
+  why. Every cv.md role needs a `### Title` / `**Company**` block, or its
+  rewrites get no role context at all.
 - **A posting's body is full of money that is not the salary
   (`scripts/compensation.py`).** Taking the first dollar figure in a body
   was measured against the real 1,761-body corpus at a $40,000 floor and

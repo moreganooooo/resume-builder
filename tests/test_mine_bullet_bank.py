@@ -163,6 +163,20 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         self.assertNotIn("Mercor", [c for (_, c, _) in gated_out])
         self.assertIn("Mercor", [c for (_, c, _) in gated_in])
 
+    @patch(
+        "orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    )
+    @patch("orchestrator.TOP_K_BULLETS", 6)
+    def test_company_off_the_roster_never_fills_a_slot(self, mock_embed):
+        # With a roster defined, a bank company on neither the roster nor the
+        # JD's situational candidates can't land in EXPERIENCE, so it must not
+        # take a pool slot either -- even when there's room for every row.
+        _write_profile_roles(self.tmp_dir, [{"name": "Treering Yearbooks", "min_bullets": 1}])
+        results = self.engine.mine_bullet_bank("some JD text", {})
+        companies = [c for (_, c, _) in results]
+        self.assertNotIn("Mercor", companies)
+        self.assertEqual(companies.count("Treering Yearbooks"), 5)
+
     @patch("orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0])
     @patch("orchestrator.TOP_K_BULLETS", 5)
     def test_embedding_dimension_mismatch_falls_back_instead_of_crashing(

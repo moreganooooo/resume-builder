@@ -51,12 +51,17 @@ class TestJobCompare(unittest.TestCase):
             "raw_text": "We need a Principal Technical Writer for developer documentation and API reference guides.",
         }
 
+        # Patch the module job_compare actually imported (`vector_store`, via
+        # scripts/ on sys.path) -- "scripts.vector_store" is a second copy of
+        # the module, so patching it missed, and this test ran a real bullet
+        # bank search against the operator's live profile: a stale-vector
+        # re-embed of 827 real bullets, with real API calls.
         with (
             patch(
-                "scripts.vector_store.search_bullet_bank",
+                "vector_store.search_bullet_bank",
                 return_value=[("Built taxonomy system.", "Acme", "[tag]", 0.9)],
             ),
-            patch("scripts.vector_store.GeminiClient.embed", return_value=[0.1] * 768),
+            patch("vector_store.GeminiClient.embed", return_value=[0.1] * 768),
         ):
             res = job_compare.compare_jobs(job_a, job_b)
             self.assertEqual(res["score_a"], 92)

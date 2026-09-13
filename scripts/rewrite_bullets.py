@@ -739,6 +739,33 @@ def _claim_tag_keywords_map() -> dict:
     return {f"[{t['name']}]": (t.get("keywords") or []) for t in profile_paths.tags()}
 
 
+_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _numbers_in(text: str) -> set:
+    """Multi-digit numbers in `text`, commas dropped ("2,933" -> "2933").
+    Single digits are ignored: "B2B", "1:1" and "K-12"-style tokens produce
+    them constantly, and they are rarely the invented metric."""
+    out = set()
+    for raw in _NUMBER_RE.findall(str(text or "")):
+        n = raw.replace(",", "").rstrip(".")
+        if n.endswith(".0"):
+            n = n[:-2]
+        if len(n.replace(".", "")) >= 2:
+            out.add(n)
+    return out
+
+
+def foreign_numbers(rewritten: str, allowed_text: str) -> set:
+    """Numbers a rewrite introduced that appear nowhere in `allowed_text`
+    (the original bullet plus its own employer's context). A rewrite may
+    rephrase, restructure and sharpen, but a number it cannot trace to this
+    employer's evidence is either invented or borrowed from another job --
+    the 2026-09-13 audit found both, e.g. Treering's "1,578 schools" in
+    Mercor and Inside Sales Team bullets."""
+    return _numbers_in(rewritten) - _numbers_in(allowed_text)
+
+
 def extract_cv_section(cv_text: str, role_company: str) -> str:
     """Narrows cv.md down to just this bullet's own company section, so
     the rewrite prompt (both tiers, but Gemma's 16k TPM budget feels it
@@ -1076,14 +1103,15 @@ class KnowledgeBase:
         company only ever sees its own projects, and every company with
         real project data gets to use it, not just Treering."""
         sections = []
+        # extract_cv_section() returns the WHOLE cv.md when it can't find this
+        # company's section. That used to go in as a "CAREER OVERVIEW" -- every
+        # other employer's metrics, handed to a rewrite of this one employer's
+        # bullet. A 2026-09-13 audit found all 17 Mercor rewrites (Mercor had
+        # no cv.md section) had turned into Treering accomplishments this way.
+        # No section means no CV context, never someone else's.
         cv_section = extract_cv_section(self.cv_full, role_company)
-        if cv_section:
-            label = (
-                "ROLE CONTEXT (cv.md excerpt)"
-                if cv_section != self.cv_full
-                else "CAREER OVERVIEW (cv.md)"
-            )
-            sections.append(f"=== {label} ===\n{cv_section}")
+        if cv_section and cv_section != self.cv_full:
+            sections.append(f"=== ROLE CONTEXT (cv.md excerpt) ===\n{cv_section}")
         bg_summary = build_background_summary(tags)
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
@@ -1154,14 +1182,15 @@ class KnowledgeBase:
 
     def _build_segment_bundle(self, role_company: str, tags: str) -> str:
         sections = []
+        # extract_cv_section() returns the WHOLE cv.md when it can't find this
+        # company's section. That used to go in as a "CAREER OVERVIEW" -- every
+        # other employer's metrics, handed to a rewrite of this one employer's
+        # bullet. A 2026-09-13 audit found all 17 Mercor rewrites (Mercor had
+        # no cv.md section) had turned into Treering accomplishments this way.
+        # No section means no CV context, never someone else's.
         cv_section = extract_cv_section(self.cv_full, role_company)
-        if cv_section:
-            label = (
-                "ROLE CONTEXT (cv.md excerpt)"
-                if cv_section != self.cv_full
-                else "CAREER OVERVIEW (cv.md)"
-            )
-            sections.append(f"=== {label} ===\n{cv_section}")
+        if cv_section and cv_section != self.cv_full:
+            sections.append(f"=== ROLE CONTEXT (cv.md excerpt) ===\n{cv_section}")
         bg_summary = build_background_summary(tags)
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
@@ -1276,6 +1305,17 @@ class KnowledgeBase:
             if segment
             else self.gemma_static_prefix
         )
+
+    def company_scoped_context(self, role_company: str, tags: str) -> str:
+        """The part of a bullet's rewrite context that is about its OWN
+        employer (cv.md section, that employer's projects and, for
+        deep-evidence roles, its metrics) -- context_block_for_bullet()
+        minus the static prefix every bullet shares. This is the evidence a
+        rewrite's numbers must come from; see foreign_numbers()."""
+        full = self.context_block_for_bullet(role_company, tags)
+        if full.startswith(self.static_prefix):
+            return full[len(self.static_prefix):]
+        return full
 
     def recruiter_context_block(self) -> str:
         if not self.recruiter_patterns:
@@ -1800,6 +1840,8 @@ def process_bullet(
 
     kb_context_gemma = kb.context_block_for_bullet_gemma(role_company, tags)
     kb_context_full = kb.context_block_for_bullet(role_company, tags)
+    # What a rewrite's numbers may be traced to -- see foreign_numbers().
+    scoped_context = kb.company_scoped_context(role_company, tags)
 
     current_bullet = original_bullet
     current_scores = original_scores.copy()
@@ -1905,6 +1947,27 @@ def process_bullet(
                     active_rewrite_model = REWRITE_FALLBACK_MODEL
                 time.sleep(SLEEP_ON_RETRY)
                 continue
+
+        stray = foreign_numbers(
+            rewritten, f"{original_bullet}\n{current_bullet}\n{scoped_context}"
+        )
+        if stray:
+            # Never scored, never kept: a number this employer's evidence
+            # can't account for is invented or borrowed from another job.
+            # The next attempt is told why via the weaknesses it's shown.
+            cli_art.console.print(
+                f"   {theme.colorize_icon('warning')} Rejected: rewrite introduced "
+                f"number(s) not in this role's evidence ({', '.join(sorted(stray))}).",
+                soft_wrap=True,
+            )
+            current_scores["weaknesses"] = (
+                f"The previous rewrite introduced numbers ({', '.join(sorted(stray))}) "
+                f"that are not in this bullet or in {role_company}'s own evidence. Use "
+                f"only numbers already present there; never borrow metrics from another role."
+            )
+            if attempt < MAX_ATTEMPTS:
+                time.sleep(SLEEP_ON_RETRY)
+            continue
 
         last_rewrite = rewritten
         last_reasoning = reasoning

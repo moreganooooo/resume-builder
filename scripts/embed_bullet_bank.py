@@ -99,6 +99,19 @@ def embed_batch(texts: list) -> list:
     ]
     body = {"requests": requests_payload}
 
+    # Same test-network chokepoint every gemini_client call goes through.
+    # This module builds its own headers, so it slipped past that guard: a
+    # test whose mock missed (test_job_compare, 2026-09-13) re-embedded the
+    # operator's real 827-bullet bank with live, rate-limited API calls.
+    import gemini_client
+
+    if gemini_client._blocked_under_test():
+        raise gemini_client.TestNetworkBlockedError(
+            "A test tried to call the live embedding API. Mock requests.post for "
+            f"this test, or set {gemini_client._TEST_NETWORK_ENV}=1 if it genuinely "
+            "needs the network."
+        )
+
     for attempt in range(MAX_RETRIES):
         resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=120)
         if resp.status_code == 429:

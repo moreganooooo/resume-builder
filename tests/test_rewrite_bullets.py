@@ -518,6 +518,91 @@ class TestFilterProjectsByEmployer(unittest.TestCase):
         self.assertEqual(filter_projects_by_employer(self.PROJECTS, ""), [])
 
 
+class TestForeignNumbers(unittest.TestCase):
+    """A rewrite may rephrase a bullet but not import numbers its own
+    employer's evidence can't account for (2026-09-13: Treering's "1,578
+    schools" turned up in rewrites of other jobs' bullets)."""
+
+    def test_flags_a_number_absent_from_the_evidence(self):
+        from rewrite_bullets import foreign_numbers
+
+        self.assertEqual(
+            foreign_numbers("Audited 2,933+ accounts", "Audited CRM accounts"), {"2933"}
+        )
+
+    def test_number_present_in_evidence_is_allowed_despite_formatting(self):
+        from rewrite_bullets import foreign_numbers
+
+        self.assertEqual(
+            foreign_numbers("Lifted reply rate to 54% across 2933 accounts",
+                            "54% reply rate; 2,933 accounts"),
+            set(),
+        )
+
+    def test_single_digits_are_ignored(self):
+        from rewrite_bullets import foreign_numbers
+
+        self.assertEqual(foreign_numbers("Ran B2B 1:1 coaching in 3 markets", ""), set())
+
+
+class TestRewriteEvidenceGuard(unittest.TestCase):
+
+    def setUp(self):
+        import persona
+
+        self._persona_sandbox = persona.sandbox_profile()
+        self._persona_sandbox.__enter__()
+        self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
+        self.kb = KnowledgeBase()
+        self.row = pd.Series(
+            {
+                "Bullet Point": "Evaluated AI-generated sales content for accuracy.",
+                "Role / Company": "Acme Corp",
+                "Tags": "[content]",
+                "weaknesses": "",
+                "accuracy_score": None,
+                "believability_score": None,
+                "clarity_score": None,
+                "ats_value": None,
+                "manager_test": None,
+            }
+        )
+
+    def test_segment_bundles_never_fall_back_to_the_whole_cv(self):
+        # extract_cv_section() returns the whole cv.md when it can't find the
+        # company; that must not reach a rewrite as context for this bullet.
+        self.kb.cv_full = "### Some Other Job\n**Other Employer** CV-MARKER 1,578 schools"
+        for build in (self.kb._build_segment_bundle, self.kb._build_gemma_segment_bundle):
+            self.assertNotIn("CV-MARKER", build("Nowhere Incorporated", "[content]"))
+
+    @patch("rewrite_bullets.time.sleep", lambda *a, **kw: None)
+    @patch("rewrite_bullets.score_bullet")
+    @patch("rewrite_bullets.GeminiClient.generate")
+    def test_rewrite_with_borrowed_number_is_rejected_and_retried(
+        self, mock_generate, mock_score
+    ):
+        import rewrite_bullets
+
+        self.kb.static_prefix = "PREFIX "
+        self.kb.context_block_for_bullet = lambda *a: "PREFIX Acme evidence: 40 reviews"
+        mock_generate.side_effect = [
+            ('{"rewritten_bullet": "Audited 1,578 schools for accuracy.", "reasoning": "", "context_gaps": ""}', {}),
+            ('{"rewritten_bullet": "Evaluated 40 AI-generated sales reviews for accuracy.", "reasoning": "", "context_gaps": ""}', {}),
+        ]
+        mock_score.return_value = {
+            "accuracy_score": 95, "believability_score": 95, "clarity_score": 95,
+            "ats_value": 90, "manager_test": "PASS", "weaknesses": "",
+        }
+        result = process_bullet(
+            self.row, self.kb, rewrite_system="sys", rewrite_system_gemma="sys-g",
+            score_system="score-sys", dry_run=False,
+            start_model=rewrite_bullets.REWRITE_FALLBACK_MODEL,
+        )
+        self.assertEqual(result["final_bullet"], "Evaluated 40 AI-generated sales reviews for accuracy.")
+        self.assertEqual(mock_score.call_count, 1)  # the borrowed version is never scored
+        self.assertIn("1578", mock_generate.call_args_list[1].kwargs["contents"])
+
+
 class TestProcessBulletGemmaHandoff(unittest.TestCase):
 
     def setUp(self):
