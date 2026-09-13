@@ -245,6 +245,30 @@ def get_city_centroid(city: str, state: str) -> list | None:
     return _city_index().get(f"{city.strip().lower()},{state_key}")
 
 
+@functools.lru_cache(maxsize=1)
+def _city_states() -> dict:
+    """Bare city name -> the set of state codes it exists in, derived once
+    from the bundled city index."""
+    states: dict = {}
+    for key in _city_index():
+        city, _, state = key.rpartition(",")
+        states.setdefault(city, set()).add(state)
+    return states
+
+
+def _unique_state_city(city: str) -> list | None:
+    """Centroid for a city named WITH its country but no state ("San
+    Francisco, United States", Ashby's usual format) -- only when the
+    bundled index has exactly one US state for that name. 20,125 of 25,042
+    names qualify (San Francisco, Seattle, New York); Portland (16 states),
+    Austin (8) and Springfield (27) stay None, never a guess."""
+    name = (city or "").strip().lower()
+    states = _city_states().get(name)
+    if not states or len(states) != 1:
+        return None
+    return _city_index().get(f"{name},{next(iter(states))}")
+
+
 def _strip_state_qualifier(state: str) -> str:
     """Drop a trailing qualifier appended after the state code.
 
@@ -319,7 +343,10 @@ def resolve_location(text: str) -> list | None:
             if len(parts) >= 3:
                 city, state = parts[-3], parts[-2]
             else:
-                return None
+                # "City, United States" -- no state, but the country rules
+                # out "London, UK"-style collisions; resolve only a city name
+                # that exists in exactly one state.
+                return _unique_state_city(city)
         # A state field can carry a trailing ZIP: "Austin, TX 78701".
         state = re.sub(r"\s*\d{5}(?:-\d{4})?$", "", state).strip()
         state = _strip_state_qualifier(state)

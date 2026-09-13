@@ -152,7 +152,8 @@ class TestLocationEnricher(unittest.TestCase):
                     "uri": "https://maps.google.com/maps?cid=42",
                     "title": "Acme Corp - Google Maps",
                     "text": "**Title:** Acme Corp\n\n* **Address:** 300 Tech Dr, "
-                    "Springfield, IL 62702, USA\n* **Rating:** 4.5",
+                    "Springfield, IL 62702, USA\n* **Rating:** 4.5\n"
+                    "* **Website:** https://www.acmecorp.com/",
                 }
             }
         ]
@@ -167,7 +168,7 @@ class TestLocationEnricher(unittest.TestCase):
             ) as mock_call,
         ):
             res = location_enricher.lookup_google_maps_backup(
-                "Acme Corp", "Springfield", "IL"
+                "Acme Corp", "Springfield", "IL", company_site="https://acmecorp.com"
             )
         self.assertEqual(res["zip"], "62702")
         self.assertEqual(res["source"], "google_maps")
@@ -176,18 +177,41 @@ class TestLocationEnricher(unittest.TestCase):
 
     def test_google_maps_backup_trusts_only_a_matching_maps_source(self):
         # No Maps source (an ungrounded answer), a different nearby business,
-        # and a non-US address all yield nothing.
+        # a non-US address, and -- the live failure -- a same-named local
+        # place whose own website is someone else's all yield nothing.
+        site = "\n* **Website:** https://acmecorp.com/"
         for grounding in (
             {},
             {"groundingChunks": [{"maps": {"title": "Other Bakery - Google Maps",
-                                            "text": "* **Address:** 1 A St, Springfield, IL 62702"}}]},
+                                            "text": "* **Address:** 1 A St, Springfield, IL 62702" + site}}]},
             {"groundingChunks": [{"maps": {"title": "Acme Corp - Google Maps",
-                                            "text": "* **Address:** 140 Otter St, Winnipeg, MB R3T 0M8, Canada"}}]},
+                                            "text": "* **Address:** 140 Otter St, Winnipeg, MB R3T 0M8, Canada" + site}}]},
+            {"groundingChunks": [{"maps": {"title": "Acme Corp Suites - Google Maps",
+                                            "text": "* **Address:** 1 A St, Springfield, IL 62702\n"
+                                                    "* **Website:** http://www.acmesuites-phones.com/"}}]},
         ):
             with self.subTest(grounding=grounding):
                 self.assertIsNone(
-                    location_enricher._parse_maps_grounding(grounding, "Acme Corp")
+                    location_enricher._parse_maps_grounding(
+                        grounding, "Acme Corp", "https://www.acmecorp.com"
+                    )
                 )
+
+    def test_no_known_company_site_means_no_maps_address(self):
+        # Nothing to verify a place against, so nothing is accepted -- and
+        # the Maps call is not even spent.
+        self.assertIsNone(
+            location_enricher._parse_maps_grounding(self.MAPS_GROUNDING, "Acme Corp")
+        )
+        with (
+            patch.dict(os.environ, {"RESUME_ALLOW_TEST_NETWORK": "1"}),
+            patch("location_enricher.lookup_website_via_search", return_value=None),
+            patch("gemini_client.generate_grounded") as mock_call,
+        ):
+            self.assertIsNone(
+                location_enricher.lookup_google_maps_backup("Acme Corp", "Springfield", "IL")
+            )
+        mock_call.assert_not_called()
 
     def test_missing_maps_uri_falls_back_to_a_google_maps_search_link(self):
         # The API returned uri: "" live; attribution still needs a link.
@@ -197,12 +221,15 @@ class TestLocationEnricher(unittest.TestCase):
                     "maps": {
                         "uri": "",
                         "title": "Acme Corp - Google Maps",
-                        "text": "* **Address:** 300 Tech Dr, Springfield, IL 62702",
+                        "text": "* **Address:** 300 Tech Dr, Springfield, IL 62702\n"
+                        "* **Website:** https://acmecorp.com/",
                     }
                 }
             ]
         }
-        res = location_enricher._parse_maps_grounding(grounding, "Acme Corp")
+        res = location_enricher._parse_maps_grounding(
+            grounding, "Acme Corp", "https://acmecorp.com"
+        )
         self.assertTrue(
             res["maps_uri"].startswith("https://www.google.com/maps/search/?api=1&query=")
         )
@@ -212,7 +239,11 @@ class TestLocationEnricher(unittest.TestCase):
         import datetime
 
         settings = {"city": "Springfield", "state": "IL", "zip": "62701", "radius_miles": 25}
-        job = {"company": "Acme Corp", "location": "Springfield, IL"}
+        job = {
+            "company": "Acme Corp",
+            "location": "Springfield, IL",
+            "company_website": "https://acmecorp.com",
+        }
         found = {
             "address": "300 Tech Dr, Springfield, IL 62702",
             "zip": "62702",
@@ -510,8 +541,10 @@ class TestLocationEnricher(unittest.TestCase):
                 with (
                     patch("location_enricher.lookup_osm_nominatim", return_value=None),
                     patch(
-                        "location_enricher.lookup_website_via_search", return_value=None
+                        "location_enricher.lookup_website_via_search",
+                        return_value="https://example.com",
                     ),
+                    patch("location_enricher.scrape_company_locations", return_value=[]),
                     patch("location_enricher.load_locations_cache", return_value={}),
                     patch("location_enricher.save_locations_cache"),
                     patch("gemini_client.GeminiClient", return_value=mock_client),
@@ -572,8 +605,10 @@ class TestLocationEnricher(unittest.TestCase):
                 with (
                     patch("location_enricher.lookup_osm_nominatim", return_value=None),
                     patch(
-                        "location_enricher.lookup_website_via_search", return_value=None
+                        "location_enricher.lookup_website_via_search",
+                        return_value="https://example.com",
                     ),
+                    patch("location_enricher.scrape_company_locations", return_value=[]),
                     patch("location_enricher.load_locations_cache", return_value={}),
                     patch("location_enricher.save_locations_cache"),
                     patch("gemini_client.GeminiClient", return_value=mock_client),

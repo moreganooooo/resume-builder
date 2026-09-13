@@ -416,6 +416,7 @@ MAPS_CACHE_DAYS = 30
 # for every Gemini 3 model, which is why the old backup could never work).
 MAPS_BACKUP_MODEL = "gemini-3.1-flash-lite"
 _MAPS_ADDRESS_RE = re.compile(r"\*\*Address:\*\*\s*(.+)")
+_MAPS_WEBSITE_RE = re.compile(r"\*\*Website:\*\*\s*(\S+)")
 _US_ADDRESS_TAIL_RE = re.compile(
     r",\s*([A-Z]{2})\s+(\d{5})(?:-\d{4})?(?:,\s*(?:USA|United States))?\s*$"
 )
@@ -440,6 +441,7 @@ def lookup_google_maps_backup(
     city: str,
     state: str,
     client: Any = None,
+    company_site: str = "",
 ) -> Optional[Dict[str, Any]]:
     """Step 3: a Google-Maps-grounded lookup of the employer's office in or
     nearest the candidate's configured city.
@@ -458,6 +460,17 @@ def lookup_google_maps_backup(
     if _blocked_under_tests():
         return None
     if not company or company.lower() in {"confidential", "unknown company", "stealth"}:
+        return None
+
+    # A Maps place is trusted only when its Website is on the company's own
+    # domain (see _parse_maps_grounding), so with no known site there is
+    # nothing to verify against: find one for free first, and skip the
+    # Maps call entirely if that fails.
+    from company_research import is_usable_company_site
+
+    if not (company_site and is_usable_company_site(company_site)):
+        company_site = lookup_website_via_search(company) or ""
+    if not company_site:
         return None
 
     # Biases Maps toward the office near the candidate, not the HQ.
@@ -483,7 +496,7 @@ def lookup_google_maps_backup(
     except Exception as exc:
         logger.debug("Google Maps backup error for %s: %s", company, exc)
         return None
-    return _parse_maps_grounding(grounding, company)
+    return _parse_maps_grounding(grounding, company, company_site)
 
 
 def _maps_search_url(query: str) -> str:
@@ -495,14 +508,25 @@ def _maps_search_url(query: str) -> str:
 
 
 def _parse_maps_grounding(
-    grounding: Dict[str, Any], company: str
+    grounding: Dict[str, Any], company: str, company_site: str = ""
 ) -> Optional[Dict[str, Any]]:
     """The first Maps source that is THIS company and has a US street
     address we can place by ZIP, else None. The address is read from the
     Maps source itself, never the model's prose; a response with no Maps
-    source at all (an ungrounded answer) yields nothing."""
-    from company_research import _compact_name
+    source at all (an ungrounded answer) yields nothing.
 
+    Identity is proven by WEBSITE, not name: the place's own listed Website
+    must sit on the company's registrable domain. A name check alone
+    accepted local businesses that merely share a word with a remote
+    employer -- live, "Fingerprint" near Buffalo returned IdentoGO and a
+    UPS Store, and "Boulevard" returned Boulevard Suites. With no company
+    site to compare, nothing is accepted: an unknown address is kept for
+    review, while a wrong one makes a remote role look local."""
+    from company_research import _compact_name, _registrable_labels
+
+    want_domain = ".".join(_registrable_labels(company_site)) if company_site else ""
+    if not want_domain:
+        return None
     want = _compact_name(company)
     for chunk in (grounding or {}).get("groundingChunks") or []:
         maps = chunk.get("maps") if isinstance(chunk, dict) else None
@@ -513,6 +537,9 @@ def _parse_maps_grounding(
         # Maps biases toward the search center, so a nearby DIFFERENT
         # business is a real possibility -- require the place's own name.
         if len(want) < 3 or len(have) < 4 or (want not in have and have not in want):
+            continue
+        listed = _MAPS_WEBSITE_RE.search(maps.get("text") or "")
+        if not listed or ".".join(_registrable_labels(listed.group(1))) != want_domain:
             continue
         match = _MAPS_ADDRESS_RE.search(maps.get("text") or "")
         if not match:
@@ -712,6 +739,7 @@ def enrich_job_location(
         {"checked_at": company_cache_entry.get("maps_checked_at")}
     )
     search_call_attempted = False
+    maps_site = ""
     if (
         not winning
         and allow_search_backup
@@ -719,9 +747,25 @@ def enrich_job_location(
         and company
         and not gemini_previously_failed
     ):
+        # A Maps result is only accepted when its Website matches the
+        # company's domain, so resolve the site first (free) and spend --
+        # and count against max_search_calls -- a Maps call only when there
+        # is something to verify it against.
+        from company_research import is_usable_company_site
+
+        maps_site = (
+            website
+            if website and is_usable_company_site(website)
+            else (lookup_website_via_search(company) or "")
+        )
+    if maps_site:
         search_call_attempted = True
         gemini_result = lookup_google_maps_backup(
-            company, target_city, target_state, client=gemini_client
+            company,
+            target_city,
+            target_state,
+            client=gemini_client,
+            company_site=maps_site,
         )
         if gemini_result:
             winning = gemini_result
