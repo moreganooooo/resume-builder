@@ -18,26 +18,51 @@ into the extraction call, since grounding tools and structured JSON output
 can't be combined in a single Gemini call.
 """
 
+import datetime
+import json
+import os
 import re
+import subprocess
+import sys
+from urllib.parse import urlparse
 
+import profile_paths
 import requests
+from atomic_write import atomic_write
 from bs4 import BeautifulSoup
 from gemini_client import GeminiClient
 
 CANDIDATE_PATHS = [
     "/about",
     "/about-us",
+    "/company",
+    "/our-story",
+    "/who-we-are",
     "/mission",
     "/values",
     "/culture",
     "/team",
     "/careers",
     "/jobs",
+    # The homepage itself, last: plenty of small/local employers have no
+    # About page at all, and their homepage is the only prose they publish.
+    # Only reached when every page above came up short of EARLY_STOP_CHARS.
+    "",
 ]
 MIN_USEFUL_CHARS = 200
 EARLY_STOP_CHARS = 1500
 MAX_TOTAL_CHARS = 6000
 REQUEST_TIMEOUT_SECONDS = 10
+
+# A browser User-Agent: the requests default ("python-requests/x") is
+# refused outright by a large share of company sites (Cloudflare and most
+# WAFs 403 it), which silently sent those companies to the weaker tiers.
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    )
+}
 
 # Grounded search can surface a job board's or review site's listing
 # instead of the company's own site (e.g. a LinkedIn company page ranking
@@ -51,9 +76,77 @@ _REJECTED_DOMAINS = (
     "wikipedia.org",
     "crunchbase.com",
     "ziprecruiter.com",
+    # ATS hosts: a board is the company's job list, not its About page.
+    "greenhouse.io",
+    "lever.co",
+    "ashbyhq.com",
+    "myworkdayjobs.com",
+    "icims.com",
+    "smartrecruiters.com",
+    "bamboohr.com",
+    "jobvite.com",
+    "rippling.com",
+    # Social/directory listings: what grounded search tends to surface for
+    # small local employers instead of their own site.
+    "facebook.com",
+    "instagram.com",
+    "twitter.com",
+    "x.com",
+    "youtube.com",
+    "yelp.com",
+    "bbb.org",
+    "zoominfo.com",
+    "mapquest.com",
+    # Business directories and contact-data sites: they rank highly for a
+    # small company's name and are never the company itself (a live
+    # DuckDuckGo sample returned bizapedia.com and seamless.ai as the top
+    # "site" for 2 of 10 employers).
+    "bizapedia.com",
+    "seamless.ai",
+    "rocketreach.co",
+    "apollo.io",
+    "dnb.com",
+    "opencorporates.com",
+    "manta.com",
+    "buzzfile.com",
+    "signalhire.com",
+    "lusha.com",
+    "owler.com",
+    "cbinsights.com",
+    "pitchbook.com",
+    "craft.co",
+    "comparably.com",
+    "builtin.com",
+    "wellfound.com",
+    "trustpilot.com",
+    "bloomberg.com",
+    "yellowpages.com",
 )
-FIND_WEBSITE_MODEL = "gemini-3.1-flash-lite"
-SEARCH_RESEARCH_MODEL = "gemini-3.1-flash-lite"
+
+
+def is_usable_company_site(url: str) -> bool:
+    """False for job boards, ATS hosts, and social/directory sites -- none is
+    ever the company's own About/Mission pages. Matched on the host SUFFIX,
+    not a substring of the URL: a substring check would let "x.com" reject
+    fedex.com and box.com."""
+    raw = (url or "").strip()
+    if not raw:
+        return False
+    if not raw.startswith(("http://", "https://")):
+        raw = f"https://{raw}"
+    host = (urlparse(raw).hostname or "").lower()
+    if not host:
+        return False
+    return not any(host == d or host.endswith("." + d) for d in _REJECTED_DOMAINS)
+# Gemma, not Gemini 3: Google Search grounding quota is per model FAMILY on
+# the free tier, and it is ZERO for every Gemini 3 model (so these calls
+# 429'd every time on gemini-3.1-flash-lite) while the Gemma 4 models sit in
+# the "Default" group at 1.5K grounded requests/day. The 2.0/2.5 families
+# also have grounding quota but answer 404 to new projects. Verified live
+# 2026-09-13: gemma-4-31b-it returned the right site with groundingMetadata
+# present. Gemma 500s intermittently; generate()'s retries absorb that.
+FIND_WEBSITE_MODEL = "gemma-4-31b-it"
+SEARCH_RESEARCH_MODEL = "gemma-4-31b-it"
 
 # Tier 2's self-reported confidence. Anything but "high" falls through to
 # Tier 3 -- many companies share a name, and a confidently-wrong writeup
@@ -64,9 +157,14 @@ _CONFIDENCE_PATTERN = re.compile(
 
 
 def _candidate_urls(company_website: str) -> list:
-    base = company_website.rstrip("/")
-    if not base.startswith("http://") and not base.startswith("https://"):
-        base = f"https://{base}"
+    # Origin only. A JD's company_website or a search hit is often a deep
+    # link (acme.com/careers/123), and appending /about to that produced
+    # acme.com/careers/123/about -- a 404 on every single candidate.
+    raw = company_website.strip()
+    if not raw.startswith("http://") and not raw.startswith("https://"):
+        raw = f"https://{raw}"
+    parsed = urlparse(raw)
+    base = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else raw.rstrip("/")
     return [f"{base}{path}" for path in CANDIDATE_PATHS]
 
 
@@ -90,6 +188,45 @@ def _extract_visible_text(html: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+_RENDER_SCRIPT = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "render-page-text.mjs"
+)
+RENDER_TIMEOUT_SECONDS = 60
+_TEST_NETWORK_ENV = "RESUME_ALLOW_TEST_NETWORK"
+
+
+def fetch_rendered_text(urls: list) -> dict:
+    """{url: visible text} for each URL, rendered in headless Chromium via
+    render-page-text.mjs -- the fallback for JavaScript-only sites, whose
+    plain HTML is an empty shell. Returns {} on any failure (no Node, no
+    Playwright browser, timeout) and never raises. Also {} under unittest
+    unless RESUME_ALLOW_TEST_NETWORK is set: a real browser session is
+    network I/O the suite must never start on its own (the same rule as
+    websearch_ddg.search() and the liveness sweep)."""
+    if not urls:
+        return {}
+    if "unittest" in sys.modules and not os.environ.get(_TEST_NETWORK_ENV):
+        return {}
+    try:
+        result = subprocess.run(
+            ["node", _RENDER_SCRIPT, *urls],
+            capture_output=True,
+            text=True,
+            timeout=RENDER_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    if result.returncode != 0:
+        return {}
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, str)}
+
+
 def fetch_company_pages(company_website: str) -> str:
     """
     Tries each candidate path in order, collecting visible text until
@@ -100,10 +237,19 @@ def fetch_company_pages(company_website: str) -> str:
     """
     collected = []
     total_chars = 0
+    host_unreachable = False
 
     for url in _candidate_urls(company_website):
         try:
-            response = requests.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
+            response = requests.get(
+                url, timeout=REQUEST_TIMEOUT_SECONDS, headers=_HEADERS
+            )
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            # The HOST is unreachable, not just this page -- trying the
+            # remaining candidates would only add a timeout each (up to two
+            # minutes of dead air on a dead domain) for the same result.
+            host_unreachable = True
+            break
         except requests.exceptions.RequestException:
             continue
         if response.status_code != 200:
@@ -119,7 +265,121 @@ def fetch_company_pages(company_website: str) -> str:
             break
 
     combined = " ".join(collected)
+    if len(combined) < MIN_USEFUL_CHARS and not host_unreachable:
+        # The site answered but served (almost) no text -- the signature of
+        # a JavaScript-rendered site, whose HTML is an empty shell until a
+        # browser runs it. Render just its About page and homepage; a dead
+        # host is skipped, since a browser would only time out as well.
+        urls = _candidate_urls(company_website)
+        rendered = fetch_rendered_text([urls[0], urls[-1]])
+        extra = " ".join(
+            re.sub(r"\s+", " ", text).strip() for text in rendered.values() if text
+        )
+        combined = f"{combined} {extra}".strip()
     return combined[:MAX_TOTAL_CHARS]
+
+
+_LEGAL_WORDS = {
+    "inc", "llc", "ltd", "limited", "co", "corp", "corporation", "company",
+    "the", "plc", "lp", "llp",
+}
+
+
+def _normalized_words(text: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).split())
+
+
+def _compact_name(company_name: str) -> str:
+    return "".join(w for w in _normalized_words(company_name).split() if w not in _LEGAL_WORDS)
+
+
+# Second-level labels under a country code ("acme.co.uk"), so the site root
+# keeps three labels there instead of two.
+_SECOND_LEVEL = {"co", "com", "org", "net", "gov", "ac", "edu"}
+# Words a company commonly wraps around its own name in its domain.
+_HOST_AFFIXES = (
+    "the", "get", "try", "join", "my", "go", "hq", "app", "use", "hello",
+    "team", "usa", "us", "inc", "group", "careers", "jobs", "s",
+)
+
+
+def _registrable_labels(url: str) -> list:
+    """Host labels trimmed to the registrable domain: ui.elevenlabs.io ->
+    [elevenlabs, io]; acme.co.uk keeps three."""
+    labels = [l for l in _host_of(url).split(".") if l]
+    if len(labels) > 2:
+        keep = 3 if labels[-2] in _SECOND_LEVEL and len(labels[-1]) == 2 else 2
+        labels = labels[-keep:]
+    return labels
+
+
+def _site_root(url: str) -> str:
+    """The company's main site for a matched result: subdomains dropped
+    (ui.elevenlabs.io and id.tripleten.com were matched live -- a design
+    system and a login page), except "www", which some sites require."""
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    root = ".".join(_registrable_labels(url))
+    www = (parsed.hostname or "").lower().startswith("www.")
+    return f"{parsed.scheme or 'https'}://{'www.' if www else ''}{root}"
+
+
+def _host_names_company(url: str, compact: str) -> bool:
+    """True when the domain's main label IS the company name, optionally
+    wrapped in one common affix (theladders.com, manpowergroupusa.com).
+    Plain containment was too loose: live, "Skill" matched gskill.com
+    (G.Skill), "Sona" sonagrouptours.com and "KOPA" m-kopa.com."""
+    labels = _registrable_labels(url)
+    if not labels:
+        return False
+    label = re.sub(r"[^a-z0-9]", "", labels[0])
+    if label == compact:
+        return True
+    return any(label in (a + compact, compact + a) for a in _HOST_AFFIXES)
+
+
+def _looks_like_the_company(result: dict, company_name: str) -> bool:
+    """Whether one search result is plausibly the company's OWN site.
+
+    Researching the wrong company is worse than researching none -- the
+    JD-text tier is always there -- so only strong evidence is accepted:
+    the domain's main label IS the name (acorns.com, theladders.com -- see
+    _host_names_company), or a HOMEPAGE whose title opens with the name
+    (adr.org for "American Arbitration Association"). A directory's deep
+    link titled with the name (somedirectory.com/company/acme-roofing)
+    fails both."""
+    url = (result.get("url") or "").strip()
+    if not is_usable_company_site(url):
+        return False
+    compact = _compact_name(company_name)
+    if len(compact) < 4:
+        return False
+    if _host_names_company(url, compact):
+        return True
+    # Title evidence counts only for a MULTI-WORD name, and only on a whole-
+    # word boundary. A single generic word is not evidence of which company
+    # this is: live, "Skill" matched a homepage titled "Skillsoft ..." (a
+    # raw startswith) and "Sona" one titled "Sona Group Tours". One-word
+    # names still match by domain above; otherwise they fall through to the
+    # grounded search in find_company_website().
+    name = _normalized_words(company_name)
+    if len(name.split()) < 2:
+        return False
+    title = _normalized_words(result.get("title"))
+    path = urlparse(url if "://" in url else f"https://{url}").path
+    return path in ("", "/") and (title == name or title.startswith(name + " "))
+
+
+def _find_website_via_search_engine(company_name: str) -> str | None:
+    """Free website lookup via DuckDuckGo (websearch_ddg), tried before the
+    grounded Gemma lookup below: it costs no quota at all, and on the live
+    corpus it found 30 of 44 sites on its own (2026-09-13). Returns the
+    company's site root (see _site_root), or None."""
+    import websearch_ddg
+
+    for result in websearch_ddg.search(f'"{company_name}" official website', max_results=8):
+        if _looks_like_the_company(result, company_name):
+            return _site_root(result["url"])
+    return None
 
 
 def find_company_website(company_name: str) -> str | None:
@@ -136,6 +396,12 @@ def find_company_website(company_name: str) -> str | None:
     """
     if not company_name:
         return None
+
+    # Free and quota-less first; the grounded Gemini call only helps on a
+    # project whose tier grants search grounding (see the helper's docstring).
+    found = _find_website_via_search_engine(company_name)
+    if found:
+        return found
 
     try:
         text, _ = GeminiClient.generate(
@@ -160,7 +426,7 @@ def find_company_website(company_name: str) -> str | None:
         return None
     url = match.group(0).rstrip(".,;")
 
-    if any(domain in url.lower() for domain in _REJECTED_DOMAINS):
+    if not is_usable_company_site(url):
         return None
     return url
 
@@ -321,3 +587,99 @@ def apply_vocabulary_substitutions_to_resume(
         ]
 
     return resume_data
+
+
+# --- Per-company cache ------------------------------------------------------
+# Research describes the COMPANY, not the role, so two roles at one employer
+# should not each pay for a site scrape plus a Gemini extraction (and, for
+# LinkedIn-sourced roles, a grounded website search too). Only the
+# company-level tiers (website, search) are cached: the JD-text tier is
+# derived from one posting and would leak that posting into another's.
+CACHE_TTL_DAYS = 90
+_CACHE_FILENAME = "company_research_cache.json"
+
+
+def _cache_path() -> str:
+    return os.path.join(profile_paths.data_dir(), _CACHE_FILENAME)
+
+
+def _cache_disabled() -> bool:
+    """Fail closed under tests that have not isolated the profile -- the
+    same guard db.upsert_job uses. Reading the developer's real cache would
+    make research tests nondeterministic; writing it would pollute it."""
+    try:
+        import db
+
+        return db._is_unisolated_test_write()
+    except Exception:
+        return "unittest" in sys.modules
+
+
+def _company_key(company_name: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", (company_name or "").lower()).split())
+
+
+def _host_of(url: str) -> str:
+    raw = (url or "").strip()
+    if not raw:
+        return ""
+    if not raw.startswith(("http://", "https://")):
+        raw = f"https://{raw}"
+    host = (urlparse(raw).hostname or "").lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+def _read_cache() -> dict:
+    try:
+        with open(_cache_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def load_cached_research(company_name: str, company_website: str = "") -> dict | None:
+    """Fresh cached research for this company, or None. A known, usable
+    website whose host differs from the cached one counts as a miss: two
+    different companies can share a name, and the site is the better
+    identity."""
+    key = _company_key(company_name)
+    if not key or _cache_disabled():
+        return None
+    entry = _read_cache().get(key)
+    if not isinstance(entry, dict) or not isinstance(entry.get("research"), dict):
+        return None
+    try:
+        saved = datetime.datetime.fromisoformat(entry.get("saved_at") or "")
+    except ValueError:
+        return None
+    if (datetime.datetime.now() - saved).days > CACHE_TTL_DAYS:
+        return None
+    known_host = (
+        _host_of(company_website) if is_usable_company_site(company_website) else ""
+    )
+    cached_host = entry.get("website_host") or ""
+    if known_host and cached_host and known_host != cached_host:
+        return None
+    return entry["research"]
+
+
+def save_cached_research(company_name: str, research: dict, website: str = "") -> None:
+    """Best-effort -- a failed cache write never fails research itself."""
+    key = _company_key(company_name)
+    if not key or not isinstance(research, dict) or _cache_disabled():
+        return
+    if research.get("_research_source") not in ("website", "search"):
+        return
+    cache = _read_cache()
+    cache[key] = {
+        "saved_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "website_host": _host_of(website),
+        "research": research,
+    }
+    try:
+        os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
+        with atomic_write(_cache_path(), encoding="utf-8") as f:
+            json.dump(cache, f, indent=2)
+    except OSError:
+        pass

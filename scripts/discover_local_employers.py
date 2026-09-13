@@ -30,6 +30,7 @@ YAML is backed up before it is touched.
 """
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -95,7 +96,8 @@ _NOT_EMPLOYERS = (
     "consulting group",
     "solutions group",
     "placement",
-    "temp",
+    "temps",
+    "temporary",
     "employment agency",
     "jobs",
     "careers",
@@ -144,7 +146,10 @@ def looks_like_employer(name: str) -> bool:
     lowered = (name or "").strip().lower()
     if len(lowered) < 2:
         return False
-    return not any(token in lowered for token in _NOT_EMPLOYERS)
+    # Word-START match, not a bare substring: "temp" anywhere in the name
+    # rejected Temple University, Tempur Sealy and anything "contemporary"
+    # as staffing agencies. Word-start still catches stems ("recruiting").
+    return not any(re.search(rf"\b{re.escape(t)}", lowered) for t in _NOT_EMPLOYERS)
 
 
 def _count_postings(provider_id: str, payload) -> int:
@@ -376,11 +381,16 @@ def discover(limit: int = 60, search_term: str = None, profile: str = None) -> l
 
 def render_entries(hits: list) -> str:
     """The YAML block appended to tracked_companies.yml."""
+    # Every value double-quoted (a JSON string is a valid YAML double-quoted
+    # scalar). Unquoted, a name containing ": " or starting with "#" -- both
+    # ordinary in business names -- produced YAML that either failed to
+    # parse or silently dropped the name, and a parse failure here breaks
+    # every later scan that reads this file.
     lines = []
     for hit in hits:
-        lines.append(f"- name: {hit['name']}")
-        lines.append(f"  careers_url: {hit['careers_url']}")
-        lines.append(f"  api: {hit['api']}")
+        lines.append(f"- name: {json.dumps(hit['name'], ensure_ascii=False)}")
+        lines.append(f"  careers_url: {json.dumps(hit['careers_url'])}")
+        lines.append(f"  api: {json.dumps(hit['api'])}")
         lines.append("  enabled: true")
     return "\n".join(lines) + "\n"
 
@@ -418,6 +428,21 @@ def append_entries(hits: list, path: str) -> str:
         flags=re.MULTILINE,
     )
     updated = original.rstrip("\n") + "\n" + render_entries(hits)
+    # Parse BEFORE writing. A text append is only valid when the file ends
+    # inside the tracked_companies list; anything else (another top-level
+    # key after it, a file that was already malformed) wrote YAML that
+    # broke every later scan silently. Refuse rather than write that.
+    try:
+        parsed = yaml.safe_load(updated) or {}
+        entries = parsed.get("tracked_companies") if isinstance(parsed, dict) else None
+        names = {e.get("name") for e in entries or [] if isinstance(e, dict)}
+    except yaml.YAMLError:
+        names = set()
+    if not all(hit["name"] in names for hit in hits):
+        raise ValueError(
+            f"Appending to {path} would not produce valid tracked_companies "
+            "entries -- nothing was written. Fix the file (or add these by hand) first."
+        )
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(updated)
     return backup
@@ -480,7 +505,11 @@ def main() -> None:
         )
         return
 
-    backup = append_entries(hits, path)
+    try:
+        backup = append_entries(hits, path)
+    except ValueError as e:
+        cli_art.cli_error(str(e))
+        sys.exit(1)
     cli_art.console.print(
         f"\n  {cli_art.SUCCESS} Added {len(hits)} employer(s). Backup: {backup}\n"
         "  They will be scanned on the next run.\n",

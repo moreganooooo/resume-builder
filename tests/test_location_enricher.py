@@ -142,19 +142,87 @@ class TestLocationEnricher(unittest.TestCase):
         self.assertEqual(winning["source"], "jd_text")
         self.assertEqual(winning["zip"], "62703")
 
-    def test_gemini_ultra_backup(self):
-        mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.text = '{"found": true, "address": "300 Tech Dr, Springfield, IL 62702", "zip": "62702"}'
-        mock_client.generate_content_with_search.return_value = mock_response
+    # The Step 3 backup used to call GeminiClient.generate_content_with_search,
+    # which never existed -- these tests mocked it into existence, so they
+    # passed while every real call raised. They now patch the real function.
+    MAPS_GROUNDING = {
+        "groundingChunks": [
+            {
+                "maps": {
+                    "uri": "https://maps.google.com/maps?cid=42",
+                    "title": "Acme Corp - Google Maps",
+                    "text": "**Title:** Acme Corp\n\n* **Address:** 300 Tech Dr, "
+                    "Springfield, IL 62702, USA\n* **Rating:** 4.5",
+                }
+            }
+        ]
+    }
 
-        with patch.dict(os.environ, {"RESUME_ALLOW_TEST_NETWORK": "1"}):
-            res = location_enricher.lookup_gemini_search_backup(
-                "Acme Corp", "Springfield", "IL", client=mock_client
+    def test_google_maps_backup(self):
+        with (
+            patch.dict(os.environ, {"RESUME_ALLOW_TEST_NETWORK": "1"}),
+            patch(
+                "gemini_client.generate_grounded",
+                return_value=("model prose", self.MAPS_GROUNDING),
+            ) as mock_call,
+        ):
+            res = location_enricher.lookup_google_maps_backup(
+                "Acme Corp", "Springfield", "IL"
             )
-            self.assertIsNotNone(res)
-            self.assertEqual(res["zip"], "62702")
-            self.assertEqual(res["source"], "gemini_search")
+        self.assertEqual(res["zip"], "62702")
+        self.assertEqual(res["source"], "google_maps")
+        self.assertEqual(res["maps_uri"], "https://maps.google.com/maps?cid=42")
+        self.assertEqual(mock_call.call_args.kwargs["tools"], [{"google_maps": {}}])
+
+    def test_google_maps_backup_trusts_only_a_matching_maps_source(self):
+        # No Maps source (an ungrounded answer), a different nearby business,
+        # and a non-US address all yield nothing.
+        for grounding in (
+            {},
+            {"groundingChunks": [{"maps": {"title": "Other Bakery - Google Maps",
+                                            "text": "* **Address:** 1 A St, Springfield, IL 62702"}}]},
+            {"groundingChunks": [{"maps": {"title": "Acme Corp - Google Maps",
+                                            "text": "* **Address:** 140 Otter St, Winnipeg, MB R3T 0M8, Canada"}}]},
+        ):
+            with self.subTest(grounding=grounding):
+                self.assertIsNone(
+                    location_enricher._parse_maps_grounding(grounding, "Acme Corp")
+                )
+
+    def test_missing_maps_uri_falls_back_to_a_google_maps_search_link(self):
+        # The API returned uri: "" live; attribution still needs a link.
+        grounding = {
+            "groundingChunks": [
+                {
+                    "maps": {
+                        "uri": "",
+                        "title": "Acme Corp - Google Maps",
+                        "text": "* **Address:** 300 Tech Dr, Springfield, IL 62702",
+                    }
+                }
+            ]
+        }
+        res = location_enricher._parse_maps_grounding(grounding, "Acme Corp")
+        self.assertTrue(
+            res["maps_uri"].startswith("https://www.google.com/maps/search/?api=1&query=")
+        )
+        self.assertIn("300+Tech+Dr", res["maps_uri"])
+
+    def test_maps_data_expires_after_30_days(self):
+        import datetime
+
+        fresh = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        old = "2020-01-01T00:00:00Z"
+        self.assertTrue(
+            location_enricher.maps_data_expired({"source": "google_maps", "fetched_at": old})
+        )
+        self.assertFalse(
+            location_enricher.maps_data_expired({"source": "google_maps", "fetched_at": fresh})
+        )
+        # Only Maps data is bound by the 30-day rule.
+        self.assertFalse(
+            location_enricher.maps_data_expired({"source": "osm_nominatim", "fetched_at": old})
+        )
 
     def test_unresolved_graceful_fallback(self):
         winning, status, corr = location_enricher.reconcile_address(None, None)
@@ -338,7 +406,7 @@ class TestLocationEnricher(unittest.TestCase):
                 [],
             )
             self.assertIsNone(
-                location_enricher.lookup_gemini_search_backup(
+                location_enricher.lookup_google_maps_backup(
                     "Real Company", "Springfield", "IL"
                 )
             )
@@ -402,6 +470,9 @@ class TestLocationEnricher(unittest.TestCase):
                     patch("location_enricher.save_locations_cache"),
                     patch("gemini_client.GeminiClient", return_value=mock_client),
                     patch(
+                        "gemini_client.generate_grounded", return_value=(None, {})
+                    ) as mock_grounded,
+                    patch(
                         "location_settings.read_settings",
                         return_value={
                             "city": "Buffalo",
@@ -419,7 +490,7 @@ class TestLocationEnricher(unittest.TestCase):
                     )
                     self.assertEqual(summary["search_calls_used"], 10)
                     self.assertEqual(
-                        mock_client.generate_content_with_search.call_count, 10
+                        mock_grounded.call_count, 10
                     )
 
     def test_gemini_quota_cap_counts_failed_attempts(self):
@@ -461,6 +532,9 @@ class TestLocationEnricher(unittest.TestCase):
                     patch("location_enricher.save_locations_cache"),
                     patch("gemini_client.GeminiClient", return_value=mock_client),
                     patch(
+                        "gemini_client.generate_grounded", return_value=(None, {})
+                    ) as mock_grounded,
+                    patch(
                         "location_settings.read_settings",
                         return_value={
                             "city": "Buffalo",
@@ -478,7 +552,7 @@ class TestLocationEnricher(unittest.TestCase):
                     )
                     self.assertEqual(summary["search_calls_used"], 10)
                     self.assertEqual(
-                        mock_client.generate_content_with_search.call_count, 10
+                        mock_grounded.call_count, 10
                     )
                     self.assertEqual(summary["resolved"], 0)
 

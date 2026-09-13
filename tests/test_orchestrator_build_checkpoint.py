@@ -144,6 +144,65 @@ class TestBuildCheckpointResume(unittest.TestCase):
     @patch("orchestrator.render_html")
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_resumed_build_with_research_reaches_why_backfill_without_nameerror(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        # research_block used to be defined only in Step 4's fresh-build
+        # branch, so a checkpoint-resumed run with saved research and an
+        # empty Why section raised NameError at Step 7's backfill check.
+        bullet = "Shipped a widget platform used by 10k users."
+        jd_manager.save_checkpoint(
+            self.job_key,
+            {
+                "jd_keywords": {"hard_skills": ["python"]},
+                "bullet_tuples": [[bullet, "Acme", "eng"]],
+                "refined_bullets": [bullet],
+                "resume_data": orchestrator.normalize_resume.normalize(
+                    {"SUMMARY": "Test summary."}
+                ),
+                "critique_data": {"recommendations": []},
+            },
+        )
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.WhyBackfillSchema:
+                return ("", {})
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
+        )
+        with (
+            patch.object(
+                orchestrator.jd_manager,
+                "read_research",
+                return_value={"company_facts": ["Acme makes widgets."]},
+            ),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertTrue(result)
+        self.assertTrue(
+            any(
+                c.kwargs.get("response_schema") is orchestrator.WhyBackfillSchema
+                for c in mock_generate.call_args_list
+            )
+        )
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
     def test_skips_keyword_extraction_and_mining_when_checkpointed(
         self, mock_generate, mock_render_html, mock_subprocess_run
     ):

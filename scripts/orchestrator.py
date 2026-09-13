@@ -2968,6 +2968,19 @@ def rescore_evaluation_with_location(
         )
     ]
     ev["experience_blockers"] = experience_blockers
+    # Same filter on the persisted list: the Jobs detail pane and
+    # `resume evaluate` render ev["hard_blockers"] directly, so leaving
+    # over_qualified entries there displays a "blocker" on a role whose
+    # score was deliberately left intact.
+    ev["hard_blockers"] = [
+        b
+        for b in blockers
+        if not (
+            isinstance(b, dict)
+            and b.get("category") == "years_experience"
+            and b.get("direction") == "over_qualified"
+        )
+    ]
 
     # Opt-in IC-only preference (content_settings.py's role_track editor).
     # Confidence-gated the same way as the Jobs/Pipeline view filters
@@ -3187,6 +3200,18 @@ def _build_output_stem(jd_path: str) -> str:
     if company_name:
         parts.append(jd_manager.sanitize_for_filename(company_name))
     return "_".join(parts)
+
+
+def _sort_audited_bullets(bullets: list, critiques: list) -> tuple[list, list]:
+    """Stable-sorts audited bullets by their critique (None sorts last) and
+    returns (sorted_bullets, order), where order[k] is the ORIGINAL index of
+    sorted_bullets[k]. The order matters: callers recover each bullet's
+    company by pairing with bullet_tuples by index, so they must apply the
+    same permutation to bullet_tuples."""
+    order = sorted(
+        range(len(bullets)), key=lambda i: _bullet_sort_key(critiques[i] or {})
+    )
+    return [bullets[i] for i in order], order
 
 
 def format_company_research_block(research: dict) -> str:
@@ -3432,8 +3457,13 @@ class ResumeEngine:
                 # guess at the "right" number -- profile.yml is still the
                 # place to set the real intended count.
                 bullet_count = ed.get("bullet_count", 1)
+                # Same defense for institution/credential: a partial entry
+                # renders what it has rather than aborting the build.
+                label = " -- ".join(
+                    p for p in (ed.get("institution"), ed.get("credential")) if p
+                ) or "Unnamed education entry"
                 lines.append(
-                    f"{i}. {ed['institution']} -- {ed['credential']}: exactly {bullet_count} bullet(s)"
+                    f"{i}. {label}: exactly {bullet_count} bullet(s)"
                 )
 
             edu_slots = profile_paths.education_achievement_slots()
@@ -3449,7 +3479,10 @@ class ResumeEngine:
                         lines.append(f"  - `{key}`: {framing}")
 
         design_only_names = [
-            entry.get("name") or entry.get("credential")
+            entry.get("name")
+            or entry.get("credential")
+            or entry.get("institution")
+            or "Unnamed credential"
             for entry in (certs + education)
             if entry.get("design_only")
         ]
@@ -4138,6 +4171,7 @@ class ResumeEngine:
         resume_from: List[str] = None,
         on_bullet_complete=None,
         vocabulary_substitutions: list = None,
+        order_out: list = None,
     ) -> List[str]:
         """
         Skeptical Editor audit loop.
@@ -4629,11 +4663,15 @@ class ResumeEngine:
         # Every bullet in refined_bullets is paired with its critique (or None,
         # which sorts last) so no bullet is ever dropped by this step.
         if start_index == 0 and refined_bullets:
-            paired = list(zip(refined_bullets, bullet_critique_list))
-            sorted_pairs = sorted(
-                paired, key=lambda pair: _bullet_sort_key(pair[1] or {})
+            refined_bullets, order = _sort_audited_bullets(
+                refined_bullets, bullet_critique_list
             )
-            refined_bullets = [bullet for bullet, critique in sorted_pairs]
+            # The caller pairs this output with bullet_tuples BY INDEX to
+            # recover each bullet's company, so hand back the permutation.
+            # Without it, every bullet after the first reordering was
+            # attributed to the wrong employer in the builder prompt.
+            if order_out is not None:
+                order_out[:] = order
 
         return refined_bullets
 
@@ -4736,6 +4774,16 @@ class ResumeEngine:
             return []
 
         jd_emb = GeminiClient.embed(jd_text[:8000])
+        # A dimension mismatch (embedding model changed since the bank was
+        # embedded) would otherwise raise ValueError at the matmul below and
+        # abort the build; the bullets_sha check can't see it. Same fallback.
+        if jd_emb is not None and embs.ndim == 2 and len(jd_emb) != embs.shape[1]:
+            cli_art.console.print(
+                f"  {cli_art.WARNING} JD embedding has {len(jd_emb)} dims but the bank has "
+                f"{embs.shape[1]} -- re-run embed_bullet_bank.py.",
+                soft_wrap=True,
+            )
+            jd_emb = None
         if jd_emb is None:
             cli_art.console.print(
                 f"  {cli_art.WARNING} JD embedding failed. Falling back to first TOP_K_BULLETS rows.",
@@ -5284,8 +5332,28 @@ class ResumeEngine:
         exist." See
         docs/superpowers/specs/2026-08-11-company-research-tiered-fallback-design.md.
         """
+        # --- Cache: research describes the company, not the role ---
+        cached = company_research.load_cached_research(
+            jd_data.get("company_name"), jd_data.get("company_website") or ""
+        )
+        if cached:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('success')} Reused saved research for "
+                f"{jd_data.get('company_name')} (from the last "
+                f"{company_research.CACHE_TTL_DAYS} days).",
+                soft_wrap=True,
+            )
+            return cached
+
         # --- Tier 1: the company's own site ---
         company_website = jd_data.get("company_website")
+        # A JD's own company_website field is sometimes a LinkedIn/ATS page
+        # rather than the company's site -- the same rejection
+        # find_company_website() applies to search hits.
+        if company_website and not company_research.is_usable_company_site(
+            company_website
+        ):
+            company_website = None
         if not company_website:
             company_website = company_research.find_company_website(
                 jd_data.get("company_name")
@@ -5305,11 +5373,22 @@ class ResumeEngine:
                         f"  {theme.colorize_icon('success')} Company research complete for {company_website}.",
                         soft_wrap=True,
                     )
-                return research_data
-            cli_art.console.print(
-                f"  {theme.colorize_icon('hint')} Couldn't find enough usable content on {company_website} -- trying a web search instead.",
-                soft_wrap=True,
-            )
+                    company_research.save_cached_research(
+                        jd_data.get("company_name"), research_data, company_website
+                    )
+                    return research_data
+                # An extraction failure used to `return None` right here,
+                # skipping the search and JD-text tiers that exist so every
+                # role gets something. Fall through to them instead.
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('hint')} Couldn't extract research from {company_website} -- trying a web search instead.",
+                    soft_wrap=True,
+                )
+            else:
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('hint')} Couldn't find enough usable content on {company_website} -- trying a web search instead.",
+                    soft_wrap=True,
+                )
         else:
             cli_art.console.print(
                 f"  {theme.colorize_icon('hint')} No company website known for this JD -- trying a web search instead.",
@@ -5331,7 +5410,10 @@ class ResumeEngine:
                     f"  {theme.colorize_icon('success')} Company research complete for {company_name} (from a web search).",
                     soft_wrap=True,
                 )
-            return research_data
+                company_research.save_cached_research(company_name, research_data)
+                return research_data
+            # Same as Tier 1: an extraction failure falls through to the
+            # JD's own text rather than ending research with nothing.
 
         # --- Tier 3: the JD's own text ---
         if not jd_text.strip():
@@ -5481,9 +5563,14 @@ class ResumeEngine:
             )
             jd_keywords = GeminiClient.parse_json(keyword_text or "") or None
 
-        research = self.research_company(jd_data, jd_text)
-        if research:
-            jd_manager.save_research(jd_path, research)
+        # Saved research first, same as build_tailored_resume: in a package
+        # build the resume step has just saved it, and re-running
+        # research_company() here paid for the same scrape + search twice.
+        research = jd_manager.read_research(jd_path)
+        if not research:
+            research = self.research_company(jd_data, jd_text)
+            if research:
+                jd_manager.save_research(jd_path, research)
         research_block = format_company_research_block(research) if research else ""
 
         # Feature #5: a referral is per-application (this specific job came
@@ -5829,6 +5916,10 @@ class ResumeEngine:
         vocabulary_substitutions = (research or {}).get("vocabulary_substitutions", [])
         checkpoint["vocabulary_substitutions"] = vocabulary_substitutions
         jd_manager.save_checkpoint(job_key, checkpoint)
+        # Built here, not in Step 4's fresh-build branch: Step 7's Why
+        # backfill reads it too, and a checkpoint-resumed run skips that
+        # branch -- a NameError on exactly the runs closest to finishing.
+        research_block = format_company_research_block(research) if research else ""
 
         # --- Step 3: Audit and refine bullets ---
         cli_art.console.rule("Step 3: Auditing bullets...", style="dim", align="left")
@@ -5838,13 +5929,20 @@ class ResumeEngine:
             checkpoint["refined_bullets"] = partial_bullets
             jd_manager.save_checkpoint(job_key, checkpoint)
 
+        audit_order = []
         refined_tuples = self.audit_and_refine_bullets(
             bullet_tuples,
             static_prefix,
             resume_from=checkpoint.get("refined_bullets", []),
             on_bullet_complete=_save_bullets_checkpoint,
             vocabulary_substitutions=vocabulary_substitutions,
+            order_out=audit_order,
         )
+        if audit_order:
+            # The audit sorted its output; keep bullet_tuples index-aligned
+            # with it, and persist both so a resumed run stays aligned too.
+            bullet_tuples = [bullet_tuples[i] for i in audit_order]
+            checkpoint["bullet_tuples"] = bullet_tuples
         refined_bullets = [b for b in refined_tuples if b]  # plain strings for builder
         checkpoint["refined_bullets"] = refined_tuples
         jd_manager.save_checkpoint(job_key, checkpoint)
@@ -5858,9 +5956,16 @@ class ResumeEngine:
         # bullet text with no company attribution at all and had to guess
         # which company each bullet belonged to -- a likely contributor to it
         # giving up and emitting empty Experience entries.
-        bullet_companies = [
-            company for (_, company, _) in bullet_tuples[: len(refined_bullets)]
+        # Paired with zip BEFORE dropping empties -- slicing bullet_tuples to
+        # len(refined_bullets) after the filter shifted every company after
+        # the first empty entry onto the wrong bullet.
+        paired = [
+            (b, company)
+            for b, (_, company, _) in zip(refined_tuples, bullet_tuples)
+            if b
         ]
+        refined_bullets = [b for b, _ in paired]
+        bullet_companies = [company for _, company in paired]
 
         # --- Step 4: Build resume ---
         cli_art.console.rule("Step 4: Building resume...", style="dim", align="left")
@@ -5916,18 +6021,9 @@ class ResumeEngine:
         else:
             kb_context = self.load_knowledge_base()
 
-            jd_data = _parse_jd_data(jd_text)
-            research = jd_manager.read_research(jd_path)
-            if research:
-                cli_art.console.print(
-                    f"  {theme.colorize_icon('success')} Loaded saved company research from JD.",
-                    soft_wrap=True,
-                )
-            else:
-                research = self.research_company(jd_data, jd_text)
-                if research:
-                    jd_manager.save_research(jd_path, research)
-            research_block = format_company_research_block(research) if research else ""
+            # `research` and `research_block` come from Step 2b. Re-running
+            # research_company() here when it came back empty just paid for
+            # the same scrape + grounded-search tiers a second time.
 
             situational_block = ""
             if situational_candidates:
@@ -6289,6 +6385,10 @@ class ResumeEngine:
                         f"  {theme.colorize_icon('warning')} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.",
                         soft_wrap=True,
                     )
+                    # Counts as a stall: otherwise the next attempt re-sends
+                    # the identical call at the same temperature, and a
+                    # deterministic parse failure repeats until attempts run out.
+                    stall_streak += 1
                     continue
                 resume_data = normalize_resume.normalize(fixed)
                 violations = validate_resume.validate(
@@ -7450,13 +7550,17 @@ class ResumeEngine:
         }
 
         # Handle file movement to jds/completed/
+        # Same as run_pipeline: move_jd_to never clobbers an existing file in
+        # completed/ and re-syncs data.db's status. A failed move is reported
+        # rather than swallowed -- the JD would otherwise stay pending silently.
         if os.path.exists(jd_path):
-            os.makedirs(jd_manager.COMPLETED_DIR, exist_ok=True)
-            dest = os.path.join(jd_manager.COMPLETED_DIR, os.path.basename(jd_path))
             try:
-                shutil.move(jd_path, dest)
-            except Exception:
-                pass
+                jd_manager.move_jd_to(jd_path, jd_manager.COMPLETED_DIR)
+            except OSError as e:
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} Could not move JD to completed/: {e}",
+                    soft_wrap=True,
+                )
 
         tracker = jd_manager.JDTracker()
         tracker.mark_completed(
@@ -7674,9 +7778,10 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
 
         if result:
             output_paths = result.get("_output_paths", {})
-            os.makedirs(jd_manager.COMPLETED_DIR, exist_ok=True)
-            dest = os.path.join(jd_manager.COMPLETED_DIR, os.path.basename(path))
-            shutil.move(path, dest)
+            # move_jd_to, not shutil.move: it never clobbers a same-named
+            # file already in completed/ and re-syncs data.db's status from
+            # the new path, which a bare move left stale.
+            jd_manager.move_jd_to(path, jd_manager.COMPLETED_DIR)
             tracker.mark_completed(
                 job_key=job_key,
                 job_title=job_title,

@@ -545,7 +545,9 @@ def _normalize_metric_for_provenance(number: str) -> str:
     """Comma/whitespace-insensitive form used only for the provenance
     substring check below -- '1,000+' in the bank must still match '1000+'
     if formatting ever drifts, without weakening the uniqueness check above."""
-    return number.replace(",", "").replace(" ", "").lower()
+    # "+" is an approximation marker, not part of the figure -- the same
+    # rule _metric_signature() applies: "$20M+" restates the bank's "$20M".
+    return number.replace(",", "").replace(" ", "").lower().rstrip("+")
 
 
 def _check_metric_provenance(
@@ -566,12 +568,21 @@ def _check_metric_provenance(
     violations = []
     company_metrics: dict[str, set[str]] = {}
     for bullet, company, _tags in bullet_tuples:
-        seen = company_metrics.setdefault(company, set())
+        seen = company_metrics.setdefault(_normalize_company(company), set())
         for number, _sig in _extract_metric_signatures(bullet):
             seen.add(_normalize_metric_for_provenance(number))
     for entry in resume_data.get("EXPERIENCE", []):
         company = entry.get("company", "")
-        allowed = company_metrics.get(company, set())
+        # Same loose matching as _check_role_roster(): the resume carries the
+        # KB's spelling ("Element 8 + Strategy, LLC") while the bank carries
+        # its own ("Element 8 / Strategy LLC"). An exact lookup found no
+        # allowed metrics at all and flagged every real figure as fabricated.
+        key = _normalize_company(company)
+        allowed = set(company_metrics.get(key, set()))
+        if key:
+            for bank_key, metrics in company_metrics.items():
+                if bank_key and (key in bank_key or bank_key in key):
+                    allowed |= metrics
         for achievement in entry.get("achievements", []):
             for number, _sig in _extract_metric_signatures(achievement):
                 if _normalize_metric_for_provenance(number) not in allowed:

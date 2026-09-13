@@ -214,6 +214,14 @@ def ingest_one(path: str, profile: str = None, engine=None) -> str | None:
         f"{job['company_name'] or 'Unknown Company'}{partial_note} -> {dest}"
     )
     os.remove(path)
+    # _dedupe_stems() skipped any same-stem sibling (job.png beside
+    # job.pdf) because it is the same job; left on disk, the next run
+    # would ingest it as a second JD and spend a second API call.
+    stem = os.path.splitext(path)[0]
+    for ext in SUPPORTED_EXTENSIONS:
+        for sibling in (stem + ext, stem + ext.upper()):
+            if sibling != path and os.path.isfile(sibling):
+                os.remove(sibling)
     return dest
 
 

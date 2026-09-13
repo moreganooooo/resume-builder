@@ -452,7 +452,10 @@ def education_achievement_slots(profile: str = None) -> list:
     data = profile_yaml(profile)
     education = ((data.get("fixed_credentials") or {}).get("education")) or []
     return [
-        (ed["institution"], ed["achievement_options"])
+        (
+            ed.get("institution") or ed.get("credential") or "Unnamed education entry",
+            ed["achievement_options"],
+        )
         for ed in education
         if ed.get("achievement_options")
     ]

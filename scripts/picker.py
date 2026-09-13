@@ -460,6 +460,13 @@ def _location_fields(data: dict, settings: dict) -> dict:
     """
     location = (data.get("location") or "").strip()
     enrichment = data.get("_location_enrichment")
+    # Google Maps terms: a Maps-sourced address may be used for at most 30
+    # days before it must be re-fetched -- past that it is treated as absent,
+    # never shown or measured from.
+    import location_enricher
+
+    if location_enricher.maps_data_expired(enrichment):
+        enrichment = None
     verdict = location_filter.evaluate_location(
         location,
         settings,
@@ -468,13 +475,21 @@ def _location_fields(data: dict, settings: dict) -> dict:
         _location_enrichment=enrichment,
     )
     display_location = location
+    source_uri = ""
     if isinstance(enrichment, dict) and enrichment.get("resolved_address"):
         display_location = enrichment.get("resolved_address")
+        if enrichment.get("source") == "google_maps":
+            # Attribution immediately after the content, "Google Maps" in
+            # proper case; the link (location_source_uri) is shown by the
+            # Jobs detail pane.
+            display_location = f"{display_location} · Google Maps"
+            source_uri = enrichment.get("maps_uri") or ""
 
     return {
         "location": display_location,
         "workplace": verdict.workplace,
         "distance_miles": verdict.distance_miles,
+        "location_source_uri": source_uri,
     }
 
 

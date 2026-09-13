@@ -19,6 +19,24 @@ sys.path.insert(0, SCRIPTS_DIR)
 import skills_menu  # noqa: E402
 
 
+class TestSkillsScreenRobustness(unittest.TestCase):
+    def test_null_category_and_name_do_not_crash_the_dashboard(self):
+        # A key that is PRESENT but null made sorted() compare None with
+        # str and raised TypeError, taking the whole Skills screen down.
+        tools = [
+            {"id": "tool_001", "name": None, "category": None, "confidence": "Expert"},
+            {"id": "tool_002", "name": "Asana", "category": "PM", "confidence": "Expert"},
+        ]
+        skills_menu._display_skills_dashboard(tools)
+
+    @patch("skills_menu._pause")
+    @patch("skills_menu._load_dismissed_skills", return_value=[])
+    def test_empty_dismissed_list_message_pauses(self, _load, mock_pause):
+        # The loop redraw erased this message the instant it printed.
+        skills_menu._manage_dismissed_skills()
+        mock_pause.assert_called_once()
+
+
 class TestAddSkillCancellation(unittest.TestCase):
     """questionary's convention: .ask() returns None on Ctrl+C/Esc rather
     than raising. Each prompt in _add_skill() must treat that as a clean

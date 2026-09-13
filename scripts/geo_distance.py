@@ -122,6 +122,56 @@ _METRO_ALIASES = {
     "nola": "New Orleans, LA",
 }
 
+# LinkedIn's metro phrasing ("Los Angeles Metropolitan Area", "Greater
+# Minneapolis-St. Paul Area", "San Francisco Bay Area") -- often the ONLY
+# location a local LinkedIn posting states. Deliberately NOT consulted by
+# resolve_location(): a metro is an area, and the rule above (regional
+# phrases return None) still holds there. resolve_metro() below is the
+# separate, explicitly-approximate lookup location_filter uses for sorting
+# and for a lenient radius check (see its METRO_SLACK_MILES). Regional
+# phrases with no single core ("Tri-State Area") are absent on purpose.
+_METRO_AREAS = {
+    "los angeles": "Los Angeles, CA",
+    "new york city": "New York, NY",
+    "new york": "New York, NY",
+    "san francisco bay": "San Francisco, CA",
+    "minneapolis-st. paul": "Minneapolis, MN",
+    "chicago": "Chicago, IL",
+    "boston": "Boston, MA",
+    "seattle": "Seattle, WA",
+    "dallas-fort worth": "Dallas, TX",
+    "washington dc-baltimore": "Washington, DC",
+    "atlanta": "Atlanta, GA",
+    "denver": "Denver, CO",
+    "phoenix": "Phoenix, AZ",
+    "houston": "Houston, TX",
+    "philadelphia": "Philadelphia, PA",
+    "detroit": "Detroit, MI",
+    "austin": "Austin, TX",
+    "kansas city": "Kansas City, MO",
+    "buffalo-niagara falls": "Buffalo, NY",
+    "buffalo": "Buffalo, NY",
+    "pittsburgh": "Pittsburgh, PA",
+    "miami-fort lauderdale": "Miami, FL",
+    "san diego": "San Diego, CA",
+    "salt lake city": "Salt Lake City, UT",
+    "raleigh-durham-chapel hill": "Raleigh, NC",
+    "nashville": "Nashville, TN",
+    "cleveland": "Cleveland, OH",
+    "charlotte": "Charlotte, NC",
+    "tampa bay": "Tampa, FL",
+    "orlando": "Orlando, FL",
+    "cincinnati": "Cincinnati, OH",
+    "indianapolis": "Indianapolis, IN",
+    "milwaukee": "Milwaukee, WI",
+    "sacramento": "Sacramento, CA",
+    "san antonio": "San Antonio, TX",
+    "las vegas": "Las Vegas, NV",
+}
+_METRO_PHRASE = re.compile(
+    r"^(?:greater\s+)?(.+?)(?:\s+(?:metropolitan|metro))?\s+area$", re.IGNORECASE
+)
+
 
 def haversine_distance_miles(
     lat1: float, lon1: float, lat2: float, lon2: float
@@ -276,6 +326,24 @@ def resolve_location(text: str) -> list | None:
         return get_city_centroid(city, state)
 
     return None
+
+
+def resolve_metro(text: str) -> list | None:
+    """[lat, lon] of a metro area's CORE city, or None.
+
+    Only for strings phrased as a metro area ("Greater Boston Area",
+    "Los Angeles Metropolitan Area") whose core is in _METRO_AREAS. The
+    point is an approximation of an area, so callers must treat it as one
+    -- location_filter applies METRO_SLACK_MILES before rejecting on it.
+    A bare city name never matches, so "Portland" stays unresolved.
+    """
+    if not text or not str(text).strip():
+        return None
+    match = _METRO_PHRASE.match(str(text).strip(" .,"))
+    if not match:
+        return None
+    core = _METRO_AREAS.get(match.group(1).lower().strip())
+    return resolve_location(core) if core else None
 
 
 def distance_between(origin: str, destination: str) -> float | None:

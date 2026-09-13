@@ -376,6 +376,26 @@ def _stage_status(stage: dict) -> tuple:
     return ("Up to date", f"as of {timestamp}")
 
 
+def _safe_stage_status(stage: dict) -> tuple:
+    """_stage_status(), but a malformed or half-written pipeline file (a
+    missing column, a corrupt CSV or checkpoint) is reported on its own row
+    instead of raising out of the status render -- which made the whole
+    Bullet Bank screen unopenable, including the very stage that would
+    rebuild the bad file."""
+    try:
+        return _stage_status(stage)
+    except Exception as e:  # noqa: BLE001 -- see docstring
+        return ("Unreadable", f"{type(e).__name__}: {e}")
+
+
+def _safe_maintenance_status(entry: dict) -> str:
+    """Same guard as _safe_stage_status() for the maintenance rows."""
+    try:
+        return _maintenance_status(entry)
+    except Exception as e:  # noqa: BLE001 -- see _safe_stage_status
+        return f"unreadable ({type(e).__name__})"
+
+
 def _checkpoint_progress_status(checkpoint_path: str) -> tuple:
     # Lazy numpy -- Lite Mode omits it; see requirements-lite.txt (F20).
     import numpy as np
@@ -467,25 +487,41 @@ def _handle_choice(choice: str) -> None:
     if entry.get("api_cost") and not _confirm(entry["label"]):
         return
 
+    import menu
+
     scroll_region_modified = False
+    suspended_alt_screen = False
     title = f"BULLET BANK | {entry['label'].upper()}"
+
+    # Same approach as menu._run_with_chain(): the alternate screen buffer
+    # has no real scrollback, and a pipeline stage prints per-bullet
+    # progress for hundreds of bullets -- everything that scrolled past the
+    # top was gone for good. Drop to the primary screen for the run so the
+    # terminal's native scrollback works, then re-enter alt-screen after.
+    if menu._should_use_alt_screen():
+        sys.stdout.write("\x1b[?1049l")
+        sys.stdout.flush()
+        suspended_alt_screen = True
 
     # Clear screen and draw the compact banner!
     sys.stdout.write("\x1b[2J\x1b[H")
     sys.stdout.flush()
     cli_art.display_compact_banner(title)
 
-    # Draw the gorgeous execution footer static at the bottom row (row = rows)
-    cli_art.display_execution_footer()
+    if not suspended_alt_screen:
+        # The pinned footer only stays pinned via the DECSTBM clamp below,
+        # and that clamp is exactly what breaks scrollback -- so both only
+        # apply when we're still inside alt-screen (no scrollback to lose).
+        cli_art.display_execution_footer()
 
-    # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
-    import shutil
+        # Set dynamic scroll region to freeze rows 1-4 (header) and the bottom row (footer)
+        import shutil
 
-    _, rows = shutil.get_terminal_size()
-    sys.stdout.write(f"\x1b[5;{rows-1}r")
-    sys.stdout.write("\x1b[5;1H")
-    sys.stdout.flush()
-    scroll_region_modified = True
+        _, rows = shutil.get_terminal_size()
+        sys.stdout.write(f"\x1b[5;{rows-1}r")
+        sys.stdout.write("\x1b[5;1H")
+        sys.stdout.flush()
+        scroll_region_modified = True
 
     try:
         script_path = os.path.join(SCRIPT_DIR, entry["script"])
@@ -498,6 +534,15 @@ def _handle_choice(choice: str) -> None:
         if scroll_region_modified:
             # Clean up: restore the scroll region back to the entire screen window
             sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
+        # run_bullet_bank_menu() clears the screen at the top of its loop
+        # under alt-screen, so without a pause the stage's whole output --
+        # including the "exited with an error" line -- vanished unread.
+        # Paused BEFORE re-entering alt-screen, so the output is read on the
+        # primary screen, where it can still be scrolled back through.
+        menu._pause_and_return()
+        if suspended_alt_screen:
+            sys.stdout.write("\x1b[?1049h\x1b[H")
             sys.stdout.flush()
 
 
@@ -563,8 +608,10 @@ def run_bullet_bank_menu() -> None:
             cli_art.display_compact_banner("BULLET BANK MANAGEMENT")
             cli_art.display_footer_commands()
 
-        stage_rows = [(s["number"], s["label"], *_stage_status(s)) for s in STAGES]
-        maintenance_rows = [(m["label"], _maintenance_status(m)) for m in MAINTENANCE]
+        stage_rows = [(s["number"], s["label"], *_safe_stage_status(s)) for s in STAGES]
+        maintenance_rows = [
+            (m["label"], _safe_maintenance_status(m)) for m in MAINTENANCE
+        ]
 
         cli_art.console.print()
         cli_art.render_bullet_bank_status(stage_rows, maintenance_rows)

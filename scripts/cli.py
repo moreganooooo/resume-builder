@@ -635,7 +635,7 @@ def location_group():
     "--allow-search-backup",
     is_flag=True,
     default=False,
-    help="Allow Gemini Search Grounding ultra-backup",
+    help="Allow the Google Maps grounding backup for addresses nothing else found",
 )
 @click.option(
     "--limit",
@@ -648,7 +648,7 @@ def location_group():
     "--max-search-calls",
     type=int,
     default=10,
-    help="Cap on Gemini Search Grounding calls spent this run (a company already "
+    help="Cap on Google Maps grounding calls spent this run (a company already "
     "attempted recently is skipped instead of re-spending a call, so this "
     "budget goes toward companies that haven't been tried yet)",
 )

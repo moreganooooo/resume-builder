@@ -838,6 +838,38 @@ class TestHandleChoice(unittest.TestCase):
         bullet_bank_menu._handle_choice("audit")
         mock_error.assert_called_once()
 
+    @patch("menu._pause_and_return")
+    @patch("bullet_bank_menu.cli_art.display_error")
+    @patch("bullet_bank_menu.subprocess.run")
+    @patch("bullet_bank_menu._confirm", return_value=True)
+    def test_pauses_after_the_stage_so_its_output_is_readable(
+        self, mock_confirm, mock_run, mock_error, mock_pause
+    ):
+        # run_bullet_bank_menu() clears the screen at the top of its loop;
+        # without a pause the stage's output and any error vanished unread.
+        mock_run.return_value.returncode = 1
+        bullet_bank_menu._handle_choice("audit")
+        mock_pause.assert_called_once()
+
+
+class TestSafeStatus(unittest.TestCase):
+    def test_a_broken_stage_file_is_reported_not_raised(self):
+        # A malformed pipeline file used to raise out of the status render
+        # and make the whole Bullet Bank screen unopenable.
+        with patch("bullet_bank_menu._stage_status", side_effect=KeyError("next_action")):
+            status, detail = bullet_bank_menu._safe_stage_status(
+                bullet_bank_menu.STAGES[0]
+            )
+        self.assertEqual(status, "Unreadable")
+        self.assertIn("KeyError", detail)
+
+    def test_a_broken_maintenance_file_is_reported_not_raised(self):
+        with patch("bullet_bank_menu._maintenance_status", side_effect=ValueError("bad")):
+            self.assertIn(
+                "unreadable",
+                bullet_bank_menu._safe_maintenance_status(bullet_bank_menu.MAINTENANCE[0]),
+            )
+
     @patch("bullet_bank_menu.cli_art.display_error")
     @patch("bullet_bank_menu.subprocess.run")
     @patch("bullet_bank_menu._confirm")

@@ -241,6 +241,36 @@ class TestFetchBoardJobs(unittest.TestCase):
 
     @patch("scan_boards._fetch_posting_text", return_value="")
     @patch("scan_boards._run_node_provider")
+    def test_malformed_item_does_not_drop_the_rest_of_the_provider(
+        self, mock_run, mock_fetch_text
+    ):
+        mock_run.return_value = [
+            "not a dict",
+            None,
+            {"title": "Marketing Coordinator", "url": "https://x.com/1", "location": "Remote"},
+        ]
+        jobs = scan_boards.fetch_board_jobs(sources=["remoteok"])
+        self.assertEqual([j["source_url"] for j in jobs], ["https://x.com/1"])
+
+    @patch("scan_boards._passes_content_filters", return_value=False)
+    @patch("scan_boards.requests.get")
+    @patch(
+        "scan_boards._load_filters",
+        return_value={"enabled_boards": [], "custom_feeds": [{"name": "F", "url": "u"}]},
+    )
+    def test_custom_feed_items_go_through_content_filters(
+        self, _filters, mock_get, _content
+    ):
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            content=b"<rss><channel><item><title>Marketing Coordinator</title>"
+            b"<link>https://f.com/1</link><description>blocked text</description>"
+            b"</item></channel></rss>",
+        )
+        self.assertEqual(scan_boards.fetch_board_jobs(), [])
+
+    @patch("scan_boards._fetch_posting_text", return_value="")
+    @patch("scan_boards._run_node_provider")
     def test_missing_company_falls_back_to_provider_id_not_a_placeholder(
         self, mock_run, mock_fetch_text
     ):
@@ -398,6 +428,16 @@ class TestRunNodeProvider(unittest.TestCase):
         self.assertEqual(kwargs["kind"], "provider_failed")
         self.assertEqual(kwargs["reason"], "last line")
 
+    @patch("scan_boards._scan_warning")
+    @patch("subprocess.run")
+    def test_non_list_json_on_exit_zero_is_rejected(self, mock_run, mock_warn):
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout='{"error":{"kind":"network"}}', stderr=""
+        )
+        self.assertEqual(scan_boards._run_node_provider("remoteok", {}), [])
+        _, kwargs = mock_warn.call_args
+        self.assertEqual(kwargs["reason"], "non-list JSON output")
+
 
 class TestParseErrorEnvelope(unittest.TestCase):
 
@@ -552,42 +592,3 @@ class TestProviderOriginEntry(unittest.TestCase):
         self.assertNotIn("location", mock_run.call_args[0][1])
 
 
-class TestBatchNodeProviders(unittest.TestCase):
-    """Verifies batch execution of board providers via _run_batch_node_providers."""
-
-    def test_empty_batch_returns_empty_dict(self):
-        res = scan_boards._run_batch_node_providers([])
-        self.assertEqual(res, {})
-
-    @patch("scan_boards.subprocess.run")
-    def test_batch_execution_success_and_error_isolation(self, mock_run):
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout='[{"provider_id": "remoteok", "status": "fulfilled", "jobs": [{"title": "Job 1"}]}, {"provider_id": "adzuna", "status": "rejected", "error": {"kind": "auth", "message": "missing key"}}]',
-        )
-        items = [
-            {"provider_id": "remoteok", "entry": {}},
-            {"provider_id": "adzuna", "entry": {}},
-        ]
-        res = scan_boards._run_batch_node_providers(items)
-        self.assertIn("remoteok", res)
-        self.assertEqual(len(res["remoteok"]), 1)
-        self.assertEqual(res["remoteok"][0]["title"], "Job 1")
-        self.assertIn("adzuna", res)
-        self.assertEqual(res["adzuna"], [])
-
-    @patch(
-        "scan_boards.subprocess.run",
-        side_effect=subprocess.TimeoutExpired(cmd="node", timeout=30),
-    )
-    def test_batch_timeout_recovers_empty_lists(self, mock_run):
-        items = [{"provider_id": "remoteok"}, {"provider_id": "himalayas"}]
-        res = scan_boards._run_batch_node_providers(items)
-        self.assertEqual(res, {"remoteok": [], "himalayas": []})
-
-    @patch("scan_boards.subprocess.run")
-    def test_batch_invalid_json_recovers_empty_lists(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="corrupt output")
-        items = [{"provider_id": "remoteok"}]
-        res = scan_boards._run_batch_node_providers(items)
-        self.assertEqual(res, {"remoteok": []})

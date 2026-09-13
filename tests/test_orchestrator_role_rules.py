@@ -96,6 +96,41 @@ class TestBuildRoleRulesBlock(unittest.TestCase):
         block = self.engine.build_role_rules_block(profile_data)
         self.assertIn("State U -- BA: exactly 1 bullet(s)", block)
 
+    def test_education_entry_missing_institution_or_credential_does_not_crash(self):
+        profile_data = {
+            "roles": [],
+            "fixed_credentials": {
+                "education": [{"credential": "BA"}, {"institution": "State U"}, {}],
+            },
+        }
+        block = self.engine.build_role_rules_block(profile_data)
+        self.assertIn("1. BA: exactly 1 bullet(s)", block)
+        self.assertIn("2. State U: exactly 1 bullet(s)", block)
+        self.assertIn("3. Unnamed education entry: exactly 1 bullet(s)", block)
+
+    def test_achievement_slots_tolerate_missing_institution(self):
+        from unittest.mock import patch
+
+        import profile_paths
+
+        yml = {
+            "fixed_credentials": {
+                "education": [{"credential": "BA", "achievement_options": {"k": "framing"}}]
+            }
+        }
+        with patch.object(profile_paths, "profile_yaml", return_value=yml):
+            self.assertEqual(
+                profile_paths.education_achievement_slots(), [("BA", {"k": "framing"})]
+            )
+
+    def test_design_only_entry_without_a_name_does_not_crash(self):
+        profile_data = {
+            "roles": [],
+            "fixed_credentials": {"education": [{"design_only": True}]},
+        }
+        block = self.engine.build_role_rules_block(profile_data)
+        self.assertIn("Unnamed credential", block)
+
     def test_voice_calibration_example_included(self):
         profile_data = {"roles": [], "voice_calibration_example": "A test quote."}
         block = self.engine.build_role_rules_block(profile_data)

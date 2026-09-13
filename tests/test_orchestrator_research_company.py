@@ -67,6 +67,72 @@ class TestResearchCompanyWebsiteFallback(unittest.TestCase):
         mock_find.assert_not_called()
 
 
+class TestResearchCompanyNeverStopsEarly(unittest.TestCase):
+    def setUp(self):
+        self.engine = orchestrator.ResumeEngine()
+
+    @patch("orchestrator.company_research.research_company_via_search")
+    @patch("orchestrator.company_research.fetch_company_pages")
+    def test_tier1_extraction_failure_falls_through_to_search(
+        self, mock_fetch, mock_search
+    ):
+        # A None extraction at Tier 1 used to return None outright,
+        # skipping the tiers that exist so every role gets research.
+        mock_fetch.return_value = "x" * 300
+        mock_search.return_value = "search writeup"
+        found = {"company_facts": ["Sells things."], "_research_source": "search"}
+        with patch.object(
+            orchestrator.ResumeEngine,
+            "_extract_company_research",
+            side_effect=[None, found],
+        ):
+            result = self.engine.research_company(
+                {"company_name": "Acme Corp", "company_website": "https://acme.com"},
+                "Acme Corp is hiring.",
+            )
+        self.assertEqual(result, found)
+        mock_search.assert_called_once()
+
+    @patch(
+        "orchestrator.company_research.research_company_via_search", return_value=None
+    )
+    @patch("orchestrator.company_research.find_company_website", return_value=None)
+    def test_linkedin_company_website_is_ignored_and_searched_for(
+        self, mock_find, _search
+    ):
+        # A JD's company_website that is really a LinkedIn page is not the
+        # company's site; it must not be scraped as one.
+        with patch("orchestrator.company_research.fetch_company_pages") as mock_fetch:
+            self.engine.research_company(
+                {
+                    "company_name": "Acme Corp",
+                    "company_website": "https://www.linkedin.com/company/acme",
+                }
+            )
+        mock_find.assert_called_once_with("Acme Corp")
+        mock_fetch.assert_not_called()
+
+
+class TestResearchCompanyCache(unittest.TestCase):
+    @patch("orchestrator.company_research.find_company_website")
+    @patch("orchestrator.company_research.fetch_company_pages")
+    @patch("orchestrator.company_research.load_cached_research")
+    def test_cached_research_is_reused_without_any_fetch(
+        self, mock_cache, mock_fetch, mock_find
+    ):
+        mock_cache.return_value = {
+            "company_facts": ["cached"],
+            "_research_source": "website",
+        }
+        result = orchestrator.ResumeEngine().research_company(
+            {"company_name": "Acme Corp", "company_website": "https://acme.com"},
+            "Acme Corp is hiring.",
+        )
+        self.assertEqual(result["company_facts"], ["cached"])
+        mock_fetch.assert_not_called()
+        mock_find.assert_not_called()
+
+
 class TestResearchCompanyTierFallback(unittest.TestCase):
     """The 2026-08-11 guarantee: research_company() should produce signal
     for effectively every JD -- website scrape, then confidence-gated

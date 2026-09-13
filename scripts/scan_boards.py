@@ -501,8 +501,6 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
 
     try:
         jobs = json.loads(result.stdout)
-        _record_provider_yield(provider_id, len(jobs))
-        return jobs
     except json.JSONDecodeError as e:
         _scan_warning(
             f"scan_boards: {provider_id} returned invalid JSON -- {e}",
@@ -511,77 +509,19 @@ def _run_node_provider(provider_id: str, entry: dict) -> list:
             reason="invalid JSON output",
         )
         return []
-
-
-def _run_batch_node_providers(items: list, timeout: int | None = None) -> dict:
-    """Executes multiple board providers concurrently in a single Node process
-    via run_provider.mjs --batch. Returns a mapping from provider_id -> job list.
-    Failed providers log appropriate warnings and return an empty list."""
-    if not items:
-        return {}
-
-    effective_timeout = timeout or (NODE_TIMEOUT_SECONDS * 2)
-    try:
-        result = subprocess.run(
-            ["node", RUN_PROVIDER_SCRIPT, "--batch", json.dumps(items)],
-            capture_output=True,
-            text=True,
-            timeout=effective_timeout,
-            env=_child_env(),
+    # Valid JSON is not necessarily a job list: an error envelope on exit 0
+    # (or `null`) would otherwise have its keys counted as postings, then
+    # crash process_provider() iterating them and lose the whole provider.
+    if not isinstance(jobs, list):
+        _scan_warning(
+            f"scan_boards: {provider_id} returned {type(jobs).__name__} JSON, expected a list",
+            kind="provider_failed",
+            provider_id=provider_id,
+            reason="non-list JSON output",
         )
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        for item in items:
-            pid = item.get("provider_id") or item.get("provider") or "unknown"
-            _scan_warning(
-                f"scan_boards: batch runner failed -- {e}",
-                kind=(
-                    "network" if isinstance(e, subprocess.TimeoutExpired) else "config"
-                ),
-                provider_id=pid,
-                reason=type(e).__name__,
-            )
-        return {
-            (item.get("provider_id") or item.get("provider") or "unknown"): []
-            for item in items
-        }
-
-    try:
-        data = json.loads(result.stdout)
-    except (json.JSONDecodeError, TypeError) as e:
-        for item in items:
-            pid = item.get("provider_id") or item.get("provider") or "unknown"
-            _scan_warning(
-                f"scan_boards: batch runner returned invalid JSON -- {e}",
-                kind="provider_failed",
-                provider_id=pid,
-                reason="invalid JSON output",
-            )
-        return {
-            (item.get("provider_id") or item.get("provider") or "unknown"): []
-            for item in items
-        }
-
-    out = {}
-    if isinstance(data, list):
-        for res in data:
-            if not isinstance(res, dict):
-                continue
-            pid = res.get("provider_id") or "unknown"
-            if res.get("status") == "fulfilled":
-                out[pid] = res.get("jobs") or []
-                _record_provider_yield(pid, len(out[pid]))
-            else:
-                err = res.get("error") or {}
-                kind = err.get("kind", "provider_failed")
-                msg = err.get("message", "unknown error")
-                _scan_warning(
-                    f"scan_boards: batch provider {pid} failed -- {msg}",
-                    kind=kind,
-                    provider_id=pid,
-                    reason=msg,
-                )
-                out[pid] = []
-    return out
+        return []
+    _record_provider_yield(provider_id, len(jobs))
+    return jobs
 
 
 def _html_to_text(markup: str) -> str:
@@ -703,7 +643,12 @@ def fetch_board_jobs(
         provider_jobs = []
 
         for raw in raw_jobs:
-            title = html.unescape((raw.get("title") or "").strip())
+            # One malformed item must not take the provider's other
+            # postings down with it (an AttributeError here fails the
+            # whole future, which only logs).
+            if not isinstance(raw, dict):
+                continue
+            title = html.unescape(str(raw.get("title") or "").strip())
             url = raw.get("url") or ""
             if not title or not url:
                 continue
@@ -823,6 +768,15 @@ def fetch_board_jobs(
 
                         desc_el = item.find("description")
                         desc = _html_to_text(desc_el.text.strip()) if desc_el else ""
+                        # Same content gates board postings go through --
+                        # feeds used to skip them entirely, so a blocked
+                        # keyword or a below-floor salary landed anyway.
+                        if not (
+                            _passes_content_filters(desc)
+                            and _passes_compensation_filter(desc)
+                            and _passes_hours_filter(desc)
+                        ):
+                            continue
 
                         company = ""
                         author_el = item.find("author")

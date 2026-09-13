@@ -34,6 +34,11 @@ type JobRow struct {
 	Location  string `json:"location"`
 	Workplace string `json:"workplace"`
 
+	// LocationSourceURI is the Google Maps source link for a Maps-resolved
+	// address (Google Maps Platform terms: attribution plus a source link
+	// viewable within one interaction). Empty for every other source.
+	LocationSourceURI string `json:"location_source_uri"`
+
 	// DistanceMiles is a POINTER on purpose. A JSON null means the
 	// location could not be resolved, which is a different fact from
 	// "zero miles away" -- a float64 would collapse the two and sort
@@ -265,13 +270,13 @@ type HardBlocker struct {
 // Evaluation mirrors the _evaluation key persisted by
 // scripts/jd_manager.py's save_evaluation().
 type Evaluation struct {
-	CompositeScore       float64  `json:"composite_score"`
-	FitScore             float64  `json:"fit_score"`
-	InterviewOddsScore   float64  `json:"interview_odds_score"`
-	PracticalPursueScore float64  `json:"practical_pursue_score"`
-	Recommendation       string   `json:"recommendation"`
-	Why                  string   `json:"why"`
-	RecruiterRead        string   `json:"recruiter_read"`
+	CompositeScore       float64 `json:"composite_score"`
+	FitScore             float64 `json:"fit_score"`
+	InterviewOddsScore   float64 `json:"interview_odds_score"`
+	PracticalPursueScore float64 `json:"practical_pursue_score"`
+	Recommendation       string  `json:"recommendation"`
+	Why                  string  `json:"why"`
+	RecruiterRead        string  `json:"recruiter_read"`
 
 	// HardBlockers are the categories that still force
 	// CompositeScore=0.00 / Recommendation="Skip" unconditionally in

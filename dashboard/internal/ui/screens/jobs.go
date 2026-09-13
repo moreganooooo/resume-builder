@@ -1922,6 +1922,11 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 	} else if job.Location != "" {
 		content = append(content, styles.Subtext.Render(truncateRunes(job.Location, wrapWidth)))
 	}
+	// Google Maps terms: a Maps-resolved address carries its source link,
+	// viewable without leaving the pane (most terminals make URLs clickable).
+	if job.LocationSourceURI != "" {
+		content = append(content, styles.Subtext.Render(truncateRunes("Google Maps: "+job.LocationSourceURI, wrapWidth)))
+	}
 	// Blank when the posting stated no type, which is the common case --
 	// rendering "Unknown" here would imply the source was asked and
 	// declined, when most sources never publish the field at all.

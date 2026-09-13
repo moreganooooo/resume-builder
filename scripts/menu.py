@@ -2540,6 +2540,7 @@ def _handle_manage_profiles():
             cli_art.console.print(
                 f"{cli_art.WARNING} No profiles exist.", soft_wrap=True
             )
+            _pause_and_return()
             return
 
         choice = cli_art.select(
@@ -2572,8 +2573,12 @@ def _handle_manage_profiles():
             new_name = new_name.strip()
 
             # Check if profile already exists
+            # Every result message below pauses before `continue`: the loop
+            # clears the screen at its top under alt-screen, so without it
+            # each message was erased the instant it printed.
             if os.path.exists(os.path.join(profile_paths.PROFILES_DIR, new_name)):
                 cli_art.display_error(f"Profile '{new_name}' already exists.")
+                _pause_and_return()
                 continue
 
             # Create the new profile
@@ -2593,9 +2598,11 @@ def _handle_manage_profiles():
                         f"\n[{theme.INFO}]Remember to run the bootstrap wizard "
                         f"(New User? Start Here!) to set up this profile![/{theme.INFO}]\n"
                     )
+                _pause_and_return()
                 continue
             except Exception as e:
                 cli_art.display_error(f"Failed to create profile: {e}")
+                _pause_and_return()
                 continue
 
         target = cli_art.select(
@@ -2605,23 +2612,34 @@ def _handle_manage_profiles():
             continue
 
         if choice == "delete":
-            confirm = questionary.confirm(
-                f"Are you sure you want to completely delete the profile '{target}' and all its data? This cannot be undone."
-            ).ask()
-            if not confirm:
+            # Resolved BEFORE deleting, same as rename below: once the
+            # directories are gone active_profile() can raise ValueError,
+            # which escaped after the data was already destroyed and left
+            # RESUME_PROFILE pointing at a deleted profile.
+            try:
+                was_active = target == profile_paths.active_profile()
+            except ValueError:
+                was_active = False
+            # cli_art.confirm with default=False, not raw questionary.confirm
+            # (which defaults to True): a stray Enter irreversibly deleted
+            # all four of the profile's roots.
+            if not cli_art.confirm(
+                f"Are you sure you want to completely delete the profile '{target}' "
+                "and all its data? This cannot be undone.",
+                default=False,
+            ):
                 continue
             for _label, path in profile_paths.sync_roots(target):
                 if os.path.exists(path):
                     shutil.rmtree(path)
             cli_art.display_success(f"Profile '{target}' deleted.")
-
-            if target == profile_paths.active_profile():
-                if os.environ.get("RESUME_PROFILE"):
-                    del os.environ["RESUME_PROFILE"]
+            if was_active:
+                os.environ.pop("RESUME_PROFILE", None)
+            _pause_and_return()
 
         elif choice == "rename":
-            new_name = questionary.text(f"New name for '{target}':").ask()
-            if not new_name:
+            new_name = cli_art.text(f"New name for '{target}':")
+            if not new_name or not new_name.strip():
                 continue
             new_name = new_name.strip()
 
@@ -2645,12 +2663,14 @@ def _handle_manage_profiles():
                 f"Rename '{target}' to '{new_name}' anyway?", default=False
             ):
                 cli_art.cli_info("Left it alone.")
+                _pause_and_return()
                 continue
 
             try:
                 moved = profile_paths.rename_profile(target, new_name)
             except (ValueError, FileExistsError) as exc:
                 cli_art.display_error(str(exc))
+                _pause_and_return()
                 continue
 
             cli_art.display_success(
@@ -2659,6 +2679,7 @@ def _handle_manage_profiles():
             )
             if was_active:
                 profile_paths.set_active_profile(new_name)
+            _pause_and_return()
 
 
 def _offer_discovery_backfill() -> bool:
@@ -2787,6 +2808,11 @@ def _handle_stale_sweep() -> bool:
 
 def _handle_help() -> bool:
     cli_art.display_help()
+    # "help" is in _run_with_chain's interactive_actions (no automatic
+    # pause), and the main loop clears the screen before redrawing under
+    # alt-screen -- so without this the panel was erased the instant it
+    # drew, and Help looked like it did nothing.
+    _pause_and_return()
     return False
 
 
@@ -2906,8 +2932,11 @@ def _handle_check_updates() -> bool:
         if scroll_region_modified:
             sys.stdout.write("\x1b[r")
             sys.stdout.flush()
-    _pause_and_return()
-    return False
+        # In the finally, not after it: every path above returns inside the
+        # try, so a trailing call was unreachable -- and Settings & Upkeep
+        # calls this directly and clears the screen on its next loop, so
+        # the result ("up to date", "commit first") vanished unread.
+        _pause_and_return()
 
 
 _HANDLERS = {

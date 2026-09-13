@@ -1160,6 +1160,74 @@ class TestHandleHelp(unittest.TestCase):
         self.assertFalse(menu._handle_help())
         mock_display.assert_called_once()
 
+    @patch("menu._pause_and_return")
+    @patch("menu.cli_art.display_help")
+    def test_pauses_so_the_panel_is_not_erased_by_the_redraw(self, _display, mock_pause):
+        # "help" gets no automatic pause from _run_with_chain, and the main
+        # loop clears the screen under alt-screen -- without this the panel
+        # vanished the instant it drew.
+        menu._handle_help()
+        mock_pause.assert_called_once()
+
+
+class TestManageProfilesDelete(unittest.TestCase):
+    def setUp(self):
+        import os
+        import shutil
+        import tempfile
+
+        import profile_paths
+
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        iso = profile_paths.isolate_for_tests(self.tmp)
+        iso.__enter__()
+        self.addCleanup(iso.__exit__, None, None, None)
+        self.profile_dir = os.path.join(profile_paths.PROFILES_DIR, "sandboxuser")
+        os.makedirs(self.profile_dir)
+        for target, kwargs in (
+            ("menu._should_use_alt_screen", {"return_value": False}),
+            ("menu._pause_and_return", {}),
+            ("menu.cli_art.select", {"side_effect": ["delete", "sandboxuser", "back"]}),
+        ):
+            p = patch(target, **kwargs)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_enter_does_not_delete(self):
+        import os
+
+        # Raw questionary.confirm defaulted to True: a stray Enter wiped the
+        # profile. The confirm must default to No.
+        with patch("menu.cli_art.confirm", return_value=False) as mock_confirm:
+            menu._handle_manage_profiles()
+        self.assertTrue(os.path.isdir(self.profile_dir))
+        self.assertIs(mock_confirm.call_args.kwargs.get("default"), False)
+
+    def test_deleting_the_active_profile_does_not_raise(self):
+        import os
+
+        # active_profile() was consulted AFTER deletion, when it can raise.
+        with (
+            patch("menu.cli_art.confirm", return_value=True),
+            patch.dict(os.environ, {"RESUME_PROFILE": "sandboxuser"}),
+        ):
+            menu._handle_manage_profiles()
+            self.assertNotIn("RESUME_PROFILE", os.environ)
+        self.assertFalse(os.path.exists(self.profile_dir))
+
+
+class TestHandleCheckUpdatesPauses(unittest.TestCase):
+    @patch("menu._pause_and_return")
+    @patch("menu.cli_art.display_execution_footer")
+    @patch("menu.cli_art.display_compact_banner")
+    @patch("menu.git_update.has_uncommitted_changes", return_value=True)
+    def test_early_return_path_still_pauses(self, _dirty, _banner, _footer, mock_pause):
+        # Settings & Upkeep calls this directly and redraws right after; the
+        # old trailing pause was unreachable from every return path.
+        self.assertFalse(menu._handle_check_updates())
+        mock_pause.assert_called_once()
+
 
 class TestChainContent(unittest.TestCase):
 

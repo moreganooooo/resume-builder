@@ -160,8 +160,10 @@ class TestEvaluateLocation(unittest.TestCase):
         self.assertEqual(verdict.reason, "international location")
 
     def test_unresolvable_is_kept_not_dropped(self):
-        # Unknown must never be treated as far away.
-        verdict = lf.evaluate_location("Greater Austin Area", cfg())
+        # Unknown must never be treated as far away. ("Tri-State Area" has no
+        # single core city; "Greater Austin Area" now resolves approximately
+        # via geo_distance.resolve_metro -- see TestMetroAreas.)
+        verdict = lf.evaluate_location("Tri-State Area", cfg())
         self.assertTrue(verdict.passes)
         self.assertIsNone(verdict.distance_miles)
 
@@ -192,8 +194,36 @@ class TestEvaluateLocation(unittest.TestCase):
         self.assertIsNone(verdict.distance_miles)
 
     def test_distance_is_none_never_a_sentinel(self):
-        verdict = lf.evaluate_location("Greater Austin Area", cfg())
+        verdict = lf.evaluate_location("Tri-State Area", cfg())
         self.assertIsNone(verdict.distance_miles)
+
+
+class TestMetroAreas(unittest.TestCase):
+    """LinkedIn metro phrasing resolves to its core city APPROXIMATELY: the
+    posting gets a distance (so it can sort nearest-first), but is only
+    rejected beyond the radius plus METRO_SLACK_MILES, since a metro is an
+    area and the candidate may live near its edge."""
+
+    def test_far_metro_is_rejected_with_a_distance(self):
+        verdict = lf.evaluate_location("Greater Austin Area", cfg())
+        self.assertFalse(verdict.passes)
+        self.assertGreater(verdict.distance_miles, 500)
+
+    def test_metro_gets_a_distance_for_sorting(self):
+        verdict = lf.evaluate_location("Kansas City Metropolitan Area", cfg())
+        self.assertTrue(verdict.passes)
+        self.assertIsNotNone(verdict.distance_miles)
+        self.assertIn("metro", verdict.reason)
+
+    def test_metro_within_the_slack_band_is_kept(self):
+        # A plain city this far outside a tiny radius is rejected; the same
+        # place written as a metro area is kept, because the metro's real
+        # extent may well reach the candidate.
+        tiny = cfg(radius_miles=0.1)
+        self.assertFalse(lf.evaluate_location("Kansas City, MO", tiny).passes)
+        self.assertTrue(
+            lf.evaluate_location("Greater Kansas City Area (Hybrid)", tiny).passes
+        )
 
 
 class TestHybridPreferred(unittest.TestCase):

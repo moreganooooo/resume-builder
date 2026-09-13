@@ -482,12 +482,13 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
                 "company_name": getattr(data, "company", None),
                 "company_linkedin_url": getattr(data, "company_link", None),
                 # LinkedIn's job page never exposes the company's own external
-                # domain -- only its own /company/<slug> page. Passing that
-                # through anyway (rather than hardcoding None) at least gives
-                # research_company() something to attempt; it already degrades
-                # gracefully (MIN_USEFUL_CHARS check) on the pages LinkedIn
-                # blocks from anonymous scraping.
-                "company_website": getattr(data, "company_link", None),
+                # domain -- only its own /company/<slug> page, already stored
+                # just above. None, deliberately: research_company() only runs
+                # its website search when company_website is EMPTY, so passing
+                # the LinkedIn page through here (as this used to) blocked that
+                # search for every LinkedIn-sourced role -- 50 of 80 pending
+                # "company websites" were LinkedIn pages (measured 2026-09-13).
+                "company_website": None,
                 "location": getattr(data, "place", None),
                 "is_remote": "remote" in place.lower(),
                 "work_model": (

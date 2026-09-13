@@ -241,6 +241,20 @@ class TestIngestOne(unittest.TestCase):
             self.assertIsNone(dest)
             self.assertTrue(os.path.exists(self.image_path))
 
+    def test_success_also_removes_same_stem_sibling(self):
+        pdf_path = os.path.join(self.tmp_dir, "job.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(b"fake pdf bytes")
+        with profile_paths.isolate_for_tests(self.sandbox):
+            with patch.object(
+                jd_image_ingest, "extract_jd_from_image", return_value=dict(FAKE_EXTRACTION)
+            ):
+                dest = jd_image_ingest.ingest_one(pdf_path, profile="alice")
+        self.assertIsNotNone(dest)
+        self.assertFalse(os.path.exists(pdf_path))
+        self.assertFalse(os.path.exists(self.image_path))
+        self.assertEqual(jd_image_ingest.discover_files([self.tmp_dir]), [])
+
     def test_filename_collision_gets_a_counter_suffix(self):
         with profile_paths.isolate_for_tests(self.sandbox):
             jds_dir = profile_paths.jds_dir("alice")

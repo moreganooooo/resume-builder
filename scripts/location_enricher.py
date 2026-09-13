@@ -233,18 +233,13 @@ def lookup_website_via_search(company: str) -> Optional[str]:
     if not company or company.lower() in {"confidential", "unknown company", "stealth"}:
         return None
 
-    import websearch_ddg
-    from company_research import _REJECTED_DOMAINS
+    # The same strict matcher company research uses. Taking the first result
+    # that merely wasn't a known job board matched the wrong company in live
+    # runs (G.Skill for "Skill", a tour operator for "Sona") -- and scraping
+    # a stranger's contact page yields a confidently wrong office address.
+    from company_research import _find_website_via_search_engine
 
-    results = websearch_ddg.search(f'"{company}" official website', max_results=5)
-    for result in results:
-        url = (result.get("url") or "").strip()
-        if not url:
-            continue
-        if any(domain in url.lower() for domain in _REJECTED_DOMAINS):
-            continue
-        return url
-    return None
+    return _find_website_via_search_engine(company)
 
 
 def scrape_company_locations(
@@ -412,52 +407,136 @@ def reconcile_address(
     return None, "unresolved", corroboration
 
 
-def lookup_gemini_search_backup(
+# Google Maps Platform terms: a Maps-sourced address may be cached for at
+# most 30 days, then must be fetched again; the place reference (the maps_uri,
+# which carries the place's CID) may be kept. Coordinates stored here come
+# from the bundled ZIP gazetteer, never from Google.
+MAPS_CACHE_DAYS = 30
+# 500 map-grounded requests/day on the free tier (Search grounding is ZERO
+# for every Gemini 3 model, which is why the old backup could never work).
+MAPS_BACKUP_MODEL = "gemini-3.1-flash-lite"
+_MAPS_ADDRESS_RE = re.compile(r"\*\*Address:\*\*\s*(.+)")
+_US_ADDRESS_TAIL_RE = re.compile(
+    r",\s*([A-Z]{2})\s+(\d{5})(?:-\d{4})?(?:,\s*(?:USA|United States))?\s*$"
+)
+
+
+def maps_data_expired(entry: Optional[Dict[str, Any]]) -> bool:
+    """True for a Google-Maps-sourced record older than MAPS_CACHE_DAYS, or
+    carrying no readable timestamp. Records from any other source never
+    expire here."""
+    if not isinstance(entry, dict) or entry.get("source") != "google_maps":
+        return False
+    stamp = entry.get("fetched_at") or entry.get("resolved_at") or ""
+    try:
+        fetched = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return True
+    return (datetime.utcnow() - fetched).total_seconds() / 86400 >= MAPS_CACHE_DAYS
+
+
+def lookup_google_maps_backup(
     company: str,
     city: str,
     state: str,
     client: Any = None,
 ) -> Optional[Dict[str, Any]]:
-    """Step 3: Ultra-backup using Gemini Flash-Lite with Google Search Grounding.
-    Fails closed under tests unless mocked or RESUME_ALLOW_TEST_NETWORK=1."""
+    """Step 3: a Google-Maps-grounded lookup of the employer's office in or
+    nearest the candidate's configured city.
+
+    Replaces a Search-grounded backup that never produced an address: it
+    called GeminiClient.generate_content_with_search(), which does not exist
+    (the AttributeError was swallowed by its broad except, and the tests
+    mocked the method into existence), and Search grounding has a ZERO
+    free-tier quota on Gemini 3 anyway. Map grounding on gemini-3.1-flash-
+    lite was verified live 2026-09-13.
+
+    Trusts only what Google Maps returned (see _parse_maps_grounding): the
+    same live test's UNgrounded answer gave a different, wrong address.
+    `client` is unused, kept for call-site compatibility. Fails closed under
+    tests unless RESUME_ALLOW_TEST_NETWORK=1."""
     if _blocked_under_tests():
         return None
-
     if not company or company.lower() in {"confidential", "unknown company", "stealth"}:
         return None
 
+    # Biases Maps toward the office near the candidate, not the HQ.
+    center = geo_distance.resolve_location(f"{city}, {state}")
+    tool_config = (
+        {"retrievalConfig": {"latLng": {"latitude": center[0], "longitude": center[1]}}}
+        if center
+        else None
+    )
+    prompt = (
+        f"Using Google Maps, find the office of '{company}' in or nearest to "
+        f"{city}, {state}, and give its street address."
+    )
     try:
-        from gemini_client import GeminiClient
+        import gemini_client
 
-        client = client or GeminiClient()
-        prompt = (
-            f"What is the office or physical work facility address of '{company}' in or near {city}, {state}?\n"
-            "Return a clean JSON object with fields:\n"
-            '{"found": true|false, "address": "...", "zip": "12345", "city": "...", "state": "..."}'
+        _text, grounding = gemini_client.generate_grounded(
+            MAPS_BACKUP_MODEL,
+            prompt,
+            tools=[{"google_maps": {}}],
+            tool_config=tool_config,
         )
-        response = client.generate_content_with_search(
-            prompt=prompt,
-            model="gemini-3.1-flash-lite",
-        )
-        text = response.text if hasattr(response, "text") else str(response)
-        # Parse JSON from response text
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match:
-            data = json.loads(match.group(0))
-            if data.get("found") and data.get("zip"):
-                zip_code = str(data.get("zip")).strip()
-                point = geo_distance.get_zip_centroid(zip_code)
-                if point:
-                    return {
-                        "address": data.get("address") or f"{city}, {state} {zip_code}",
-                        "zip": zip_code,
-                        "lat": point[0],
-                        "lon": point[1],
-                        "source": "gemini_search",
-                    }
     except Exception as exc:
-        logger.debug("Gemini Search backup error for %s: %s", company, exc)
+        logger.debug("Google Maps backup error for %s: %s", company, exc)
+        return None
+    return _parse_maps_grounding(grounding, company)
 
+
+def _maps_search_url(query: str) -> str:
+    """A Google Maps URLs search link (keyless and documented by Google for
+    linking into Maps)."""
+    return "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote_plus(
+        query.strip()
+    )
+
+
+def _parse_maps_grounding(
+    grounding: Dict[str, Any], company: str
+) -> Optional[Dict[str, Any]]:
+    """The first Maps source that is THIS company and has a US street
+    address we can place by ZIP, else None. The address is read from the
+    Maps source itself, never the model's prose; a response with no Maps
+    source at all (an ungrounded answer) yields nothing."""
+    from company_research import _compact_name
+
+    want = _compact_name(company)
+    for chunk in (grounding or {}).get("groundingChunks") or []:
+        maps = chunk.get("maps") if isinstance(chunk, dict) else None
+        if not isinstance(maps, dict):
+            continue
+        title = re.sub(r"\s*-\s*Google Maps\s*$", "", maps.get("title") or "")
+        have = _compact_name(title)
+        # Maps biases toward the search center, so a nearby DIFFERENT
+        # business is a real possibility -- require the place's own name.
+        if len(want) < 3 or len(have) < 4 or (want not in have and have not in want):
+            continue
+        match = _MAPS_ADDRESS_RE.search(maps.get("text") or "")
+        if not match:
+            continue
+        address = match.group(1).strip()
+        tail = _US_ADDRESS_TAIL_RE.search(address)
+        if not tail:
+            continue  # non-US, or no ZIP to place it by
+        point = geo_distance.get_zip_centroid(tail.group(2))
+        if not point:
+            continue
+        return {
+            "address": address,
+            "zip": tail.group(2),
+            "lat": point[0],
+            "lon": point[1],
+            "source": "google_maps",
+            # The API's own source link when it sends one -- it sometimes
+            # returns uri: "" (seen live for Sunrun). Otherwise Google's
+            # documented Maps URLs search link, so every Maps address keeps
+            # its source one interaction away, as the terms require.
+            "maps_uri": maps.get("uri") or _maps_search_url(f"{title} {address}"),
+            "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
     return None
 
 
@@ -567,6 +646,10 @@ def enrich_job_location(
     discovery_result = None
     if not agency and company:
         cached_entry = cache.get(clean_company_key)
+        if maps_data_expired(cached_entry):
+            # Google Maps terms: a Maps address older than 30 days is
+            # re-fetched, never served from cache.
+            cached_entry = None
         cached_failure = bool(cached_entry) and cached_entry.get("failed") is True
         if cached_entry and not cached_failure:
             discovery_result = dict(cached_entry)
@@ -613,7 +696,9 @@ def enrich_job_location(
         discovery_result, jd_result, is_agency=agency
     )
 
-    # Step 3: Ultra-Backup via Gemini Search if needed. Skipped when a prior
+    # Step 3: Ultra-Backup via Google Maps grounding if needed (the
+    # gemini_failed/gemini_checked_at cache keys keep their old names so
+    # existing caches still apply). Skipped when a prior
     # run already spent a search call on this exact company and it came up
     # empty within the cooldown window -- otherwise the small per-run quota
     # (max_search_calls) gets re-spent on the same unfindable companies every
@@ -633,20 +718,22 @@ def enrich_job_location(
         and not gemini_previously_failed
     ):
         search_call_attempted = True
-        gemini_result = lookup_gemini_search_backup(
+        gemini_result = lookup_google_maps_backup(
             company, target_city, target_state, client=gemini_client
         )
         if gemini_result:
             winning = gemini_result
             status = "resolved"
-            corroboration["discovery_source"] = "gemini_search"
+            corroboration["discovery_source"] = "google_maps"
             corroboration["discovery_zip"] = gemini_result.get("zip")
             cache[clean_company_key] = {
                 "address": gemini_result.get("address"),
                 "zip": gemini_result.get("zip"),
                 "lat": gemini_result.get("lat"),
                 "lon": gemini_result.get("lon"),
-                "source": "gemini_search",
+                "source": "google_maps",
+                "maps_uri": gemini_result.get("maps_uri"),
+                "fetched_at": gemini_result.get("fetched_at"),
             }
         else:
             cache[clean_company_key] = {
@@ -678,6 +765,9 @@ def enrich_job_location(
         "resolved_zip": winning.get("zip") if winning else None,
         "lat": winning.get("lat") if winning else None,
         "lon": winning.get("lon") if winning else None,
+        # The Google Maps source link: attribution for a Maps address, and
+        # the place reference kept past the 30-day address expiry.
+        "maps_uri": winning.get("maps_uri") if winning else None,
         "distance_miles": distance_miles,
         "is_within_radius": is_within,
         "is_agency": agency,
@@ -755,10 +845,13 @@ def enrich_profile_locations(
                 data = json.load(f)
             if not isinstance(data, dict):
                 continue
-            if (
-                data.get("_location_enrichment", {}).get("status")
-                in _TERMINAL_ENRICHMENT_STATUSES
+            if data.get("_location_enrichment", {}).get(
+                "status"
+            ) in _TERMINAL_ENRICHMENT_STATUSES and not maps_data_expired(
+                data.get("_location_enrichment")
             ):
+                # Terminal -- except a Google Maps address past its 30-day
+                # cache limit, which must be re-fetched.
                 continue
             tasks.append(
                 {
@@ -793,6 +886,7 @@ def enrich_profile_locations(
             meta.get("_location_enrichment")
             and meta["_location_enrichment"].get("status")
             in _TERMINAL_ENRICHMENT_STATUSES
+            and not maps_data_expired(meta["_location_enrichment"])
         ):
             continue
         tasks.append(
