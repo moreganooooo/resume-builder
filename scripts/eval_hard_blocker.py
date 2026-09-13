@@ -206,10 +206,21 @@ def main() -> int:
             skipped += 1
             continue
 
+        # Mirrors orchestrator.rescore_evaluation_with_location()'s own
+        # filter: a years_experience entry tagged direction="over_qualified"
+        # is never treated as a real blocker downstream (see
+        # docs/hard_blockers.md), so it must not count as "flagged" here
+        # either, or this script would measure a stricter classifier than
+        # the one actually shipped.
         predicted_yd = (
             "flagged"
             if any(
-                isinstance(b, dict) and b.get("category") in EXPERIENCE_CATEGORIES
+                isinstance(b, dict)
+                and b.get("category") in EXPERIENCE_CATEGORIES
+                and not (
+                    b.get("category") == "years_experience"
+                    and b.get("direction") == "over_qualified"
+                )
                 for b in blockers
             )
             else "not_flagged"

@@ -106,11 +106,28 @@ class TestActiveProfileYmlSchema(unittest.TestCase):
                 )
 
     def test_education_entries_declare_an_institution_and_bullet_count(self):
+        # bullet_count must actually be PRESENT, not merely int-typed once
+        # defaulted -- `entry.get("bullet_count", 0)` passed this test even
+        # when the key was missing entirely (isinstance(0, int) is True),
+        # which is exactly how a hand-written profile.yml with education
+        # entries carrying only institution/credential shipped undetected
+        # and crashed every resume build with KeyError('bullet_count') in
+        # orchestrator.build_role_rules_block() (that call site now
+        # defaults to 1 rather than raising, but this test is what should
+        # catch the missing field long before a real build does).
         creds = self.data.get("fixed_credentials") or {}
         for entry in creds.get("education") or []:
             with self.subTest(entry=entry.get("institution")):
                 self.assertTrue(entry.get("institution"))
-                self.assertIsInstance(entry.get("bullet_count", 0), int)
+                self.assertIn(
+                    "bullet_count",
+                    entry,
+                    f"education entry {entry.get('institution')!r} is missing "
+                    "bullet_count -- build_role_rules_block() needs an explicit "
+                    "value, not a silent default, to render the right number "
+                    "of bullets under this credential",
+                )
+                self.assertIsInstance(entry["bullet_count"], int)
 
     def test_protected_bullets_are_prose_not_urls(self):
         """These are bullet descriptions the builder must never drop, e.g.

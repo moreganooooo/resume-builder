@@ -59,10 +59,25 @@ class TestBuildSample(unittest.TestCase):
     """Test suite for build_sample module."""
 
     def test_build_sample_fixture_missing(self):
-        """Test build_sample when SAMPLE_JD_PATH does not exist."""
-        with patch.object(build_sample, "SAMPLE_JD_PATH", "/nonexistent/sample_jd.txt"):
-            res = build_sample.build_sample()
-            self.assertEqual(res, {"resume": {}, "coverletter": {}})
+        """Test build_sample when SAMPLE_JD_PATH does not exist.
+
+        Must also isolate profile_root() -- _resolve_sample_jd_path()
+        checks a profile-specific fixture (profiles/<name>/sample_jd.txt)
+        FIRST, before falling back to the shared/patched SAMPLE_JD_PATH.
+        Any profile that has actually added its own (e.g. dominick) has a
+        real, existing file there, so without this the early-return branch
+        this test exists to cover never triggers -- build_sample() runs
+        the real pipeline instead and fails on the live-network guard,
+        depending on which profile happens to be active when the suite
+        runs (see tests/test_no_operator_identity.py's own reasoning)."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with patch.object(
+                build_sample, "SAMPLE_JD_PATH", "/nonexistent/sample_jd.txt"
+            ), patch(
+                "build_sample.profile_paths.profile_root", return_value=tmp_dir
+            ):
+                res = build_sample.build_sample()
+                self.assertEqual(res, {"resume": {}, "coverletter": {}})
 
     @patch("build_sample.orchestrator.ResumeEngine")
     @patch("build_sample.jd_manager")

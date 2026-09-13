@@ -373,10 +373,16 @@ def check_kb_allowlist() -> dict:
     import orchestrator
 
     kb_dir = profile_paths.kb_dir()
+    # Only the bootstrap-guaranteed core (KB_REQUIRED_FILES) is reported as
+    # "missing" -- most of KB_ALLOWLIST is either the output of a separate,
+    # optional deep-evidence extraction pass, or a hand-curated,
+    # profile-specific research artifact (see KB_REQUIRED_FILES's own
+    # docstring in orchestrator.py). Flagging those as broken for a profile
+    # that never ran that optional step -- or, like Dom, isn't Morgan and
+    # has no reason to have a file literally named after Morgan's own former
+    # employer -- read as "your knowledge base is broken" when nothing was.
     missing = [
-        f
-        for f in orchestrator.KB_ALLOWLIST
-        if not os.path.exists(os.path.join(kb_dir, f))
+        f for f in orchestrator.KB_REQUIRED_FILES if not os.path.exists(os.path.join(kb_dir, f))
     ]
 
     now = time.time()
@@ -395,12 +401,13 @@ def check_kb_allowlist() -> dict:
         else []
     )
 
-    # Every file missing and nothing else wrong is "never bootstrapped," not
-    # "partially broken" -- collapse it to one actionable line instead of a
-    # 19-filename wall doctor used to print, with the real instruction
-    # buried at the end of a warning about shrunk context (B32).
+    # Every required file missing and nothing else wrong is "never
+    # bootstrapped," not "partially broken" -- collapse it to one
+    # actionable line instead of a filename wall doctor used to print,
+    # with the real instruction buried at the end of a warning about
+    # shrunk context (B32).
     if (
-        len(missing) == len(orchestrator.KB_ALLOWLIST)
+        len(missing) == len(orchestrator.KB_REQUIRED_FILES)
         and not corrupted
         and not conflicts
     ):
@@ -408,7 +415,7 @@ def check_kb_allowlist() -> dict:
         return _check(
             f"Knowledge-base allowlist files ({name})",
             False,
-            f"0 of {len(orchestrator.KB_ALLOWLIST)} present -- profile not bootstrapped yet",
+            f"0 of {len(orchestrator.KB_REQUIRED_FILES)} required files present -- profile not bootstrapped yet",
             f"Profile `{name}` isn't set up yet -- run `resume` -> New User? Start Here! "
             "(or `resume bootstrap` directly).",
         )

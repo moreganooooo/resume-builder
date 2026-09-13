@@ -39,6 +39,7 @@ import cli_art
 import doctor
 import followup
 import git_update
+import interactive_subprocess
 import jd_manager
 import liveness as liveness_module
 import maintenance
@@ -1157,7 +1158,11 @@ def _run_go_bootstrap_wizard() -> tuple[bool, dict | None]:
         if build.returncode != 0:
             return False, None
 
-    result = subprocess.run(
+    # interactive_subprocess.run(), not subprocess.run() directly: this
+    # binary blocks on real terminal input for the whole onboarding
+    # wizard, so an interrupted/killed parent orphans it the same way it
+    # did for charm_prompt.py's prompt binary -- see that module's docstring.
+    result = interactive_subprocess.run(
         [bin_path], cwd=dashboard_dir, capture_output=True, text=True
     )
     if result.returncode == _BOOTSTRAP_GO_CANCELLED:

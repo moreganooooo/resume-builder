@@ -5,6 +5,7 @@ Imported by both orchestrator.py and rewrite_bullets.py to break
 the circular import between them.
 """
 
+import base64
 import copy
 import hashlib
 import json
@@ -527,7 +528,19 @@ class GeminiClient:
         service_tier: str = "standard",
         model_fallback: bool = True,
         tools: list = None,
+        inline_file: tuple[bytes, str] = None,
     ) -> tuple[str | None, dict]:
+        # inline_file, when given, is (raw_bytes, mime_type) -- e.g. a
+        # screenshot PDF/PNG of a job posting (see jd_image_ingest.py).
+        # Sent as a second `parts` entry alongside the text prompt, base64
+        # inline (not the separate Files API) -- these screenshots are a
+        # few MB, comfortably under Gemini's inline-request size limit, so
+        # there's no reason to add the extra upload round-trip. Gemini's
+        # documented PDF support reads an image-only PDF (no text layer)
+        # the same way it reads a plain image, which is what makes this
+        # viable at all -- pdfminer/pypdf extract nothing from a
+        # screenshot-only PDF (confirmed empirically: 2 characters from a
+        # real Tesla careers page screencapture).
         url = f"{BASE_URL}/{model}:generateContent"
 
         valid_tiers = {"standard", "priority", "flex"}
@@ -652,8 +665,20 @@ class GeminiClient:
                     model, system_instruction
                 )
 
+            parts = [{"text": contents}]
+            if inline_file is not None:
+                file_bytes, mime_type = inline_file
+                parts.append(
+                    {
+                        "inlineData": {
+                            "mimeType": mime_type,
+                            "data": base64.b64encode(file_bytes).decode("ascii"),
+                        }
+                    }
+                )
+
             body = {
-                "contents": [{"role": "user", "parts": [{"text": contents}]}],
+                "contents": [{"role": "user", "parts": parts}],
                 "generationConfig": generation_config,
                 "serviceTier": tier,
             }

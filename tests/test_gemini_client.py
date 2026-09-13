@@ -495,5 +495,45 @@ class TestContextCaching(unittest.TestCase):
         self.assertNotIn("systemInstruction", generate_body)
 
 
+class TestInlineFile(unittest.TestCase):
+    """inline_file (jd_image_ingest.py's screenshot-JD path) must add a
+    second `parts` entry alongside the text prompt, base64-encoded, and
+    must never appear at all when unused -- the vast majority of calls."""
+
+    @patch("gemini_client.requests.post")
+    def test_inline_file_becomes_a_second_part_base64_encoded(self, mock_post):
+        import base64
+
+        mock_post.return_value = _success_response()
+
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="Transcribe this.",
+            inline_file=(b"\x89PNG raw bytes", "image/png"),
+        )
+
+        parts = mock_post.call_args.kwargs["json"]["contents"][0]["parts"]
+        self.assertEqual(len(parts), 2)
+        self.assertEqual(parts[0], {"text": "Transcribe this."})
+        self.assertEqual(parts[1]["inlineData"]["mimeType"], "image/png")
+        self.assertEqual(
+            base64.b64decode(parts[1]["inlineData"]["data"]), b"\x89PNG raw bytes"
+        )
+
+    @patch("gemini_client.requests.post")
+    def test_no_inline_file_means_one_part_only(self, mock_post):
+        mock_post.return_value = _success_response()
+
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="content",
+        )
+
+        parts = mock_post.call_args.kwargs["json"]["contents"][0]["parts"]
+        self.assertEqual(parts, [{"text": "content"}])
+
+
 if __name__ == "__main__":
     unittest.main()

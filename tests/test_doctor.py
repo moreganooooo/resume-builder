@@ -292,12 +292,15 @@ class TestCheckKbAllowlist(unittest.TestCase):
         )
         self._kb_patcher.start()
         self._real_allowlist = orchestrator.KB_ALLOWLIST
+        self._real_required = orchestrator.KB_REQUIRED_FILES
         orchestrator.KB_ALLOWLIST = ["bullet-bank.md", "profile.yml"]
+        orchestrator.KB_REQUIRED_FILES = frozenset(["bullet-bank.md", "profile.yml"])
 
     def tearDown(self):
         import orchestrator
 
         orchestrator.KB_ALLOWLIST = self._real_allowlist
+        orchestrator.KB_REQUIRED_FILES = self._real_required
         self._kb_patcher.stop()
         for name in os.listdir(self.tmp_dir):
             os.remove(os.path.join(self.tmp_dir, name))
@@ -354,9 +357,59 @@ class TestCheckKbAllowlist(unittest.TestCase):
         # listing every one of KB_ALLOWLIST's filenames.
         result = doctor.check_kb_allowlist()
         self.assertFalse(result["passed"])
-        self.assertIn("0 of 2 present", result["detail"])
+        self.assertIn("0 of 2 required files present", result["detail"])
         self.assertNotIn("bullet-bank.md", result["detail"])
         self.assertIn("resume bootstrap", result["fix"])
+
+    def test_optional_allowlist_file_missing_does_not_fail(self):
+        # An allowlisted file outside KB_REQUIRED_FILES (a hand-curated or
+        # optional-deep-evidence artifact -- e.g. Morgan's own
+        # treering-archive-readme.md) must never read as "your knowledge
+        # base is broken" for a profile that never had or made one.
+        import orchestrator
+
+        orchestrator.KB_ALLOWLIST = [
+            "bullet-bank.md",
+            "profile.yml",
+            "treering-archive-readme.md",
+        ]
+        self._write("bullet-bank.md")
+        self._write("profile.yml")
+        result = doctor.check_kb_allowlist()
+        self.assertTrue(result["passed"], result["detail"])
+
+    def test_optional_allowlist_file_corruption_still_fails(self):
+        # Missing is fine for an optional file; corrupted is not -- a
+        # zero-byte file that IS present still poisons the builder's
+        # context regardless of which bucket it's in.
+        import orchestrator
+
+        orchestrator.KB_ALLOWLIST = [
+            "bullet-bank.md",
+            "profile.yml",
+            "treering-archive-readme.md",
+        ]
+        self._write("bullet-bank.md")
+        self._write("profile.yml")
+        self._write("treering-archive-readme.md", content="")
+        result = doctor.check_kb_allowlist()
+        self.assertFalse(result["passed"])
+        self.assertIn("corrupted", result["detail"])
+        self.assertIn("treering-archive-readme.md", result["detail"])
+
+
+class TestKbRequiredFilesInvariant(unittest.TestCase):
+    def test_every_required_file_is_in_the_allowlist(self):
+        # KB_REQUIRED_FILES narrows what doctor calls "missing"; it must
+        # never name a file outside KB_ALLOWLIST itself, or the builder's
+        # own context-assembly (get_active_kb_files) and doctor's health
+        # check would disagree about what this profile is even supposed
+        # to have.
+        import orchestrator
+
+        self.assertTrue(
+            orchestrator.KB_REQUIRED_FILES.issubset(set(orchestrator.KB_ALLOWLIST))
+        )
 
 
 class TestRunChecks(unittest.TestCase):

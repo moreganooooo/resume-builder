@@ -249,10 +249,17 @@ type Research struct {
 	ResearchedAt            string   `json:"researched_at"`
 }
 
-// HardBlocker mirrors scripts/schemas.py's HardBlockerSchema.
+// HardBlocker mirrors scripts/schemas.py's HardBlockerSchema. Direction is
+// only meaningful for Category=="years_experience" ("under_qualified" vs
+// "over_qualified"); orchestrator.rescore_evaluation_with_location() never
+// persists an "over_qualified" entry into Evaluation.ExperienceBlockers, so
+// by the time this reaches the dashboard every years_experience row here is
+// already a real blocker, not a recruiting-concern-only overqualification
+// flag -- see docs/hard_blockers.md.
 type HardBlocker struct {
-	Text     string `json:"text"`
-	Category string `json:"category"`
+	Text      string `json:"text"`
+	Category  string `json:"category"`
+	Direction string `json:"direction,omitempty"`
 }
 
 // Evaluation mirrors the _evaluation key persisted by

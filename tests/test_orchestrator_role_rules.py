@@ -79,6 +79,23 @@ class TestBuildRoleRulesBlock(unittest.TestCase):
         self.assertIn("Widget Cert | Widget Co | 2020", block)
         self.assertIn("State U -- BA: exactly 2 bullet(s)", block)
 
+    def test_education_entry_missing_bullet_count_defaults_instead_of_raising(self):
+        # A hand-written profile.yml education entry that only sets
+        # institution/credential (no bullet_count) used to raise
+        # KeyError('bullet_count') here and abort every resume build for
+        # the whole profile -- observed live on a real profile. Missing,
+        # not just falsy: test_profile_yml_schema.py's own schema test is
+        # what should catch this before a real build ever does; this is
+        # the defense-in-depth fallback.
+        profile_data = {
+            "roles": [],
+            "fixed_credentials": {
+                "education": [{"institution": "State U", "credential": "BA"}],
+            },
+        }
+        block = self.engine.build_role_rules_block(profile_data)
+        self.assertIn("State U -- BA: exactly 1 bullet(s)", block)
+
     def test_voice_calibration_example_included(self):
         profile_data = {"roles": [], "voice_calibration_example": "A test quote."}
         block = self.engine.build_role_rules_block(profile_data)

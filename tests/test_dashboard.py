@@ -56,7 +56,7 @@ class TestRun(unittest.TestCase):
         self.assertIn("Nothing to show yet", message)
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[{"path": "a.json"}])
-    @patch("dashboard.subprocess.run")
+    @patch("dashboard.interactive_subprocess.run")
     @patch("dashboard.os.path.exists", return_value=False)
     @patch("dashboard.go_available", return_value=True)
     def test_proceeds_without_applications_md_when_jobs_are_evaluated(
@@ -70,7 +70,7 @@ class TestRun(unittest.TestCase):
         self.assertTrue(success)
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
-    @patch("dashboard.subprocess.run")
+    @patch("dashboard.interactive_subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
     @patch("dashboard.go_available", return_value=True)
     def test_launches_go_run_with_the_profile_data_dir(
@@ -98,7 +98,7 @@ class TestRun(unittest.TestCase):
         self.assertIn("env", mock_subproc.call_args[1])
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
-    @patch("dashboard.subprocess.run")
+    @patch("dashboard.interactive_subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
     @patch("dashboard.go_available", return_value=True)
     def test_returns_false_when_dashboard_process_exits_nonzero(
@@ -188,7 +188,7 @@ class TestRunCleansUpJobsExport(unittest.TestCase):
         self._sandbox.__exit__(None, None, None)
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
-    @patch("dashboard.subprocess.run")
+    @patch("dashboard.interactive_subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
     @patch("dashboard.go_available", return_value=True)
     def test_temp_file_removed_after_successful_run(
@@ -204,7 +204,7 @@ class TestRunCleansUpJobsExport(unittest.TestCase):
         self.assertFalse(os.path.isfile(jobs_path))
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
-    @patch("dashboard.subprocess.run")
+    @patch("dashboard.interactive_subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
     @patch("dashboard.go_available", return_value=True)
     def test_temp_file_removed_even_when_process_fails(
@@ -235,7 +235,7 @@ class TestDashboardProfileEnvAndRecompile(unittest.TestCase):
         self._sandbox.__exit__(None, None, None)
 
     @patch("dashboard.picker.list_all_evaluated_jds", return_value=[])
-    @patch("dashboard.subprocess.run")
+    @patch("dashboard.interactive_subprocess.run")
     @patch("dashboard.os.path.exists", return_value=True)
     @patch("dashboard.go_available", return_value=True)
     @patch("dashboard.ui_config.get_full_ui_config")
@@ -257,7 +257,7 @@ class TestDashboardProfileEnvAndRecompile(unittest.TestCase):
         self.assertEqual(env.get("RESUME_BUILDER_MOTION"), "reduced")
 
     @patch("dashboard.go_available", return_value=True)
-    @patch("dashboard.subprocess.run")
+    @patch("dashboard.interactive_subprocess.run")
     def test_compile_dashboard_when_stale(self, mock_subproc, mock_go):
         with tempfile.TemporaryDirectory() as tmpdir:
             bin_dir = os.path.join(tmpdir, "bin")
