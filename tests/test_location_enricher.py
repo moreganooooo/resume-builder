@@ -208,6 +208,52 @@ class TestLocationEnricher(unittest.TestCase):
         )
         self.assertIn("300+Tech+Dr", res["maps_uri"])
 
+    def _step3_run(self, cache_entry):
+        import datetime
+
+        settings = {"city": "Springfield", "state": "IL", "zip": "62701", "radius_miles": 25}
+        job = {"company": "Acme Corp", "location": "Springfield, IL"}
+        found = {
+            "address": "300 Tech Dr, Springfield, IL 62702",
+            "zip": "62702",
+            "lat": 39.8,
+            "lon": -89.6,
+            "source": "google_maps",
+            "maps_uri": "https://maps.google.com/maps?cid=42",
+            "fetched_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        cache = {"acme corp::il": dict(cache_entry)}
+        with (
+            patch("location_enricher.save_locations_cache"),
+            patch("location_enricher.lookup_osm_nominatim", return_value=None),
+            patch("location_enricher.lookup_website_via_search", return_value=None),
+            patch("location_enricher.lookup_google_maps_backup", return_value=found) as mock_maps,
+        ):
+            res = location_enricher.enrich_job_location(
+                job, settings=settings, allow_search_backup=True, cache=cache
+            )
+        return res, mock_maps
+
+    def test_old_gemini_failed_flag_does_not_block_a_maps_try(self):
+        # The old Search backup never ran but stamped gemini_failed anyway.
+        import datetime
+
+        now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        res, mock_maps = self._step3_run(
+            {"failed": True, "checked_at": now, "gemini_failed": True, "gemini_checked_at": now}
+        )
+        mock_maps.assert_called_once()
+        self.assertEqual(res["status"], "resolved")
+
+    def test_recent_maps_failure_still_skips_the_retry(self):
+        import datetime
+
+        now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        _res, mock_maps = self._step3_run(
+            {"failed": True, "checked_at": now, "maps_failed": True, "maps_checked_at": now}
+        )
+        mock_maps.assert_not_called()
+
     def test_maps_data_expires_after_30_days(self):
         import datetime
 
