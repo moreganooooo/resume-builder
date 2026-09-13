@@ -138,6 +138,31 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         self.assertEqual(len(results), 5)
         self.assertNotIn("Mercor", companies)
 
+    @patch(
+        "orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    )
+    @patch("orchestrator.TOP_K_BULLETS", 6)
+    def test_situational_role_left_out_unless_its_keyword_gate_cleared(self, mock_embed):
+        # A situational role's bullets only belong in the pool when the JD
+        # cleared its keyword gate (the caller passes its bank_tag in
+        # extra_company_minimums). Otherwise the roster drops that company
+        # later anyway, so any slot it took was wasted.
+        _write_profile_roles(self.tmp_dir, [])
+        situational = {
+            "situational_min_bullets": 1,
+            "roles": {"Mercor Gig": {"bank_tag": "Mercor", "trigger_keywords": ["x"]}},
+        }
+        with patch(
+            "orchestrator.situational_roles.load_situational_roles",
+            return_value=situational,
+        ):
+            gated_out = self.engine.mine_bullet_bank("some JD text", {})
+            gated_in = self.engine.mine_bullet_bank(
+                "some JD text", {}, extra_company_minimums={"Mercor": 1}
+            )
+        self.assertNotIn("Mercor", [c for (_, c, _) in gated_out])
+        self.assertIn("Mercor", [c for (_, c, _) in gated_in])
+
     @patch("orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0])
     @patch("orchestrator.TOP_K_BULLETS", 5)
     def test_embedding_dimension_mismatch_falls_back_instead_of_crashing(

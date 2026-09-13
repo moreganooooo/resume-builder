@@ -52,6 +52,40 @@ class TestCreateNewProfile(unittest.TestCase):
             content = f.read()
         self.assertIn("CONTACT_INFO", content)
 
+    def test_scaffolded_build_education_reads_profile_yml(self):
+        """The scaffold used to return [] from build_education(), so every
+        bootstrapped profile rendered resumes with no Education section --
+        even with degrees listed in profile.yml's fixed_credentials."""
+        import yaml
+
+        bootstrap_bullet_bank.create_new_profile(self.test_profile)
+        with open(
+            os.path.join(self.profile_path, "knowledge_base", "profile.yml"), "w"
+        ) as f:
+            yaml.safe_dump(
+                {
+                    "fixed_credentials": {
+                        "education": [
+                            {"credential": "B.S., Biology", "institution": "Example State"},
+                            {
+                                "credential": "Coursework, Design",
+                                "institution": "Example College",
+                                "design_only": True,
+                            },
+                        ]
+                    }
+                },
+                f,
+            )
+        fixed_content = profile_paths.fixed_content_module(self.test_profile)
+        education = fixed_content.build_education({})
+        self.assertEqual(
+            [(e["degree"], e["institution"]) for e in education],
+            [("B.S., Biology", "Example State"), ("Coursework, Design", "Example College")],
+        )
+        self.assertTrue(education[1]["design_only"])
+        self.assertNotIn("design_only", education[0])
+
     def test_scaffolds_empty_situational_roles_yaml(self):
         bootstrap_bullet_bank.create_new_profile(self.test_profile)
         path = os.path.join(self.profile_path, "situational_roles.yaml")
