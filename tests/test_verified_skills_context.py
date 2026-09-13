@@ -348,6 +348,29 @@ class TestComputeSkillCoverageMatrix(unittest.TestCase):
         self.assertEqual(result[0]["skill"], "Python")
         self.assertIn("coverage", result[0])
 
+    def test_rate_limited_primary_falls_back_to_backup_model(self):
+        import numpy as np
+
+        import embed_bullet_bank
+
+        def fake_embed(batch, model=None, max_retries=None):
+            if model == embed_bullet_bank.EMBED_MODEL:
+                raise RuntimeError("embed_batch failed after 2 retries.")
+            return [np.ones(768, dtype=np.float32).tolist() for _ in batch]
+
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("numpy.load", return_value=np.ones((2, 768), dtype=np.float32)),
+            patch("embed_bullet_bank.embed_batch", side_effect=fake_embed) as mock_embed,
+        ):
+            result = orchestrator.compute_skill_coverage_matrix(["Python"])
+
+        self.assertEqual([r["skill"] for r in result], ["Python"])
+        models = [c.kwargs.get("model") for c in mock_embed.call_args_list]
+        self.assertEqual(models, [embed_bullet_bank.EMBED_MODEL, embed_bullet_bank.BACKUP_EMBED_MODEL])
+        # Short ladder: the backup exists, so the primary never waits ~150s.
+        self.assertTrue(all(c.kwargs.get("max_retries") == 2 for c in mock_embed.call_args_list))
+
 
 class TestEvaluateFitPopulatesSkillMatrix(unittest.TestCase):
     @patch("orchestrator.compute_skill_coverage_matrix")

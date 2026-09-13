@@ -50,6 +50,79 @@ class TestEmbedBatchReadsKeyPerCall(unittest.TestCase):
         )
 
 
+class TestBackupEmbeddingModel(unittest.TestCase):
+    """gemini-embedding-001 has its own quota, so it can absorb the primary
+    model's rate limits -- but only against its own index."""
+
+    @patch("embed_bullet_bank.requests.post")
+    def test_model_argument_reaches_the_request(self, mock_post):
+        mock_post.return_value = MagicMock(
+            status_code=200, json=lambda: {"embeddings": [{"values": [0.0]}]}
+        )
+        embed_bullet_bank.embed_batch(["one"], model=embed_bullet_bank.BACKUP_EMBED_MODEL)
+        self.assertIn("gemini-embedding-001:batchEmbedContents", mock_post.call_args.args[0])
+        self.assertEqual(
+            mock_post.call_args.kwargs["json"]["requests"][0]["model"],
+            "models/gemini-embedding-001",
+        )
+
+    @patch("embed_bullet_bank.time.sleep", lambda *a, **kw: None)
+    @patch("embed_bullet_bank.requests.post")
+    def test_max_retries_caps_the_ladder(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=429)
+        with self.assertRaises(RuntimeError):
+            embed_bullet_bank.embed_batch(["one"], max_retries=1)
+        self.assertEqual(mock_post.call_count, 1)
+
+    def test_each_model_keeps_its_own_index_files(self):
+        primary = embed_bullet_bank.index_paths("/kb")
+        backup = embed_bullet_bank.index_paths("/kb", embed_bullet_bank.BACKUP_EMBED_MODEL)
+        self.assertEqual(os.path.basename(primary[0]), "bullet_vectors_ge2_d768.npy")
+        self.assertEqual(os.path.basename(backup[0]), "bullet_vectors_ge1_d768.npy")
+        self.assertEqual(len(set(primary) & set(backup)), 0)
+
+
+class TestCliBuildsBothIndexes(unittest.TestCase):
+    """The menu's Embed stage runs this script; it must refresh the backup
+    index too, or the fallback silently goes stale after every bank edit."""
+
+    def _run(self, argv, main_side_effect=None):
+        with patch("embed_bullet_bank.main", side_effect=main_side_effect) as mock_main:
+            code = embed_bullet_bank.cli(argv)
+        return code, [c.kwargs.get("model") for c in mock_main.call_args_list]
+
+    def test_default_builds_primary_then_backup(self):
+        code, models = self._run([])
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            models, [embed_bullet_bank.EMBED_MODEL, embed_bullet_bank.BACKUP_EMBED_MODEL]
+        )
+
+    def test_primary_only_skips_the_backup(self):
+        _, models = self._run(["--primary-only"])
+        self.assertEqual(models, [embed_bullet_bank.EMBED_MODEL])
+
+    def test_model_flag_builds_exactly_that_index(self):
+        _, models = self._run(["--model", embed_bullet_bank.BACKUP_EMBED_MODEL])
+        self.assertEqual(models, [embed_bullet_bank.BACKUP_EMBED_MODEL])
+
+    def test_backup_failure_does_not_fail_the_step(self):
+        def fail_backup(model=None):
+            if model == embed_bullet_bank.BACKUP_EMBED_MODEL:
+                raise RuntimeError("quota")
+
+        code, models = self._run([], main_side_effect=fail_backup)
+        self.assertEqual(code, 0)
+        self.assertEqual(len(models), 2)
+
+    def test_primary_failure_still_fails_the_step(self):
+        def fail_primary(model=None):
+            raise RuntimeError("primary down")
+
+        with self.assertRaises(RuntimeError):
+            self._run([], main_side_effect=fail_primary)
+
+
 class TestEmbedBatchLengthGuard(unittest.TestCase):
     """B20 (phase-9-backlog.md): a response with a missing/short
     "embeddings" key used to silently contribute fewer rows than sent,

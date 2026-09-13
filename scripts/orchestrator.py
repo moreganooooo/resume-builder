@@ -2206,22 +2206,50 @@ def compute_skill_coverage_matrix(skill_names: list) -> list:
     try:
         import dashboard_actions
         import numpy as np
-        from embed_bullet_bank import BATCH_SIZE, embed_batch
+        from embed_bullet_bank import (
+            BACKUP_EMBED_MODEL,
+            BATCH_SIZE,
+            EMBED_MODEL,
+            embed_batch,
+            index_paths,
+        )
         from vector_store import cosine_similarity_matrix
     except ImportError:
         return []
 
     kb_dir = profile_paths.kb_dir()
-    emb_npy = os.path.join(kb_dir, "bullet_vectors_ge2_d768.npy")
-    if not os.path.exists(emb_npy):
+    # The primary model first, then the backup, each against ITS OWN index
+    # (the two models' vectors are not comparable). A short retry ladder,
+    # since there is somewhere else to go: the full ~150s wait on every
+    # rate-limited evaluation is what stalled a 374-role re-score for hours.
+    candidates = [
+        (model, index_paths(kb_dir, model)[0]) for model in (EMBED_MODEL, BACKUP_EMBED_MODEL)
+    ]
+    candidates = [(model, npy) for model, npy in candidates if os.path.exists(npy)]
+    if not candidates:
         return []
 
+    for model, emb_npy in candidates:
+        try:
+            embs = np.load(emb_npy)
+            skill_vecs = []
+            for i in range(0, len(skill_names), BATCH_SIZE):
+                batch = skill_names[i : i + BATCH_SIZE]
+                skill_vecs.extend(embed_batch(batch, model=model, max_retries=2))
+            if embs.ndim != 2 or any(v and len(v) != embs.shape[1] for v in skill_vecs):
+                continue
+        except Exception:
+            continue
+        return _rank_skill_coverage(skill_names, skill_vecs, embs)
+    return []
+
+
+def _rank_skill_coverage(skill_names: list, skill_vecs: list, embs) -> list:
+    """Coverage percentile per skill against `embs` (one model's index)."""
     try:
-        embs = np.load(emb_npy)
-        skill_vecs = []
-        for i in range(0, len(skill_names), BATCH_SIZE):
-            batch = skill_names[i : i + BATCH_SIZE]
-            skill_vecs.extend(embed_batch(batch))
+        import dashboard_actions
+        import numpy as np
+        from vector_store import cosine_similarity_matrix
 
         reference = dashboard_actions._coverage_reference(embs)
 
@@ -4912,6 +4940,33 @@ class ResumeEngine:
                 soft_wrap=True,
             )
             jd_emb = None
+        if jd_emb is None:
+            # The primary model failed (usually a 429). The backup model has
+            # its own quota but its own vector space, so it is usable only
+            # against its OWN index, and only when that index was built from
+            # this exact bank (same content hash) -- otherwise fall through to
+            # the unranked fallback below, as before.
+            try:
+                from embed_bullet_bank import BACKUP_EMBED_MODEL, embed_batch, index_paths
+
+                b_npy, b_meta, _ = index_paths(self.kb_dir, BACKUP_EMBED_MODEL)
+                if os.path.exists(b_npy) and os.path.exists(b_meta):
+                    with open(b_meta, "r", encoding="utf-8") as f:
+                        b_sha = json.load(f).get("bullets_sha")
+                    b_embs = np.load(b_npy)
+                    if b_sha == current_sha and len(b_embs) == len(df):
+                        vec = embed_batch(
+                            [jd_text[:8000]], model=BACKUP_EMBED_MODEL, max_retries=2
+                        )[0]
+                        if b_embs.ndim == 2 and len(vec) == b_embs.shape[1]:
+                            jd_emb, embs = vec, b_embs
+                            cli_art.console.print(
+                                f"  {theme.colorize_icon('hint')} Primary embedding unavailable -- "
+                                f"matched against the {BACKUP_EMBED_MODEL} backup index.",
+                                soft_wrap=True,
+                            )
+            except Exception:
+                pass
         if jd_emb is None:
             cli_art.console.print(
                 f"  {cli_art.WARNING} JD embedding failed. Falling back to first TOP_K_BULLETS rows.",

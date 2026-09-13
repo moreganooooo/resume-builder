@@ -64,6 +64,11 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 AUTH_HEADERS = {"x-goog-api-key": API_KEY}
 
 EMBED_MODEL = "gemini-embedding-2"
+# Separate per-model quota, so it absorbs Embedding 2's rate limits -- but
+# only against its own index (index_paths()); the two models' vectors are
+# not comparable. Build it with: embed_bullet_bank.py --model gemini-embedding-001
+BACKUP_EMBED_MODEL = "gemini-embedding-001"
+MODEL_FAMILY = {EMBED_MODEL: "ge2", BACKUP_EMBED_MODEL: "ge1"}
 EMBED_DIM = 768  # sweet spot for text-only
 BATCH_SIZE = 20  # batchEmbedContents supports up to ~20 requests per call
 EMBED_SLEEP = (
@@ -85,12 +90,31 @@ CHECKPOINT_PATH = os.path.join(
 )
 
 
-def embed_batch(texts: list) -> list:
-    """Call batchEmbedContents for a list of strings. Returns list of float lists."""
-    url = f"{BASE_URL}/{EMBED_MODEL}:batchEmbedContents"
+def index_paths(kb_dir: str, model: str = None) -> tuple:
+    """(npy, meta, checkpoint) paths for `model`'s bullet-bank index.
+
+    Vectors from different embedding models live in different spaces, so
+    each model keeps its own index and a query must only ever be compared
+    against the index built by the same model. The primary model keeps the
+    historical ge2 file names."""
+    family = MODEL_FAMILY[model or EMBED_MODEL]
+    base = os.path.join(kb_dir, f"bullet_vectors_{family}_d{EMBED_DIM}")
+    return f"{base}.npy", f"{base}.meta", f"{base}.checkpoint.npz"
+
+
+def embed_batch(texts: list, model: str = None, max_retries: int = None) -> list:
+    """Call batchEmbedContents for a list of strings. Returns list of float lists.
+
+    `model` defaults to EMBED_MODEL; BACKUP_EMBED_MODEL has its own quota and
+    its own index (see index_paths()). `max_retries` defaults to MAX_RETRIES
+    -- callers that have a backup to fall back on pass a smaller number
+    rather than waiting out the full ~150s ladder."""
+    model = model or EMBED_MODEL
+    retries = max_retries or MAX_RETRIES
+    url = f"{BASE_URL}/{model}:batchEmbedContents"
     requests_payload = [
         {
-            "model": f"models/{EMBED_MODEL}",
+            "model": f"models/{model}",
             "content": {"parts": [{"text": t}]},
             "outputDimensionality": EMBED_DIM,
             "taskType": "RETRIEVAL_DOCUMENT",
@@ -118,12 +142,12 @@ def embed_batch(texts: list) -> list:
     # a rate-limited old key for hours after the key had been switched.
     headers = {"x-goog-api-key": gemini_client._get_api_key() or API_KEY}
 
-    for attempt in range(MAX_RETRIES):
+    for attempt in range(retries):
         resp = requests.post(url, json=body, headers=headers, timeout=120)
         if resp.status_code == 429:
             wait = 10 * (2**attempt)
             cli_art.cli_warning(
-                f"Rate limited. Waiting {wait}s (attempt {attempt+1}/{MAX_RETRIES})..."
+                f"Rate limited. Waiting {wait}s (attempt {attempt+1}/{retries})..."
             )
             time.sleep(wait)
             continue
@@ -141,7 +165,7 @@ def embed_batch(texts: list) -> list:
             )
         return vecs
 
-    raise RuntimeError(f"embed_batch failed after {MAX_RETRIES} retries.")
+    raise RuntimeError(f"embed_batch failed after {retries} retries ({model}).")
 
 
 def load_checkpoint(expected_sha: str):
@@ -182,7 +206,14 @@ def save_checkpoint(vectors: list, next_index: int, bullets_sha_value: str):
     )
 
 
-def main():
+def main(model: str = None):
+    # A backup-model build writes its own ge1 index (and checkpoint), never
+    # the primary ge2 files -- see index_paths().
+    global NPY_PATH, META_PATH, CHECKPOINT_PATH
+    model = model or EMBED_MODEL
+    if model != EMBED_MODEL:
+        NPY_PATH, META_PATH, CHECKPOINT_PATH = index_paths(KB_DIR, model)
+
     if not API_KEY:
         raise EnvironmentError("GEMINI_API_KEY / GOOGLE_API_KEY not set in .env")
 
@@ -221,7 +252,7 @@ def main():
     n_batches = (remaining + BATCH_SIZE - 1) // BATCH_SIZE
     est_secs = n_batches * EMBED_SLEEP
     cli_art.console.print(
-        f"{theme.colorize_icon('build')} Embedding with {EMBED_MODEL} @ {EMBED_DIM}d",
+        f"{theme.colorize_icon('build')} Embedding with {model} @ {EMBED_DIM}d",
         soft_wrap=True,
     )
     cli_art.cli_info(
@@ -240,7 +271,7 @@ def main():
             f"{batch[0][:60]}{'...' if len(batch[0]) > 60 else ''}"
         )
 
-        vecs = embed_batch(batch)
+        vecs = embed_batch(batch, model=model)
         vectors.extend(vecs)
 
         # Checkpoint after every batch
@@ -258,7 +289,7 @@ def main():
     )
 
     meta = {
-        "model": EMBED_MODEL,
+        "model": model,
         "dim": EMBED_DIM,
         "rows": total,
         "csv": CSV_PATH,
@@ -282,5 +313,52 @@ def main():
     )
 
 
+def cli(argv: list = None) -> int:
+    """Command-line entry point -- what the Bullet Bank menu's "Embed" stage
+    and bootstrap_bullet_bank's pipeline both run. By default it builds the
+    primary index and then the backup model's index, so the backup never
+    silently goes stale after a bank edit (a stale backup is skipped at match
+    time, which quietly removes the fallback). The backup is best-effort: if
+    it fails -- say its own quota is spent -- this warns and still succeeds,
+    since real builds need only the primary index. `--primary-only` skips
+    it; `--model` builds exactly one index."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Embed the active profile's bullet bank.")
+    parser.add_argument(
+        "--model",
+        choices=[EMBED_MODEL, BACKUP_EMBED_MODEL],
+        help="Build only this model's index.",
+    )
+    parser.add_argument(
+        "--primary-only",
+        action="store_true",
+        help="Skip the backup model's index.",
+    )
+    args = parser.parse_args(argv)
+
+    if args.model:
+        main(model=args.model)
+        return 0
+
+    main(model=EMBED_MODEL)
+    if args.primary_only:
+        return 0
+    cli_art.console.print(
+        f"\n{theme.colorize_icon('build')} Building the backup index ({BACKUP_EMBED_MODEL}) "
+        "-- used automatically when the primary model is rate-limited.",
+        soft_wrap=True,
+    )
+    try:
+        main(model=BACKUP_EMBED_MODEL)
+    except Exception as e:
+        cli_art.cli_warning(
+            f"Backup index not built ({e}). Resume builds still work; re-run this "
+            f"step later, or `embed_bullet_bank.py --model {BACKUP_EMBED_MODEL}`, "
+            "to restore the fallback."
+        )
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    sys.exit(cli())
