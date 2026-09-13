@@ -696,18 +696,20 @@ def enrich_job_location(
         discovery_result, jd_result, is_agency=agency
     )
 
-    # Step 3: Ultra-Backup via Google Maps grounding if needed (the
-    # gemini_failed/gemini_checked_at cache keys keep their old names so
-    # existing caches still apply). Skipped when a prior
+    # Step 3: Ultra-Backup via Google Maps grounding if needed. Its negative
+    # cache uses maps_failed/maps_checked_at, NOT the old gemini_* keys: the
+    # old Search backup never actually ran (see lookup_google_maps_backup),
+    # yet stamped gemini_failed on 108 companies -- honoring those flags kept
+    # 63 of them from ever getting a real Maps attempt. Skipped when a prior
     # run already spent a search call on this exact company and it came up
     # empty within the cooldown window -- otherwise the small per-run quota
     # (max_search_calls) gets re-spent on the same unfindable companies every
     # run instead of ever reaching new ones further down the queue.
     company_cache_entry = cache.get(clean_company_key) or {}
     gemini_previously_failed = company_cache_entry.get(
-        "gemini_failed"
+        "maps_failed"
     ) is True and not _negative_cache_expired(
-        {"checked_at": company_cache_entry.get("gemini_checked_at")}
+        {"checked_at": company_cache_entry.get("maps_checked_at")}
     )
     search_call_attempted = False
     if (
@@ -738,8 +740,8 @@ def enrich_job_location(
         else:
             cache[clean_company_key] = {
                 **company_cache_entry,
-                "gemini_failed": True,
-                "gemini_checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "maps_failed": True,
+                "maps_checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
         save_locations_cache(cache, profile)
 
