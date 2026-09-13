@@ -199,6 +199,18 @@ class HardBlockerSchema(BaseModel):
         "-- everything else, including 'field_domain', keeps the existing "
         "behavior of forcing a Skip."
     )
+    direction: Literal["under_qualified", "over_qualified", "n/a"] = Field(
+        default="n/a",
+        description="Only meaningful when category is 'years_experience': "
+        "'under_qualified' means the candidate's own tenure falls BELOW the "
+        "posting's stated floor -- a real blocker. 'over_qualified' means "
+        "the candidate clears the floor easily and the posting reads as "
+        "entry-level relative to their background -- a real recruiting "
+        "concern, but NOT what this field measures, so it does not count "
+        "as a blocker downstream (see docs/hard_blockers.md's "
+        "overqualification-conflation finding). Use 'n/a' for every other "
+        "category.",
+    )
 
 
 class RecruiterEvaluationSchema(BaseModel):
@@ -627,4 +639,39 @@ class StagedFactsExtractionSchema(BaseModel):
     facts: List[FactItemSchema] = Field(
         default_factory=list,
         description="Extracted candidate factual claims awaiting human review",
+    )
+
+
+class ScreenshotJdExtractionSchema(BaseModel):
+    """A job posting transcribed from a screenshot/PDF image -- see
+    jd_image_ingest.py. Mirrors the job-dict shape scan_indeed.py and the
+    Node board-scanner providers already produce, so the output slots
+    into the existing JD pipeline unchanged."""
+
+    job_title: str = Field(default="", description="The role's title, verbatim from the image")
+    company_name: str = Field(default="", description="The hiring company's name")
+    location: str = Field(
+        default="", description="The posting's stated location, verbatim (city/state, 'Remote', etc.)"
+    )
+    source_url: str = Field(
+        default="",
+        description="The posting's URL if visible anywhere in the image (browser address "
+        "bar, a QR code caption, printed footer text) -- empty string if not visible. "
+        "Never guess or reconstruct one from the company name or job title.",
+    )
+    is_remote: bool | None = Field(
+        default=None,
+        description="true if the posting states this is remote, false if it explicitly "
+        "states onsite/hybrid, null if the image doesn't say",
+    )
+    description: str = Field(
+        default="",
+        description="The full job posting body -- responsibilities, requirements, "
+        "qualifications, compensation if shown -- transcribed as completely and "
+        "verbatim as the image allows. Do not summarize or paraphrase.",
+    )
+    is_partial: bool = Field(
+        default=False,
+        description="true if the image is visibly cut off or scrolled mid-posting, so "
+        "the transcription is known-incomplete rather than the posting's full text",
     )

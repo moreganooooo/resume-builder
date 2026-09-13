@@ -75,6 +75,12 @@ DEFAULT_DISTANCE_MILES = 25
 DEFAULT_SEARCH_TERM = "marketing"
 DEFAULT_RESULTS_WANTED = 50
 
+# JobSpy's search_term is a single string, so covering N configured
+# titles costs N scrape calls -- capped so a profile with many scattered
+# target roles (see _default_search_term()'s docstring) can't turn one
+# scan into an unbounded number of Indeed hits.
+MAX_SEARCH_TERMS = 3
+
 # Indeed's own site key in JobSpy.
 SITE_NAME = "indeed"
 
@@ -115,7 +121,7 @@ def _is_remote(row) -> bool | None:
     return bool(value)
 
 
-def _default_search_term() -> str:
+def _default_search_terms() -> list:
     """Falls back to the active profile's own configured target roles
     instead of the fixed "marketing" literal -- scan.run_scan() never
     threads a search_term through to any fetcher (every real call site
@@ -124,12 +130,13 @@ def _default_search_term() -> str:
     of what that profile does. Reads scan_filters.yml's
     title_filter.positive (seeded from profile.yml's primary/secondary
     target roles during bootstrap -- see bootstrap_profile.
-    seed_scan_filters_from_target_roles) and uses the first, most
-    specific entry -- JobSpy's search_term is a single string, so
-    covering every configured title would mean a separate scrape call
-    per title, a bigger change than fixing the wrong default. Falls back
-    to DEFAULT_SEARCH_TERM only if scan_filters.yml is missing, unreadable,
-    or genuinely has no positive titles configured yet."""
+    seed_scan_filters_from_target_roles) and returns up to
+    MAX_SEARCH_TERMS entries, most specific first -- JobSpy's search_term
+    is a single string, so covering more than one title costs one scrape
+    call per title, which is why this is capped rather than unbounded.
+    Falls back to [DEFAULT_SEARCH_TERM] only if scan_filters.yml is
+    missing, unreadable, or genuinely has no positive titles configured
+    yet."""
     try:
         path = os.path.join(
             profile_paths.board_scanner_dir(), "scan_filters.yml"
@@ -137,48 +144,18 @@ def _default_search_term() -> str:
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     except (OSError, yaml.YAMLError):
-        return DEFAULT_SEARCH_TERM
+        return [DEFAULT_SEARCH_TERM]
     positive = (data.get("title_filter") or {}).get("positive") or []
-    return str(positive[0]).strip() if positive else DEFAULT_SEARCH_TERM
+    terms = [str(p).strip() for p in positive if str(p).strip()]
+    return terms[:MAX_SEARCH_TERMS] if terms else [DEFAULT_SEARCH_TERM]
 
 
-def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
-    """Scrapes Indeed for the active profile's configured location.
-
-    Returns the same job-dict shape as the other sources. Returns [] --
-    never raises -- when the profile has no configured origin, when
-    JobSpy is not installed, or when the scrape is blocked.
-    """
-    settings = location_settings.read_settings()
-    location = _origin_from_settings(settings)
-    if not location:
-        cli_art.cli_error(
-            "Indeed scan needs a location -- set one under Settings & Upkeep "
-            "-> Location & Commute Radius. Skipping."
-        )
-        return []
-
-    try:
-        from jobspy import scrape_jobs
-    except ImportError:
-        cli_art.cli_error(
-            "python-jobspy is not installed (pip install -r requirements.txt). "
-            "Skipping Indeed scan."
-        )
-        return []
-
-    distance = settings.get("radius_miles") or DEFAULT_DISTANCE_MILES
-    term = search_term or _default_search_term()
-
-    if activity is not None:
-        activity.start_source(1, label="Fetching")
-        activity.step(
-            "discovery",
-            "Indeed",
-            f"Checking {cli_art.format_board_name('indeed')} "
-            f"({location}, {distance} mi)",
-            preserve_markup=True,
-        )
+def _scrape_one_term(term: str, location: str, distance) -> list:
+    """Runs one JobSpy scrape for a single search term and normalizes the
+    result frame into this module's job-dict shape. Never raises -- a
+    block, layout change, or transient network fault degrades to []
+    rather than aborting the whole multi-term scan."""
+    from jobspy import scrape_jobs
 
     try:
         frame = scrape_jobs(
@@ -190,14 +167,14 @@ def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
             country_indeed="USA",
         )
     except Exception as e:
-        # Scraping is inherently fragile -- a block, a layout change, or a
-        # transient network fault must not abort the whole scan run.
-        logging.error(f"scan_indeed: Indeed scrape failed -- {e}")
-        cli_art.cli_error(f"Indeed scan failed ({type(e).__name__}). Skipping.")
+        logging.error(f"scan_indeed: Indeed scrape failed for {term!r} -- {e}")
+        cli_art.cli_error(
+            f"Indeed scan failed for {term!r} ({type(e).__name__}). Skipping term."
+        )
         return []
 
     if frame is None or len(frame) == 0:
-        logging.info("scan_indeed: Indeed returned no listings.")
+        logging.info(f"scan_indeed: Indeed returned no listings for {term!r}.")
         return []
 
     jobs = []
@@ -244,7 +221,78 @@ def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
         scan_boards._flag_thin_description(job, "indeed", url)
         jobs.append(job)
 
-    logging.info(f"scan_indeed: returning {len(jobs)} listing(s).")
+    logging.info(f"scan_indeed: {term!r} returned {len(jobs)} listing(s).")
+    return jobs
+
+
+def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
+    """Scrapes Indeed for the active profile's configured location.
+
+    An explicit search_term (e.g. fetch_indeed_tesla_jobs's "Tesla") runs
+    a single scrape, unchanged. With no explicit term, this covers every
+    one of the profile's configured target-role titles (up to
+    MAX_SEARCH_TERMS -- see _default_search_terms()), not just the first:
+    JobSpy's search_term is one string per call, so multiple titles cost
+    one scrape call each, merged here and deduped by source_url (the same
+    posting can legitimately surface under more than one title query).
+
+    Returns the same job-dict shape as the other sources. Returns [] --
+    never raises -- when the profile has no configured origin, when
+    JobSpy is not installed, or when every scrape is blocked.
+    """
+    settings = location_settings.read_settings()
+    location = _origin_from_settings(settings)
+    if not location:
+        cli_art.cli_error(
+            "Indeed scan needs a location -- set one under Settings & Upkeep "
+            "-> Location & Commute Radius. Skipping."
+        )
+        return []
+
+    try:
+        import jobspy  # noqa: F401
+    except ImportError:
+        cli_art.cli_error(
+            "python-jobspy is not installed (pip install -r requirements.txt). "
+            "Skipping Indeed scan."
+        )
+        return []
+
+    distance = settings.get("radius_miles") or DEFAULT_DISTANCE_MILES
+    terms = [search_term] if search_term else _default_search_terms()
+
+    if activity is not None:
+        activity.start_source(len(terms), label="Fetching")
+
+    seen_urls = set()
+    jobs = []
+    for term in terms:
+        if activity is not None:
+            activity.step(
+                "discovery",
+                "Indeed",
+                f"Checking {cli_art.format_board_name('indeed')} for {term!r} "
+                f"({location}, {distance} mi)",
+                preserve_markup=True,
+            )
+        # Dedup only against URLs already carried in from an EARLIER term
+        # -- a within-term duplicate (Indeed itself returning a repeat
+        # row for one query) is left alone, unchanged from single-term
+        # behavior, and only added to seen_urls once the whole term's
+        # batch has been collected.
+        batch = _scrape_one_term(term, location, distance)
+        batch_urls = set()
+        for job in batch:
+            if job["source_url"] in seen_urls:
+                continue
+            jobs.append(job)
+            batch_urls.add(job["source_url"])
+        seen_urls |= batch_urls
+
+    logging.info(
+        f"scan_indeed: returning {len(jobs)} listing(s) across "
+        f"{len(terms)} term(s)."
+    )
     return jobs
 
 

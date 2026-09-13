@@ -18,7 +18,7 @@ import questionary  # noqa: E402
 class TestConfirm(unittest.TestCase):
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_true_answer_builds_correct_spec_and_command(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(
             returncode=0, stdout=json.dumps({"confirmed": True}), stderr=""
@@ -37,7 +37,7 @@ class TestConfirm(unittest.TestCase):
         )
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_false_answer(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(
             returncode=0, stdout=json.dumps({"confirmed": False}), stderr=""
@@ -46,7 +46,7 @@ class TestConfirm(unittest.TestCase):
         self.assertFalse(result)
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_cancellation_returns_none(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(returncode=130, stdout="", stderr="")
         result = charm_prompt.confirm("Ready?")
@@ -54,7 +54,7 @@ class TestConfirm(unittest.TestCase):
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
     @patch("charm_prompt.questionary.confirm")
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_nonzero_exit_degrades_to_questionary_instead_of_raising(
         self, mock_run, mock_questionary_confirm, mock_compile
     ):
@@ -71,7 +71,7 @@ class TestConfirm(unittest.TestCase):
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
     @patch("charm_prompt.questionary.confirm")
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_malformed_json_degrades_to_questionary_instead_of_raising(
         self, mock_run, mock_questionary_confirm, mock_compile
     ):
@@ -87,7 +87,7 @@ class TestConfirm(unittest.TestCase):
 class TestSelect(unittest.TestCase):
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_returns_selected_value(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(
             returncode=0, stdout=json.dumps({"value": "b"}), stderr=""
@@ -98,7 +98,7 @@ class TestSelect(unittest.TestCase):
         self.assertEqual(result, "b")
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_default_is_passed_through_as_default_value(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(
             returncode=0, stdout=json.dumps({"value": "b"}), stderr=""
@@ -109,14 +109,14 @@ class TestSelect(unittest.TestCase):
         self.assertEqual(spec["default_value"], "b")
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_cancellation_returns_none(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(returncode=130, stdout="", stderr="")
         result = charm_prompt.select("Pick one", [{"label": "A", "value": "a"}])
         self.assertIsNone(result)
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_separators_are_excluded_from_the_options_sent_to_the_binary(
         self, mock_run, mock_compile
     ):
@@ -149,7 +149,7 @@ class TestSelect(unittest.TestCase):
 class TestCheckbox(unittest.TestCase):
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_returns_selected_values(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(
             returncode=0, stdout=json.dumps({"values": ["a", "b"]}), stderr=""
@@ -160,7 +160,7 @@ class TestCheckbox(unittest.TestCase):
         self.assertEqual(result, ["a", "b"])
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_cancellation_returns_none(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(returncode=130, stdout="", stderr="")
         result = charm_prompt.checkbox("Pick some", [{"label": "A", "value": "a"}])
@@ -170,7 +170,7 @@ class TestCheckbox(unittest.TestCase):
 class TestText(unittest.TestCase):
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_returns_entered_value(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(
             returncode=0, stdout=json.dumps({"value": "45"}), stderr=""
@@ -191,7 +191,7 @@ class TestText(unittest.TestCase):
         )
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("charm_prompt.subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_cancellation_returns_none(self, mock_run, mock_compile):
         mock_run.return_value = MagicMock(returncode=130, stdout="", stderr="")
         result = charm_prompt.text("Enter something:")
@@ -402,7 +402,7 @@ class TestDegradationOnRuntimeError(unittest.TestCase):
 class TestRunPromptDirectly(unittest.TestCase):
     @patch("charm_prompt._compile_prompt_if_needed", return_value="/custom/bin/prompt")
     @patch("os.path.exists", return_value=True)
-    @patch("subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     def test_run_with_existing_bin(self, mock_run, mock_exists, mock_compile):
         mock_run.return_value = MagicMock(returncode=0, stdout='{"ok": true}')
         res = charm_prompt._run_prompt({"test": 1})
@@ -419,7 +419,7 @@ class TestFlushStdin(unittest.TestCase):
     answer before the user ever sees the question."""
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
-    @patch("subprocess.run")
+    @patch("charm_prompt.interactive_subprocess.run")
     @patch("termios.tcflush")
     def test_run_prompt_flushes_stdin_before_every_call(
         self, mock_flush, mock_run, mock_compile

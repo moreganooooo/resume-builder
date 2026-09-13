@@ -82,6 +82,20 @@ def build_sample() -> dict:
 
     sample_jd_path = _resolve_sample_jd_path()
 
+    # The shared fixture is permanently marketing-specific (see
+    # _resolve_sample_jd_path's own docstring) -- silently running a
+    # non-marketing profile's smoke test against it produces a build that
+    # "succeeds" without proving anything about that profile's own bullet
+    # bank, since nothing in it will match. Surfaced once here rather
+    # than only in a comment, since that's exactly how this went unnoticed
+    # for every profile except the one that happened to add its own.
+    if sample_jd_path == SAMPLE_JD_PATH:
+        cli_art.console.print(
+            f"  {theme.colorize_icon('warning')} Using the shared marketing sample JD "
+            f"-- add profiles/<name>/sample_jd.txt for a profile-specific smoke test.",
+            soft_wrap=True,
+        )
+
     if not os.path.exists(sample_jd_path):
         cli_art.console.print(
             f"  {theme.colorize_icon('error')} Sample fixture not found: {sample_jd_path}",

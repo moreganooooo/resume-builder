@@ -28,7 +28,7 @@ class TestHandleBootstrapDelegatesToSubmenu(unittest.TestCase):
     (bootstrap_menu.py) for an already-existing, non-guest profile -- it
     does not re-run the onboarding wizard every time."""
 
-    @patch("menu.subprocess.run")
+    @patch("menu.interactive_subprocess.run")
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=True)
     @patch("menu._profile_is_set_up", return_value=True)
     def test_delegates_to_bootstrap_menu_and_returns_its_result(
@@ -40,7 +40,7 @@ class TestHandleBootstrapDelegatesToSubmenu(unittest.TestCase):
         mock_subprocess.assert_not_called()
         self.assertTrue(result)
 
-    @patch("menu.subprocess.run")
+    @patch("menu.interactive_subprocess.run")
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
     @patch("menu._profile_is_set_up", return_value=True)
     def test_returns_false_when_submenu_reports_nothing_happened(
@@ -116,7 +116,7 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
 
     @patch("menu.cli_art.confirm", return_value=False)
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
-    @patch("menu.subprocess.run")
+    @patch("menu.interactive_subprocess.run")
     def test_guest_mode_triggers_wizard_even_though_morgan_profile_exists(
         self, mock_subprocess_run, mock_run_menu, mock_cli_confirm
     ):
@@ -154,7 +154,7 @@ class TestHandleBootstrapNewProfileTrigger(unittest.TestCase):
 
     @patch("menu.bootstrap_menu.run_bootstrap_menu", return_value=False)
     @patch("menu.bootstrap_bullet_bank.create_new_profile")
-    @patch("menu.subprocess.run")
+    @patch("menu.interactive_subprocess.run")
     @patch("menu._profile_is_set_up", return_value=True)
     def test_no_guest_mode_and_existing_profile_skips_the_wizard(
         self,

@@ -40,6 +40,7 @@ import shutil
 import subprocess
 
 import cli_art
+import interactive_subprocess
 import questionary
 
 _CANCEL_EXIT_CODE = 130
@@ -162,7 +163,12 @@ def _run_prompt(spec: dict):
     # to do raw-mode drawing, which a pipe can't provide (confirmed via a
     # pty-attached test). The binary's JSON answer goes to stdout, so
     # that's the only stream we capture.
-    result = subprocess.run(
+    #
+    # interactive_subprocess.run(), not subprocess.run() directly: this is
+    # exactly the call site that orphaned ~30 dashboard/bin/prompt
+    # processes over several days when the parent was interrupted or its
+    # terminal closed -- see that module's own docstring.
+    result = interactive_subprocess.run(
         cmd,
         cwd=_DASHBOARD_DIR,
         stdout=subprocess.PIPE,

@@ -19,6 +19,7 @@ import sys
 import tempfile
 
 import cli_art
+import interactive_subprocess
 import picker
 import profile_paths
 import ui_config
@@ -211,7 +212,10 @@ def run(profile: str = None) -> tuple[bool, str]:
                 "-backlog",
                 str(backlog),
             ]
-        result = subprocess.run(cmd, cwd=DASHBOARD_DIR, env=env)
+        # interactive_subprocess.run(), not subprocess.run() directly:
+        # this is the long-running TUI itself -- two of these were found
+        # orphaned and still running hours after their parent was gone.
+        result = interactive_subprocess.run(cmd, cwd=DASHBOARD_DIR, env=env)
     finally:
         os.remove(jobs_path)
 

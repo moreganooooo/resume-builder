@@ -259,9 +259,16 @@ class GoBootstrapWizardTest(unittest.TestCase):
 
             return R()
 
+        # The actual wizard invocation goes through interactive_subprocess.run
+        # (not subprocess.run directly) so an interrupted/killed parent can't
+        # orphan the Go binary -- see interactive_subprocess.py's own
+        # docstring. os.path.exists patched True so the (real, unmocked)
+        # `go build` step is skipped entirely and only the wizard run itself
+        # is exercised here.
         with (
-            patch("subprocess.run", side_effect=fake_run),
+            patch("menu.interactive_subprocess.run", side_effect=fake_run),
             patch("shutil.which", return_value="/usr/local/bin/go"),
+            patch("os.path.exists", return_value=True),
         ):
             menu._run_go_bootstrap_wizard()
 
@@ -281,8 +288,9 @@ class GoBootstrapWizardTest(unittest.TestCase):
             stderr = "boom"
 
         with (
-            patch("subprocess.run", return_value=R()),
+            patch("menu.interactive_subprocess.run", return_value=R()),
             patch("shutil.which", return_value="/usr/local/bin/go"),
+            patch("os.path.exists", return_value=True),
         ):
             ok, data = menu._run_go_bootstrap_wizard()
         self.assertFalse(ok, "a wizard failure must hand off to the fallback wizard")
@@ -297,7 +305,7 @@ class GoBootstrapWizardTest(unittest.TestCase):
             stderr = ""
 
         with (
-            patch("subprocess.run", return_value=R()),
+            patch("menu.interactive_subprocess.run", return_value=R()),
             patch("shutil.which", return_value="/usr/local/bin/go"),
             patch("os.path.exists", return_value=True),
         ):

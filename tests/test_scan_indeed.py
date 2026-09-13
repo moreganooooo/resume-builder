@@ -87,28 +87,38 @@ class TestDefaultSearchTerm(unittest.TestCase):
         with open(self._scan_filters_path, "w", encoding="utf-8") as f:
             yaml.safe_dump({"title_filter": {"positive": positive}}, f)
 
-    def test_uses_first_positive_title(self):
+    def test_uses_all_positive_titles_up_to_the_cap(self):
         self._write_filters(["Data Scientist", "Machine Learning Engineer"])
-        self.assertEqual(scan_indeed._default_search_term(), "Data Scientist")
+        self.assertEqual(
+            scan_indeed._default_search_terms(),
+            ["Data Scientist", "Machine Learning Engineer"],
+        )
+
+    def test_caps_at_max_search_terms(self):
+        self._write_filters(["A", "B", "C", "D", "E"])
+        terms = scan_indeed._default_search_terms()
+        self.assertEqual(len(terms), scan_indeed.MAX_SEARCH_TERMS)
+        self.assertEqual(terms, ["A", "B", "C"])
 
     def test_falls_back_when_no_positive_titles_configured(self):
         self._write_filters([])
         self.assertEqual(
-            scan_indeed._default_search_term(), scan_indeed.DEFAULT_SEARCH_TERM
+            scan_indeed._default_search_terms(), [scan_indeed.DEFAULT_SEARCH_TERM]
         )
 
     def test_falls_back_when_scan_filters_missing(self):
         self.assertEqual(
-            scan_indeed._default_search_term(), scan_indeed.DEFAULT_SEARCH_TERM
+            scan_indeed._default_search_terms(), [scan_indeed.DEFAULT_SEARCH_TERM]
         )
 
     @patch("location_settings.read_settings", return_value=SETTINGS)
-    def test_fetch_indeed_jobs_uses_profiles_own_target_role(self, _):
+    def test_fetch_indeed_jobs_covers_every_configured_target_role(self, _):
         self._write_filters(["Data Scientist", "Machine Learning Engineer"])
         fake = MagicMock(return_value=frame_of([ROW]))
         with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
             scan_indeed.fetch_indeed_jobs()
-        self.assertEqual(fake.call_args.kwargs["search_term"], "Data Scientist")
+        terms_called = [c.kwargs["search_term"] for c in fake.call_args_list]
+        self.assertEqual(terms_called, ["Data Scientist", "Machine Learning Engineer"])
 
     @patch("location_settings.read_settings", return_value=SETTINGS)
     def test_explicit_search_term_still_wins(self, _):
@@ -117,6 +127,48 @@ class TestDefaultSearchTerm(unittest.TestCase):
         with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
             scan_indeed.fetch_indeed_jobs(search_term="Tesla")
         self.assertEqual(fake.call_args.kwargs["search_term"], "Tesla")
+
+
+class TestMultiTermDedup(unittest.TestCase):
+    """The same posting can legitimately surface under more than one
+    title query -- dedup by source_url is what keeps a two-title profile
+    from getting duplicate JD files."""
+
+    def setUp(self):
+        import tempfile
+
+        self._tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, self._tmp_dir, ignore_errors=True)
+        patcher = patch(
+            "scan_indeed.profile_paths.board_scanner_dir",
+            return_value=self._tmp_dir,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        import yaml
+
+        with open(
+            os.path.join(self._tmp_dir, "scan_filters.yml"), "w", encoding="utf-8"
+        ) as f:
+            yaml.safe_dump(
+                {"title_filter": {"positive": ["Data Scientist", "ML Engineer"]}}, f
+            )
+
+    @patch("location_settings.read_settings", return_value=SETTINGS)
+    def test_same_url_across_terms_is_deduped(self, _):
+        fake = MagicMock(return_value=frame_of([ROW]))
+        with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
+            jobs = scan_indeed.fetch_indeed_jobs()
+        self.assertEqual(fake.call_count, 2)
+        self.assertEqual(len(jobs), 1)
+
+    @patch("location_settings.read_settings", return_value=SETTINGS)
+    def test_distinct_urls_across_terms_are_both_kept(self, _):
+        other_row = dict(ROW, job_url="https://indeed.com/viewjob?jk=2")
+        fake = MagicMock(side_effect=[frame_of([ROW]), frame_of([other_row])])
+        with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
+            jobs = scan_indeed.fetch_indeed_jobs()
+        self.assertEqual(len(jobs), 2)
 
 
 class TestFetchIndeedJobs(unittest.TestCase):

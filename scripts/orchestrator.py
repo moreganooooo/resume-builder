@@ -248,6 +248,44 @@ KB_ALLOWLIST = sorted(
 )
 
 
+# Subset of KB_ALLOWLIST that `bootstrap_profile.run_profile_setup()`
+# actually guarantees, in its default (all-targets) run:
+# write_profile_yml/write_portals_yml (profile.yml, portals.yml),
+# write_background_guide/write_voice_anchors (user-background-guide.md,
+# voice-anchors.md), write_cv_md (cv.md), and write_verified_ledger
+# (verified_metrics/tools/projects.json). Everything else in
+# KB_ALLOWLIST is either the output of a separate, optional deep-evidence
+# extraction pass this profile may never run (verified_facts.json needs
+# a staged-facts review; verified-claims.csv/evidence-guide.csv/
+# evidence_graph.json/extracted-screenshot-metrics.csv/
+# recruiter_memory_patterns.json all come from that same optional flow --
+# see the `deep_evidence_keywords`/"not every profile has one company
+# with this much audited archive" note elsewhere in this file), or a
+# hand-curated, profile-specific research artifact no bootstrap flow
+# writes at all (bullet-bank.md, detective-findings-trimmed.csv,
+# article-digest.md, summaries-and-skills-clean.csv,
+# treering-archive-readme.md -- the last of those is literally named
+# after one profile's own former employer and was never meant to
+# generalize). doctor.check_kb_allowlist() only reports a file as
+# "missing" when it's in THIS set, so a profile that hasn't done (or will
+# never do) the optional deep-research pass isn't told its knowledge base
+# is broken -- KB_ALLOWLIST itself is unchanged and still includes all of
+# these, since get_active_kb_files() already treats absence gracefully
+# for the builder's own context assembly.
+KB_REQUIRED_FILES = frozenset(
+    [
+        "cv.md",
+        "portals.yml",
+        "profile.yml",
+        "user-background-guide.md",
+        "verified_metrics.json",
+        "verified_projects.json",
+        "verified_tools.json",
+        "voice-anchors.md",
+    ]
+)
+
+
 def get_active_kb_files(kb_dir: str) -> list:
     """Returns the sorted list of curated KB_ALLOWLIST files present in kb_dir,
     guaranteeing deterministic, prompt-cacheable context and preventing token overflow.
@@ -2902,10 +2940,25 @@ def rescore_evaluation_with_location(
     # years_experience/degree blockers are split out and never force a
     # Skip/zero -- see EXPERIENCE_BLOCKER_CATEGORIES above. Every other
     # category keeps the original unconditional behavior.
+    #
+    # A years_experience entry tagged direction="over_qualified" is a real
+    # recruiting concern (see docs/hard_blockers.md's
+    # overqualification-conflation finding) but not what this list is
+    # meant to represent -- only a candidate falling BELOW a stated floor
+    # is a blocker. Excluded here rather than in the prompt: telling the
+    # model not to notice overqualification collided with an instinct it
+    # clearly has, so the signal is allowed to surface and is filtered out
+    # downstream instead. degree/other categories carry no direction
+    # concept and are never affected by this filter.
     experience_blockers = [
         b
         for b in blockers
-        if isinstance(b, dict) and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
+        if isinstance(b, dict)
+        and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
+        and not (
+            b.get("category") == "years_experience"
+            and b.get("direction") == "over_qualified"
+        )
     ]
     disqualifying_blockers = [
         b
@@ -3367,8 +3420,20 @@ class ResumeEngine:
         if education:
             lines.append("\nEducation -- Fixed Order and Bullet Counts:")
             for i, ed in enumerate(education, 1):
+                # bullet_count missing (not just falsy) used to raise
+                # KeyError here and abort EVERY resume build for the whole
+                # profile -- a hand-written profile.yml with education
+                # entries that only set institution/credential is an easy,
+                # unenforced-until-now mistake to make (see
+                # test_profile_yml_schema.py's own
+                # test_education_entries_declare_an_institution_and_bullet_count,
+                # which now actually asserts presence rather than
+                # type-checking a defaulted 0). 1 is a safe minimum, not a
+                # guess at the "right" number -- profile.yml is still the
+                # place to set the real intended count.
+                bullet_count = ed.get("bullet_count", 1)
                 lines.append(
-                    f"{i}. {ed['institution']} -- {ed['credential']}: exactly {ed['bullet_count']} bullet(s)"
+                    f"{i}. {ed['institution']} -- {ed['credential']}: exactly {bullet_count} bullet(s)"
                 )
 
             edu_slots = profile_paths.education_achievement_slots()
