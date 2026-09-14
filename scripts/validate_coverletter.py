@@ -203,8 +203,16 @@ def _check_cliched_openers(cover_letter_data: dict) -> list[str]:
     return violations
 
 
+# Similarity cutoffs are per embedding model: gemini-embedding-001 scores the
+# same text pairs higher across the board. Measured 2026-09-13 on an
+# 845-bullet bank, 0.60 on the primary model is the 1.2th percentile of
+# bullet-pair similarity; the same percentile on the backup is 0.717.
+GROUNDING_THRESHOLD = 0.60
+GROUNDING_THRESHOLD_BACKUP = 0.72
+
+
 def _check_semantic_grounding(
-    cover_letter_data: dict, keeper_bullets: list[str], keeper_embs
+    cover_letter_data: dict, keeper_bullets: list[str], keeper_embs, keeper_embs_backup=None
 ) -> list[str]:
     """
     Rigorously checks each sentence of the cover letter that makes a professional claim,
@@ -256,7 +264,20 @@ def _check_semantic_grounding(
 
             # Compute sentence embedding via sharing the main client
             emb = GeminiClient.embed(sentence)
-            if emb is None:
+            matrix, threshold = keeper_embs, GROUNDING_THRESHOLD
+            if emb is None and keeper_embs_backup is not None:
+                # Primary model unavailable: the backup model, against ITS OWN
+                # index and at its own cutoff (the two are not comparable).
+                try:
+                    import embed_bullet_bank
+
+                    emb = embed_bullet_bank.embed_batch(
+                        [sentence], model=embed_bullet_bank.BACKUP_EMBED_MODEL, max_retries=2
+                    )[0]
+                    matrix, threshold = keeper_embs_backup, GROUNDING_THRESHOLD_BACKUP
+                except Exception:
+                    emb = None
+            if emb is None or len(emb) != matrix.shape[1]:
                 continue
 
             s_vec = np.array(emb, dtype=np.float32)
@@ -265,15 +286,15 @@ def _check_semantic_grounding(
                 s_vec = s_vec / s_norm
 
             # Normalize keeper embeddings matrix
-            embs_norm = keeper_embs / (
-                np.linalg.norm(keeper_embs, axis=1, keepdims=True) + 1e-9
+            embs_norm = matrix / (
+                np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-9
             )
             sims = embs_norm @ s_vec
             max_sim = float(np.max(sims))
             best_idx = int(np.argmax(sims))
 
             # 0.60 is the state-of-the-art threshold representing high similarity for d=768
-            if max_sim < 0.60:
+            if max_sim < threshold:
                 violations.append(
                     f"Ungrounded semantic claim in body_paragraphs[{p_idx}]: {sentence!r} "
                     f"(Highest similarity to keeper bank was only {max_sim:.2f}; "
@@ -297,6 +318,7 @@ def validate(
     keeper_bullets: list[str] = None,
     keeper_embs=None,
     voice_rules: dict = None,
+    keeper_embs_backup=None,
 ) -> list[str]:
     violations = []
     violations.extend(_check_forbidden_phrases(cover_letter_data, style_rules))
@@ -306,7 +328,9 @@ def validate(
     violations.extend(_check_kb_traceability(cover_letter_data, kb_corpus))
     violations.extend(_check_cliched_openers(cover_letter_data))
     violations.extend(
-        _check_semantic_grounding(cover_letter_data, keeper_bullets, keeper_embs)
+        _check_semantic_grounding(
+            cover_letter_data, keeper_bullets, keeper_embs, keeper_embs_backup
+        )
     )
     violations.extend(_check_voice_metrics(cover_letter_data, voice_rules))
     return violations

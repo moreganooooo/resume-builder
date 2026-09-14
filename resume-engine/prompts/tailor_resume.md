@@ -241,8 +241,8 @@ block itself names the exact company/candidates that cleared the gate.
 
 **This block being present does not mean you should use one.** Only include a situational entry if it would genuinely, materially help this specific JD -- essentially never for most JDs, even when the block is present. If you do include one:
 
-- **Shrink-not-replace, not a swap.** Nobody disappears from the resume. Include exactly ONE situational entry, exactly 2 bullets, using the exact company name given in the `=== SITUATIONAL ROLE CANDIDATES ===` block.
-- **Floor-of-2 exception, this scenario only.** Normally page-2 roles (see ROLE RULES) never drop below their Min. When a situational role is active, exactly ONE page-2 role may drop one bullet below its normal Min instead, to make room. Pick whichever page-2 role is least relevant to this specific JD.
+- **Shrink-not-replace, not a swap.** Nobody disappears from the resume. Include at most TWO situational entries -- usually ONE; add a second only when two different candidates each genuinely strengthen this JD (e.g. a retail posting where two separate retail backgrounds both apply) -- exactly 2 bullets each, using the exact company names given in the `=== SITUATIONAL ROLE CANDIDATES ===` block.
+- **Floor-of-2 exception, this scenario only.** Normally page-2 roles (see ROLE RULES) never drop below their Min. For each situational entry you include, ONE page-2 role may drop one bullet below its normal Min instead, to make room -- a different page-2 role for each entry, never two bullets from the same role. Pick whichever page-2 roles are least relevant to this specific JD.
 - **Page-1 roles (see ROLE RULES) never shrink for this, full stop** -- they keep their normal targets/floors regardless of whether a situational role is active.
 - If no `=== SITUATIONAL ROLE CANDIDATES ===` block is present, do not include any situational entry at all.
 
