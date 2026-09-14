@@ -1401,9 +1401,10 @@ def _micro_refactor_skills_line(line: str, style_rules: dict) -> str:
 "{line}"
 
 Rewrite this line to satisfy ONE of these constraints:
-Option 1: Trim items or shorten category label so total length is <= {max_chars} characters (1 printed line).
-Option 2: Add 1-2 relevant skills so total length is >= {wrap_min} characters and <= {2 * max_chars} characters (2 full lines).
+Option 1 (preferred): Trim items or shorten category label so total length is <= {max_chars} characters (1 printed line).
+Option 2: Lengthen the SAME items (spell out an abbreviation, name a sub-area of a skill already listed) so total length is >= {wrap_min} characters and <= {2 * max_chars} characters (2 full lines).
 
+Never add a tool, platform or skill that is not already in the line -- every item must be one the candidate is already credited with.
 Keep the **Category Name:** format. Return ONLY the rewritten skills line."""
     try:
         repaired, _ = GeminiClient.generate(
@@ -1413,9 +1414,21 @@ Keep the **Category Name:** format. Return ONLY the rewritten skills line."""
             temperature=0.2,
         )
         cleaned = repaired.strip().strip('"').strip("'") if repaired else line
-        return cleaned if cleaned else line
     except Exception:
         return line
+    if not cleaned:
+        return line
+    # This step used to be told to "add 1-2 relevant skills" with no list of
+    # what the candidate actually has, so it padded lines with tools they'd
+    # never used (Snowflake, Spark, Docker) -- which the hallucination check
+    # then rejected, failing whole builds (2026-09-14). Keep the original
+    # line rather than accept a rewrite that introduces an unverified item.
+    try:
+        before = len(validate_resume._check_hallucinated_tools({"SKILLS": [line]}))
+        after = len(validate_resume._check_hallucinated_tools({"SKILLS": [cleaned]}))
+    except Exception:
+        return cleaned
+    return line if after > before else cleaned
 
 
 def _micro_dedupe_metric(
@@ -6998,6 +7011,23 @@ class ResumeEngine:
                 prev_round_violations = violations
 
             resume_data, violations = best_resume_data, best_violations
+
+            # Last deterministic pass before giving up. An unverified tool in
+            # SKILLS is removable without a model call, yet a data-science
+            # sample failed twice on 2026-09-14 with only such violations left
+            # (Snowflake/Redshift/Docker, then Spark/Snowflake/Prototyping) --
+            # the retry loop kept re-adding them and the build returned {}.
+            if violations and any("Hallucinated skill or tool" in v for v in violations):
+                resume_data, violations = repair_violations_surgically(
+                    resume_data,
+                    violations,
+                    style_rules_for_validation,
+                    role_roster,
+                    role_bullet_minimums,
+                    bullet_tuples,
+                    role_bullet_maximums=role_bullet_maximums,
+                    role_metadata=role_metadata,
+                )
 
             if violations:
                 fatal_violations, soft_warnings = partition_violations(violations)
