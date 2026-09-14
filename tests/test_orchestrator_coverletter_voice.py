@@ -87,7 +87,7 @@ class TestOrchestratorCoverletterVoice(unittest.TestCase):
 
         # Dynamic high-variance prose on attempt 2 (passes all voice & word count checks, ~340 words total)
         good_p1 = (
-            "I love building systems that work quietly in the background — so people do not have to. "
+            "As a Content Strategist, I love building systems that work quietly in the background — so people do not have to. "
             "Over the past six years at Treering, I spearheaded our outbound communication engine, connecting with thousands of school coordinators and driving a substantial revenue surge through deeply personalized messaging. "
             "Clarity and empathy win every time. "
             "When scaling new platforms, communication operations must balance operational rigor with genuine human connection to prevent audience churn and fatigue. "
