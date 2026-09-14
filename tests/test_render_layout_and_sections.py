@@ -48,6 +48,12 @@ class TestLayout(unittest.TestCase):
     def test_relaxed_layout_adds_spacing(self):
         self.assertIn("line-height: 1.25", rendered(RESUME, "relaxed"))
 
+    def test_balanced_layout_raises_leading_only(self):
+        html = rendered(RESUME, "balanced")
+        self.assertIn("line-height: 1.2;", html)
+        self.assertNotIn("line-height: 1.25", html)
+        self.assertNotIn(".section { margin-bottom: 16px; }", html)
+
     def test_unknown_layout_falls_back_to_default(self):
         self.assertNotIn("line-height: 1.25", rendered(RESUME, "roomy"))
 

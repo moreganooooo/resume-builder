@@ -190,6 +190,15 @@ def build_certifications_section_html(section_title: str, certs: list) -> str:
 # page 1. The default layout is untouched.
 LAYOUT_CSS = {
     "compact": "",
+    # Line height only (1.20 vs the template's 1.15), gaps unchanged -- a
+    # little air for a resume that fills its pages without room to spare
+    # for the full "relaxed" treatment.
+    "balanced": """
+  body,
+  .summary-text, .skills-grid, .skills-text, .job-title, .job-meta,
+  .job-clients, .job li, .career-note,
+  .cert-item, .edu-header, .edu-desc, .edu-item li, .why-text { line-height: 1.2; }
+""",
     # One leading for every text block (1.25 at 9.75pt, about 12.2pt line
     # to line -- a middle ground between the compact 1.15 and a 1.32 that
     # read as airy). The first version raised it only for the summary,

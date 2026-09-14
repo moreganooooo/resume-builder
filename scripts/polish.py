@@ -307,7 +307,7 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
     pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
     try:
         result = subprocess.run(
-            ["node", pdf_script, html_path, pdf_path, "--format=letter"],
+            ["node", pdf_script, html_path, pdf_path, "--format=letter", "--max-pages=2"],
             capture_output=True,
             text=True,
             timeout=PDF_GENERATION_TIMEOUT_SECONDS,
