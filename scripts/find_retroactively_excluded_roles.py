@@ -78,6 +78,14 @@ def check_gates(data: dict) -> list:
     description = data.get("description") or ""
     location = (data.get("location") or "").strip()
 
+    # A newly excluded title keyword ("Staff Data", "Principal") must reach
+    # roles saved before it existed -- the title filter was the one gate this
+    # re-check skipped. Excluded keywords only: see _hits_excluded_title()
+    # for why the positive requirement must not be re-applied.
+    title = (data.get("job_title") or data.get("title") or "").strip()
+    if title and scan_boards._hits_excluded_title(title):
+        failed.append("title")
+
     if not scan_boards._passes_employment_filter(
         data.get("employment_type"), data.get("source_platform") or ""
     ):

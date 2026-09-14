@@ -182,6 +182,20 @@ def _passes_title_filter(title: str) -> bool:
     return True
 
 
+def _hits_excluded_title(title: str) -> bool:
+    """True when the title contains a title_filter.negative keyword.
+
+    The negative list alone -- not the positive requirement -- is what can
+    apply to roles already saved. LinkedIn and Jobright scans never run the
+    title filter at all (only board/ATS/Indeed scans do), so their roles
+    were never required to carry a positive keyword: re-checking positives
+    would have archived 96 of one profile's pending roles that its LinkedIn
+    queries found on purpose ("AI Engineer", "Senior Data Scientist, ...")."""
+    tf = _load_filters().get("title_filter", {})
+    lower = (title or "").lower()
+    return any(k.lower() in lower for k in tf.get("negative", []))
+
+
 def _passes_content_filters(description: str) -> bool:
     """The single BODY-text gate for both scanners, beside the location one.
 

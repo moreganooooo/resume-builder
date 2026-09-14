@@ -5310,6 +5310,19 @@ class ResumeEngine:
         )
         return list(zip(bullets_out, company_out, tags_out))
 
+    def _role_dna_dir(self) -> str:
+        """Where role_dna.yaml comes from: the profile's own knowledge base
+        when it has one, else the shared resume-engine/scoring library.
+
+        The shared library is a marketing one (email_lifecycle,
+        sales_enablement, marketing_ops_crm, generalist_coordinator), and
+        until 2026-09-13 it was the only one: a data-science profile's
+        evaluations were told to "choose the archetype from these keys", and
+        339 of 344 came back generalist_coordinator or marketing_ops_crm. The
+        resume critique's ROLE DNA rubric read the same file."""
+        own = os.path.join(self.kb_dir, "role_dna.yaml")
+        return self.kb_dir if os.path.exists(own) else self.scoring_dir
+
     def build_fit_evaluation_context(self, jd_text: str, jd_skill_names: list = None) -> str:
         """
         Builds evaluate_fit()'s user-content block: the candidate first, then
@@ -5365,7 +5378,7 @@ class ResumeEngine:
             sections.append(skills_block)
 
         try:
-            role_dna = self.load_yaml(self.scoring_dir, "role_dna.yaml")
+            role_dna = self.load_yaml(self._role_dna_dir(), "role_dna.yaml")
             if role_dna:
                 sections.append(
                     "=== ROLE ARCHETYPE LIBRARY (from role_dna.yaml) ===\n"
@@ -6859,7 +6872,7 @@ class ResumeEngine:
                 ),
                 (self.scoring_dir, "manager_test.yaml", "MANAGER TEST SCORING RUBRIC"),
                 (self.scoring_dir, "skills_scoring.yaml", "SKILLS SCORING RUBRIC"),
-                (self.scoring_dir, "role_dna.yaml", "ROLE DNA SCORING RUBRIC"),
+                (self._role_dna_dir(), "role_dna.yaml", "ROLE DNA SCORING RUBRIC"),
                 (self.scoring_dir, "ats_match.yaml", "ATS MATCH SCORING RUBRIC"),
                 (self.scoring_dir, "ai_risk.yaml", "AI RISK SCORING RUBRIC"),
                 (

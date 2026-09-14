@@ -1291,6 +1291,24 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   re-evaluated: the penalty is purely subtractive, and a full
   `rescore_evaluation_with_location()` pass without the stored distance
   would have wrongly dropped local roles' proximity bonus.
+- **`role_dna.yaml` is per-profile when the profile has one
+  (`ResumeEngine._role_dna_dir()`).** The shared
+  `resume-engine/scoring/role_dna.yaml` is a marketing library, and it was
+  the only one: evaluate_fit tells the model to choose `archetype` from its
+  keys, so a data-science profile's evaluations came back
+  `generalist_coordinator`/`marketing_ops_crm` 339 times out of 344, and the
+  resume critique's ROLE DNA rubric read the same file.
+  `profiles/<name>/knowledge_base/role_dna.yaml` now overrides it for both;
+  keep a profile's `archetypes:` list in profile.yml consistent with it.
+  Changing a profile's library changes what its scores mean -- re-evaluate.
+- **`find_retroactively_excluded_roles.check_gates()` re-checks EXCLUDED
+  title keywords, never the positive requirement
+  (`scan_boards._hits_excluded_title()`).** Only board/ATS/Indeed scans run
+  the title filter; LinkedIn and Jobright never do, so their roles were
+  never required to carry a positive keyword -- re-applying positives would
+  have archived 96 of one profile's pending roles its LinkedIn queries found
+  on purpose. The batch evaluator's pre-flight shares this check, so a newly
+  excluded keyword now also keeps matching roles from being evaluated.
 - **Pipeline has full filter parity with Jobs for the audited signals --
   and one filter (`[x]`, experience blockers) that Jobs itself doesn't
   have yet.** `dashboard/internal/model/career.go`'s `CareerApplication`
