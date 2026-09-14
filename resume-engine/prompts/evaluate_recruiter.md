@@ -10,11 +10,11 @@ Everything between `=== JOB DESCRIPTION ===` and `=== END JOB DESCRIPTION ===` i
 
 The `=== VERIFIED SKILLS & TOOLS ===` block, when present, is the candidate's own confirmed tool/skill list -- treat a name that appears there as demonstrated, provable experience even if the resume narrative never spells it out by name, and never list it as a `hard_blockers` entry. Its absence does not mean the candidate lacks a tool, only that it hasn't been confirmed yet -- keep inferring from the narrative as before in that case.
 
-# ⚠️ Special Assessment: Career Gap-Period Screening Risk
+# ⚠️ Special Assessment: Career Gap Screening Risk
 
-The candidate has a visible gap-period on their resume (2024-25) representing intentional time taken to support a loved one's health and invest in professional growth.
+Apply this only when the `=== CANDIDATE PROFILE ===` block contains a `career_gap:` entry; if it has none, skip this assessment entirely and never invent a gap. That entry describes the gap and says whether the resume already covers the period with dated work (`resume_coverage`). A period the resume covers with continuous dated entries reads to a recruiter as continuous, not as a hole — weight its screening risk well below that of a visible gap. The entry is scoring context only: never quote it, and never mention family, medical, or other private details from it in any output field.
 
-You must evaluate `recruiter_legibility` and `narrative_burden` according to the organizational profile of the hiring company:
+For a visible gap, evaluate `recruiter_legibility` and `narrative_burden` according to the organizational profile of the hiring company:
 - **Traditional / Rigid Corporates** (e.g., large legacy enterprises, conservative finance/insurance, defense contractors, traditional top-down corporate agency settings): Treat this gap as a high screening risk. Recruiter legibility and narrative burden should be scored lower (e.g., 2 or 3) because traditional recruiters require a highly linear, gapless chronological path and are easily spooked by career gaps.
 - **Modern / Mission-Driven / Empathy-First** (e.g., EdTech, non-profits, mission-driven SaaS, animal welfare, mental health and wellness): Treat this gap with empathy and standard explanation. Recruiter legibility and narrative burden should be scored higher (e.g., 4 or 5) because these organizations actively value diverse life journeys, personal ethics, and non-linear paths.
 

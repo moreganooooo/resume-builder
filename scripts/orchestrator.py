@@ -324,6 +324,9 @@ AUDIT_PROFILE_KEEP = [
     # Same shape as the bug this whole trim exists to describe: an
     # evaluation running against the JD alone.
     "fixed_credentials:",
+    # evaluate_recruiter.md's gap assessment reads this per profile; it
+    # used to hardcode one candidate's 2024-25 gap for every profile.
+    "career_gap:",
 ]
 AUDIT_PROFILE_STOP = [
     "industries_of_genuine_fit:",
