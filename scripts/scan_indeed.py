@@ -145,6 +145,14 @@ def _default_search_terms() -> list:
             data = yaml.safe_load(f) or {}
     except (OSError, yaml.YAMLError):
         return [DEFAULT_SEARCH_TERM]
+    # An explicit indeed_search_terms list wins. A profile whose title filter
+    # is negatives-only (no positive list, by design -- positives would make
+    # every board/ATS/Indeed scan REQUIRE one of them) otherwise searched
+    # Indeed for the single literal "marketing" within its commute radius.
+    override = data.get("indeed_search_terms") or []
+    override = [str(p).strip() for p in override if p is not None and str(p).strip()]
+    if override:
+        return override[:MAX_SEARCH_TERMS]
     positive = (data.get("title_filter") or {}).get("positive") or []
     # A bare "-" list item loads as None, and str(None) is "None" -- skip
     # it before converting or Indeed gets searched for the literal word.
