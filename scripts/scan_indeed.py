@@ -235,6 +235,37 @@ def _scrape_one_term(term: str, location: str, distance) -> list:
     return jobs
 
 
+def _admit_indeed_job(job: dict) -> bool:
+    """The gates the other scan sources apply, which Indeed results skipped
+    entirely: excluded title keywords and the commute/location gate. A first
+    local scan (2026-09-13) saved 47 of 207 postings whose titles hit the
+    profile's own exclusions ("Administrative Assistant", "... - Clinical"),
+    plus Buffalo roles outside a 5-mile radius.
+
+    Positive title keywords are deliberately not applied: they already chose
+    what Indeed searched for, and a broad positive list ("Member",
+    "Specialist") would admit nearly everything anyway. A missing or
+    unreadable scan_filters.yml keeps the listing -- same
+    unresolvable-is-not-rejected rule as the location gate itself."""
+    import scan_boards
+
+    try:
+        if scan_boards._hits_excluded_title(job.get("job_title") or ""):
+            logging.info(
+                f"scan_indeed: skipping {job.get('job_title')!r} -- excluded title keyword."
+            )
+            return False
+        if not scan_boards._passes_location_filter(
+            job.get("location") or "",
+            is_remote=job.get("is_remote"),
+            work_model=job.get("work_model") or "",
+        ):
+            return False
+    except Exception:
+        return True
+    return True
+
+
 def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
     """Scrapes Indeed for the active profile's configured location.
 
@@ -293,6 +324,8 @@ def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
         batch = _scrape_one_term(term, location, distance)
         batch_urls = set()
         for job in batch:
+            if not _admit_indeed_job(job):
+                continue
             url = job.get("source_url")
             # A missing URL is not an identity -- "" must never mark
             # every later URL-less listing as a duplicate.

@@ -20,6 +20,49 @@ sys.path.insert(
 
 import scan_indeed  # noqa: E402
 
+# _admit_indeed_job() reads the ACTIVE profile's real scan_filters.yml
+# through scan_boards' cache, so every test here that isn't about admission
+# runs with it switched off -- otherwise a fixture row's "Buffalo, NY"
+# passes or fails depending on whose profile is active.
+_real_admit = scan_indeed._admit_indeed_job
+_admit_patcher = patch("scan_indeed._admit_indeed_job", return_value=True)
+
+
+def setUpModule():
+    _admit_patcher.start()
+
+
+def tearDownModule():
+    _admit_patcher.stop()
+
+
+class TestIndeedAdmission(unittest.TestCase):
+    """Indeed results now pass the excluded-title and location gates the
+    other sources apply."""
+
+    JOB = {"job_title": "Marketing Manager", "location": "Buffalo, NY", "is_remote": False}
+
+    def _admit(self, job, excluded=False, location_ok=True):
+        with (
+            patch("scan_boards._hits_excluded_title", return_value=excluded),
+            patch("scan_boards._passes_location_filter", return_value=location_ok),
+        ):
+            return _real_admit(job)
+
+    def test_clean_local_listing_is_kept(self):
+        self.assertTrue(self._admit(self.JOB))
+
+    def test_excluded_title_is_dropped(self):
+        self.assertFalse(self._admit(dict(self.JOB, job_title="Marketing Manager - Clinical"), excluded=True))
+
+    def test_listing_outside_the_radius_is_dropped(self):
+        self.assertFalse(self._admit(self.JOB, location_ok=False))
+
+    def test_unreadable_filters_keep_the_listing(self):
+        with patch("scan_boards._hits_excluded_title", side_effect=FileNotFoundError):
+            self.assertTrue(_real_admit(self.JOB))
+
+
 SETTINGS = {
     "city": "Springfield",
     "state": "IL",

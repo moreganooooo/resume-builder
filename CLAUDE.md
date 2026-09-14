@@ -864,7 +864,14 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   each), else `title_filter.positive`, else "marketing" -- a profile with an
   exclusions-only title filter otherwise searched Indeed for that one word
   within its radius. Don't add positives just to steer Indeed: every
-  board/ATS/Indeed posting would then have to carry one.
+  board/ATS posting would then have to carry one. Indeed results pass
+  through excluded title keywords and `_passes_location_filter()` before
+  being kept (`_admit_indeed_job()`) -- they had no gate at all, so a first
+  local scan (2026-09-13) saved 47 of 207 postings whose titles hit the
+  profile's own exclusions ("Administrative Assistant", "... - Clinical")
+  and Buffalo roles outside a 5-mile radius. Positives are deliberately not
+  applied: a broad positive list ("Member", "Specialist") admits nearly
+  everything anyway, and it already chose what Indeed searched for.
 - **Websearch sweeps: Python searches, Node filters.** Brave's free tier
   became metered, so DuckDuckGo is the default backend
   (`scripts/websearch_ddg.py`) and Brave is used only when
@@ -1308,11 +1315,12 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   Changing a profile's library changes what its scores mean -- re-evaluate.
 - **`find_retroactively_excluded_roles.check_gates()` re-checks EXCLUDED
   title keywords, never the positive requirement
-  (`scan_boards._hits_excluded_title()`).** Only board/ATS/Indeed scans run
-  the title filter; LinkedIn and Jobright never do, so their roles were
-  never required to carry a positive keyword -- re-applying positives would
-  have archived 96 of one profile's pending roles its LinkedIn queries found
-  on purpose. The batch evaluator's pre-flight shares this check, so a newly
+  (`scan_boards._hits_excluded_title()`).** Only board/ATS scans run the
+  full title filter; Indeed applies excluded keywords and the location gate
+  (see the Indeed note), and LinkedIn and Jobright apply none of it, so
+  their roles were never required to carry a positive keyword --
+  re-applying positives would have archived 96 of one profile's pending
+  roles its LinkedIn queries found on purpose. The batch evaluator's pre-flight shares this check, so a newly
   excluded keyword now also keeps matching roles from being evaluated.
 - **Pipeline has full filter parity with Jobs for the audited signals --
   and one filter (`[x]`, experience blockers) that Jobs itself doesn't
