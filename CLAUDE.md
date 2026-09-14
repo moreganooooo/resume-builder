@@ -306,7 +306,14 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   file's location, inflating "pending" from 170 to 2,184). A file move
   is an explicit act; a stale row is a write that did not happen.
   `scripts/reconcile_jd_status.py` realigns them (dry-run by default,
-  backs up first) and leaves scan-sourced rows alone.
+  backs up first) and leaves scan-sourced rows alone. Likely root cause,
+  fixed 2026-09-13: `jd_manager._sync_jd_to_db()` derived the right status
+  from the file's directory, then `**data` spread the JD's own top-level
+  "status" (a scanner's "Pending") over it -- so `archive_jd()` moved a
+  file into `archived/` and re-synced its row as pending. The derived
+  status now wins. Separately, a posting can still have duplicate rows
+  under other ids (see the dedupe note), which an archive of the file does
+  not reach; archive those via `jd_source.set_status()`.
 - **`jobs.id` has two shapes, and the difference matters.** A filename
   id (`2026-08-07_Rula_Sr...json`) has a JD file on disk and is
   actionable from the dashboard, since every action in
@@ -1252,6 +1259,19 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `funnel_friction_nudge: 2` had 286 of its 364 remote roles pinned at
   funnel_friction 1, which is why its top roles showed lower interview
   odds than a default-weight profile.
+- **`posting_legitimacy` costs composite points, not just a label.** Its
+  numeric sibling `posting_legitimacy_score` is 15% of Practical Pursue,
+  itself 20% of composite -- about 3% -- so a posting the evaluator itself
+  flagged ("Proceed with Caution": a different company named in the body,
+  a Tally.so apply form) could rank #1; on 2026-09-13 a profile's top role
+  was an AI engineer opening at a home-renovation LLC. `fit_composite_score()`
+  now subtracts `legitimacy_penalty()` -- 0.50 for caution, 1.50 for
+  "Suspicious" -- both editable `scoring_weights` keys. Existing pending
+  evaluations were adjusted in place (composite minus the penalty, marked
+  `legitimacy_penalty_applied` so it is never applied twice) rather than
+  re-evaluated: the penalty is purely subtractive, and a full
+  `rescore_evaluation_with_location()` pass without the stored distance
+  would have wrongly dropped local roles' proximity bonus.
 - **Pipeline has full filter parity with Jobs for the audited signals --
   and one filter (`[x]`, experience blockers) that Jobs itself doesn't
   have yet.** `dashboard/internal/model/career.go`'s `CareerApplication`

@@ -2762,6 +2762,32 @@ LOW_STRESS_BONUS = 0.40
 STRETCH_GAP_PENALTY_PER_ITEM = 0.20
 STRETCH_GAP_MAX_PENALTY = 0.80
 
+# posting_legitimacy ("High Confidence" / "Proceed with Caution" /
+# "Suspicious") used to be a label only: its numeric sibling,
+# posting_legitimacy_score, is 15% of Practical Pursue, which is itself 20%
+# of composite -- about 3% of the ranking. On 2026-09-13 a profile's #1 role
+# was an "Applied AI Engineer" at a home-renovation LLC whose postings the
+# evaluator itself had flagged (a different company named in the body, a
+# Tally.so application form), and 5 of its top 12 were from two such LLCs.
+# The label now costs composite points, like the other deterministic
+# adjustments here.
+LEGITIMACY_CAUTION_PENALTY = 0.50
+LEGITIMACY_SUSPICIOUS_PENALTY = 1.50
+
+
+def legitimacy_penalty(
+    posting_legitimacy: str = None,
+    caution_penalty: float = None,
+    suspicious_penalty: float = None,
+) -> float:
+    """Composite points a posting_legitimacy verdict costs. None or "High
+    Confidence" costs nothing."""
+    if posting_legitimacy == "Suspicious":
+        return LEGITIMACY_SUSPICIOUS_PENALTY if suspicious_penalty is None else suspicious_penalty
+    if posting_legitimacy == "Proceed with Caution":
+        return LEGITIMACY_CAUTION_PENALTY if caution_penalty is None else caution_penalty
+    return 0.0
+
 
 def _weighted_score(subscores: dict, weights: dict) -> float:
     """1-5 weighted average of a subscore dict against its matching
@@ -2810,6 +2836,9 @@ def fit_composite_score(
     low_stress_bonus: float = None,
     stretch_gap_penalty_per_item: float = None,
     stretch_gap_max_penalty: float = None,
+    posting_legitimacy: str = None,
+    legitimacy_caution_penalty: float = None,
+    legitimacy_suspicious_penalty: float = None,
 ) -> float:
     """Weighted 1-5 blend of the three independent layer scores, per
     COMPOSITE_SCORE_WEIGHTS, plus a proximity boost for local commutable jobs
@@ -2899,10 +2928,19 @@ def fit_composite_score(
             stretch_gap_max_penalty,
         )
 
+    legit_penalty = legitimacy_penalty(
+        posting_legitimacy, legitimacy_caution_penalty, legitimacy_suspicious_penalty
+    )
+
     return round(
         max(
             min(
-                base + proximity_bonus + stress_adjustment - penalty - stretch_penalty,
+                base
+                + proximity_bonus
+                + stress_adjustment
+                - penalty
+                - stretch_penalty
+                - legit_penalty,
                 5.0,
             ),
             0.0,
@@ -3161,6 +3199,9 @@ def rescore_evaluation_with_location(
             low_stress_bonus=weights.get("low_stress_bonus"),
             stretch_gap_penalty_per_item=weights.get("stretch_gap_penalty_per_item"),
             stretch_gap_max_penalty=weights.get("stretch_gap_max_penalty"),
+            posting_legitimacy=ev.get("posting_legitimacy"),
+            legitimacy_caution_penalty=weights.get("legitimacy_caution_penalty"),
+            legitimacy_suspicious_penalty=weights.get("legitimacy_suspicious_penalty"),
         )
         ev["composite_score"] = comp
 
