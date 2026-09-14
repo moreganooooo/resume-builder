@@ -25,6 +25,12 @@ TEMPLATE_PATH = os.path.join(
 )
 
 
+def _link_display(url: str) -> str:
+    from render_html import link_display
+
+    return link_display(url)
+
+
 def build_recipient_block_html(
     company_name: str,
     contact_name: str = "",
@@ -46,11 +52,34 @@ def build_recipient_block_html(
         lines.append(company_name)
     if location:
         lines.append(location)
-    return f'<div class="letter-address">{"<br>".join(escape(line) for line in lines)}</div>'
+    escaped = [escape(line) for line in lines]
+    if escaped:
+        # The addressee line is bold, like the top line of a business-letter
+        # address block.
+        escaped[0] = f"<strong>{escaped[0]}</strong>"
+    return f'<div class="letter-address">{"<br>".join(escaped)}</div>'
 
 
-def build_body_paragraphs_html(paragraphs: list) -> str:
-    return "\n".join(f"<p>{escape(p)}</p>" for p in paragraphs)
+def build_body_paragraphs_html(paragraphs: list, bold_phrase: str = "") -> str:
+    """Paragraphs as <p> elements. The first occurrence of bold_phrase (the
+    role title) in the FIRST paragraph is bolded -- validate_coverletter
+    requires it to appear there, so the reader sees what the letter is for
+    without hunting."""
+    import re as _re
+
+    out = []
+    for index, paragraph in enumerate(paragraphs):
+        text = escape(paragraph)
+        if index == 0 and str(bold_phrase or "").strip():
+            text = _re.sub(
+                _re.escape(escape(bold_phrase.strip())),
+                lambda m: f"<strong>{m.group(0)}</strong>",
+                text,
+                count=1,
+                flags=_re.IGNORECASE,
+            )
+        out.append(f"<p>{text}</p>")
+    return "\n".join(out)
 
 
 def build_signature_block_html() -> str:
@@ -96,7 +125,7 @@ def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
         "TAGLINE": escape(cover_letter_data.get("tagline", "")),
         "PHONE": escape(contact["PHONE"]),
         "EMAIL": escape(contact["EMAIL"]),
-        "LINKEDIN_DISPLAY": escape(contact["LINKEDIN_DISPLAY"]),
+        "LINKEDIN_DISPLAY": escape(_link_display(contact["LINKEDIN_DISPLAY"])),
         "LOCATION": escape(contact["LOCATION"]),
         "PAGE_WIDTH": "8.5in",
         "DATE": datetime.date.today().strftime("%B %-d, %Y"),
@@ -119,8 +148,14 @@ def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
     )
     html = html.replace(
         "{{BODY_PARAGRAPHS}}",
-        build_body_paragraphs_html(cover_letter_data.get("body_paragraphs", [])),
+        build_body_paragraphs_html(
+            cover_letter_data.get("body_paragraphs", []),
+            cover_letter_data.get("role_title", ""),
+        ),
     )
+    from render_html import header_links_row_html, profile_header_links
+
+    html = html.replace("{{EXTRA_LINKS_ROW}}", header_links_row_html(profile_header_links()))
     html = html.replace("{{SIGNATURE_BLOCK}}", build_signature_block_html())
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

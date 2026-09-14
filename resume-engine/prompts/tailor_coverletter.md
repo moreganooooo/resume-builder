@@ -19,6 +19,8 @@ Using the job description and the background context provided, write:
 
 # Rules
 
+- Name the exact role title from the `=== ROLE TITLE ===` block, word for word, in the first or second sentence of the first paragraph — never only later in the letter. It is bolded automatically; do not add any markup.
+- No generic filler sentences. A line that could sit in anyone's letter ("I thrive in high-stakes environments", "This technical depth drives my work", "Let's build something impactful together", "I am passionate about...") tells the reader nothing — replace it with a specific fact from the candidate's background tied to this role, or cut it. End the letter on one concrete sentence about what the candidate would do in this role, not a slogan.
 - First person ("I") throughout every paragraph. Never refer to the candidate in the third person ("they have...", "she brings...").
 - No clichéd or passive first-sentence body openers. Avoid the following: "I am writing to apply...", "I am writing to express my interest...", "I was excited/thrilled to see your posting...", "My name is [Name] and I...", "Please accept this...". Instead, you MUST use a **Hook-First Opening** that immediately delivers a strong narrative hook showing (not telling) your value and connecting it directly to their critical business need or stage (e.g., "When [Company Name] is scaling [Goal], having a foundational CRM that supports millions of users...").
 - No forbidden buzzwords/phrases (results-driven, passionate, synergy, thought leader, etc. -- the same list the resume pipeline forbids).

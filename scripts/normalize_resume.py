@@ -55,6 +55,8 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
         for cert in fixed_content.CERTIFICATIONS
         if include_design_credentials or not cert.get("design_only")
     ]
+    # Fixed like certifications: a profile's patents never vary per JD.
+    result["PATENTS"] = [dict(p) for p in (getattr(fixed_content, "PATENTS", None) or [])]
     # EDU_ACHIEVEMENT_KEY_<n> fields are numbered by profile_paths.
     # education_achievement_slots()'s order (see orchestrator.py's
     # build_education_achievement_schema_fields(), which built the schema
