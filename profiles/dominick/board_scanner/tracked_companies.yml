@@ -223,3 +223,15 @@ tracked_companies:
   careers_url: https://jobs.ashbyhq.com/floatme
   api: https://api.ashbyhq.com/posting-api/job-board/floatme
   enabled: true
+- name: "Samsara"
+  careers_url: "https://boards.greenhouse.io/samsara"
+  api: "https://boards-api.greenhouse.io/v1/boards/samsara/jobs"
+  enabled: true
+- name: "GitLab"
+  careers_url: "https://boards.greenhouse.io/gitlab"
+  api: "https://boards-api.greenhouse.io/v1/boards/gitlab/jobs"
+  enabled: true
+- name: "Zapier"
+  careers_url: "https://jobs.ashbyhq.com/zapier"
+  api: "https://api.ashbyhq.com/posting-api/job-board/zapier"
+  enabled: true
