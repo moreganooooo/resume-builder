@@ -7858,6 +7858,20 @@ class ResumeEngine:
             )
             return {}
 
+        # Re-save after Step 7: page fitting can still change resume_data --
+        # the Why backfill adds WHY_TEXT when the PDF has room, and trims drop
+        # bullets -- after Step 6 already wrote the JSON. A 2026-09-14 sample's
+        # saved JSON had an empty WHY_TEXT while its PDF carried a full Why
+        # section, so a re-render from the JSON silently lost it.
+        try:
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(resume_data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Could not re-save final resume JSON: {e}",
+                soft_wrap=True,
+            )
+
         final_companies = {
             job.get("company") for job in resume_data.get("EXPERIENCE", [])
         }

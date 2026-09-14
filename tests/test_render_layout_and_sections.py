@@ -43,13 +43,13 @@ class TestCertificationsSection(unittest.TestCase):
 
 class TestLayout(unittest.TestCase):
     def test_default_layout_adds_nothing(self):
-        self.assertNotIn("line-height: 1.32", rendered(RESUME))
+        self.assertNotIn("line-height: 1.25", rendered(RESUME))
 
     def test_relaxed_layout_adds_spacing(self):
-        self.assertIn("line-height: 1.32", rendered(RESUME, "relaxed"))
+        self.assertIn("line-height: 1.25", rendered(RESUME, "relaxed"))
 
     def test_unknown_layout_falls_back_to_default(self):
-        self.assertNotIn("line-height: 1.32", rendered(RESUME, "roomy"))
+        self.assertNotIn("line-height: 1.25", rendered(RESUME, "roomy"))
 
 
 if __name__ == "__main__":
