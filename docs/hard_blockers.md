@@ -348,12 +348,16 @@ order of how likely it is to move a number without another null result:
 ## What's still unbuilt
 
 - `field_domain` has no carve-out constant analogous to
-  `EXPERIENCE_BLOCKER_CATEGORIES` yet, despite clearing the precision
-  bar -- this is a deliberate open decision (see "What this means today"
-  above), not an oversight: recall is still low enough that someone
-  should decide on purpose whether the tradeoff is worth it, the way
-  `role_track`'s graduation was a deliberate, documented step rather than
-  an automatic consequence of a number crossing a line.
+  `EXPERIENCE_BLOCKER_CATEGORIES` -- **decided 2026-09-13 by the profile
+  owner: it stays a hard blocker** (zero score, auto-archived as Skip),
+  rather than becoming a penalty or a scan-time filter. The reasoning:
+  precision cleared the bar, so a flag is usually right (roughly 1 in 10
+  blocked roles may be a genuine fit, recoverable from the archive), and
+  low recall only means most real mismatches go unflagged and are scored
+  normally -- it does not cause wrong blocks. On that day it accounted for
+  24 of one profile's 42 re-score Skips (12 with no other blocker); a
+  review list of those went to the owner. Revisit if a relabeling pass
+  (below) moves precision back under the bar.
 - No fresh investigation has started on `years_experience`/`degree`'s
   clean-baseline failure mode (item 1 above) -- the `direction` split is
   real and verified, but does not explain the bulk of the remaining gap.
