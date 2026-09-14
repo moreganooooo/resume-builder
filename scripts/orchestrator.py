@@ -1687,6 +1687,8 @@ def partition_violations(violations: list[str]) -> tuple[list[str], list[str]]:
             or "short widow" in v
             or "dead band" in v
             or "wrap to a 3rd line" in v
+            # A wording-quality nudge: worth a fix attempt, never a failed build.
+            or v.startswith("Vague magnitude")
         ):
             soft.append(v)
         else:

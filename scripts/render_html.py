@@ -190,17 +190,28 @@ def build_certifications_section_html(section_title: str, certs: list) -> str:
 # page 1. The default layout is untouched.
 LAYOUT_CSS = {
     "compact": "",
+    # One leading for every text block (1.32 at 9.75pt, about 12.9pt line
+    # to line) -- the first version raised it only for the summary, skills
+    # and job bullets, so Education/certifications/Why kept the compact
+    # 1.15 and page 2 read tighter than page 1.
     "relaxed": """
+  body,
+  .summary-text, .skills-grid, .skills-text, .job-title, .job-meta,
+  .job-clients, .job li, .career-note,
+  .cert-item, .edu-header, .edu-desc, .edu-item li, .why-text { line-height: 1.32; }
   .header { margin-bottom: 16px; }
   .section { margin-bottom: 16px; }
   .section-title { margin-bottom: 6px; }
-  .summary-text, .skills-grid, .job li, .career-note { line-height: 1.32; }
   .skills-grid { gap: 3px; }
   .job { margin-bottom: 14px; }
   .job + .job .job-title { margin-top: 6px; }
   .job-meta { margin-bottom: 5px; }
-  .job ul { margin-top: 5px; }
-  .job li { margin-bottom: 3px; }
+  .job ul, .edu-item ul { margin-top: 5px; }
+  .job li, .edu-item li { margin-bottom: 3px; }
+  .cert-item { margin-bottom: 3px; }
+  .edu-item { margin-bottom: 10px; }
+  .edu-header { margin-bottom: 5px; }
+  .why-text p { margin-bottom: 10px; }
 """,
 }
 

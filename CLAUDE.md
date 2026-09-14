@@ -1348,6 +1348,20 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   (`build_certifications_section_html`), and profile.yml
   `resume_layout: relaxed` injects `render_html.LAYOUT_CSS["relaxed"]` for
   a profile whose content leaves page 2 sparse; the default is unchanged.
+  The relaxed layout sets ONE leading (1.32) on body and every text block --
+  the first version covered only summary/skills/job bullets, so Education
+  and Why kept 1.15 and page 2 read tighter than page 1.
+  `validate_resume._check_vague_magnitudes()` flags size words standing in
+  for a number ("significant accuracy improvements" while the bullets held
+  15%) in the Summary and bullets; "statistically significant" is exempt.
+  It is a SOFT violation (`partition_violations`): the fix loop gets a try,
+  a leftover never fails a build -- after two builds failed on fatal-only
+  wording issues that day, a style nudge was not allowed to join them.
+  The skills-line dead-band fixer (`_micro_refactor_skills_line`) may only
+  trim or lengthen existing items; it used to "add 1-2 relevant skills" with
+  no list of what the candidate has, inventing tools the hallucination check
+  then rejected, and a last deterministic repair pass now runs on leftover
+  hallucinated-tool violations before a build gives up.
 - **`role_dna.yaml` is per-profile when the profile has one
   (`ResumeEngine._role_dna_dir()`).** The shared
   `resume-engine/scoring/role_dna.yaml` is a marketing library, and it was
