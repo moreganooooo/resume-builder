@@ -7558,7 +7558,7 @@ class ResumeEngine:
         while True:
             try:
                 pdf_result = subprocess.run(
-                    ["node", pdf_script, html_out, pdf_out, "--format=letter"],
+                    ["node", pdf_script, html_out, pdf_out, "--format=letter", "--max-pages=2"],
                     capture_output=True,
                     text=True,
                     timeout=PDF_GENERATION_TIMEOUT_SECONDS,

@@ -1362,6 +1362,17 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   no list of what the candidate has, inventing tools the hallucination check
   then rejected, and a last deterministic repair pass now runs on leftover
   hallucinated-tool violations before a build gives up.
+- **Resume PDFs must pass `--max-pages=2` to `generate-pdf.mjs`.** Its
+  default target is ONE page, and above the target it runs a "tightening
+  loop" (body line-height down to 1.02, letter-spacing -0.02em, job/section
+  margins cut to 4-8px) before printing. Every two-page resume render called
+  it with only `--format=letter`, so every resume PDF came out crunched while
+  the HTML (and any screenshot of it) looked fine -- found 2026-09-14. Both
+  resume call sites (orchestrator Step 7 and polish.py) now pass 2; the cover
+  letter's single-page target stays the default. Judge layout from the PDF,
+  or from HTML rendered with the same target, never from the raw HTML alone.
+  profile.yml `resume_layout:` also has a `balanced` option (line height 1.20
+  only, gaps unchanged) between compact 1.15 and relaxed 1.25.
 - **`role_dna.yaml` is per-profile when the profile has one
   (`ResumeEngine._role_dna_dir()`).** The shared
   `resume-engine/scoring/role_dna.yaml` is a marketing library, and it was
