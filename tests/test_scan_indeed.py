@@ -110,6 +110,21 @@ class TestDefaultSearchTerm(unittest.TestCase):
             scan_indeed._default_search_terms(), [scan_indeed.DEFAULT_SEARCH_TERM]
         )
 
+    def test_explicit_indeed_search_terms_win_and_are_capped(self):
+        import yaml
+
+        with open(self._scan_filters_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "indeed_search_terms": ["communications", None, "content", "copywriter", "x"],
+                    "title_filter": {"positive": ["Data Scientist"]},
+                },
+                f,
+            )
+        self.assertEqual(
+            scan_indeed._default_search_terms(), ["communications", "content", "copywriter"]
+        )
+
     def test_falls_back_when_scan_filters_missing(self):
         self.assertEqual(
             scan_indeed._default_search_terms(), [scan_indeed.DEFAULT_SEARCH_TERM]

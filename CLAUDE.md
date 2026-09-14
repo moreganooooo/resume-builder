@@ -859,7 +859,12 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   Indeed succeeded in the same process, are recorded in that module's
   docstring so they read as tested-and-rejected rather than untried.
   Note JobSpy hard-pins `numpy==1.26.3`, which will fight any Dependabot
-  bump of numpy.
+  bump of numpy. Search terms come from `scan_filters.yml`'s
+  `indeed_search_terms` when set (max `MAX_SEARCH_TERMS` = 3, one scrape
+  each), else `title_filter.positive`, else "marketing" -- a profile with an
+  exclusions-only title filter otherwise searched Indeed for that one word
+  within its radius. Don't add positives just to steer Indeed: every
+  board/ATS/Indeed posting would then have to carry one.
 - **Websearch sweeps: Python searches, Node filters.** Brave's free tier
   became metered, so DuckDuckGo is the default backend
   (`scripts/websearch_ddg.py`) and Brave is used only when
