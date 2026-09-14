@@ -41,6 +41,20 @@ class TestCheckGates(unittest.TestCase):
             )
         self.assertNotIn("employment_type", failed)
 
+    def test_excluded_title_keyword_fails_the_title_gate(self):
+        filters = {"title_filter": {"positive": ["Data Scientist"], "negative": ["Principal"]}}
+        with patch.object(fre.scan_boards, "_load_filters", return_value=filters):
+            failed = fre.check_gates({"title": "Principal Data Scientist", "description": ""})
+        self.assertIn("title", failed)
+
+    def test_missing_positive_keyword_does_not_fail_the_title_gate(self):
+        # LinkedIn/Jobright never apply the title filter, so a role they found
+        # was never required to carry a positive keyword.
+        filters = {"title_filter": {"positive": ["Data Scientist"], "negative": ["Principal"]}}
+        with patch.object(fre.scan_boards, "_load_filters", return_value=filters):
+            failed = fre.check_gates({"title": "AI Engineer", "description": ""})
+        self.assertNotIn("title", failed)
+
     def test_unstated_field_never_fails_a_gate(self):
         filters = {"employment_type": ["full_time"], "location": {}}
         with patch.object(fre.scan_boards, "_load_filters", return_value=filters):
