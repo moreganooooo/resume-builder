@@ -131,6 +131,13 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
             "deal_breakers": eval_data.get("hard_blockers") or [],
             **data,
         }
+        # The status derived above from the file's directory/_application
+        # must win over the JD's own top-level "status" (a scanner's "new" /
+        # "Pending"), which **data would otherwise spread over it. It did:
+        # archive_jd() moved a file into archived/ and then re-synced its
+        # row as pending -- 12 archived postings stayed on the pending list
+        # on 2026-09-13, and every expire/complete move drifted the same way.
+        job_record["status"] = status
         db.upsert_job(job_record, profile=profile)
     except (sqlite3.OperationalError, sqlite3.DatabaseError) as e:
         logging.warning(

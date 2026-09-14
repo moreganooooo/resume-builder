@@ -147,6 +147,8 @@ _SCORING_WEIGHTS_KEYS = (
     "stretch_gap_penalty_per_item",
     "stretch_gap_max_penalty",
     "funnel_friction_nudge",
+    "legitimacy_caution_penalty",
+    "legitimacy_suspicious_penalty",
 )
 
 # Mirrors orchestrator.py's hardcoded module constants exactly, so an
@@ -159,6 +161,8 @@ DEFAULT_SCORING_WEIGHTS = {
     "stretch_gap_penalty_per_item": 0.20,
     "stretch_gap_max_penalty": 0.80,
     "funnel_friction_nudge": 1,
+    "legitimacy_caution_penalty": 0.50,
+    "legitimacy_suspicious_penalty": 1.50,
 }
 
 SCORING_WEIGHT_LABELS = {
@@ -168,6 +172,8 @@ SCORING_WEIGHT_LABELS = {
     "stretch_gap_penalty_per_item": "Penalty per capability gap",
     "stretch_gap_max_penalty": "Max total capability-gap penalty",
     "funnel_friction_nudge": "Remote/onsite funnel-friction nudge (+/-)",
+    "legitimacy_caution_penalty": "Penalty for a 'Proceed with Caution' posting",
+    "legitimacy_suspicious_penalty": "Penalty for a 'Suspicious' posting",
 }
 
 # role_track (docs/role_track.md) cleared its >=90% holdout bar --
