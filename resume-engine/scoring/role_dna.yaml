@@ -14,6 +14,7 @@ archetypes:
 
   email_lifecycle:
     label: "Email Lifecycle & CRM"
+    tagline_descriptor: "Campaign CRM Strategist"
     jd_keywords: [lifecycle, retention, nurture, drip, onboarding, re-engagement, segmentation, automation, sequences, open rate, click rate, reply rate, deliverability]
     core_signals:
       - Outreach.io platform ownership (vendor eval, integration, adoption)
@@ -38,6 +39,7 @@ archetypes:
 
   sales_enablement:
     label: "Sales Enablement & Content Systems"
+    tagline_descriptor: "Content Systems & Training Designer"
     jd_keywords: [enablement, playbook, onboarding, training, SDR, sales content, library, governance, LMS, facilitation, curriculum]
     core_signals:
       - Content Committee (founded, chaired, 100+ assets, 129 sequences)
@@ -61,6 +63,7 @@ archetypes:
 
   b2b_content_copywriter:
     label: "B2B Content & Copywriting"
+    tagline_descriptor: "Brand Voice & Campaign Copywriter"
     jd_keywords: [copywriter, content strategist, brand voice, editorial, campaign, storytelling, messaging, copy, B2B, demand generation, content marketing]
     core_signals:
       - Agency training (VML, Callahan Creek)
@@ -84,6 +87,7 @@ archetypes:
 
   marketing_ops_crm:
     label: "Marketing Operations & CRM"
+    tagline_descriptor: "CRM Campaign Systems Specialist"
     jd_keywords: [marketing ops, CRM, Salesforce, HubSpot, data hygiene, reporting, attribution, automation, segmentation, territory, pipeline, revenue operations]
     core_signals:
       - Salesforce territory as a product (national Hot Zone analysis)
@@ -107,6 +111,7 @@ archetypes:
 
   generalist_coordinator:
     label: "Generalist Marketing / Coordinator"
+    tagline_descriptor: "Campaign Strategy & Lifecycle Marketing"
     jd_keywords: [marketing coordinator, marketing specialist, content coordinator, campaign coordinator, digital marketing, multi-channel, cross-functional]
     core_signals:
       - Range across campaigns, CRM, content, and design

@@ -412,6 +412,10 @@
     break-inside: avoid;
     page-break-inside: avoid;
   }
+
+  /* Per-profile layout override (profile.yml resume_layout:), injected by
+     render_html.py -- empty for the default compact layout. */
+  {{LAYOUT_CSS}}
 </style>
 </head>
 <body>
@@ -450,11 +454,8 @@
     {{EXPERIENCE}}
   </div>
 
-  <!-- TRAINING & CERTIFICATIONS -->
-  <div class="section avoid-break">
-    <div class="section-title">{{SECTION_CERTIFICATIONS}}</div>
-    {{CERTIFICATIONS}}
-  </div>
+  <!-- TRAINING & CERTIFICATIONS (conditional -- render_html.py drops this entirely when there are none) -->
+  {{CERTIFICATIONS_SECTION}}
 
   <!-- EDUCATION -->
   <div class="section avoid-break">

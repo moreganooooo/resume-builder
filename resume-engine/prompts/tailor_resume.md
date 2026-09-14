@@ -87,9 +87,12 @@ contain the JD's actual title, the tagline has failed regardless of how good it 
 
 - Format: [JD Role Title, cleaned] | [Archetype Descriptor]
 - Part 1 = the JD's own role title, lightly cleaned (see below). Part 2 = the archetype descriptor
-  that frames HOW this candidate does that job, drawn from the CRM/lifecycle/content background —
+  that frames HOW this candidate does that job, drawn from this candidate's own background —
   it is supporting context, never a replacement for Part 1.
-- Archetype descriptors (Part 2 only): Email Lifecycle → "Campaign CRM Strategist" | Sales Enablement → "Content Systems & Training Designer" | B2B Content → "Brand Voice & Campaign Copywriter" | Marketing Ops → "CRM Campaign Systems Specialist" | Generalist → "Campaign Strategy & Lifecycle Marketing"
+- Archetype descriptors (Part 2 only): take them from the `=== TAGLINE DESCRIPTORS ===` block
+  (this candidate's own archetype library) — pick the archetype this JD matches best. If that block
+  is absent, write a short descriptor from the candidate's verified background; never borrow
+  another field's vocabulary.
 - Remove "Sr.", "Junior", "Remote", parentheses from the role title; keep the essence
 - Must fit one printed line, max 60 characters total (empirically measured — a tagline that runs
   long wraps to a 2nd line at 14pt). If your first draft runs long, condense Part 2 (or trim filler
@@ -115,15 +118,15 @@ contain the JD's actual title, the tagline has failed regardless of how good it 
 
 ### Summary Structural Archetypes
 
-Analyze the target company's business stage (from JD and COMPANY RESEARCH) and select the corresponding narrative archetype to structure your professional summary:
+Analyze the target company's business stage (from JD and COMPANY RESEARCH) and select the corresponding narrative archetype to structure your professional summary. The templates below show STRUCTURE only — every bracket is filled from this candidate's verified background in the JD's own vocabulary. Never reuse a template's filler wording:
 
 1. **Scale-First / Growth Archetype** (for established, enterprise, or scaling companies focused on optimization, operational efficiency, scaling existing systems, high performance, and standard processes):
    - Focus: Optimization, scaling, infrastructure, systematic execution, alignment.
-   - Exemplar: `<strong>[Title] with 10+ years of experience directing high-scale program operations and lifecycle marketing.</strong> Architected and scaled CRM infrastructure to support 15M+ users, driving a 24% increase in user retention. Integrates [Tool/Platform] and advanced automation to optimize multi-channel performance across global divisions.`
+   - Template: `<strong>[Title] with [N]+ years of experience [core scope the candidate actually owned].</strong> [Past-tense verb] [system or program they built or ran] at [verified scale], driving [verified metric]. [Verb] [Tool/Platform] to [outcome stated in the JD's own terms].`
 
 2. **Zero-to-One / Builder Archetype** (for early-stage startups, new product divisions, launch teams, or high-ambiguity environments focused on speed, building from scratch, product launch, and validation):
    - Focus: Speed, launch, building from scratch, product-market fit, execution under ambiguity.
-   - Exemplar: `<strong>[Title] with 8+ years of experience leading zero-to-one product development and CRM launches.</strong> Established foundational user-onboarding tracks from scratch for early-stage ventures, scaling active subscriber bases from 0 to 500k. Implemented [Tool/Platform] and agile workflows to validate product-market fit and accelerate time-to-market.`
+   - Template: `<strong>[Title] with [N]+ years of experience [building something from scratch in the candidate's field].</strong> [Past-tense verb] [the first version of a verified system, program, or asset], [verified result from zero]. [Verb] [Tool/Platform] to [validate or ship, in the JD's own terms].`
 
 
 # Skills Section Rules

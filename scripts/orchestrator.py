@@ -3118,6 +3118,25 @@ def build_situational_track_context(jd_text: str, roles_data: dict = None) -> st
     )
 
 
+def build_tagline_descriptor_block(role_dna: dict | None) -> str:
+    """The tagline's Part 2 options, from the active profile's own archetype
+    library (role_dna.yaml `tagline_descriptor`s). tailor_resume.md used to
+    hardcode one marketing profile's five descriptors, so a data-science
+    profile's sample tagline came out "DATA SCIENTIST | CAMPAIGN CRM SYSTEMS
+    SPECIALIST" (2026-09-14). Empty when no archetype carries one -- the
+    prompt then has the model write a descriptor from the candidate's own
+    background."""
+    archetypes = (role_dna or {}).get("archetypes") or {}
+    lines = [
+        f"- {cfg.get('label') or key} -> \"{cfg['tagline_descriptor']}\""
+        for key, cfg in archetypes.items()
+        if isinstance(cfg, dict) and cfg.get("tagline_descriptor")
+    ]
+    if not lines:
+        return ""
+    return "=== TAGLINE DESCRIPTORS ===\n" + "\n".join(lines)
+
+
 def build_commute_context(distance_miles, radius_miles, workplace, location=None) -> str:
     """One computed fact for the evaluator: how far a non-remote posting's
     office is from home, against the configured radius. Without it the model
@@ -6534,6 +6553,14 @@ class ResumeEngine:
         # branch below) because Step 7's trim loop references it regardless
         # of whether this run resumed resume_data from a checkpoint.
         build_prompt = self.load_prompt("tailor_resume.md")
+        try:
+            descriptor_block = build_tagline_descriptor_block(
+                self.load_yaml(self._role_dna_dir(), "role_dna.yaml")
+            )
+        except Exception:
+            descriptor_block = ""
+        if descriptor_block:
+            build_prompt = f"{build_prompt}\n\n{descriptor_block}"
 
         # Computed once and reused at every response_schema=TemplateSchema
         # call below (build, fix, trim) -- see
