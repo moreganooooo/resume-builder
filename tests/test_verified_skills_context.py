@@ -68,6 +68,22 @@ class TestSkillsFilteredToThePosting(unittest.TestCase):
         filler = [{"name": f"Filler Skill {i} Marketing"} for i in range(150)]
         return {"tools": filler + [{"name": n} for n in extra]}
 
+    def test_semantic_matches_join_the_block_under_a_neutral_header(self):
+        with patch("orchestrator.semantic_skill_matches", return_value=["Customer Journey Mapping"]):
+            with (
+                patch(
+                    "skills_menu._load_verified_tools",
+                    return_value=self._ledger(["Customer Journey Mapping", "Figma"]),
+                ),
+                patch("profile_paths.profile_yaml", return_value={}),
+            ):
+                block = orchestrator.build_verified_skills_context(
+                    "Own lifecycle programs.", ["lifecycle mapping"]
+                )
+        self.assertIn("Customer Journey Mapping", block)
+        self.assertNotIn("Figma", block)
+        self.assertNotIn(" of the candidate's", block)  # no "N of M" framing
+
     def test_disabled_filter_sends_the_whole_ledger(self):
         with patch("orchestrator.SKILLS_CONTEXT_FILTER_ENABLED", False):
             block = self._block(["Figma"], "Needs Salesforce.")
@@ -117,6 +133,47 @@ class TestSkillsFilteredToThePosting(unittest.TestCase):
         block = self._block(["Figma"], "")
         self.assertIn("Figma", block)
         self.assertIn("Filler Skill 3 Marketing", block)
+
+
+class TestSemanticSkillMatches(unittest.TestCase):
+    def setUp(self):
+        import json
+        import tempfile
+
+        import numpy as np
+
+        import embed_verified_skills as evs
+
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, self.tmp, True)
+        self.names = ["Figma", "Lifecycle Marketing", "Salesforce"]
+        npy, meta = os.path.join(self.tmp, "v.npy"), os.path.join(self.tmp, "v.meta")
+        np.save(npy, np.array([[0.0, 1.0], [0.7, 0.7], [1.0, 0.0]], dtype=np.float32))
+        with open(meta, "w") as f:
+            json.dump({"names_sha": evs._names_sha(self.names)}, f)
+        for attr, value in (
+            ("NPY_PATH", npy),
+            ("META_PATH", meta),
+            ("load_verified_skill_names", lambda: list(self.names)),
+        ):
+            p = patch.object(evs, attr, value)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_close_meaning_matches_and_distant_ones_do_not(self):
+        with patch("embed_bullet_bank.embed_batch", return_value=[[1.0, 0.0]]):
+            # Salesforce: 1.0 (kept); Lifecycle Marketing: 0.71 (below 0.82)
+            self.assertEqual(orchestrator.semantic_skill_matches(["CRM platform"]), ["Salesforce"])
+
+    def test_vectors_built_from_another_ledger_are_never_used(self):
+        import embed_verified_skills as evs
+
+        with (
+            patch.object(evs, "load_verified_skill_names", lambda: ["Salesforce", "Something New"]),
+            patch("embed_bullet_bank.embed_batch") as mock_embed,
+        ):
+            self.assertEqual(orchestrator.semantic_skill_matches(["CRM platform"]), [])
+        mock_embed.assert_not_called()
 
 
 class TestBlockReachesFitContext(unittest.TestCase):

@@ -923,7 +923,59 @@ def relevant_skill_names(names, jd_text: str) -> list:
     return sorted(matched, key=str.lower)
 
 
-def build_verified_skills_context(jd_text: str = "") -> str:
+# Semantic half of the (disabled, see SKILLS_CONTEXT_FILTER_ENABLED) filter.
+# Measured 2026-09-13 on a 1,387-name ledger: two UNRELATED skill names score
+# above 0.806 only 1% of the time, while a skill's nearest other skill has a
+# median of 0.887 -- so 0.82 admits near-synonyms ("CRM platform" ->
+# "Salesforce CRM"), not topical neighbours.
+SEMANTIC_SKILL_MATCH_THRESHOLD = 0.82
+SEMANTIC_SKILL_MATCHES_PER_JD_SKILL = 3
+
+
+def semantic_skill_matches(jd_skill_names) -> list:
+    """Ledger skills close in MEANING to the posting's own extracted skills --
+    what the lexical relevant_skill_names() misses when a posting and the
+    ledger name the same skill differently. Uses embed_verified_skills.py's
+    cached ledger vectors, only when their names_sha matches the current
+    ledger, plus one embedding call for the posting's skills. Any failure
+    returns [] -- lexical matching still applies."""
+    if not jd_skill_names:
+        return []
+    try:
+        import numpy as np
+
+        import embed_verified_skills as evs
+        from embed_bullet_bank import BATCH_SIZE, embed_batch
+
+        names = evs.load_verified_skill_names()
+        with open(evs.META_PATH, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        if meta.get("names_sha") != evs._names_sha(names):
+            return []
+        ledger = np.load(evs.NPY_PATH)
+        if len(ledger) != len(names):
+            return []
+        queries = list(jd_skill_names)
+        vecs = []
+        for i in range(0, len(queries), BATCH_SIZE):
+            vecs.extend(embed_batch(queries[i : i + BATCH_SIZE], max_retries=2))
+        q = np.array(vecs, dtype=np.float32)
+        if q.ndim != 2 or q.shape[1] != ledger.shape[1]:
+            return []
+        q = q / (np.linalg.norm(q, axis=1, keepdims=True) + 1e-9)
+        led = ledger / (np.linalg.norm(ledger, axis=1, keepdims=True) + 1e-9)
+        sims = q @ led.T
+        picked = set()
+        for row in sims:
+            for j in np.argsort(-row)[:SEMANTIC_SKILL_MATCHES_PER_JD_SKILL]:
+                if row[j] >= SEMANTIC_SKILL_MATCH_THRESHOLD:
+                    picked.add(names[int(j)])
+        return sorted(picked, key=str.lower)
+    except Exception:
+        return []
+
+
+def build_verified_skills_context(jd_text: str = "", jd_skill_names: list = None) -> str:
     """The candidate's own confirmed tools/skills for evaluate_fit()'s user
     content, or "" when there is nothing to say.
 
@@ -989,14 +1041,19 @@ def build_verified_skills_context(jd_text: str = "") -> str:
             + ", ".join(sorted(names, key=str.lower))
         )
 
-    matched = relevant_skill_names(names, jd_text)
+    matched = sorted(
+        set(relevant_skill_names(names, jd_text)) | set(semantic_skill_matches(jd_skill_names)),
+        key=str.lower,
+    )
+    # No "N of M" count: v1's "65 of the candidate's 1,387" framing was the
+    # likeliest reason one A/B role lost 0.8 interview odds with its overlap
+    # subscore unchanged -- it reads as thin coverage, not as filtering.
     return (
-        f"=== VERIFIED SKILLS & TOOLS relevant to this posting ({len(matched)} of the "
-        f"candidate's {len(names)} confirmed; filtered to what the posting mentions) ===\n"
+        "=== VERIFIED SKILLS & TOOLS relevant to this posting (from verified_tools.json + profile.yml) ===\n"
         + instructions
-        + "Only confirmed skills this posting names are shown. A requirement not shown may "
-        "still be covered under another name -- weigh the narrative and background before "
-        "listing it as a gap.\n"
+        + "These are the candidate's confirmed skills that match this posting, by name or "
+        "close meaning. A requirement not listed here may still be covered under another "
+        "name -- weigh the narrative and background before listing it as a gap.\n"
         + (", ".join(matched) if matched else "(none of the confirmed skills are named in this posting)")
     )
 
@@ -5253,7 +5310,7 @@ class ResumeEngine:
         )
         return list(zip(bullets_out, company_out, tags_out))
 
-    def build_fit_evaluation_context(self, jd_text: str) -> str:
+    def build_fit_evaluation_context(self, jd_text: str, jd_skill_names: list = None) -> str:
         """
         Builds evaluate_fit()'s user-content block: the candidate first, then
         the JD.
@@ -5303,7 +5360,7 @@ class ResumeEngine:
                     soft_wrap=True,
                 )
 
-        skills_block = build_verified_skills_context(jd_text)
+        skills_block = build_verified_skills_context(jd_text, jd_skill_names)
         if skills_block:
             sections.append(skills_block)
 
@@ -5364,8 +5421,16 @@ class ResumeEngine:
         # here rather than left for the Matrix to pay for on first view.
         warm_jd_keyword_cache(jd_path)
 
+        # The posting's own extracted skills (cached by the warm-up above):
+        # the skills block's semantic matching and the step-9 matrix both
+        # use them, so they are gathered once.
+        try:
+            jd_skill_names = gather_jd_skill_names(jd_path)
+        except Exception:
+            jd_skill_names = []
+
         # 1. Prepare evaluation context
-        fit_context = self.build_fit_evaluation_context(jd_text)
+        fit_context = self.build_fit_evaluation_context(jd_text, jd_skill_names)
 
         # 2. Stage 1 LLM Call: Capability Fit
         capability_prompt = self.load_prompt("evaluate_capability.md")
@@ -5550,7 +5615,7 @@ class ResumeEngine:
         # bullet-bank embeddings file or an embedding API hiccup just
         # means no matrix this round, same as before this existed.
         try:
-            skill_names = gather_jd_skill_names(jd_path)
+            skill_names = jd_skill_names or gather_jd_skill_names(jd_path)
             skill_matrix = compute_skill_coverage_matrix(skill_names)
             if skill_matrix:
                 evaluation["skill_matrix"] = skill_matrix
