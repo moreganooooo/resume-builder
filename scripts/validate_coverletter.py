@@ -188,41 +188,16 @@ _CLICHED_OPENER_PATTERNS = [
 ]
 
 
-# Sentences that could sit in anyone's letter. A 2026-09-14 letter closed its
-# paragraphs with "I thrive in these high-stakes environments", "This
-# technical depth drives my work", and "Let's build something impactful
-# together" -- each spends a line saying nothing a screener can check.
-_FILLER_PATTERNS = [
-    re.compile(p, re.IGNORECASE)
-    for p in (
-        r"\bthrive\s+in\b",
-        r"\bhigh[- ]stakes\s+environments?\b",
-        r"\blet'?s\s+build\b",
-        r"\bsomething\s+(?:impactful|special|great|amazing)\b",
-        r"\bdrives\s+my\s+work\b",
-        r"\bpassionate\s+about\b",
-        r"\bhit\s+the\s+ground\s+running\b",
-        r"\bperfect\s+fit\b",
-        r"\bmake\s+a\s+(?:meaningful|real|lasting)\s+(?:impact|difference)\b",
-        r"\bdynamic\s+(?:team|environment)\b",
-        r"\bfast[- ]paced\s+environment\b",
-        r"\bteam\s+player\b",
-        r"\bcore\s+of\s+my\s+professional\s+mission\b",
-        r"\bexcited\s+(?:about|by)\s+the\s+(?:opportunity|prospect)\b",
-    )
-]
-
-
 def _check_filler_lines(cover_letter_data: dict) -> list[str]:
-    violations = []
-    for paragraph in cover_letter_data.get("body_paragraphs", []) or []:
-        for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
-            if any(p.search(sentence) for p in _FILLER_PATTERNS):
-                violations.append(
-                    f"Generic filler line: {sentence.strip()!r} -- replace it with a specific fact "
-                    f"from the candidate's background tied to this role, or cut it."
-                )
-    return violations
+    """Sentences that could sit in anyone's letter (filler_phrases.py)."""
+    import filler_phrases
+
+    return [
+        f"Generic filler line: {sentence!r} -- replace it with a specific fact "
+        f"from the candidate's background tied to this role, or cut it."
+        for paragraph in cover_letter_data.get("body_paragraphs", []) or []
+        for sentence in filler_phrases.filler_sentences(paragraph)
+    ]
 
 
 def _check_role_title(cover_letter_data: dict, role_title: str) -> list[str]:

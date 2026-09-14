@@ -1692,6 +1692,7 @@ def partition_violations(violations: list[str]) -> tuple[list[str], list[str]]:
             or "wrap to a 3rd line" in v
             # A wording-quality nudge: worth a fix attempt, never a failed build.
             or v.startswith("Vague magnitude")
+            or v.startswith("Generic filler line")
         ):
             soft.append(v)
         else:

@@ -918,6 +918,18 @@ def _check_vague_magnitudes(resume_data: dict) -> list[str]:
     return violations
 
 
+def _check_why_filler(resume_data: dict) -> list[str]:
+    """The resume's "Why [Company]?" section gets the same filler check as a
+    cover letter (filler_phrases.py). Soft, like vague magnitudes."""
+    import filler_phrases
+
+    return [
+        f"Generic filler line in Why section: {sentence!r} -- replace it with a specific "
+        f"fact tied to this company, or cut it."
+        for sentence in filler_phrases.filler_sentences(resume_data.get("WHY_TEXT") or "")
+    ]
+
+
 def _check_hallucinated_tools(resume_data: dict) -> list[str]:
     """
     Checks if any skills or tools mentioned in the SKILLS section of the resume are
@@ -2225,6 +2237,7 @@ def validate(
     violations.extend(_check_skills_title_case(resume_data))
     violations.extend(_check_hallucinated_tools(resume_data))
     violations.extend(_check_vague_magnitudes(resume_data))
+    violations.extend(_check_why_filler(resume_data))
     violations.extend(_check_pronouns_outside_why(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_metric_provenance(resume_data, bullet_tuples))
