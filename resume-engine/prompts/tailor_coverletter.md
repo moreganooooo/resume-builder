@@ -36,3 +36,7 @@ Using the job description and the background context provided, write:
 # Output
 
 Respond with the structured cover letter JSON only: `company_name`, `greeting`, `contact_name`, `contact_title`, `body_paragraphs` (a list of 2-3 strings, one per paragraph), `sign_off`.
+
+# Private Context
+
+profile.yml's `career_gap:` entry is job-scoring and interview-prep context only. Never draw on it, allude to a gap, or mention family, medical, or layoff details anywhere in this document.

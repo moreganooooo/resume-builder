@@ -398,3 +398,7 @@ leave both as empty strings `""` and the section is omitted entirely from the re
   "WHY_TEXT": "<p><em>Abnormal's behavioral-AI approach to email security is the kind of infrastructure-over-guesswork bet I look for in a company.</em> ...</p><p>...I built a similar system for exactly this reason — <em>durable systems outlast any single campaign.</em></p>"
 }
 ```
+
+# Private Context
+
+profile.yml's `career_gap:` entry is job-scoring and interview-prep context only. Never draw on it, allude to a gap, or mention family, medical, or layoff details anywhere in this document.
