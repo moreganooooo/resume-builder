@@ -102,6 +102,26 @@ def index_paths(kb_dir: str, model: str = None) -> tuple:
     return f"{base}.npy", f"{base}.meta", f"{base}.checkpoint.npz"
 
 
+def backup_index_for(kb_dir: str, bullets_sha_value: str = None, n_rows: int = None):
+    """The backup model's bullet-bank matrix, or None when it is missing or
+    was built from a different bank (content hash / row count). A query
+    embedded with BACKUP_EMBED_MODEL may only ever be compared against this."""
+    npy, meta_path, _ = index_paths(kb_dir, BACKUP_EMBED_MODEL)
+    if not (os.path.exists(npy) and os.path.exists(meta_path)):
+        return None
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        matrix = np.load(npy)
+    except Exception:
+        return None
+    if bullets_sha_value is not None and meta.get("bullets_sha") != bullets_sha_value:
+        return None
+    if n_rows is not None and len(matrix) != n_rows:
+        return None
+    return matrix if matrix.ndim == 2 else None
+
+
 def embed_batch(texts: list, model: str = None, max_retries: int = None) -> list:
     """Call batchEmbedContents for a list of strings. Returns list of float lists.
 

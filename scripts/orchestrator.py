@@ -5918,6 +5918,7 @@ class ResumeEngine:
         # Load keeper bullets and embeddings for advanced semantic grounding check
         keeper_bullets = []
         keeper_embs = None
+        keeper_embs_backup = None
         bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
         emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
         if os.path.exists(bank_csv) and os.path.exists(emb_npy):
@@ -5928,6 +5929,13 @@ class ResumeEngine:
                 df = pd.read_csv(bank_csv)
                 keeper_bullets = df["Bullet Point"].fillna("").tolist()
                 keeper_embs = np.load(emb_npy)
+                import embed_bullet_bank
+
+                # Used only when the primary model can't embed a sentence;
+                # None unless it matches this exact bank.
+                keeper_embs_backup = embed_bullet_bank.backup_index_for(
+                    self.kb_dir, bullets_sha(keeper_bullets), len(keeper_bullets)
+                )
             except Exception:
                 pass
 
@@ -5940,7 +5948,7 @@ class ResumeEngine:
             style_rules,
             kb_corpus=background_context,
             keeper_bullets=keeper_bullets,
-            keeper_embs=keeper_embs,
+            keeper_embs=keeper_embs, keeper_embs_backup=keeper_embs_backup,
             voice_rules=self.voice_rules,
         )
 
@@ -5977,7 +5985,7 @@ class ResumeEngine:
                     style_rules,
                     kb_corpus=background_context,
                     keeper_bullets=keeper_bullets,
-                    keeper_embs=keeper_embs,
+                    keeper_embs=keeper_embs, keeper_embs_backup=keeper_embs_backup,
                     voice_rules=self.voice_rules,
                 )
             attempt += 1
@@ -6323,9 +6331,9 @@ class ResumeEngine:
                     "\n\n=== SITUATIONAL ROLE CANDIDATES ===\n"
                     f"The JD's language matched a deterministic keyword gate for: "
                     f"{', '.join(situational_candidates)}. These are NOT automatically "
-                    "included -- use your own judgment on whether including ONE of them "
-                    "(as a small, 2-bullet supporting entry) would genuinely help this "
-                    "specific JD, per the Situational/Optional Work History Entries rules. "
+                    "included -- use your own judgment on whether including one of them, or "
+                    "at most two (each a small, 2-bullet supporting entry), would genuinely "
+                    "help this specific JD, per the Situational/Optional Work History Entries rules. "
                     "If none would genuinely help, don't include any of them -- this "
                     "should be rare by construction, not a default."
                 )

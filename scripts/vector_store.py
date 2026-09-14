@@ -178,6 +178,24 @@ def search_bullet_bank(
         return []
 
     jd_emb = GeminiClient.embed(jd_text[:8000])
+    if jd_emb is None:
+        # Primary model unavailable (usually a 429): the backup model has its
+        # own quota, but only its OWN index is comparable -- used only when
+        # that index was built from this exact bank.
+        try:
+            import embed_bullet_bank as ebb
+
+            backup = ebb.backup_index_for(
+                kb_dir, bullets_sha(df["Bullet Point"].fillna("").tolist()), len(df)
+            )
+            if backup is not None:
+                vec = ebb.embed_batch(
+                    [jd_text[:8000]], model=ebb.BACKUP_EMBED_MODEL, max_retries=2
+                )[0]
+                if len(vec) == backup.shape[1]:
+                    jd_emb, embs = vec, backup
+        except Exception:
+            jd_emb = None
     bullets = df["Bullet Point"].fillna("").tolist()
     companies = (
         df["Role / Company"].fillna("").tolist()

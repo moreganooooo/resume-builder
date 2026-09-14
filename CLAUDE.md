@@ -798,7 +798,16 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   requires the same normalized title. `__main__` prints only the first 10
   clusters -- read `total_clusters`/`sample_clusters` from the returned
   dict -- and don't wire a bulk-archive step into `scan.run_scan()` until
-  its dry run has been checked against real data.
+  its dry run has been checked against real data. An explicit archive
+  (dashboard `_archive`, a batch-evaluation Skip) now also archives that
+  posting's other pending copies -- `archive_copies_of_file()` /
+  `archive_copies_of_id()`, matching on dedup_hash or normalized
+  company + title -- because archiving only the one record left its copies
+  on the pending list (16 rows for 12 postings). Never hook this into
+  `jd_source.set_status()` generally: `run_deduplication()` archives its
+  losers through status writes and would take its own winner with them.
+  Tests can't create such a copy with `db.upsert_job()` -- it folds a same
+  company+title row into the existing one -- so insert the row directly.
 - **A liveness sweep's temp files must be per-run, never a fixed path.**
   `liveness._run_temp_paths()` generates a unique input/output pair for
   every `check-liveness.mjs` spawn. They used to be two module-level
@@ -942,7 +951,17 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   checked like the primary, so after a bank edit it goes stale (and is
   skipped) until rebuilt. `embed_batch()` also reads the API key per call:
   the old module-level header froze the import-time key, so a running job
-  kept a switched-out key for hours.
+  kept a switched-out key for hours. The same fallback, through
+  `embed_bullet_bank.backup_index_for()` (hash- and row-checked), now covers
+  `vector_store.search_bullet_bank()` and the cover letter's
+  `_check_semantic_grounding()`. Similarity scales differ by model, so that
+  check's cutoff does too: 0.60 on the primary, 0.72 on the backup --
+  percentile-matched (0.60 is the 1.2th percentile of primary bullet-pair
+  similarity on an 845-bullet bank; the backup's 1.2th percentile is 0.717).
+  Never reuse one model's similarity threshold for the other. Still
+  primary-only: the evidence-guide and doc-chunk searches (their own
+  ge2-only caches) and `cluster_bullet_bank.py` (an offline, resumable
+  batch whose clusters must come from one model).
 - **The verified-skills filter exists but ships OFF
   (`orchestrator.SKILLS_CONTEXT_FILTER_ENABLED`).** A 1,407-name ledger costs
   ~7,500 tokens per evaluation, and `relevant_skill_names()` cuts that ~92%

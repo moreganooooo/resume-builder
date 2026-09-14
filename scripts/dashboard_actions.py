@@ -48,6 +48,7 @@ import sys
 import traceback
 
 import cli_art
+import dedup_pending_roles
 import jd_manager
 import jd_source
 import liveness
@@ -139,6 +140,18 @@ def _status(jd_path: str, new_status: str, jobs_path: str) -> int:
     return 0
 
 
+def _archive_copies(archive_fn) -> None:
+    """Archives the other pending copies of a just-archived posting (see
+    dedup_pending_roles.archive_copies_of). Best-effort: the posting itself
+    is already archived, so a failure here must not fail the action."""
+    try:
+        n = archive_fn()
+        if n:
+            print(f"Also archived {n} duplicate cop{'y' if n == 1 else 'ies'} of this posting.")
+    except Exception as exc:
+        print(f"note: could not archive duplicate copies: {exc}", file=sys.stderr)
+
+
 def _archive(jd_path: str, jobs_path: str) -> int:
     try:
         if not os.path.exists(jd_path):
@@ -147,11 +160,13 @@ def _archive(jd_path: str, jobs_path: str) -> int:
             # jds/archived/ -- the on-disk clutter jd_source exists to avoid.
             jd_source.set_status(jd_path, "archived")
             print(f"Archived job {jd_path} (database-only, no file moved)")
+            _archive_copies(lambda: dedup_pending_roles.archive_copies_of_id(jd_path))
             dashboard._export_jobs_to(jobs_path)
             return 0
 
         archived_path = jd_manager.archive_jd(jd_path)
         print(f"Archived to: {archived_path}")
+        _archive_copies(lambda: dedup_pending_roles.archive_copies_of_file(archived_path))
     except Exception as exc:
         print(f"archive failed for {jd_path}: {exc}", file=sys.stderr)
         _user_error(

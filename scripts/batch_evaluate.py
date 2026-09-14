@@ -8,10 +8,12 @@ docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md.
 """
 
 import contextlib
+import logging
 import os
 import time
 
 import cli_art
+import dedup_pending_roles
 import jd_manager
 import jd_source
 import orchestrator
@@ -144,6 +146,7 @@ def _evaluate_one(engine, identifier: str, on_label=None) -> dict:
         source = identifier if is_database_backed else path
         if skipped and not is_database_backed:
             source = jd_manager.archive_jd(path)
+            _archive_copies_of(lambda: dedup_pending_roles.archive_copies_of_file(source))
 
     # Outside the context ON PURPOSE. Leaving the block runs sync_back(),
     # which writes the temp file's payload over the row -- including its
@@ -152,8 +155,19 @@ def _evaluate_one(engine, identifier: str, on_label=None) -> dict:
     # scan row in the pending list.
     if skipped and is_database_backed:
         jd_source.set_status(identifier, "archived")
+        _archive_copies_of(lambda: dedup_pending_roles.archive_copies_of_id(identifier))
 
     return _result_row(source, job_key, job_title, company_name, evaluation)
+
+
+def _archive_copies_of(archive_fn) -> None:
+    """A Skip archives the posting; this also archives its other pending
+    copies (dedup_pending_roles.archive_copies_of), so the posting actually
+    leaves the list. Best-effort -- never fails the evaluation."""
+    try:
+        archive_fn()
+    except Exception as exc:
+        logging.warning(f"batch_evaluate: could not archive duplicate copies: {exc}")
 
 
 def evaluate_all_pending(

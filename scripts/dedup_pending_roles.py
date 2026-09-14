@@ -42,6 +42,90 @@ def get_job_url(meta: dict) -> str:
     return u.rstrip("/")
 
 
+def archive_copies_of(meta: dict, exclude_ids=(), profile: str = None) -> int:
+    """Archives every PENDING data.db row that is another copy of the posting
+    `meta` describes, by the same rules run_deduplication() clusters on --
+    same dedup_hash, or same normalized company + title (which subsumes its
+    URL + company + title rule). Returns how many rows it archived.
+
+    Archiving a posting used to reach only the one record it was called on:
+    a posting often has a file plus copies under other ids, so the copies
+    stayed pending and the "archived" posting never left the list (16 rows
+    for 12 postings, 2026-09-13). Only called from explicit archive actions
+    -- never from jd_source.set_status() in general, since run_deduplication
+    archives its losers through status writes and would archive its own
+    winner."""
+    c_norm = normalize_text(meta.get("company_name") or meta.get("company"))
+    t_norm = normalize_text(meta.get("job_title") or meta.get("title"))
+    h = str(meta.get("dedup_hash") or "")
+    if not (c_norm and t_norm) and not h:
+        return 0
+    exclude = {str(x) for x in exclude_ids if x}
+    conn = db.get_db(profile)
+    conn.row_factory = sqlite3.Row
+    archived = 0
+    try:
+        rows = conn.execute(
+            "SELECT id, company, title, dedup_hash, metadata_json FROM jobs "
+            "WHERE lower(status) = 'pending'"
+        ).fetchall()
+        for r in rows:
+            if str(r["id"]) in exclude:
+                continue
+            same_hash = bool(h) and str(r["dedup_hash"] or "") == h
+            same_posting = bool(c_norm and t_norm) and (
+                normalize_text(r["company"]),
+                normalize_text(r["title"]),
+            ) == (c_norm, t_norm)
+            if not (same_hash or same_posting):
+                continue
+            r_meta = json.loads(r["metadata_json"] or "{}")
+            r_meta["archived_reason"] = "copy of an archived posting"
+            conn.execute(
+                "UPDATE jobs SET status = 'archived', metadata_json = ?, "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json.dumps(r_meta), r["id"]),
+            )
+            archived += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return archived
+
+
+def archive_copies_of_file(jd_path: str, profile: str = None) -> int:
+    """archive_copies_of() for a JD file, skipping the file's own row."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return 0
+    if not isinstance(meta, dict):
+        return 0
+    own_id = meta.get("source_job_id") or meta.get("id") or jd_manager.compute_job_key(jd_path)
+    return archive_copies_of(meta, exclude_ids={own_id}, profile=profile)
+
+
+def archive_copies_of_id(job_id: str, profile: str = None) -> int:
+    """archive_copies_of() for a database-only job, skipping the job itself."""
+    conn = db.get_db(profile)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT company, title, dedup_hash, metadata_json FROM jobs WHERE id = ?",
+            (job_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return 0
+    meta = json.loads(row["metadata_json"] or "{}")
+    meta.setdefault("company", row["company"])
+    meta.setdefault("title", row["title"])
+    meta.setdefault("dedup_hash", row["dedup_hash"])
+    return archive_copies_of(meta, exclude_ids={job_id}, profile=profile)
+
+
 def run_deduplication(profile: str = None, dry_run: bool = True) -> dict:
     conn = db.get_db(profile)
     conn.row_factory = sqlite3.Row
