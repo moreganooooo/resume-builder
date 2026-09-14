@@ -3118,6 +3118,31 @@ def build_situational_track_context(jd_text: str, roles_data: dict = None) -> st
     )
 
 
+def build_commute_context(distance_miles, radius_miles, workplace, location=None) -> str:
+    """One computed fact for the evaluator: how far a non-remote posting's
+    office is from home, against the configured radius. Without it the model
+    judged the candidate's commute deal-breaker blind and called offices
+    3 miles away "incompatible" (2026-09-14). Empty when remote, or when the
+    distance or radius is unknown -- unknown is never stated as near or far."""
+    if workplace == location_filter.REMOTE or distance_miles is None or not radius_miles:
+        return ""
+    where = f" ({location})" if location else ""
+    if distance_miles <= radius_miles:
+        verdict = (
+            f"WITHIN the candidate's {radius_miles:g}-mile commute radius. Onsite or "
+            "hybrid work at this office is exactly what their location deal-breaker "
+            "allows -- do not treat the in-office requirement as a deal-breaker or "
+            "score it as incompatible."
+        )
+    else:
+        verdict = f"OUTSIDE the candidate's {radius_miles:g}-mile commute radius."
+    return (
+        "=== COMMUTE (computed from the posting's location, not stated in it) ===\n"
+        f"This posting's office{where} is about {float(distance_miles):.1f} miles from "
+        f"the candidate's home -- {verdict}"
+    )
+
+
 def city_level_distance(location, loc_settings: dict) -> float | None:
     """Miles from the profile's home city to the posting's nearest listed
     hub, from city centroids -- the same resolution the scan-time location
@@ -5446,7 +5471,9 @@ class ResumeEngine:
         own = os.path.join(self.kb_dir, "role_dna.yaml")
         return self.kb_dir if os.path.exists(own) else self.scoring_dir
 
-    def build_fit_evaluation_context(self, jd_text: str, jd_skill_names: list = None) -> str:
+    def build_fit_evaluation_context(
+        self, jd_text: str, jd_skill_names: list = None, commute_block: str = ""
+    ) -> str:
         """
         Builds evaluate_fit()'s user-content block: the candidate first, then
         the JD.
@@ -5525,6 +5552,9 @@ class ResumeEngine:
         if track_block:
             sections.append(track_block)
 
+        if commute_block:
+            sections.append(commute_block)
+
         pay_block = build_compensation_context(jd_text)
         if pay_block:
             sections.append(pay_block)
@@ -5569,8 +5599,70 @@ class ResumeEngine:
         except Exception:
             jd_skill_names = []
 
+        # 0. Resolve workplace mode and commute distance BEFORE the model
+        # calls, so the evaluator is told how far the office is. It used to
+        # run afterwards: the model read the candidate's commute deal-breaker
+        # with no distance and called a 3-mile office "incompatible", and
+        # rescoring corrected remote_quality but not the other subscores.
+        jd_data = _parse_jd_data(jd_text)
+        workplace = location_filter.classify_workplace(
+            jd_data.get("location", ""),
+            jd_data.get("is_remote"),
+            jd_data.get("work_model", ""),
+        )
+        loc_dist = None
+        try:
+            import location_settings
+
+            loc_settings = location_settings.read_settings()
+        except Exception:
+            loc_settings = {}
+
+        radius_miles = loc_settings.get("radius_miles")
+        workplace_mode = loc_settings.get("workplace_mode", "any")
+
+        enrichment = jd_data.get("_location_enrichment")
+        if (
+            isinstance(enrichment, dict)
+            and enrichment.get("distance_miles") is not None
+        ):
+            loc_dist = enrichment.get("distance_miles")
+        elif radius_miles and (jd_data.get("location") or jd_text):
+            try:
+                import location_enricher
+
+                job_data = {
+                    "id": os.path.basename(jd_path),
+                    "title": jd_data.get("job_title", ""),
+                    "company": jd_data.get("company_name", ""),
+                    "location": jd_data.get("location", ""),
+                    "raw_text": jd_text,
+                    "company_website": jd_data.get("company_website", ""),
+                    "is_remote": jd_data.get("is_remote"),
+                    "work_model": jd_data.get("work_model"),
+                }
+                cache = location_enricher.load_locations_cache()
+                enr = location_enricher.enrich_job_location(
+                    job_data,
+                    settings=loc_settings,
+                    allow_search_backup=False,
+                    cache=cache,
+                )
+                if enr.get("distance_miles") is not None:
+                    loc_dist = enr.get("distance_miles")
+            except Exception:
+                pass
+        if loc_dist is None and radius_miles:
+            loc_dist = city_level_distance(jd_data.get("location"), loc_settings)
+
         # 1. Prepare evaluation context
-        fit_context = self.build_fit_evaluation_context(jd_text, jd_skill_names)
+        fit_context = self.build_fit_evaluation_context(
+            jd_text,
+            jd_skill_names,
+            commute_block=build_commute_context(
+                loc_dist, radius_miles, workplace, jd_data.get("location")
+            ),
+        )
 
         # 2. Stage 1 LLM Call: Capability Fit
         capability_prompt = self.load_prompt("evaluate_capability.md")
@@ -5660,12 +5752,6 @@ class ResumeEngine:
         # Nudge magnitude is Settings-configurable (funnel_friction_nudge,
         # default 1) via scripts/content_settings.py.
         funnel_friction_nudge = scoring_weights.get("funnel_friction_nudge", 1)
-        jd_data = _parse_jd_data(jd_text)
-        workplace = location_filter.classify_workplace(
-            jd_data.get("location", ""),
-            jd_data.get("is_remote"),
-            jd_data.get("work_model", ""),
-        )
         if workplace == location_filter.REMOTE:
             funnel_friction_score = max(
                 funnel_friction_score - funnel_friction_nudge, 1
@@ -5678,52 +5764,7 @@ class ResumeEngine:
             "funnel_friction"
         ] = funnel_friction_score
 
-        # 6. Resolve Commute / Location distance for local scoring
-        loc_dist = None
-        try:
-            import location_settings
-
-            loc_settings = location_settings.read_settings()
-        except Exception:
-            loc_settings = {}
-
-        radius_miles = loc_settings.get("radius_miles")
-        workplace_mode = loc_settings.get("workplace_mode", "any")
-
-        enrichment = jd_data.get("_location_enrichment")
-        if (
-            isinstance(enrichment, dict)
-            and enrichment.get("distance_miles") is not None
-        ):
-            loc_dist = enrichment.get("distance_miles")
-        elif radius_miles and (jd_data.get("location") or jd_text):
-            try:
-                import location_enricher
-
-                job_data = {
-                    "id": os.path.basename(jd_path),
-                    "title": jd_data.get("job_title", ""),
-                    "company": jd_data.get("company_name", ""),
-                    "location": jd_data.get("location", ""),
-                    "raw_text": jd_text,
-                    "company_website": jd_data.get("company_website", ""),
-                    "is_remote": jd_data.get("is_remote"),
-                    "work_model": jd_data.get("work_model"),
-                }
-                cache = location_enricher.load_locations_cache()
-                enr = location_enricher.enrich_job_location(
-                    job_data,
-                    settings=loc_settings,
-                    allow_search_backup=False,
-                    cache=cache,
-                )
-                if enr.get("distance_miles") is not None:
-                    loc_dist = enr.get("distance_miles")
-            except Exception:
-                pass
-        if loc_dist is None and radius_miles:
-            loc_dist = city_level_distance(jd_data.get("location"), loc_settings)
-
+        # 6. (Commute distance was resolved in step 0, before the model calls.)
         posting_age_days = jd_manager.compute_posting_age_days(jd_path)
         evaluation["posting_age_days"] = posting_age_days
 
