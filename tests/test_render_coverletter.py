@@ -170,7 +170,8 @@ class TestBuildRecipientBlockHtml(unittest.TestCase):
     def test_no_contact_no_location(self):
         html = render_coverletter_module.build_recipient_block_html("Acme Corp")
         self.assertEqual(
-            html, '<div class="letter-address">Acme Corp Hiring Team<br>Acme Corp</div>'
+            html,
+            '<div class="letter-address"><strong>Acme Corp Hiring Team</strong><br>Acme Corp</div>',
         )
 
     def test_with_contact_and_location(self):
@@ -182,14 +183,14 @@ class TestBuildRecipientBlockHtml(unittest.TestCase):
         )
         self.assertEqual(
             html,
-            '<div class="letter-address">Attn: Maggie Smith, HR Manager<br>Acme Corp<br>Austin, TX</div>',
+            '<div class="letter-address"><strong>Attn: Maggie Smith, HR Manager</strong><br>Acme Corp<br>Austin, TX</div>',
         )
 
     def test_contact_without_title(self):
         html = render_coverletter_module.build_recipient_block_html(
             "Acme Corp", contact_name="Maggie Smith"
         )
-        self.assertIn("Attn: Maggie Smith<br>", html)
+        self.assertIn("Attn: Maggie Smith</strong><br>", html)
         self.assertNotIn("Attn: Maggie Smith,", html)
 
     def test_escapes_html_in_all_lines(self):

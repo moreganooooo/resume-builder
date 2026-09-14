@@ -43,8 +43,8 @@ def _valid_letter():
             "starts from evidence instead of guesswork.",
             "Beyond the metrics, I bring a collaborative approach to content operations, "
             "regularly partnering with design and revenue operations to keep messaging "
-            "consistent across every channel a prospect might encounter. I thrive in "
-            "environments where priorities shift quickly and enjoy building the kind of "
+            "consistent across every channel a prospect might encounter. I have worked in "
+            "teams where priorities shift quickly and like building the kind of "
             "repeatable systems that let a small team punch above its weight, which is "
             "exactly the kind of environment this role describes. I would welcome the "
             "chance to bring that same energy to a team that is scaling as quickly as "

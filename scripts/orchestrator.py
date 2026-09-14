@@ -3575,6 +3575,32 @@ def _resolve_company_location(research: dict | None, jd_data: dict) -> str:
     return jd_data.get("location") or ""
 
 
+_SMALL_TITLE_WORDS = {"and", "of", "for", "the", "to", "in", "on", "at", "a", "an"}
+
+
+def _coverletter_role_title(jd_data: dict, stem: str) -> str:
+    """The role title a cover letter names in its first paragraph: the
+    posting's own job_title, else Part 1 of the matching resume's tagline
+    (a plain-text JD has no structured title). Trimmed of a trailing
+    " — subtitle" or "(Remote)", and title-cased if it arrived in caps."""
+    title = str((jd_data or {}).get("job_title") or "").strip()
+    if not title:
+        title = _read_matching_resume_tagline(stem).split("|")[0].strip()
+    title = re.split(r"\s+[—–-]\s+|\s*\(", title)[0].strip()
+    if title.isupper():
+        words = []
+        for index, word in enumerate(title.split()):
+            lower = word.lower()
+            if index and lower in _SMALL_TITLE_WORDS:
+                words.append(lower)
+            elif len(word) <= 3 and word.isalpha() and lower not in _SMALL_TITLE_WORDS:
+                words.append(word)  # likely an acronym: ML, AI, BI
+            else:
+                words.append(word.capitalize())
+        title = " ".join(words)
+    return title
+
+
 def _read_matching_resume_tagline(stem: str) -> str:
     """Best-effort read of a resume TAGLINE already built for the same
     JD -- '{stem}_Resume.json' in this profile's output/json dir, the
@@ -6122,6 +6148,9 @@ class ResumeEngine:
         job_key = jd_manager.compute_job_key(jd_path)
         checkpoint = jd_manager.load_checkpoint(job_key)
         jd_keywords = checkpoint.get("jd_keywords") if checkpoint else None
+        # The role being applied for: named (and bolded at render) in the
+        # first paragraph -- a 2026-09-14 letter never said which job it was for.
+        role_title = _coverletter_role_title(jd_data, _build_output_stem(jd_path))
 
         # Feature #12 needs keywords even for a standalone cover-letter-only
         # run (no prior resume build, so no checkpoint to reuse). Extracted
@@ -6187,7 +6216,10 @@ class ResumeEngine:
 
         coverletter_prompt = self.load_prompt("tailor_coverletter.md")
         background_context = self.build_audit_static_prefix(include_evidence_guide=True)
-        system_instruction = f"{coverletter_prompt}\n\n{background_context}{research_block}{referral_block}{keyword_block}{recommendations_block}"
+        role_block = (
+            f"\n\n=== ROLE TITLE ===\n{role_title}\n" if role_title else ""
+        )
+        system_instruction = f"{coverletter_prompt}\n\n{background_context}{research_block}{referral_block}{keyword_block}{recommendations_block}{role_block}"
 
         letter_text, _ = GeminiClient.generate(
             model=BUILDER_MODEL,
@@ -6240,6 +6272,7 @@ class ResumeEngine:
             keeper_bullets=keeper_bullets,
             keeper_embs=keeper_embs, keeper_embs_backup=keeper_embs_backup,
             voice_rules=self.voice_rules,
+            role_title=role_title,
         )
 
         max_coverletter_attempts = 3
@@ -6277,6 +6310,7 @@ class ResumeEngine:
                     keeper_bullets=keeper_bullets,
                     keeper_embs=keeper_embs, keeper_embs_backup=keeper_embs_backup,
                     voice_rules=self.voice_rules,
+                    role_title=role_title,
                 )
             attempt += 1
 
@@ -6295,6 +6329,7 @@ class ResumeEngine:
 
         stem = _build_output_stem(jd_path)
         letter_data["tagline"] = _read_matching_resume_tagline(stem)
+        letter_data["role_title"] = role_title
         json_out = os.path.join(self.output_json_dir, f"{stem}_CoverLetter.json")
         html_out = os.path.join(self.output_html_dir, f"{stem}_CoverLetter.html")
         pdf_out = os.path.join(self.output_pdf_dir, f"{stem}_CoverLetter.pdf")

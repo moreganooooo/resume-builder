@@ -102,7 +102,7 @@ class TestOrchestratorCoverletterVoice(unittest.TestCase):
         # Add another supporting paragraph to reach 240-360 word target
         good_p3 = (
             "Beyond tactical execution, I champion collaborative workflows across product, marketing, and sales teams to align overall strategy with daily execution. "
-            "I thrive in fast-paced environments where priorities shift quickly and cross-functional clarity is paramount to driving customer engagement and long-term retention. "
+            "I have spent years on teams where priorities shift quickly and cross-functional clarity is paramount to driving customer engagement and long-term retention. "
             "By establishing clear communication frameworks and data-backed performance tracking, teams achieve sustainable growth without compromising on narrative craft. "
             "Thank you for considering my application, and I look forward to the opportunity to discuss how my background aligns with your vision."
         )

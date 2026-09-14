@@ -227,6 +227,64 @@ def _profile_layout() -> str:
     return str(value).strip().lower() if value else "compact"
 
 
+def link_display(url: str) -> str:
+    """A URL as shown on the page: no scheme, no "www.", no trailing slash
+    ("https://www.linkedin.com/in/x/" -> "linkedin.com/in/x")."""
+    text = str(url or "").strip()
+    text = _re.sub(r"^https?://", "", text, flags=_re.IGNORECASE)
+    text = _re.sub(r"^www\.", "", text, flags=_re.IGNORECASE)
+    return text.rstrip("/")
+
+
+def profile_header_links() -> list:
+    """Extra header links a profile opts into (profile.yml
+    `resume_header_links:` names keys of its `candidate:` block, e.g.
+    [extra_link, portfolio_url]). Opt-in because normalize_resume
+    deliberately keeps a portfolio off resumes that never asked for one."""
+    try:
+        import profile_paths
+
+        profile = profile_paths.profile_yaml() or {}
+    except Exception:
+        return []
+    candidate = profile.get("candidate") or {}
+    return [
+        str(candidate.get(key)).strip()
+        for key in (profile.get("resume_header_links") or [])
+        if str(candidate.get(key) or "").strip()
+    ]
+
+
+def header_links_row_html(links: list) -> str:
+    """A second contact row for extra links, or "" when there are none."""
+    shown = [escape(link_display(link)) for link in (links or []) if str(link or "").strip()]
+    if not shown:
+        return ""
+    sep = '<span class="separator">|</span>'
+    return '<div class="contact-row">' + sep.join(f"<span>{s}</span>" for s in shown) + "</div>"
+
+
+def build_patents_section_html(patents: list, section_title: str = "Patents") -> str:
+    """Patents, one line each (Title | Number), styled like certifications;
+    "" when the profile has none."""
+    rows = [p for p in (patents or []) if isinstance(p, dict) and (p.get("title") or "").strip()]
+    if not rows:
+        return ""
+    items = []
+    for patent in rows:
+        parts = [f'<span class="cert-title">{escape(patent["title"])}</span>']
+        for key in ("number", "role"):
+            value = str(patent.get(key) or "").strip()
+            if value:
+                parts.append(f'<span class="cert-sep">|</span><span class="cert-org">{escape(value)}</span>')
+        items.append(f'<div class="cert-item patent-item">{"".join(parts)}</div>')
+    return f"""
+  <div class="section avoid-break">
+    <div class="section-title">{escape(section_title or "Patents")}</div>
+    {"".join(items)}
+  </div>"""
+
+
 def build_why_html(section_title: str, why_text: str) -> str:
     """
     Renders the conditional "Why [Company]?" section. tailor_resume.md says to
@@ -328,7 +386,7 @@ def render_html(resume_data: dict, output_path: str) -> str:
         "TAGLINE": _wrap_tagline_pipe(escape(resume_data.get("TAGLINE", ""))),
         "PHONE": escape(resume_data.get("PHONE", "")),
         "EMAIL": escape(resume_data.get("EMAIL", "")),
-        "LINKEDIN_DISPLAY": escape(resume_data.get("LINKEDIN_DISPLAY", "")),
+        "LINKEDIN_DISPLAY": escape(link_display(resume_data.get("LINKEDIN_DISPLAY", ""))),
         "LOCATION": escape(resume_data.get("LOCATION", "")),
         "PAGE_WIDTH": resume_data.get("PAGE_WIDTH", "8.5in"),
         "SUMMARY_TEXT": _sanitize_copy(resume_data.get("SUMMARY_TEXT", "")),
@@ -356,6 +414,16 @@ def render_html(resume_data: dict, output_path: str) -> str:
         ),
     )
     html = html.replace("{{LAYOUT_CSS}}", LAYOUT_CSS.get(_profile_layout(), ""))
+    html = html.replace(
+        "{{PATENTS_SECTION}}",
+        build_patents_section_html(
+            resume_data.get("PATENTS", []), resume_data.get("SECTION_PATENTS") or "Patents"
+        ),
+    )
+    header_links = resume_data.get("HEADER_LINKS")
+    if header_links is None:
+        header_links = profile_header_links()
+    html = html.replace("{{EXTRA_LINKS_ROW}}", header_links_row_html(header_links))
     html = html.replace(
         "{{EDUCATION}}", build_education_html(resume_data.get("EDUCATION", []))
     )

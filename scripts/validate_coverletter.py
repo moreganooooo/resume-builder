@@ -188,6 +188,58 @@ _CLICHED_OPENER_PATTERNS = [
 ]
 
 
+# Sentences that could sit in anyone's letter. A 2026-09-14 letter closed its
+# paragraphs with "I thrive in these high-stakes environments", "This
+# technical depth drives my work", and "Let's build something impactful
+# together" -- each spends a line saying nothing a screener can check.
+_FILLER_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r"\bthrive\s+in\b",
+        r"\bhigh[- ]stakes\s+environments?\b",
+        r"\blet'?s\s+build\b",
+        r"\bsomething\s+(?:impactful|special|great|amazing)\b",
+        r"\bdrives\s+my\s+work\b",
+        r"\bpassionate\s+about\b",
+        r"\bhit\s+the\s+ground\s+running\b",
+        r"\bperfect\s+fit\b",
+        r"\bmake\s+a\s+(?:meaningful|real|lasting)\s+(?:impact|difference)\b",
+        r"\bdynamic\s+(?:team|environment)\b",
+        r"\bfast[- ]paced\s+environment\b",
+        r"\bteam\s+player\b",
+        r"\bcore\s+of\s+my\s+professional\s+mission\b",
+        r"\bexcited\s+(?:about|by)\s+the\s+(?:opportunity|prospect)\b",
+    )
+]
+
+
+def _check_filler_lines(cover_letter_data: dict) -> list[str]:
+    violations = []
+    for paragraph in cover_letter_data.get("body_paragraphs", []) or []:
+        for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
+            if any(p.search(sentence) for p in _FILLER_PATTERNS):
+                violations.append(
+                    f"Generic filler line: {sentence.strip()!r} -- replace it with a specific fact "
+                    f"from the candidate's background tied to this role, or cut it."
+                )
+    return violations
+
+
+def _check_role_title(cover_letter_data: dict, role_title: str) -> list[str]:
+    """The role being applied for must be named in the first paragraph."""
+    title = " ".join(str(role_title or "").lower().split())
+    if not title:
+        return []
+    paragraphs = cover_letter_data.get("body_paragraphs") or []
+    first = " ".join(str(paragraphs[0] if paragraphs else "").lower().split())
+    if title in first:
+        return []
+    return [
+        f"The first paragraph must name the role being applied for, word for word: "
+        f"'{role_title}'. Work it into the first or second sentence."
+    ]
+
+
 def _check_cliched_openers(cover_letter_data: dict) -> list[str]:
     paragraphs = cover_letter_data.get("body_paragraphs", [])
     if not paragraphs:
@@ -319,8 +371,11 @@ def validate(
     keeper_embs=None,
     voice_rules: dict = None,
     keeper_embs_backup=None,
+    role_title: str = "",
 ) -> list[str]:
     violations = []
+    violations.extend(_check_role_title(cover_letter_data, role_title))
+    violations.extend(_check_filler_lines(cover_letter_data))
     violations.extend(_check_forbidden_phrases(cover_letter_data, style_rules))
     violations.extend(_check_paragraph_count(cover_letter_data))
     violations.extend(_check_word_count(cover_letter_data))

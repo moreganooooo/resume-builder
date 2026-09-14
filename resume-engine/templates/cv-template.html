@@ -151,6 +151,9 @@
     padding: 0 4px;
   }
 
+  /* Optional second row of links (render_html.header_links_row_html). */
+  .contact-row + .contact-row { margin-top: 3px; }
+
   /* === SECTIONS === */
   .section {
     margin-bottom: 10px;
@@ -434,6 +437,7 @@
       <span class="separator">|</span>
       <span>{{LOCATION}}</span>
     </div>
+    {{EXTRA_LINKS_ROW}}
   </div>
 
   <!-- PROFESSIONAL SUMMARY -->
@@ -453,6 +457,9 @@
     <div class="section-title">{{SECTION_EXPERIENCE}}</div>
     {{EXPERIENCE}}
   </div>
+
+  <!-- PATENTS (conditional -- render_html.py drops this entirely when there are none) -->
+  {{PATENTS_SECTION}}
 
   <!-- TRAINING & CERTIFICATIONS (conditional -- render_html.py drops this entirely when there are none) -->
   {{CERTIFICATIONS_SECTION}}
