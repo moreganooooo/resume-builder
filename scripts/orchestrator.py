@@ -2896,6 +2896,7 @@ def fit_composite_score(
     posting_legitimacy: str = None,
     legitimacy_caution_penalty: float = None,
     legitimacy_suspicious_penalty: float = None,
+    constraint_penalty: float = 0.0,
 ) -> float:
     """Weighted 1-5 blend of the three independent layer scores, per
     COMPOSITE_SCORE_WEIGHTS, plus a proximity boost for local commutable jobs
@@ -2997,7 +2998,8 @@ def fit_composite_score(
                 + stress_adjustment
                 - penalty
                 - stretch_penalty
-                - legit_penalty,
+                - legit_penalty
+                - (constraint_penalty or 0.0),
                 5.0,
             ),
             0.0,
@@ -3078,6 +3080,44 @@ def is_spurious_commute_blocker(blocker) -> bool:
     return False
 
 
+def build_situational_track_context(jd_text: str, roles_data: dict = None) -> str:
+    """Tells the evaluator a posting belongs to one of the candidate's
+    situational tracks (situational_roles.yaml) -- matched on the TITLE,
+    since those triggers ("administrative support", "data entry") appear in
+    plenty of marketing bodies too.
+
+    Without it, a local clerical or retail role was scored against the
+    candidate's primary career: "a significant step down", north_star 1,
+    growth 1 -- composites of 0.4-1.4 for roles the candidate had asked the
+    scanner to find (2026-09-14). The situational entry is what goes on the
+    resume for such a role, so it is what the fit should be judged on."""
+    try:
+        title = str((_parse_jd_data(jd_text) or {}).get("job_title") or "").strip()
+        names = (
+            situational_roles.detect_situational_candidates(title, roles_data)
+            if title
+            else []
+        )
+    except Exception:
+        return ""
+    if not names:
+        return ""
+    return (
+        "=== SITUATIONAL TRACK ===\n"
+        f"This posting's title matches the candidate's situational experience: "
+        f"{', '.join(names)}. The candidate deliberately considers roles like this "
+        "as a calm, local alternative to their primary career -- applying is a "
+        "choice, not a misstep, and that experience goes on the resume they send.\n"
+        "- Judge functional_alignment, tools_process_overlap, evidence_match, "
+        "title_continuity and domain_credibility against that situational "
+        "experience, not against target_roles.\n"
+        "- Do not score north_star_alignment, growth_value or level_plausibility "
+        "low merely because the role is junior to or outside the primary career; "
+        "score whether it is a stable, sustainable, reasonable fit for them.\n"
+        "- Being over-qualified is never a hard_blocker."
+    )
+
+
 def city_level_distance(location, loc_settings: dict) -> float | None:
     """Miles from the profile's home city to the posting's nearest listed
     hub, from city centroids -- the same resolution the scan-time location
@@ -3117,6 +3157,9 @@ def rescore_evaluation_with_location(
     description: str = None,
     scoring_weights: dict = None,
     role_track_settings: dict = None,
+    work_constraints_settings: dict = None,
+    posting_workplace: str = None,
+    job_title: str = None,
 ) -> dict:
     """Recalculates an evaluation dict incorporating local commute distance:
     1. Calibrates practical_pursue_subscores['remote_quality'] (closer = higher).
@@ -3151,6 +3194,20 @@ def rescore_evaluation_with_location(
     subs = dict(ev.get("practical_pursue_subscores", {}))
     blockers = list(ev.get("hard_blockers", []))
 
+    # Blocker hygiene, every category. Over-qualification is a recruiting
+    # concern, never a reason not to apply (the years_experience carve-out
+    # below predates this and covered only that category -- an `other`
+    # entry tagged over_qualified still zeroed a retail role on
+    # 2026-09-14). And a "blocker" whose text is just the job title is the
+    # model disqualifying the role for being what it is.
+    title_key = " ".join(str(job_title or "").lower().split())
+    blockers = [
+        b
+        for b in blockers
+        if not (isinstance(b, dict) and b.get("direction") == "over_qualified")
+        and not (title_key and " ".join(_blocker_text(b).lower().split()) == title_key)
+    ]
+
     is_commutable_local = (
         radius_miles
         and distance_miles is not None
@@ -3178,6 +3235,27 @@ def rescore_evaluation_with_location(
             if msg not in existing_texts:
                 blockers.append({"text": msg, "category": "onsite_commute"})
             ev["hard_blockers"] = blockers
+
+    # A profile's own physical/phone limits (scan_filters.yml
+    # work_constraints:, scripts/work_constraints.py). Deterministic, so
+    # the verdict does not depend on how the model reads a posting today;
+    # physical_demands is not an EXPERIENCE category, so it forces Skip.
+    constraint_penalty = 0.0
+    if work_constraints_settings and description:
+        import work_constraints
+
+        seen = {(b.get("category"), _blocker_text(b)) for b in blockers if isinstance(b, dict)}
+        for finding in work_constraints.detect(description, work_constraints_settings):
+            if finding["severity"] == work_constraints.BLOCKER:
+                key = ("physical_demands", finding["text"])
+                if key not in seen:
+                    seen.add(key)
+                    blockers.append(
+                        {"text": finding["text"], "category": "physical_demands", "direction": "n/a"}
+                    )
+            else:
+                constraint_penalty += finding["penalty"]
+    ev["hard_blockers"] = blockers
 
     fit_score = compute_fit_score(ev.get("fit_subscores", {}))
     interview_odds_score = compute_interview_odds_score(
@@ -3264,7 +3342,22 @@ def rescore_evaluation_with_location(
 
             stress_signal_count = len(stress_signals.categories(description))
 
-        weights = scoring_weights or {}
+        weights = dict(scoring_weights or {})
+        # An in-person job has to be calm to be worth the commute: a
+        # profile can scale the stress penalty for onsite/hybrid postings.
+        multiplier = float(
+            (work_constraints_settings or {}).get("onsite_stress_multiplier") or 1.0
+        )
+        if multiplier != 1.0 and posting_workplace in (
+            location_filter.ONSITE,
+            location_filter.HYBRID,
+        ):
+            for key, default in (
+                ("stress_signal_penalty_per_category", STRESS_SIGNAL_PENALTY_PER_CATEGORY),
+                ("stress_signal_max_penalty", STRESS_SIGNAL_MAX_PENALTY),
+            ):
+                base_value = weights.get(key)
+                weights[key] = (default if base_value is None else base_value) * multiplier
         comp = fit_composite_score(
             fit_score,
             interview_odds_score,
@@ -3288,6 +3381,7 @@ def rescore_evaluation_with_location(
             posting_legitimacy=ev.get("posting_legitimacy"),
             legitimacy_caution_penalty=weights.get("legitimacy_caution_penalty"),
             legitimacy_suspicious_penalty=weights.get("legitimacy_suspicious_penalty"),
+            constraint_penalty=constraint_penalty,
         )
         ev["composite_score"] = comp
 
@@ -5427,6 +5521,10 @@ class ResumeEngine:
                 soft_wrap=True,
             )
 
+        track_block = build_situational_track_context(jd_text)
+        if track_block:
+            sections.append(track_block)
+
         pay_block = build_compensation_context(jd_text)
         if pay_block:
             sections.append(pay_block)
@@ -5548,9 +5646,11 @@ class ResumeEngine:
 
             scoring_weights = content_settings.read_scoring_weights()
             role_track_settings = content_settings.read_role_track_settings()
+            work_constraints_settings = content_settings.read_work_constraints()
         except Exception:
             scoring_weights = {}
             role_track_settings = {}
+            work_constraints_settings = {}
 
         # 5b. Remote-vs-Local Candidate Pool Calibration. A remote posting
         # competes against a national/global applicant pool; an onsite
@@ -5638,6 +5738,9 @@ class ResumeEngine:
             description=jd_data.get("description") or jd_text,
             scoring_weights=scoring_weights,
             role_track_settings=role_track_settings,
+            work_constraints_settings=work_constraints_settings,
+            posting_workplace=workplace,
+            job_title=jd_data.get("job_title"),
         )
 
         # 8. Heuristic Ghost Job Probability Calculator

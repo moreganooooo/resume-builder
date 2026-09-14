@@ -1303,6 +1303,31 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   re-evaluated: the penalty is purely subtractive, and a full
   `rescore_evaluation_with_location()` pass without the stored distance
   would have wrongly dropped local roles' proximity bonus.
+- **Physical and phone limits are Python, not a prompt judgment
+  (`scripts/work_constraints.py`, scan_filters.yml `work_constraints:`).**
+  On 2026-09-14 the recruiter evaluator zeroed all 26 of a profile's local
+  retail/clerical roles, over the job title itself ("Retail Sales
+  Associate"), over-qualification tagged `other`, and ordinary duties
+  ("operate multi-line phone systems"), while the physical demands that
+  actually mattered to that candidate were flagged inconsistently. Now:
+  standing for long periods, lifting over `heavy_lift_lbs` (or frequent
+  lifting over `max_lift_lbs`), and truck unloading are deterministic
+  `physical_demands` blockers (they force Skip); occasional mid-weight
+  lifting and phone-heavy work are penalties; `onsite_stress_multiplier`
+  scales the stress penalty for onsite/hybrid postings. Inert without the
+  block. Thresholds were measured on a 1,628-posting corpus -- a sit
+  option anywhere in the clause voids a standing match ("sit and/or stand
+  at a desk for extended periods" is a desk job), and clauses split on
+  semicolons ("Regular lifting of 30 lbs; occasional heavier" is two
+  facts). `rescore_evaluation_with_location()` also drops ANY
+  `over_qualified` blocker and any blocker whose text is the job title,
+  and evaluate_recruiter.md tells the model to leave physical demands,
+  routine duties and over-qualification out of `hard_blockers` entirely.
+  Separately, `build_situational_track_context()` tells the evaluator when
+  a posting's TITLE matches a situational role, so a clerical role is
+  judged against the situational experience that goes on its resume rather
+  than the primary career ("a significant step down", north_star 1).
+  Titles only: those triggers appear in marketing bodies too.
 - **`role_dna.yaml` is per-profile when the profile has one
   (`ResumeEngine._role_dna_dir()`).** The shared
   `resume-engine/scoring/role_dna.yaml` is a marketing library, and it was
