@@ -171,6 +171,50 @@ def build_certifications_html(certs: list[dict]) -> str:
     return "\n".join(html)
 
 
+def build_certifications_section_html(section_title: str, certs: list) -> str:
+    """The whole Training & Certifications section, or "" when there is
+    nothing to list -- the template used to print the heading regardless, so
+    a profile without certifications got an empty titled section on page 1."""
+    certs = [c for c in (certs or []) if isinstance(c, dict) and (c.get("title") or "").strip()]
+    if not certs:
+        return ""
+    return f"""
+  <div class="section avoid-break">
+    <div class="section-title">{escape(section_title or "Training & Certifications")}</div>
+    {build_certifications_html(certs)}
+  </div>"""
+
+
+# A profile whose content runs short (profile.yml `resume_layout: relaxed`)
+# gets more breathing room so page 2 doesn't look empty next to a dense
+# page 1. The default layout is untouched.
+LAYOUT_CSS = {
+    "compact": "",
+    "relaxed": """
+  .header { margin-bottom: 16px; }
+  .section { margin-bottom: 16px; }
+  .section-title { margin-bottom: 6px; }
+  .summary-text, .skills-grid, .job li, .career-note { line-height: 1.32; }
+  .skills-grid { gap: 3px; }
+  .job { margin-bottom: 14px; }
+  .job + .job .job-title { margin-top: 6px; }
+  .job-meta { margin-bottom: 5px; }
+  .job ul { margin-top: 5px; }
+  .job li { margin-bottom: 3px; }
+""",
+}
+
+
+def _profile_layout() -> str:
+    try:
+        import profile_paths
+
+        value = (profile_paths.profile_yaml() or {}).get("resume_layout")
+    except Exception:
+        return "compact"
+    return str(value).strip().lower() if value else "compact"
+
+
 def build_why_html(section_title: str, why_text: str) -> str:
     """
     Renders the conditional "Why [Company]?" section. tailor_resume.md says to
@@ -294,9 +338,12 @@ def render_html(resume_data: dict, output_path: str) -> str:
         "{{EXPERIENCE}}", build_experience_html(resume_data.get("EXPERIENCE", []))
     )
     html = html.replace(
-        "{{CERTIFICATIONS}}",
-        build_certifications_html(resume_data.get("CERTIFICATIONS", [])),
+        "{{CERTIFICATIONS_SECTION}}",
+        build_certifications_section_html(
+            scalars["SECTION_CERTIFICATIONS"], resume_data.get("CERTIFICATIONS", [])
+        ),
     )
+    html = html.replace("{{LAYOUT_CSS}}", LAYOUT_CSS.get(_profile_layout(), ""))
     html = html.replace(
         "{{EDUCATION}}", build_education_html(resume_data.get("EDUCATION", []))
     )

@@ -1334,6 +1334,20 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   and call 3-mile offices "incompatible", which rescoring fixed in
   `remote_quality` but not in the other subscores. Nothing is said when
   the distance or radius is unknown, or the posting is remote.
+- **tailor_resume.md must stay field-neutral; profile vocabulary lives in
+  data.** It hardcoded one marketing profile's five tagline descriptors and
+  two marketing summary exemplars, so a data-science profile's sample came
+  out "DATA SCIENTIST | CAMPAIGN CRM SYSTEMS SPECIALIST" with a summary
+  that copied the exemplar's "multi-channel performance" (2026-09-14).
+  Descriptors are now `tagline_descriptor` on each archetype in
+  role_dna.yaml (shared or per-profile), injected as `=== TAGLINE
+  DESCRIPTORS ===` by `build_tagline_descriptor_block()`, and the
+  exemplars are bracketed structure-only templates.
+  `test_tagline_descriptors` fails if a descriptor reappears in the prompt.
+  Rendering: the Training & Certifications section is dropped when empty
+  (`build_certifications_section_html`), and profile.yml
+  `resume_layout: relaxed` injects `render_html.LAYOUT_CSS["relaxed"]` for
+  a profile whose content leaves page 2 sparse; the default is unchanged.
 - **`role_dna.yaml` is per-profile when the profile has one
   (`ResumeEngine._role_dna_dir()`).** The shared
   `resume-engine/scoring/role_dna.yaml` is a marketing library, and it was
