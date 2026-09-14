@@ -198,6 +198,37 @@ _INTERNATIONAL_TOKENS |= {
     "nu",
 }
 
+# Regions and major non-US cities. A posting that names only these ("Europe",
+# "Roppongi, Tokyo", "Bangalore") used to pass as merely unresolvable -- a
+# 2026-09-13 scan kept all three inside a 5-mile radius. Several are also US
+# town names (Hamburg, Warsaw, Athens, Melbourne...), which is why
+# looks_international() never trusts any of these when the same location
+# also names a US state or "US".
+_INTERNATIONAL_PLACES = {
+    "europe", "european union", "asia", "asia pacific", "middle east", "africa",
+    "latin america", "south america", "central america",
+    "london", "manchester", "edinburgh", "glasgow", "belfast", "dublin", "cork",
+    "paris", "berlin", "munich", "frankfurt", "hamburg", "amsterdam", "rotterdam",
+    "brussels", "madrid", "barcelona", "lisbon", "milan", "rome", "vienna", "zurich",
+    "geneva", "stockholm", "copenhagen", "oslo", "helsinki", "warsaw", "krakow",
+    "kraków", "prague", "budapest", "bucharest", "sofia", "belgrade", "zagreb",
+    "athens", "istanbul", "kyiv", "tbilisi", "riga", "vilnius", "tallinn",
+    "toronto", "vancouver", "montreal", "ottawa", "calgary",
+    "tokyo", "osaka", "kyoto", "seoul", "busan", "taipei", "shanghai", "beijing",
+    "shenzhen", "manila", "jakarta", "kuala lumpur", "bangkok", "hanoi",
+    "ho chi minh city", "bangalore", "bengaluru", "hyderabad", "pune", "mumbai",
+    "chennai", "new delhi", "gurgaon", "gurugram", "noida", "kolkata", "ahmedabad",
+    "sydney", "melbourne", "brisbane", "perth", "auckland",
+    "tel aviv", "jerusalem", "dubai", "abu dhabi", "riyadh", "doha", "cairo",
+    "lagos", "nairobi", "johannesburg", "cape town",
+    "sao paulo", "são paulo", "mexico city", "guadalajara", "monterrey",
+    "buenos aires", "bogota", "bogotá", "medellin", "medellín", "santiago", "lima",
+}
+# Short tokens are trusted only as a whole comma-separated piece ("Toronto,
+# ON"), never inside a phrase, where "on"/"bc" are ordinary words -- except
+# these, which are unambiguous even mid-phrase ("Remote UK").
+_SHORT_TOKENS_OK_IN_PHRASE = {"uk", "uae"}
+
 # Workplace words are not part of a place name. "Hybrid - Kansas City, MO"
 # must resolve to Kansas City, or every hybrid posting looks unresolvable
 # and silently survives the radius check.
@@ -266,11 +297,38 @@ def looks_international(location: str) -> bool:
     if not location:
         return False
     stripped = re.sub(r"\([^)]*\)", " ", location)
-    for part in re.split(r"[,/|;]", stripped):
-        token = part.strip().strip(".").lower()
-        if token in _INTERNATIONAL_TOKENS:
-            return True
-    return False
+    parts = [p.strip().strip(".").lower() for p in re.split(r"[,/|;]", stripped)]
+    parts = [p for p in parts if p]
+
+    def phrases(part: str) -> set:
+        # Every 1-3 word run inside a piece, so "Amtech India" yields "india".
+        words = re.findall(r"[^\W\d_]+", part)
+        return {
+            " ".join(words[i:j])
+            for i in range(len(words))
+            for j in range(i + 1, min(i + 3, len(words)) + 1)
+        }
+
+    international = False
+    us_signal = False
+    for part in parts:
+        if part in _INTERNATIONAL_TOKENS or part in _INTERNATIONAL_PLACES:
+            international = True
+        # A bare state code counts only as a whole piece ("Hamburg, NY") --
+        # inside a phrase "in"/"or"/"me" are ordinary words, not IN/OR/ME.
+        if len(part) == 2 and part.upper() in _STATE_CODES:
+            us_signal = True
+        for phrase in phrases(part):
+            if (len(phrase) >= 4 or phrase in _SHORT_TOKENS_OK_IN_PHRASE) and (
+                phrase in _INTERNATIONAL_TOKENS or phrase in _INTERNATIONAL_PLACES
+            ):
+                international = True
+            if phrase in _US_COUNTRY_TOKENS or phrase in _STATE_NAMES:
+                us_signal = True
+    # A US state or "US" anywhere wins: US towns share foreign names
+    # (Hamburg, Warsaw, Poland NY; Melbourne FL; Athens GA), "Georgia" is a
+    # state as well as a country, and "Remote - US; Europe" is US-eligible.
+    return international and not us_signal
 
 
 class LocationVerdict:
