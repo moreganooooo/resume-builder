@@ -113,6 +113,7 @@ def check_score(
     description: str,
     scoring_weights: dict,
     role_track_settings: dict | None = None,
+    work_constraints_settings: dict | None = None,
 ) -> bool:
     """Recomputes the recommendation with current scoring weights and
     reports whether it now comes out Skip. hard_blockers/experience_blockers
@@ -136,6 +137,7 @@ def check_score(
         description=description,
         scoring_weights=scoring_weights,
         role_track_settings=role_track_settings,
+        work_constraints_settings=work_constraints_settings,
     )
     return rescored.get("recommendation") == "Skip"
 
@@ -143,6 +145,7 @@ def check_score(
 def find_candidates(profile: str) -> list:
     scoring_weights = content_settings.read_scoring_weights()
     role_track_settings = content_settings.read_role_track_settings()
+    work_constraints_settings = content_settings.read_work_constraints()
     findings = []
     checked = set()
 
@@ -158,7 +161,11 @@ def find_candidates(profile: str) -> list:
         gate_failures = check_gates(data)
         description = data.get("description") or ""
         score_flagged = check_score(
-            row["evaluation"], description, scoring_weights, role_track_settings
+            row["evaluation"],
+            description,
+            scoring_weights,
+            role_track_settings,
+            work_constraints_settings,
         )
 
         if gate_failures or score_flagged:

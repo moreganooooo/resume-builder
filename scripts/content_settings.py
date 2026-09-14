@@ -231,6 +231,17 @@ def read_settings(path: str | None = None) -> dict:
         kept = {k: pay[k] for k in _COMPENSATION_KEYS if pay.get(k) not in (None, "")}
         if kept:
             settings["compensation"] = kept
+    constraints = data.get("work_constraints")
+    if isinstance(constraints, dict):
+        import work_constraints
+
+        kept = {
+            k: constraints[k]
+            for k in work_constraints.DEFAULTS
+            if constraints.get(k) not in (None, "")
+        }
+        if kept:
+            settings["work_constraints"] = kept
     weights = data.get("scoring_weights")
     if isinstance(weights, dict):
         kept = {
@@ -270,6 +281,15 @@ def read_role_track_settings(path: str | None = None) -> dict:
     merged = dict(DEFAULT_ROLE_TRACK_SETTINGS)
     merged.update(overrides)
     return merged
+
+
+def read_work_constraints(path: str | None = None) -> dict:
+    """scan_filters.yml's work_constraints: block merged over
+    work_constraints.DEFAULTS -- all inert, so a profile without the block
+    scores exactly as before."""
+    import work_constraints
+
+    return work_constraints.merged(read_settings(path).get("work_constraints"))
 
 
 def read_linkedin_experience_levels(path: str | None = None) -> list:
