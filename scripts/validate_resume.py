@@ -880,6 +880,44 @@ def check_keyword_coverage(
     return {"score": score, "band": band, "matched": matched, "missing": missing}
 
 
+# Size words that stand in for a number. A 2026-09-14 summary said "driving
+# significant accuracy improvements" and "reducing processing time
+# substantially" while the candidate's own bullets carried the real figures
+# (15%, 96%) -- the vagueness hid the strongest evidence on the page.
+_VAGUE_MAGNITUDE_RE = re.compile(
+    r"\b(significant(?:ly)?|substantial(?:ly)?|dramatic(?:ally)?|considerabl[ey]|"
+    r"notabl[ey]|greatly|vastly|massive(?:ly)?|tremendous(?:ly)?|markedly)\b",
+    re.IGNORECASE,
+)
+# Legitimate technical usage, not a stand-in for a figure.
+_VAGUE_MAGNITUDE_EXEMPT_RE = re.compile(
+    r"\bstatistical(?:ly)?\s+significan|\bsignificant\s+(?:figures|digits)\b"
+    r"|\bsignificance\b",
+    re.IGNORECASE,
+)
+
+
+def _check_vague_magnitudes(resume_data: dict) -> list[str]:
+    """Flags a vague size word in the Summary or a bullet. Soft (see
+    orchestrator.partition_violations): the fix loop is asked to replace it
+    with the verified figure or a concrete result, but it never fails a build."""
+    fields = [("Summary", _strip_html(resume_data.get("SUMMARY_TEXT") or ""))]
+    fields += [("bullet", b) for b in _all_bullets(resume_data)]
+    violations = []
+    for label, text in fields:
+        if not text:
+            continue
+        scrubbed = _VAGUE_MAGNITUDE_EXEMPT_RE.sub(" ", text)
+        match = _VAGUE_MAGNITUDE_RE.search(scrubbed)
+        if match:
+            violations.append(
+                f"Vague magnitude '{match.group(0)}' in {label}: state the verified figure "
+                f"from the candidate's own bullets instead, or describe the concrete result "
+                f"-- {text[:90]!r}"
+            )
+    return violations
+
+
 def _check_hallucinated_tools(resume_data: dict) -> list[str]:
     """
     Checks if any skills or tools mentioned in the SKILLS section of the resume are
@@ -2186,6 +2224,7 @@ def validate(
     violations.extend(_check_skills_line_lengths(resume_data, style_rules))
     violations.extend(_check_skills_title_case(resume_data))
     violations.extend(_check_hallucinated_tools(resume_data))
+    violations.extend(_check_vague_magnitudes(resume_data))
     violations.extend(_check_pronouns_outside_why(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_metric_provenance(resume_data, bullet_tuples))
