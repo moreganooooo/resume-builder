@@ -290,7 +290,18 @@ title_filter:
   - Talent
   - People
   - Human Resources
-  - HR
+  # Specific HR titles, not a bare "HR": matching is a case-insensitive
+  # substring, so "HR" also rejected every "$60/hr" contract posting (and
+  # "Christmas", "three"...). Changed 2026-09-13.
+  - HR Manager
+  - HR Generalist
+  - HR Coordinator
+  - HR Specialist
+  - HR Business Partner
+  - HR Assistant
+  - HR Director
+  - HRBP
+  - Christmas
   - Cold Call
   - Clinical
   - Medical
@@ -302,8 +313,6 @@ title_filter:
   - Pharmaceutical
   - Compounding
   - Billing
-  - Administrative
-  - Data Entry
   - Supply Chain
   - Quality Control
   - Philippines
@@ -372,7 +381,6 @@ title_filter:
   - Food Safety
   - Store Operations
   - Real Estate
-  - 'Retail '
   - Success Manager
   - Sales Consultant
   - Channel Partner
@@ -423,7 +431,6 @@ title_filter:
   - Field Implementation
   - Field Support
   - Renewals
-  - Operations Specialist
   - Tech-Operations
   - Delivery Operations
   - Field Operations
@@ -597,5 +604,38 @@ title_filter:
   - Sales Operation
   - RevOps
   - Revenue Operations
+  # Clerical and retail roles (situational resume entries), added 2026-09-14.
+  - Administrative
+  - Office Assistant
+  - Office Manager
+  - Receptionist
+  - Front Desk
+  - Clerk
+  - Data Entry
+  - Sales Associate
+  - Retail
+  - Store Associate
+  - Cashier
+  - Keyholder
 role_track:
   exclude_manager: true
+# What Indeed searches for (max 3 terms, one scrape each). Local clerical and
+# retail roles only surface if Indeed is asked for them; email/lifecycle roles
+# are remote and come from the boards/ATS scans. Added 2026-09-14.
+indeed_search_terms:
+- marketing
+- administrative assistant
+- sales associate
+# Physical and phone limits, judged deterministically on every evaluation
+# (scripts/work_constraints.py). Standing for long periods, heavy lifting and
+# manual labor are deal-breakers; light/medium lifting is fine. Phone-heavy
+# work costs points but is not ruled out. In-person roles pay double the
+# stress-signal penalty, so only calm onsite/hybrid roles rank well.
+work_constraints:
+  no_prolonged_standing: true
+  no_manual_labor: true
+  max_lift_lbs: 25
+  heavy_lift_lbs: 40
+  lift_penalty: 0.3
+  phone_heavy_penalty: 0.75
+  onsite_stress_multiplier: 2.0
