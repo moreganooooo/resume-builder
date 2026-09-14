@@ -3078,6 +3078,35 @@ def is_spurious_commute_blocker(blocker) -> bool:
     return False
 
 
+def city_level_distance(location, loc_settings: dict) -> float | None:
+    """Miles from the profile's home city to the posting's nearest listed
+    hub, from city centroids -- the same resolution the scan-time location
+    gate already trusts (location_filter.nearest_hub_distance). None when
+    either side can't be resolved; never 0.
+
+    location_enricher resolves to an ADDRESS (a ZIP in the text, or Maps)
+    and reports a bare "Buffalo, NY, US" as unresolved, so on 2026-09-13
+    every one of a profile's first 33 local roles reached
+    rescore_evaluation_with_location() with no distance: routine
+    onsite/commute lines ("Fully onsite in Buffalo, NY", "Ability to
+    commute: Depew, NY") were never recognized as commutable and zeroed
+    roles 4-11 miles from home."""
+    if not location or not loc_settings:
+        return None
+    origin = ", ".join(
+        str(x) for x in (loc_settings.get("city"), loc_settings.get("state")) if x
+    )
+    if not origin:
+        return None
+    try:
+        import location_filter
+
+        miles, _hub = location_filter.nearest_hub_distance(str(location), origin)
+    except Exception:
+        return None
+    return round(miles, 1) if miles is not None else None
+
+
 def rescore_evaluation_with_location(
     evaluation: dict,
     distance_miles: float = None,
@@ -5592,6 +5621,8 @@ class ResumeEngine:
                     loc_dist = enr.get("distance_miles")
             except Exception:
                 pass
+        if loc_dist is None and radius_miles:
+            loc_dist = city_level_distance(jd_data.get("location"), loc_settings)
 
         posting_age_days = jd_manager.compute_posting_age_days(jd_path)
         evaluation["posting_age_days"] = posting_age_days
