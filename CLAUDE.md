@@ -1328,6 +1328,12 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   judged against the situational experience that goes on its resume rather
   than the primary career ("a significant step down", north_star 1).
   Titles only: those triggers appear in marketing bodies too.
+  `evaluate_fit()` also resolves workplace mode and commute distance
+  BEFORE the model calls and states it (`build_commute_context()`): the
+  model used to read a "short commute only" deal-breaker with no distance
+  and call 3-mile offices "incompatible", which rescoring fixed in
+  `remote_quality` but not in the other subscores. Nothing is said when
+  the distance or radius is unknown, or the posting is remote.
 - **`role_dna.yaml` is per-profile when the profile has one
   (`ResumeEngine._role_dna_dir()`).** The shared
   `resume-engine/scoring/role_dna.yaml` is a marketing library, and it was
