@@ -11,6 +11,31 @@ sys.path.insert(0, SCRIPTS_DIR)
 import scan_jobright  # noqa: E402
 
 
+class TestJobrightCompensation(unittest.TestCase):
+    """Pay was dropped entirely until 2026-09-15 -- the API states it in
+    minSalary/maxSalary, with the period only in salaryDesc."""
+
+    def test_annual_range_round_trips_through_normalize(self):
+        import compensation
+
+        comp = scan_jobright._jobright_compensation(
+            {"minSalary": 114000.0, "maxSalary": 200000.0,
+             "salaryDesc": "$114K/yr - $200K/yr"}
+        )
+        parsed = compensation.normalize_structured(comp)
+        self.assertEqual(parsed["period"], "annual")
+        self.assertEqual(parsed["annualized_max"], 200000)
+
+    def test_hourly_period_comes_from_the_description(self):
+        comp = scan_jobright._jobright_compensation(
+            {"minSalary": 20.0, "maxSalary": 25.0, "salaryDesc": "$20/hr - $25/hr"}
+        )
+        self.assertEqual(comp["interval"], "hour")
+
+    def test_no_salary_is_none(self):
+        self.assertIsNone(scan_jobright._jobright_compensation({"salaryDesc": ""}))
+
+
 class TestFetchJobrightJobsActivity(unittest.TestCase):
 
     @patch.dict(os.environ, {"JOBRIGHT_COOKIE_STRING": "fake-cookie"})
