@@ -580,7 +580,8 @@ def evaluate(jd_file, yes, refresh):
     multiple=True,
     default=None,
     help="Source to scan (jobright, linkedin, boards -- public job boards like RemoteOK/TheMuse, "
-    "ats -- direct-to-ATS like Greenhouse/Ashby/Lever). Repeatable. Default: all configured sources.",
+    "ats -- direct-to-ATS like Greenhouse/Ashby/Lever, indeed / indeed_tesla / indeed_watchlist -- "
+    "Indeed role search, Tesla, named-company watchlist). Repeatable. Default: all configured sources.",
 )
 @click.option(
     "--no-verify",
