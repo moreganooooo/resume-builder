@@ -549,8 +549,15 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   for new projects. Map grounding is the reverse: 500/day on
   `gemini-3.1-flash-lite`/`3.5-flash-lite`. Hence `company_research`'s
   Search calls run on `gemma-4-31b-it` and the location enricher's Maps
-  call on `gemini-3.1-flash-lite`. `generate()` never swaps models on a
-  call carrying `tools` (a swap lands on a family with no grounding quota),
+  call on `gemini-3.5-flash-lite` (verified live 2026-09-15, when it became
+  the default flash-lite everywhere -- same free-tier limits as 3.1, which
+  is now its first fallback in `MODEL_FALLBACKS`). Grounded calls fall
+  back only within their tool's quota family (`GROUNDED_FALLBACKS`): Search
+  swaps between `gemma-4-31b-it` and `gemma-4-26b-a4b-it`, Maps between the
+  two flash-lites. The 2.5 models appear in the model list but return 404
+  "no longer available to new users" (probed 2026-09-15) -- don't point a
+  grounded call at them. A call carrying `tools` never uses
+  `MODEL_FALLBACKS` (a swap there lands on a family with no grounding quota),
   and grounded callers use `generate_grounded()`, which returns the
   `groundingMetadata` they must check -- an answer with no grounding chunk
   is the model's memory, and was measurably wrong in testing. Check a

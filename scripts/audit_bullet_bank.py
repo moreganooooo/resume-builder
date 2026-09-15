@@ -137,7 +137,7 @@ def run_audit(csv_path=None, out_path=None, sleep_seconds=SLEEP):
 
         try:
             critique_text, usage = GeminiClient.generate(
-                model="gemini-3.1-flash-lite",
+                model="gemini-3.5-flash-lite",
                 system_instruction=critique_system,
                 contents=(
                     f"--- BULLET ---\n{bullet}\n\n"

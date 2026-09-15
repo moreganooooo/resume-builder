@@ -114,7 +114,14 @@ def generate_grounded(
     body = {"contents": [{"parts": [{"text": prompt}]}], "tools": tools}
     if tool_config:
         body["toolConfig"] = tool_config
+    fallbacks = grounded_fallbacks(tools)
+    failures = 0
     for attempt in range(max_retries):
+        # Two failures on one model -> its same-quota-family backup.
+        if failures >= 2 and model in fallbacks:
+            model = fallbacks[model]
+            url = f"{BASE_URL}/{model}:generateContent"
+            failures = 0
         try:
             response = requests.post(
                 url,
@@ -138,6 +145,7 @@ def generate_grounded(
             return (text.strip() or None), (candidate.get("groundingMetadata") or {})
         if response is not None and response.status_code not in (429, 500, 502, 503, 504):
             return None, {}
+        failures += 1
         time.sleep(min(5 * 2**attempt, 30))
     return None, {}
 
@@ -219,7 +227,7 @@ BASE_BACKOFF_SECS = 8
 MAX_BACKOFF_SECS = 90
 
 # Fallback model used when primary fails repeatedly
-REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
+REWRITE_FALLBACK_MODEL = "gemini-3.5-flash-lite"
 
 
 def _server_retry_delay_secs(resp) -> float | None:
@@ -257,10 +265,45 @@ def _server_retry_delay_secs(resp) -> float | None:
 # itself) -- gemma-4-31b-it has TPM Unlimited on this account's quota
 # tiers, making it a real rescue path when flash-lite is under high
 # demand, not just a same-model retry with backoff.
+# gemini-3.5-flash-lite sits between them (2026-09-15): the old pair was
+# each other's only rescue, and a probe that day found flash-lite 503ing and
+# gemma-4-31b-it 500ing on every call while 3.5-flash-lite answered in <1s
+# with the same schema + minimal-thinking config -- so the fallback just
+# bounced between two failing models until the retries ran out. The swap
+# resets the failure streak, so one call can walk more than one hop.
+# 3.5-flash-lite became the default the same day (identical free-tier
+# limits: 15 RPM / 250k TPM / 500 RPD), with 3.1 as its first rescue.
 MODEL_FALLBACKS = {
-    "gemma-4-31b-it": REWRITE_FALLBACK_MODEL,
+    "gemini-3.5-flash-lite": "gemini-3.1-flash-lite",
     "gemini-3.1-flash-lite": "gemma-4-31b-it",
+    "gemma-4-31b-it": "gemini-3.5-flash-lite",
 }
+
+# Grounded calls fall back only WITHIN the family that has quota for their
+# tool -- MODEL_FALLBACKS would cross into a family with none (Search
+# grounding is zero for every Gemini 3 model on the free tier; the 2.5
+# models 404 for newer projects). Probed live 2026-09-15: gemma-4-31b-it
+# 500ing on every Search call while gemma-4-26b-a4b-it grounded fine; both
+# flash-lites return Maps chunks (500 RPD each).
+GROUNDED_FALLBACKS = {
+    "google_search": {
+        "gemma-4-31b-it": "gemma-4-26b-a4b-it",
+        "gemma-4-26b-a4b-it": "gemma-4-31b-it",
+    },
+    "google_maps": {
+        "gemini-3.5-flash-lite": "gemini-3.1-flash-lite",
+        "gemini-3.1-flash-lite": "gemini-3.5-flash-lite",
+    },
+}
+
+
+def grounded_fallbacks(tools) -> dict:
+    """The fallback map for a call using `tools` -- empty (no swap) unless it
+    uses exactly one known grounding tool."""
+    names = {name for tool in tools or [] if isinstance(tool, dict) for name in tool}
+    if len(names) != 1:
+        return {}
+    return GROUNDED_FALLBACKS.get(names.pop(), {})
 
 # Embedding model + dimension (matches orchestrator.py constants)
 EMBED_MODEL = "gemini-embedding-2"
@@ -614,8 +657,9 @@ class GeminiClient:
         # lets the caller fall through to its next tier sooner. (Gemma DOES
         # support Google Search -- verified live 2026-09-13; an earlier
         # version of this comment said otherwise.)
-        if tools:
-            model_fallback = False
+        # A grounded call swaps only within its tool's quota family (see
+        # GROUNDED_FALLBACKS).
+        fallbacks = grounded_fallbacks(tools) if tools else MODEL_FALLBACKS
         failure_streak = 0
 
         for attempt in range(max_retries):
@@ -788,8 +832,8 @@ class GeminiClient:
                     )
             except requests.exceptions.RequestException as e:
                 failure_streak += 1
-                if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
-                    fallback_model = MODEL_FALLBACKS[model]
+                if model_fallback and failure_streak >= 2 and model in fallbacks:
+                    fallback_model = fallbacks[model]
                     cli_art.console.print(
                         f"    {cli_art.WARNING} Transport failures — falling back to {fallback_model}...",
                         soft_wrap=True,
@@ -827,8 +871,8 @@ class GeminiClient:
                 )
 
             if resp.status_code in RETRYABLE:
-                if model_fallback and failure_streak >= 2 and model in MODEL_FALLBACKS:
-                    fallback_model = MODEL_FALLBACKS[model]
+                if model_fallback and failure_streak >= 2 and model in fallbacks:
+                    fallback_model = fallbacks[model]
                     cli_art.console.print(
                         f"    {cli_art.WARNING} Server failures — falling back to {fallback_model}...",
                         soft_wrap=True,

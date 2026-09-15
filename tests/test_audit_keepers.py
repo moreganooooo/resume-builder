@@ -368,7 +368,7 @@ class TestStage4AutoRewriteStartsOnFlashLite(unittest.TestCase):
         self.assertEqual(
             call_kwargs["start_model"], audit_keepers.REWRITE_FALLBACK_MODEL
         )
-        self.assertEqual(audit_keepers.REWRITE_FALLBACK_MODEL, "gemini-3.1-flash-lite")
+        self.assertEqual(audit_keepers.REWRITE_FALLBACK_MODEL, "gemini-3.5-flash-lite")
 
     @patch("audit_keepers.append_keeper")
     @patch("audit_keepers.process_bullet")
