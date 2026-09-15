@@ -44,6 +44,26 @@ JOBRIGHT_REQUEST_DELAY_SECONDS = (
 MIN_MATCH_SCORE = 70  # jobs scoring below this are discarded, same as job_automater
 
 
+def _jobright_compensation(job_result: dict) -> dict | None:
+    """{min, max, interval} from jobright's minSalary/maxSalary.
+
+    The period is only stated in `salaryDesc` ("$114K/yr - $200K/yr",
+    "$25/hr"), so it is read from there; guessing it from magnitude would
+    misread a high hourly rate.
+    """
+    low, high = job_result.get("minSalary"), job_result.get("maxSalary")
+    if not low and not high:
+        return None
+    desc = (job_result.get("salaryDesc") or "").lower()
+    interval = next(
+        (name for cue, name in (("/hr", "hour"), ("hour", "hour"), ("/mo", "month"),
+                                ("/wk", "week"), ("/yr", "year"), ("year", "year"))
+         if cue in desc),
+        "",
+    )
+    return {"min": low, "max": high, "interval": interval}
+
+
 def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
     """Fetches jobs from the JobRight API with pagination, filters out
     anything scoring below MIN_MATCH_SCORE, and returns a list of job dicts
@@ -145,6 +165,12 @@ def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
                         "publish_time": job_result.get("publishTime"),
                         "publish_time_desc": job_result.get("publishTimeDesc"),
                         "employment_type": job_result.get("employmentType"),
+                        # Pay lives in these fields, not the summary text --
+                        # dropping them left every jobright posting (287 of
+                        # 520 pending, 2026-09-15) with no pay, though the API
+                        # states it on ~60%. Read by
+                        # compensation.normalize_structured().
+                        "compensation": _jobright_compensation(job_result),
                         "seniority_level": job_result.get("jobSeniority"),
                         "description": description,
                         "description_html": None,

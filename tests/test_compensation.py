@@ -65,6 +65,26 @@ class TestParseCompensation(unittest.TestCase):
         self.assertEqual(parsed["period"], "annual")
         self.assertEqual(parsed["annualized_max"], 95000)
 
+    def test_thousands_group_missing_a_zero(self):
+        # Real Doximity posting. The pattern used to stop at "$130", miss
+        # the range, and display a $130 salary.
+        parsed = compensation.parse_compensation(
+            "The anticipated total compensation for this role is "
+            "$130,00 - $190,000, depending on experience."
+        )
+        self.assertEqual(parsed["min"], 130000)
+        self.assertEqual(parsed["max"], 190000)
+        self.assertEqual(parsed["period"], "annual")
+
+    def test_estimated_range_phrase_anchors_pay(self):
+        # "compensation" sits outside the window here; the phrase beside
+        # the figure is the only pay cue.
+        parsed = compensation.parse_compensation(
+            "In addition to other forms of compensation like perks and "
+            "benefits, the estimated range for this role is $67,870 - $84,810 USD."
+        )
+        self.assertEqual(parsed["max"], 84810)
+
 
 class TestBenefitFiguresAreNotPay(unittest.TestCase):
     """Every one of these was a real false positive on the live corpus.

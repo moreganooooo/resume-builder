@@ -76,7 +76,11 @@ _PERIOD_WORDS = (
 )
 
 # A money amount, with optional K suffix and optional decimals.
-_AMOUNT = r"\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s*([kK])?"
+# The optional ",\d{2}" group catches a dropped zero ("$130,00 - $190,000",
+# a real Doximity posting): without it the pattern stopped at "$130", the
+# range never matched, and the posting displayed a salary of $130.
+# _to_number restores the missing digit.
+_AMOUNT = r"\$\s*(\d{1,3}(?:,\d{3})*(?:,\d{2}(?!\d))?(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s*([kK])?"
 
 # A dollar figure in a job posting is USUALLY NOT THE SALARY. Measured on
 # this profile's corpus, taking the first figure in the body rejected 99
@@ -93,7 +97,11 @@ _PAY_ANCHOR = re.compile(
     r"\b(salary|salaries|compensation|pay\s*(?:range|rate|band|scale)?|base\s*pay"
     r"|base\s*salary|hourly\s*rate|wage|remuneration|earn|paid|pays"
     r"|annualized|per\s+hour|per\s+year|per\s+annum|/\s*hour|/\s*hr\b|/\s*yr\b"
-    r"|an\s+hour|hourly|annually)\b",
+    r"|an\s+hour|hourly|annually"
+    # "In addition to other forms of compensation like perks and benefits,
+    # the estimated range for this role is $67,870 - $84,810" -- the pay
+    # word sits outside the window; the phrase next to the figure is this.
+    r"|estimated\s+range|range\s+for\s+this\s+(?:role|position))\b",
     re.I,
 )
 
@@ -122,6 +130,9 @@ _SINGLE_RE = re.compile(_AMOUNT)
 
 
 def _to_number(digits: str, k_suffix: str | None) -> float | None:
+    # "130,00" is a thousands group missing a zero, never a decimal --
+    # decimals here use a period.
+    digits = re.sub(r",(\d{2})$", r",\g<1>0", digits)
     try:
         value = float(digits.replace(",", ""))
     except ValueError:
