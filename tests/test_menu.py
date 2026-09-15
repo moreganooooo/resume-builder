@@ -354,6 +354,18 @@ class TestHandleScan(unittest.TestCase):
 
     @patch("menu.scan_module.run_scan", return_value=1)
     @patch("menu.questionary.select")
+    def test_indeed_only_runs_every_indeed_source(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "indeed_all"
+        menu._handle_scan()
+        sources = mock_run.call_args.args[0]
+        self.assertIn("indeed", sources)
+        self.assertIn("indeed_tesla", sources)
+        self.assertIn("indeed_watchlist", sources)
+        self.assertNotIn("boards", sources)
+        self.assertNotIn("ats", sources)
+
+    @patch("menu.scan_module.run_scan", return_value=1)
+    @patch("menu.questionary.select")
     def test_jobright_choice_passes_single_source_list(self, mock_select, mock_run):
         mock_select.return_value.ask.return_value = "jobright"
         menu._handle_scan()

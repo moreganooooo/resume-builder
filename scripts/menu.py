@@ -845,7 +845,25 @@ def _build_scan_source_choices() -> list:
             ),
             value="ats",
         ),
+        questionary.Choice(
+            title=_icon_title(
+                "discovery", "Indeed only (role search, Tesla, company watchlist)"
+            ),
+            value="indeed_all",
+        ),
     ]
+
+
+def _scan_sources_for_choice(choice: str) -> list | None:
+    """The run_scan() source list behind one scan-menu choice. Indeed is
+    several sources (the role search, Tesla, the company watchlist), so
+    "Indeed only" expands to every registered source named indeed*; a new
+    Indeed source is picked up without touching the menu."""
+    if choice == "all":
+        return None
+    if choice == "indeed_all":
+        return [s for s in scan_module.SOURCE_FETCHERS if s.startswith("indeed")]
+    return [choice]
 
 
 def _confirm_active_profile(force: bool = False) -> bool:
@@ -1441,8 +1459,7 @@ def _handle_scan() -> bool:
     choice = cli_art.select("Which source(s)?", choices=_build_scan_source_choices())
     if not choice:
         return False
-    sources = None if choice == "all" else [choice]
-    written = scan_module.run_scan(sources)
+    written = scan_module.run_scan(_scan_sources_for_choice(choice))
     return written > 0
 
 
