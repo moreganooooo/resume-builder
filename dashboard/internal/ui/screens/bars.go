@@ -125,12 +125,28 @@ func scoreIcon(t theme.Theme, score float64) string {
 // selected. jobs.go's renderSidebarLine and pipeline.go's
 // renderSidebarAppLine were identical apart from field names.
 func renderSidebarRow(t theme.Theme, score float64, company, subtitle string, width int, selected bool) string {
+	return renderSidebarRowTagged(t, score, company, "", subtitle, width, selected)
+}
+
+// renderSidebarRowTagged is renderSidebarRow with an already-styled tag
+// (e.g. Jobs' employment-type badge) after the company name. The tag's
+// width is reserved before the company is truncated, so a long company
+// name is cut rather than the tag.
+func renderSidebarRowTagged(t theme.Theme, score float64, company, tag, subtitle string, width int, selected bool) string {
 	scoreText := scoreStyle(t, score).Render(scoreIcon(t, score) + " " + fmt.Sprintf("%.1f", score))
 
 	// compWidth: total minus score glyph+space+number (≈ 6) minus 1 guard
 	// for the PadHorizontal outer padding, so company text doesn't wrap or
 	// ellipsize a char too early on narrow sidebars.
 	compWidth := width - 7
+	if tag != "" {
+		compWidth -= lipgloss.Width(tag) + 1
+		// Too narrow for both: the company name matters more.
+		if compWidth < 8 {
+			tag = ""
+			compWidth = width - 7
+		}
+	}
 	if compWidth < 8 {
 		compWidth = 8
 	}
@@ -140,6 +156,9 @@ func renderSidebarRow(t theme.Theme, score float64, company, subtitle string, wi
 		companyStyle = companyStyle.Bold(true)
 	}
 	line1 := fmt.Sprintf("%s %s", scoreText, companyStyle.Render(companyText))
+	if tag != "" {
+		line1 += " " + tag
+	}
 
 	// subtitleWidth: full available width minus 1 for the outer PadHorizontal
 	subtitleWidth := width - 3
