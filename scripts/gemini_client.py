@@ -279,6 +279,16 @@ MODEL_FALLBACKS = {
     "gemma-4-31b-it": "gemini-3.5-flash-lite",
 }
 
+# Scoring calls (fit evaluation, bullet scoring) must never land on
+# gemini-3.5-flash-lite: re-scoring the same roles on it moved composite
+# scores well past run-to-run noise (2026-09-15), so it has no scoring role
+# at all. A 503 streak falls back to Gemma instead, which has its own quota;
+# a call that exhausts both fails and the role is retried on a later run.
+SCORING_FALLBACKS = {
+    "gemini-3.1-flash-lite": "gemma-4-31b-it",
+    "gemma-4-31b-it": "gemini-3.1-flash-lite",
+}
+
 # Grounded calls fall back only WITHIN the family that has quota for their
 # tool -- MODEL_FALLBACKS would cross into a family with none (Search
 # grounding is zero for every Gemini 3 model on the free tier; the 2.5
@@ -620,7 +630,10 @@ class GeminiClient:
         model_fallback: bool = True,
         tools: list = None,
         inline_file: tuple[bytes, str] = None,
+        fallbacks: dict = None,
     ) -> tuple[str | None, dict]:
+        # fallbacks overrides MODEL_FALLBACKS for an ungrounded call -- e.g.
+        # SCORING_FALLBACKS, which keeps a scoring call off 3.5-flash-lite.
         # inline_file, when given, is (raw_bytes, mime_type) -- e.g. a
         # screenshot PDF/PNG of a job posting (see jd_image_ingest.py).
         # Sent as a second `parts` entry alongside the text prompt, base64
@@ -659,7 +672,10 @@ class GeminiClient:
         # version of this comment said otherwise.)
         # A grounded call swaps only within its tool's quota family (see
         # GROUNDED_FALLBACKS).
-        fallbacks = grounded_fallbacks(tools) if tools else MODEL_FALLBACKS
+        if tools:
+            fallbacks = grounded_fallbacks(tools)
+        elif fallbacks is None:
+            fallbacks = MODEL_FALLBACKS
         failure_streak = 0
 
         for attempt in range(max_retries):

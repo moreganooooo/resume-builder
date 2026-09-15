@@ -551,7 +551,12 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   Search calls run on `gemma-4-31b-it` and the location enricher's Maps
   call on `gemini-3.5-flash-lite` (verified live 2026-09-15, when it became
   the default flash-lite everywhere -- same free-tier limits as 3.1, which
-  is now its first fallback in `MODEL_FALLBACKS`). Grounded calls fall
+  is now its first fallback in `MODEL_FALLBACKS`) -- EXCEPT scoring: fit
+  evaluation (`orchestrator.EVAL_MODEL`) and bullet scoring
+  (`rewrite_bullets.SCORE_MODEL`) stay on 3.1 and pass
+  `fallbacks=SCORING_FALLBACKS` (3.1 <-> gemma-4-31b-it), because 3.5's
+  scores for the same roles moved well past run-to-run noise. Any new
+  scoring call must do the same. Grounded calls fall
   back only within their tool's quota family (`GROUNDED_FALLBACKS`): Search
   swaps between `gemma-4-31b-it` and `gemma-4-26b-a4b-it`, Maps between the
   two flash-lites. The 2.5 models appear in the model list but return 404

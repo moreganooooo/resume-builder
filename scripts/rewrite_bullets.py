@@ -121,7 +121,7 @@ SCORING_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
 
 # orchestrator.py lives in the same scripts/ directory as this file.
 # Import GeminiClient only — orchestrator.py has no module-level client object.
-from gemini_client import GeminiClient, SustainedFailureError  # noqa: E402
+from gemini_client import SCORING_FALLBACKS, GeminiClient, SustainedFailureError  # noqa: E402
 
 CLUSTER_MAP_IN = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 CLUSTER_MAP_OUT = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv")
@@ -155,10 +155,12 @@ KB_VOICE_ANCHORS = os.path.join(KB_DIR, "voice-anchors.md")
 # SCORE_MODEL: gemini-3.1-flash-lite — scoring calls are lower-volume
 #   (one per rewrite attempt) and need strict JSON compliance with a
 #   7-field schema. Flash-lite handles this cleanly within free-tier limits.
+#   Never 3.5-flash-lite, including via fallback (SCORING_FALLBACKS): its
+#   scores drifted well past run-to-run noise (2026-09-15).
 # ---------------------------------------------------------------------------
 REWRITE_MODEL = "gemma-4-31b-it"
 REWRITE_FALLBACK_MODEL = "gemini-3.5-flash-lite"
-SCORE_MODEL = "gemini-3.5-flash-lite"
+SCORE_MODEL = "gemini-3.1-flash-lite"
 MAX_ATTEMPTS = 3
 MAX_REWRITE_PARSE_FAILURES = 2
 GEMMA_MINIMAL_JSON = True
@@ -1542,6 +1544,7 @@ def score_bullet(
         ),
         temperature=0.0,
         response_schema=ScoreOutputSchema,
+        fallbacks=SCORING_FALLBACKS,
     )
     data = GeminiClient.parse_json(raw)
     time.sleep(SLEEP_BETWEEN_SCORES)
