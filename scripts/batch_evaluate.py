@@ -20,8 +20,8 @@ import orchestrator
 import theme
 
 # Keeps evaluate_fit() calls under this account's Gemini API tier (15 RPM
-# for gemini-3.1-flash-lite / BUILDER_MODEL). evaluate_fit() now makes TWO
-# back-to-back calls per JD (capability + recruiter, both BUILDER_MODEL,
+# for gemini-3.1-flash-lite / EVAL_MODEL). evaluate_fit() now makes TWO
+# back-to-back calls per JD (capability + recruiter, both EVAL_MODEL,
 # with no pacing between them) rather than one -- this constant used to
 # assume one call/JD (60s / 15 = 4.0s minimum), which at 2 calls/JD was
 # actually running at ~2/4.5s =~ 26.7 RPM, nearly double the 15 RPM cap,

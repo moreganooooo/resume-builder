@@ -273,6 +273,23 @@ class TestModelFallbackOptOut(unittest.TestCase):
 
     @patch("gemini_client.time.sleep", lambda *a, **kw: None)
     @patch("gemini_client.requests.post")
+    def test_scoring_fallbacks_never_reach_3_5_flash_lite(self, mock_post):
+        mock_post.return_value = self._rate_limited_response()
+        GeminiClient.generate(
+            model="gemini-3.1-flash-lite",
+            system_instruction="sys",
+            contents="score this",
+            max_retries=6,
+            fallbacks=gemini_client.SCORING_FALLBACKS,
+        )
+        targets = [call.args[0] for call in mock_post.call_args_list]
+        self.assertTrue(any("gemma-4-31b-it" in url for url in targets))
+        self.assertFalse(any("gemini-3.5-flash-lite" in url for url in targets))
+        self.assertNotIn("gemini-3.5-flash-lite", gemini_client.SCORING_FALLBACKS)
+        self.assertNotIn("gemini-3.5-flash-lite", gemini_client.SCORING_FALLBACKS.values())
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
     def test_grounded_call_never_swaps_even_with_fallback_enabled(self, mock_post):
         # Grounding quota is per model family (zero for Gemini 3 on the free
         # tier), so a swap can land on a model with no grounding quota at

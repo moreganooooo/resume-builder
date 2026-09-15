@@ -109,6 +109,10 @@ CRITIQUE_MODEL = "gemini-3.5-flash-lite"
 REWRITE_MODEL = "gemma-4-31b-it"
 REWRITE_FALLBACK_MODEL = "gemini-3.5-flash-lite"
 BUILDER_MODEL = "gemini-3.5-flash-lite"
+# Fit scoring stays on 3.1: 3.5-flash-lite's scores for the same roles moved
+# well past run-to-run noise (2026-09-15). Paired with SCORING_FALLBACKS so a
+# 503 streak can never route a score through 3.5 either.
+EVAL_MODEL = "gemini-3.1-flash-lite"
 EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM = 768  # gemini-embedding-2 native dimension
 
@@ -358,7 +362,7 @@ MAX_BACKOFF_SECS = 90
 # GEMINI CLIENT  (raw REST)
 # ---------------------------------------------------------------------------
 
-from gemini_client import GeminiClient  # replaces the inline class
+from gemini_client import SCORING_FALLBACKS, GeminiClient  # replaces the inline class
 from gemini_client import SustainedFailureError
 
 # ---------------------------------------------------------------------------
@@ -5731,22 +5735,24 @@ class ResumeEngine:
         # 2. Stage 1 LLM Call: Capability Fit
         capability_prompt = self.load_prompt("evaluate_capability.md")
         cap_text, _ = GeminiClient.generate(
-            model=BUILDER_MODEL,
+            model=EVAL_MODEL,
             system_instruction=capability_prompt,
             contents=fit_context,
             response_schema=CapabilityEvaluationSchema,
             temperature=0.0,
+            fallbacks=SCORING_FALLBACKS,
         )
         capability_data = GeminiClient.parse_json(cap_text or "") or {}
 
         # 3. Stage 2 LLM Call: Recruiter & Legitimacy Fit
         recruiter_prompt = self.load_prompt("evaluate_recruiter.md")
         rec_text, _ = GeminiClient.generate(
-            model=BUILDER_MODEL,
+            model=EVAL_MODEL,
             system_instruction=recruiter_prompt,
             contents=fit_context,
             response_schema=RecruiterEvaluationSchema,
             temperature=0.0,
+            fallbacks=SCORING_FALLBACKS,
         )
         recruiter_data = GeminiClient.parse_json(rec_text or "") or {}
 
