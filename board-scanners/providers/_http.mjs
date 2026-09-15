@@ -34,6 +34,9 @@ export const PROVIDER_HTTP_CONFIG = {
   workday: { minGapMs: 250 },
   // New per-posting .md detail fetch (B36) -- one extra request per listed job.
   workable: { minGapMs: 150 },
+  // No API: one search-page fetch per 20 postings, then one posting-page
+  // fetch per posting for its JSON-LD description.
+  icims: { minGapMs: 200 },
 };
 
 function parseRetryAfterMs(header) {

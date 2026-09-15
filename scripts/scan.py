@@ -92,6 +92,10 @@ SOURCE_FETCHERS = {
     # default role-based one above -- not a replacement for it. See
     # scan_indeed.fetch_indeed_tesla_jobs()'s own docstring.
     "indeed_tesla": scan_indeed.fetch_indeed_tesla_jobs,
+    # Named employers with no ATS board, from scan_filters.yml's
+    # indeed_watch_companies; a no-op for a profile without one. See
+    # scan_indeed.fetch_indeed_watchlist_jobs().
+    "indeed_watchlist": scan_indeed.fetch_indeed_watchlist_jobs,
     "boards": scan_boards.fetch_board_jobs,
     "ats": scan_ats.fetch_ats_jobs,
 }
