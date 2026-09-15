@@ -28,6 +28,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
+import bullet_bank_state  # noqa: E402
 import profile_paths  # noqa: E402
 
 KB_DIR = profile_paths.kb_dir()
@@ -46,6 +47,13 @@ CLUSTER_CHECKPOINT_PATH = os.path.join(
     KB_DIR, "bullet_vectors_ge2_d768_cluster.checkpoint.npz"
 )
 EMBED_CHECKPOINT_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768.checkpoint.npz")
+REMOVED_CSV = bullet_bank_state.removed_path(KB_DIR)
+
+
+def _removed():
+    """removed-bullets.csv, read fresh -- a bullet removed on purpose is
+    settled work for every stage, never pending (see bullet_bank_state)."""
+    return bullet_bank_state.load_removed(REMOVED_CSV)
 
 # Statuses that mark a rewrite-stage row as done -- mirrors
 # rewrite_bullets.py's own DONE_STATUSES, duplicated here rather than
@@ -81,7 +89,6 @@ def _audit_progress():
     with open(RAW_CSV, newline="", encoding="utf-8") as f:
         raw_texts = {str(row.get("Bullet Point")) for row in csv.DictReader(f)}
     total = len(raw_texts)
-    done = 0
     if os.path.exists(AUDITED_CSV):
         # audit_bullet_bank.py flushes to disk after every row and its
         # output only ever contains rows actually scored so far, so row
@@ -100,7 +107,10 @@ def _audit_progress():
         # scored," so the two can't drift out of sync again.
         with open(AUDITED_CSV, newline="", encoding="utf-8") as f:
             audited_texts = {str(row.get("Bullet Point")) for row in csv.DictReader(f)}
-        done = len(raw_texts & audited_texts)
+    else:
+        audited_texts = set()
+    removed = _removed()
+    done = sum(1 for t in raw_texts if t in audited_texts or removed.settles(t))
     return (done, total)
 
 
@@ -165,8 +175,34 @@ def _rewrite_progress():
         if "original_bullet" in df_k.columns:
             done_bullets |= set(df_k["original_bullet"].dropna().str.strip())
 
-    done = int(target["Bullet Point"].astype(str).str.strip().isin(done_bullets).sum())
+    removed = _removed()
+    done = int(
+        target["Bullet Point"]
+        .astype(str)
+        .str.strip()
+        .map(lambda t: t in done_bullets or removed.settles(t))
+        .sum()
+    )
     return (done, total)
+
+
+def _cluster_progress():
+    """Clean bullets present in the cluster map, by normalized TEXT. The map
+    used to be judged by mtime, so any edit to the clean or audited file --
+    including a deliberate removal -- read as "Stale" while a real addition
+    made after the last run could still read "Up to date". A bullet removed
+    on purpose counts as done: clustering it again only feeds it back into
+    rewriting."""
+    if not os.path.exists(RAW_CSV) or not os.path.exists(CLUSTER_MAP_CSV):
+        return None
+    norm = bullet_bank_state.normalize
+    with open(RAW_CSV, newline="", encoding="utf-8") as f:
+        raw = {norm(row.get("Bullet Point")) for row in csv.DictReader(f)} - {""}
+    with open(CLUSTER_MAP_CSV, newline="", encoding="utf-8") as f:
+        mapped = {norm(row.get("Bullet Point")) for row in csv.DictReader(f)}
+    removed = _removed()
+    done = sum(1 for t in raw if t in mapped or removed.settles(t))
+    return (done, len(raw))
 
 
 def _audit_keepers_progress():
@@ -225,7 +261,8 @@ STAGES = [
         "inputs": [RAW_CSV, AUDITED_CSV],
         "output": CLUSTER_MAP_CSV,
         "api_cost": True,
-        "status_mode": "mtime",
+        "status_mode": "progress",
+        "progress_fn": _cluster_progress,
         "checkpoint": CLUSTER_CHECKPOINT_PATH,
     },
     {
@@ -293,6 +330,16 @@ MAINTENANCE = [
         "description": "routes bullets queued during real resume builds into keepers/rewrite/retired",
         "script": "triage_needs_review.py",
         "watched_file": NEEDS_REVIEW_CSV,
+        "api_cost": False,
+    },
+    {
+        "key": "remove",
+        "label": "Remove Bullets",
+        "after_stage": None,
+        "description": "deletes bullets from the bank for good -- every stage remembers,\n"
+        "so a rerun never brings them back\n",
+        "script": "remove_bullets.py",
+        "watched_file": REMOVED_CSV,
         "api_cost": False,
     },
     {
@@ -429,6 +476,10 @@ def _maintenance_status(entry: dict) -> str:
         with open(path, newline="", encoding="utf-8") as f:
             count = sum(1 for _ in csv.DictReader(f))
         return "empty -- nothing to triage" if count == 0 else f"{count} row(s) waiting"
+
+    if entry["key"] == "remove":
+        count = len(_removed())
+        return "none removed yet" if count == 0 else f"{count} removed so far"
 
     if entry["key"] == "retire":
         if not os.path.exists(path):

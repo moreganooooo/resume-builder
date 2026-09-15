@@ -2118,6 +2118,20 @@ def main():
             soft_wrap=True,
         )
 
+    # A bullet removed on purpose, or the raw bullet a removed keeper was
+    # rewritten from, is settled -- rewriting it would recreate the removal.
+    import bullet_bank_state
+
+    removed = bullet_bank_state.load_removed(bullet_bank_state.removed_path(KB_DIR))
+    if len(removed):
+        before = len(df_todo)
+        df_todo = df_todo[~df_todo["Bullet Point"].map(removed.settles)]
+        if before != len(df_todo):
+            cli_art.console.print(
+                f"   {theme.colorize_icon('hint')}  Skipping {before - len(df_todo)} removed bullets (removed-bullets.csv)",
+                soft_wrap=True,
+            )
+
     if args.limit:
         df_todo = df_todo.head(args.limit)
 

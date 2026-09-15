@@ -26,6 +26,12 @@ class TriageTestCase(unittest.TestCase):
         triage_needs_review.KEEPERS_CSV = self.keepers
         triage_needs_review.REWRITE_QUEUE = self.rewrite_queue
         triage_needs_review.RETIRED_PATH = self.retired
+        triage_needs_review.KEEPERS_AUDITED = os.path.join(
+            self.tmp_dir, "bullet-bank-keepers-audited.csv"
+        )
+        triage_needs_review.REMOVED_PATH = os.path.join(
+            self.tmp_dir, "removed-bullets.csv"
+        )
 
     def tearDown(self):
         import shutil

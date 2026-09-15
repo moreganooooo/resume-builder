@@ -15,6 +15,25 @@ sys.path.insert(0, SCRIPTS_DIR)
 import bullet_bank_menu  # noqa: E402
 
 
+
+_REMOVED_PATCH = None
+
+
+def setUpModule():
+    # Progress counters read removed-bullets.csv; never the real profile's.
+    global _REMOVED_PATCH
+    _REMOVED_PATCH = patch.object(
+        bullet_bank_menu,
+        "REMOVED_CSV",
+        os.path.join(tempfile.gettempdir(), "no-such-removed-bullets.csv"),
+    )
+    _REMOVED_PATCH.start()
+
+
+def tearDownModule():
+    _REMOVED_PATCH.stop()
+
+
 class TestStageStatusMtime(unittest.TestCase):
 
     def setUp(self):
@@ -624,10 +643,10 @@ class TestStagesAndMaintenanceDefinitions(unittest.TestCase):
     def test_all_stages_cost_api(self):
         self.assertTrue(all(s["api_cost"] for s in bullet_bank_menu.STAGES))
 
-    def test_three_maintenance_scripts(self):
+    def test_maintenance_scripts(self):
         self.assertEqual(
             [m["key"] for m in bullet_bank_menu.MAINTENANCE],
-            ["triage", "retire", "auto_rewrite"],
+            ["triage", "remove", "retire", "auto_rewrite"],
         )
 
     def test_auto_rewrite_costs_api_and_passes_the_flag(self):
@@ -693,15 +712,13 @@ class TestBuildChoicesOrdering(unittest.TestCase):
         # audit, rewrite, audit_keepers, and embed all flush partial
         # results to their output file as they run -- an mtime-only check
         # reports "Up to date" the instant ANY output exists, even with
-        # most rows still pending. cluster keeps status_mode="mtime"
-        # because its final CSV is written once, atomically, only after
-        # all in-memory work is done; score_gems keeps "columns" since it
-        # updates its file in place.
+        # most rows still pending. cluster counts clean bullets present in
+        # its map (an mtime check called any deliberate removal "Stale");
+        # score_gems keeps "columns" since it updates its file in place.
         by_key = {s["key"]: s for s in bullet_bank_menu.STAGES}
-        for key in ("audit", "rewrite", "audit_keepers", "embed"):
+        for key in ("audit", "cluster", "rewrite", "audit_keepers", "embed"):
             self.assertEqual(by_key[key]["status_mode"], "progress", key)
             self.assertTrue(callable(by_key[key]["progress_fn"]), key)
-        self.assertEqual(by_key["cluster"]["status_mode"], "mtime")
         self.assertEqual(by_key["score_gems"]["status_mode"], "columns")
 
 

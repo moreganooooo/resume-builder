@@ -123,6 +123,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
+import bullet_bank_state  # noqa: E402
 import profile_paths  # noqa: E402
 
 KB_DIR = profile_paths.kb_dir()
@@ -159,6 +160,7 @@ CLUSTER_MAP_IN = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 DISCREPANCIES_OUT = os.path.join(KB_DIR, "audit-discrepancies.csv")
 REWRITE_QUEUE_OUT = os.path.join(KB_DIR, "audit-rewrite-queue.csv")
 MANUAL_ATTEMPTS_OUT = os.path.join(KB_DIR, "audit-manual-attempts.csv")
+REMOVED_CSV = bullet_bank_state.removed_path(KB_DIR)
 
 MANUAL_ATTEMPTS_COLS = [
     "cluster_id",
@@ -216,7 +218,7 @@ def _normalize_cluster_id(value) -> str:
 
 
 def merge_new_rows_from_keepers_in(
-    df_audited: pd.DataFrame, df_keepers_in: pd.DataFrame
+    df_audited: pd.DataFrame, df_keepers_in: pd.DataFrame, removed=None
 ) -> tuple:
     """Unions any row from df_keepers_in (bullet-bank-keepers.csv, the
     live landing zone triage_needs_review.py appends new KEEP rows into
@@ -238,6 +240,16 @@ def merge_new_rows_from_keepers_in(
     moment a single freshly-triaged row with a blank cluster_id entered
     keepers.csv).
 
+    A cluster ID is a hash of its members (cluster_bullet_bank.
+    stable_cluster_ids), so it changes whenever a bullet joins or leaves
+    the cluster -- an unknown ID alone does not make a row new. A row is
+    new only if its ID, its text, AND the raw text it was rewritten from
+    are all unknown here: a second rewrite of a raw bullet the audited file
+    already has a version of is a variant, not a new achievement. Rows in
+    `removed` (bullet_bank_state.Removed, i.e. removed-bullets.csv) are
+    never merged -- that is how a bullet deleted from the audited file on
+    purpose stays deleted.
+
     Missing columns on the new rows are filled with "" rather than
     dropped, so a schema mismatch between the two files doesn't silently
     lose data."""
@@ -251,15 +263,25 @@ def merge_new_rows_from_keepers_in(
             for nid in df_audited["source_cluster_id"].map(_normalize_cluster_id)
             if nid
         }
-    known_texts = set(
-        df_audited.get("Bullet Point", pd.Series(dtype=str)).astype(str).str.strip()
-    )
+    known_texts = {
+        bullet_bank_state.normalize(t)
+        for t in df_audited.get("Bullet Point", pd.Series(dtype=str))
+    } - {""}
+    known_originals = {
+        bullet_bank_state.normalize(t)
+        for t in df_audited.get("original_bullet", pd.Series(dtype=str))
+    } - {""}
 
     def _is_new(row) -> bool:
-        cid = _normalize_cluster_id(row.get("source_cluster_id"))
-        if cid:
-            return cid not in known_ids
-        return str(row.get("Bullet Point", "")).strip() not in known_texts
+        text = bullet_bank_state.normalize(row.get("Bullet Point"))
+        if removed is not None and removed.blocks(text):
+            return False
+        if _normalize_cluster_id(row.get("source_cluster_id")) in known_ids:
+            return False
+        if text in known_texts:
+            return False
+        original = bullet_bank_state.normalize(row.get("original_bullet"))
+        return not (original and original in known_originals)
 
     new_rows = df_keepers_in[df_keepers_in.apply(_is_new, axis=1)].copy()
     if new_rows.empty:
@@ -1322,9 +1344,10 @@ def main():
     # otherwise never reach the audited file again once it exists. Union
     # in anything from KEEPERS_IN not already present here (by Bullet
     # Point text) so new bullets still get promoted through the pipeline.
+    removed = bullet_bank_state.load_removed(REMOVED_CSV)
     if using_audited_source and os.path.exists(KEEPERS_IN):
         df_keepers, n_new = merge_new_rows_from_keepers_in(
-            df_keepers, pd.read_csv(KEEPERS_IN)
+            df_keepers, pd.read_csv(KEEPERS_IN), removed
         )
         if n_new:
             cli_art.console.print(
