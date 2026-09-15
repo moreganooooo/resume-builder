@@ -47,6 +47,7 @@ CLUSTER_CHECKPOINT_PATH = os.path.join(
     KB_DIR, "bullet_vectors_ge2_d768_cluster.checkpoint.npz"
 )
 EMBED_CHECKPOINT_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768.checkpoint.npz")
+EMBED_META_PATH = os.path.join(KB_DIR, "bullet_vectors_ge2_d768.meta")
 REMOVED_CSV = bullet_bank_state.removed_path(KB_DIR)
 
 
@@ -217,6 +218,36 @@ def _audit_keepers_progress():
     return (done, total)
 
 
+def _embed_index_current():
+    """True/False when the primary index's stored bullets_sha does / does not
+    match keepers-audited's current bullet text; None when either side is
+    missing (the plain existence/mtime check decides then). Content, not
+    mtime: a column-only rewrite of keepers-audited (Step 5 scoring gems)
+    bumps its mtime without touching a bullet, and read as "Stale" here."""
+    import json
+
+    from bullet_bank_hash import bullets_sha
+
+    if not (os.path.exists(EMBED_META_PATH) and os.path.exists(KEEPERS_AUDITED_CSV)):
+        return None
+    try:
+        with open(EMBED_META_PATH, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+    except (OSError, ValueError):
+        return None
+    with open(KEEPERS_AUDITED_CSV, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        # Same column choice and empty-cell handling as embed_bullet_bank.main().
+        col = next(
+            (c for c in ("Bullet Point", "bullet", "achievement") if c in (reader.fieldnames or [])),
+            None,
+        )
+        if col is None:
+            return None
+        texts = [row.get(col) or "" for row in reader]
+    return meta.get("bullets_sha") == bullets_sha(texts) and meta.get("rows") == len(texts)
+
+
 def _embed_progress():
     # Lazy numpy -- Lite Mode omits it; see requirements-lite.txt (F20).
     import numpy as np
@@ -313,6 +344,7 @@ STAGES = [
         "api_cost": True,
         "status_mode": "progress",
         "progress_fn": _embed_progress,
+        "current_fn": _embed_index_current,
     },
 ]
 
@@ -416,11 +448,21 @@ def _stage_status(stage: dict) -> tuple:
         return ("Never run", "")
 
     output_mtime = os.path.getmtime(output)
+    timestamp = datetime.datetime.fromtimestamp(output_mtime).strftime("%Y-%m-%d %H:%M")
+
+    # A stage that can compare content (the embed index's stored hash)
+    # decides by that instead of mtime; None falls back to mtime.
+    current_fn = stage.get("current_fn")
+    current = current_fn() if current_fn else None
+    if current is True:
+        return ("Up to date", f"as of {timestamp}")
+    if current is False:
+        return ("Stale", "bullet text changed since last embed")
+
     for input_path in stage["inputs"]:
         if os.path.exists(input_path) and os.path.getmtime(input_path) > output_mtime:
             return ("Stale", "")
 
-    timestamp = datetime.datetime.fromtimestamp(output_mtime).strftime("%Y-%m-%d %H:%M")
     return ("Up to date", f"as of {timestamp}")
 
 

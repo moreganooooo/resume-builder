@@ -1,5 +1,6 @@
 import csv
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -617,6 +618,56 @@ class TestEmbedProgress(unittest.TestCase):
             ),
         ):
             self.assertEqual(bullet_bank_menu._embed_progress(), (40, 40))
+
+
+class TestEmbedStatusByContent(unittest.TestCase):
+    """Step 6 is judged by the index's stored bullets_sha, not mtime."""
+
+    def setUp(self):
+        import json
+
+        from bullet_bank_hash import bullets_sha
+
+        self.tmp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp_dir, ignore_errors=True)
+        self.csv_path = os.path.join(self.tmp_dir, "keepers_audited.csv")
+        self.npy_path = os.path.join(self.tmp_dir, "idx.npy")
+        self.meta_path = os.path.join(self.tmp_dir, "idx.meta")
+        with open(self.npy_path, "wb") as f:
+            f.write(b"x")
+        with open(self.meta_path, "w", encoding="utf-8") as f:
+            json.dump({"bullets_sha": bullets_sha(["a", "b"]), "rows": 2}, f)
+        for name, value in (
+            ("KEEPERS_AUDITED_CSV", self.csv_path),
+            ("EMBED_META_PATH", self.meta_path),
+            ("EMBED_CHECKPOINT_PATH", os.path.join(self.tmp_dir, "none.npz")),
+        ):
+            p = patch.object(bullet_bank_menu, name, value)
+            p.start()
+            self.addCleanup(p.stop)
+        stage = next(s for s in bullet_bank_menu.STAGES if s["key"] == "embed")
+        self.stage = dict(stage, inputs=[self.csv_path], output=self.npy_path)
+
+    def _write_csv_newer(self, rows, fieldnames):
+        with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        later = os.path.getmtime(self.npy_path) + 60
+        os.utime(self.csv_path, (later, later))
+
+    def test_column_only_change_is_up_to_date(self):
+        self._write_csv_newer(
+            [{"Bullet Point": "a", "gem": "5"}, {"Bullet Point": "b", "gem": "4"}],
+            ["Bullet Point", "gem"],
+        )
+        self.assertEqual(bullet_bank_menu._stage_status(self.stage)[0], "Up to date")
+
+    def test_text_change_is_stale(self):
+        self._write_csv_newer(
+            [{"Bullet Point": "a"}, {"Bullet Point": "b edited"}], ["Bullet Point"]
+        )
+        self.assertEqual(bullet_bank_menu._stage_status(self.stage)[0], "Stale")
 
 
 class TestClusterStageHasCheckpointKey(unittest.TestCase):

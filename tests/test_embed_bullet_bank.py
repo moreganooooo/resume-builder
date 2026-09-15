@@ -279,6 +279,32 @@ class TestMainFlow(unittest.TestCase):
         self.assertTrue(os.path.exists(self.npy_path))
         self.assertTrue(os.path.exists(self.meta_path))
 
+    @patch("embed_bullet_bank.time.sleep")
+    @patch("embed_bullet_bank.embed_batch")
+    def test_main_skips_when_index_already_matches_bank(self, mock_embed, mock_sleep):
+        import pandas as pd
+
+        mock_embed.return_value = [[0.1] * embed_bullet_bank.EMBED_DIM] * 2
+        pd.DataFrame({"Bullet Point": ["Bullet 1", "Bullet 2"]}).to_csv(
+            self.csv_path, index=False
+        )
+        embed_bullet_bank.main()
+        mock_embed.reset_mock()
+
+        # A column-only edit (new mtime, same bullet text) costs nothing.
+        pd.DataFrame(
+            {"Bullet Point": ["Bullet 1", "Bullet 2"], "gem_score": [5, 4]}
+        ).to_csv(self.csv_path, index=False)
+        embed_bullet_bank.main()
+        mock_embed.assert_not_called()
+
+        # A text change rebuilds.
+        pd.DataFrame({"Bullet Point": ["Bullet 1", "Bullet 2 edited"]}).to_csv(
+            self.csv_path, index=False
+        )
+        embed_bullet_bank.main()
+        mock_embed.assert_called()
+
 
 if __name__ == "__main__":
     unittest.main()

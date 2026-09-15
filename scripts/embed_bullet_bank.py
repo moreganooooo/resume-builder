@@ -122,6 +122,21 @@ def backup_index_for(kb_dir: str, bullets_sha_value: str = None, n_rows: int = N
     return matrix if matrix.ndim == 2 else None
 
 
+def index_is_current(npy_path: str, meta_path: str, sha: str, n_rows: int) -> bool:
+    """True when the index at these paths was built from exactly this bank
+    (content hash and row count), so rebuilding it would spend API calls to
+    reproduce the same vectors. Judged by content, never mtime: a column-only
+    edit to the keepers CSV bumps its mtime without changing a bullet."""
+    if not (os.path.exists(npy_path) and os.path.exists(meta_path)):
+        return False
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+    except Exception:
+        return False
+    return meta.get("bullets_sha") == sha and meta.get("rows") == n_rows
+
+
 def embed_batch(texts: list, model: str = None, max_retries: int = None) -> list:
     """Call batchEmbedContents for a list of strings. Returns list of float lists.
 
@@ -265,6 +280,10 @@ def main(model: str = None):
         soft_wrap=True,
     )
     current_sha = bullets_sha(bullets)
+
+    if index_is_current(NPY_PATH, META_PATH, current_sha, total):
+        cli_art.cli_info(f"{model} index already matches this bank -- skipping.")
+        return
 
     vectors, start_index = load_checkpoint(current_sha)
 
