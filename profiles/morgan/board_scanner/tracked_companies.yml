@@ -1718,3 +1718,11 @@ tracked_companies:
   careers_url: https://careers.smartrecruiters.com/brueggersbagels
   api: https://api.smartrecruiters.com/v1/companies/brueggersbagels/postings
   enabled: true
+- name: "Sierra"
+  careers_url: "https://jobs.ashbyhq.com/sierra"
+  api: "https://api.ashbyhq.com/posting-api/job-board/sierra"
+  enabled: true
+- name: "Tempur + Sealy"
+  careers_url: "https://careers.smartrecruiters.com/tempur-sealy"
+  api: "https://api.smartrecruiters.com/v1/companies/tempur-sealy/postings"
+  enabled: true
