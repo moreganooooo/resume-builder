@@ -76,7 +76,7 @@ from render_resume_docx import render_resume_docx
 
 # --- MODEL STRATEGY ---
 # CRITIQUE_MODEL: handles bullet critique (high-frequency) and the post-build
-#   holistic resume critique. gemini-3.1-flash-lite gives the best free-tier
+#   holistic resume critique. gemini-3.5-flash-lite gives the best free-tier
 #   headroom while reliably following JSON instructions with strict schemas.
 #
 # REWRITE_MODEL: gemma-4-31b-it -- primary rewrite model for the audit loop.
@@ -86,12 +86,12 @@ from render_resume_docx import render_resume_docx
 #   JSON compliance. GEMMA_MINIMAL_JSON=True means Gemma only has to produce
 #   {"rewritten_bullet": "..."} -- one key, much less drift.
 #
-# REWRITE_FALLBACK_MODEL: gemini-3.1-flash-lite -- activated automatically
+# REWRITE_FALLBACK_MODEL: gemini-3.5-flash-lite -- activated automatically
 #   after MAX_REWRITE_PARSE_FAILURES consecutive parse failures on a single
 #   bullet. Reliable JSON compliance as a safety net.
 #
 # BUILDER_MODEL: handles JD keyword extraction and the final resume assembly.
-#   gemini-3.1-flash-lite for quota reasons. Nested response models are fine
+#   gemini-3.5-flash-lite for quota reasons. Nested response models are fine
 #   here -- TemplateSchema was briefly flattened to List[dict] on the theory
 #   that nested $defs caused a builder 400, but that was disproven and
 #   reverted (see ExperienceEntry's docstring: the real cause was
@@ -105,10 +105,10 @@ from render_resume_docx import render_resume_docx
 # NOTE: orchestrator.py uses raw REST (requests) rather than the google-genai SDK.
 #   This avoids SDK versioning headaches on the free tier and gives full explicit
 #   control over the payload shape and response parsing.
-CRITIQUE_MODEL = "gemini-3.1-flash-lite"
+CRITIQUE_MODEL = "gemini-3.5-flash-lite"
 REWRITE_MODEL = "gemma-4-31b-it"
-REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
-BUILDER_MODEL = "gemini-3.1-flash-lite"
+REWRITE_FALLBACK_MODEL = "gemini-3.5-flash-lite"
+BUILDER_MODEL = "gemini-3.5-flash-lite"
 EMBED_MODEL = "gemini-embedding-2"
 EMBED_DIM = 768  # gemini-embedding-2 native dimension
 

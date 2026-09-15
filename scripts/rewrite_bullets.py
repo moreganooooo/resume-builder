@@ -157,8 +157,8 @@ KB_VOICE_ANCHORS = os.path.join(KB_DIR, "voice-anchors.md")
 #   7-field schema. Flash-lite handles this cleanly within free-tier limits.
 # ---------------------------------------------------------------------------
 REWRITE_MODEL = "gemma-4-31b-it"
-REWRITE_FALLBACK_MODEL = "gemini-3.1-flash-lite"
-SCORE_MODEL = "gemini-3.1-flash-lite"
+REWRITE_FALLBACK_MODEL = "gemini-3.5-flash-lite"
+SCORE_MODEL = "gemini-3.5-flash-lite"
 MAX_ATTEMPTS = 3
 MAX_REWRITE_PARSE_FAILURES = 2
 GEMMA_MINIMAL_JSON = True

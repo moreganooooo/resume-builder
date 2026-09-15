@@ -231,7 +231,7 @@ class TestAuditResumeRewritePath(unittest.TestCase):
         flash_call = calls[3]
 
         self.assertEqual(gemma_call.kwargs["model"], "gemma-4-31b-it")
-        self.assertEqual(flash_call.kwargs["model"], "gemini-3.1-flash-lite")
+        self.assertEqual(flash_call.kwargs["model"], "gemini-3.5-flash-lite")
         self.assertLess(
             len(gemma_call.kwargs["system_instruction"]),
             len(flash_call.kwargs["system_instruction"]),

@@ -414,7 +414,7 @@ def reconcile_address(
 MAPS_CACHE_DAYS = 30
 # 500 map-grounded requests/day on the free tier (Search grounding is ZERO
 # for every Gemini 3 model, which is why the old backup could never work).
-MAPS_BACKUP_MODEL = "gemini-3.1-flash-lite"
+MAPS_BACKUP_MODEL = "gemini-3.5-flash-lite"
 _MAPS_ADDRESS_RE = re.compile(r"\*\*Address:\*\*\s*(.+)")
 _MAPS_WEBSITE_RE = re.compile(r"\*\*Website:\*\*\s*(\S+)")
 _US_ADDRESS_TAIL_RE = re.compile(

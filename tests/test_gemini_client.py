@@ -65,16 +65,23 @@ def _success_response():
 
 class TestModelFallbacks(unittest.TestCase):
 
-    def test_flash_lite_falls_back_to_gemma_with_unlimited_tpm(self):
-        # gemini-3.1-flash-lite has a 250k TPM cap and, before this mapping
-        # existed, had nowhere to fall back to (REWRITE_FALLBACK_MODEL
-        # pointed at itself) -- gemma-4-31b-it has TPM Unlimited on this
-        # account's quota tiers, a real rescue path when flash-lite alone
-        # is under high demand.
+    def test_default_flash_lite_walks_to_the_older_one_then_gemma(self):
+        # The old flash-lite <-> gemma pair was each other's only rescue, so
+        # when both failed at once (2026-09-15) a call bounced between them
+        # until its retries ran out. Three models break that loop.
+        self.assertEqual(
+            MODEL_FALLBACKS["gemini-3.5-flash-lite"], "gemini-3.1-flash-lite"
+        )
         self.assertEqual(MODEL_FALLBACKS["gemini-3.1-flash-lite"], "gemma-4-31b-it")
 
-    def test_gemma_still_falls_back_to_flash_lite(self):
-        self.assertEqual(MODEL_FALLBACKS["gemma-4-31b-it"], "gemini-3.1-flash-lite")
+    def test_gemma_falls_back_to_the_default_flash_lite(self):
+        self.assertEqual(MODEL_FALLBACKS["gemma-4-31b-it"], "gemini-3.5-flash-lite")
+
+    def test_every_fallback_target_has_its_own_fallback(self):
+        # A target with no entry is a dead end: its failures just exhaust
+        # the remaining retries on the one model.
+        for target in MODEL_FALLBACKS.values():
+            self.assertIn(target, MODEL_FALLBACKS)
 
 
 class TestGenerateFallsBackAfterRepeatedFailures(unittest.TestCase):
@@ -87,21 +94,44 @@ class TestGenerateFallsBackAfterRepeatedFailures(unittest.TestCase):
 
     @patch("gemini_client.time.sleep", lambda *a, **kw: None)
     @patch("gemini_client.requests.post")
-    def test_switches_to_gemma_after_two_flash_lite_timeouts(self, mock_post):
+    def test_switches_to_3_1_flash_lite_after_two_3_5_timeouts(self, mock_post):
         mock_post.side_effect = [
             requests.exceptions.Timeout("timeout=90"),
             requests.exceptions.Timeout("timeout=90"),
             _success_response(),
         ]
         text, usage = GeminiClient.generate(
-            model="gemini-3.1-flash-lite",
+            model="gemini-3.5-flash-lite",
             system_instruction="sys",
             contents="do the thing",
         )
         self.assertEqual(text, "ok")
         self.assertEqual(mock_post.call_count, 3)
         third_call_url = mock_post.call_args_list[2].args[0]
-        self.assertIn("gemma-4-31b-it", third_call_url)
+        self.assertIn("gemini-3.1-flash-lite", third_call_url)
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
+    def test_one_call_walks_the_whole_chain(self, mock_post):
+        # Both original models failing at once is the case the third model
+        # exists for: the call must reach gemma after 3.5-flash-lite fails
+        # too, not give up.
+        mock_post.side_effect = [
+            requests.exceptions.Timeout("timeout=90"),
+            requests.exceptions.Timeout("timeout=90"),
+            requests.exceptions.Timeout("timeout=90"),
+            requests.exceptions.Timeout("timeout=90"),
+            _success_response(),
+        ]
+        text, usage = GeminiClient.generate(
+            model="gemini-3.5-flash-lite",
+            system_instruction="sys",
+            contents="do the thing",
+        )
+        self.assertEqual(text, "ok")
+        urls = [c.args[0] for c in mock_post.call_args_list]
+        self.assertIn("gemini-3.1-flash-lite", urls[2])
+        self.assertIn("gemma-4-31b-it", urls[4])
 
     @patch("gemini_client.time.sleep", lambda *a, **kw: None)
     @patch("gemini_client.requests.post")
@@ -118,7 +148,7 @@ class TestGenerateFallsBackAfterRepeatedFailures(unittest.TestCase):
         )
         self.assertEqual(text, "ok")
         third_call_url = mock_post.call_args_list[2].args[0]
-        self.assertIn("gemini-3.1-flash-lite", third_call_url)
+        self.assertIn("gemini-3.5-flash-lite", third_call_url)
 
 
 class TestSustainedFailureDetection(unittest.TestCase):
@@ -264,6 +294,40 @@ class TestModelFallbackOptOut(unittest.TestCase):
 
     @patch("gemini_client.time.sleep", lambda *a, **kw: None)
     @patch("gemini_client.requests.post")
+    def test_search_call_swaps_only_within_gemma(self, mock_post):
+        server_error = MagicMock()
+        server_error.status_code = 500
+        mock_post.side_effect = [server_error, server_error, _success_response()]
+        text, _ = GeminiClient.generate(
+            model="gemma-4-31b-it",
+            system_instruction="sys",
+            contents="find the website",
+            tools=[{"google_search": {}}],
+        )
+        self.assertEqual(text, "ok")
+        self.assertIn("gemma-4-26b-a4b-it", mock_post.call_args_list[2].args[0])
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
+    def test_maps_grounded_call_swaps_to_the_other_flash_lite(self, mock_post):
+        server_error = MagicMock()
+        server_error.status_code = 503
+        mock_post.side_effect = [server_error, server_error, _success_response()]
+        text, _ = gemini_client.generate_grounded(
+            "gemini-3.5-flash-lite", "where?", tools=[{"google_maps": {}}]
+        )
+        self.assertEqual(text, "ok")
+        self.assertIn("gemini-3.1-flash-lite", mock_post.call_args_list[2].args[0])
+
+    def test_unknown_or_mixed_tools_get_no_fallback(self):
+        self.assertEqual(gemini_client.grounded_fallbacks([{"code_execution": {}}]), {})
+        self.assertEqual(
+            gemini_client.grounded_fallbacks([{"google_search": {}}, {"google_maps": {}}]),
+            {},
+        )
+
+    @patch("gemini_client.time.sleep", lambda *a, **kw: None)
+    @patch("gemini_client.requests.post")
     def test_generate_grounded_returns_text_and_grounding(self, mock_post):
         # The Maps lookup must SEE the grounding to trust an address.
         ok = MagicMock()
@@ -311,7 +375,7 @@ class TestModelFallbackOptOut(unittest.TestCase):
         )
         self.assertEqual(text, "ok")
         third_call_url = mock_post.call_args_list[2].args[0]
-        self.assertIn("gemini-3.1-flash-lite", third_call_url)
+        self.assertIn("gemini-3.5-flash-lite", third_call_url)
 
 
 class TestGemmaPacing(unittest.TestCase):
