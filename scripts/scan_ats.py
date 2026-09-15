@@ -130,6 +130,11 @@ _ATS_HOST_PATTERNS = [
 
 _ATS_PROVIDER_IDS = frozenset(provider_id for provider_id, _ in _ATS_HOST_PATTERNS)
 
+# Providers whose listing carries no description, so they fetch one per
+# posting within a time budget and are handed the profile's title_filter to
+# order those fetches (board-scanners/providers/_title_priority.mjs).
+_DESCRIBE_PER_POSTING_PROVIDERS = frozenset({"workday", "icims"})
+
 # How heavily each ATS platform weighs literal keyword-matching, for cover
 # letter keyword front-loading (docs/superpowers/plans/2026-08-17-cover-
 # letter-blueprint-roadmap.md Group B, Feature #12). Workday/Taleo are
@@ -299,6 +304,19 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
             else scan_boards._fetch_posting_text(url, provider_id)
         )
 
+    # A websearch hit carries only the search snippet (~300 chars). For a
+    # company with no ATS (PostProcess's WordPress posting pages) the page
+    # itself is plain HTML and holds the real posting, so it is worth one
+    # fetch -- kept only when it actually recovered more text.
+    if (
+        provider_id == "websearch"
+        and not raw.get("description_is_teaser")
+        and len(description) < scan_boards.MIN_DESCRIPTION_CHARS
+    ):
+        page_text = scan_boards._fetch_posting_text(url, provider_id)
+        if len(page_text) > len(description):
+            description = page_text
+
     if not scan_boards._passes_location_filter(location):
         return None
     if not scan_boards._passes_content_filters(description):
@@ -384,7 +402,16 @@ def fetch_ats_jobs(sources: list = None, activity=None) -> list:
         if not provider_id or provider_id not in _ATS_PROVIDER_IDS:
             return []
 
-        raw_jobs = scan_boards._run_node_provider(provider_id, company)
+        # Providers that fetch one description per posting (workday, icims)
+        # use this to describe the titles this profile wants first -- see
+        # board-scanners/providers/_title_priority.mjs. Ordering only; the
+        # real filter still runs in _normalize_raw_job below.
+        entry = company
+        if provider_id in _DESCRIBE_PER_POSTING_PROVIDERS:
+            title_filter = scan_boards._load_filters().get("title_filter") or {}
+            if title_filter:
+                entry = {**company, "_title_filter": title_filter}
+        raw_jobs = scan_boards._run_node_provider(provider_id, entry)
         logging.info(
             f"scan_ats: {company.get('name')} ({provider_id}) returned {len(raw_jobs)} raw listing(s)."
         )

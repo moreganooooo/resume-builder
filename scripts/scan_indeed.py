@@ -63,6 +63,7 @@ warning, never an exception that takes a whole scan down.
 
 import logging
 import os
+import re
 
 import cli_art
 import location_settings
@@ -351,3 +352,106 @@ def fetch_indeed_tesla_jobs(activity=None) -> list:
     network-failure handling as the default search, just a different
     search_term."""
     return fetch_indeed_jobs(search_term="Tesla", activity=activity)
+
+
+def _company_key(name: str) -> str:
+    """Lowercase alphanumerics only, so "Tapecon, Inc." and "tapecon" meet."""
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def _watch_companies() -> list:
+    """scan_filters.yml's `indeed_watch_companies`, as (label, [keys]).
+
+    Each item is a plain name or {name, aliases: [...]} -- an alias covers
+    an employer Indeed lists under a shorter or different name ("Viridi"
+    for Viridi Parente). A missing or unreadable file means no watchlist."""
+    import scan_boards
+
+    try:
+        raw = scan_boards._load_filters().get("indeed_watch_companies") or []
+    except Exception:
+        return []
+    companies = []
+    for item in raw:
+        if isinstance(item, str):
+            name, aliases = item, [item]
+        elif isinstance(item, dict) and item.get("name"):
+            name = item["name"]
+            aliases = [name, *(item.get("aliases") or [])]
+        else:
+            continue
+        keys = [k for k in (_company_key(a) for a in aliases) if k]
+        if keys:
+            companies.append((name, keys))
+    return companies
+
+
+def fetch_indeed_watchlist_jobs(activity=None) -> list:
+    """Every local Indeed posting from a named company, whatever the title.
+
+    For employers with no ATS board to track -- they post only to job
+    boards (Sentient Science, Viridi Parente, Tapecon). One Indeed search
+    per company, keeping only rows whose employer matches one of that
+    company's keys (containment, after _company_key): a search for a company
+    name also returns other employers' postings that merely mention it.
+
+    The positive title filter is not applied -- the point is to see what
+    these companies post, not only the titles the profile searches for --
+    but excluded titles and the location gate are (_admit_indeed_job). Each
+    kept job carries `watchlist_company`, and the scan report lists them
+    under their own source ("indeed_watchlist"). A profile with no
+    watchlist returns [] without touching the network."""
+    companies = _watch_companies()
+    if not companies:
+        return []
+
+    settings = location_settings.read_settings()
+    location = _origin_from_settings(settings)
+    if not location:
+        cli_art.cli_error(
+            "Indeed watchlist needs a location -- set one under Settings & "
+            "Upkeep -> Location & Commute Radius. Skipping."
+        )
+        return []
+    try:
+        import jobspy  # noqa: F401
+    except ImportError:
+        cli_art.cli_error(
+            "python-jobspy is not installed (pip install -r requirements.txt). "
+            "Skipping Indeed watchlist."
+        )
+        return []
+    distance = settings.get("radius_miles") or DEFAULT_DISTANCE_MILES
+
+    if activity is not None:
+        activity.start_source(len(companies), label="Fetching")
+
+    seen_urls = set()
+    jobs = []
+    for name, keys in companies:
+        if activity is not None:
+            activity.step(
+                "discovery",
+                "Indeed",
+                f"Checking {cli_art.format_board_name('indeed')} for {name!r} postings",
+                preserve_markup=True,
+            )
+        for job in _scrape_one_term(name, location, distance):
+            company_key = _company_key(job.get("company_name"))
+            if not any(key in company_key for key in keys):
+                continue
+            if not _admit_indeed_job(job):
+                continue
+            url = job.get("source_url")
+            if url and url in seen_urls:
+                continue
+            if url:
+                seen_urls.add(url)
+            job["watchlist_company"] = name
+            jobs.append(job)
+
+    logging.info(
+        f"scan_indeed: watchlist returned {len(jobs)} listing(s) across "
+        f"{len(companies)} company(ies)."
+    )
+    return jobs

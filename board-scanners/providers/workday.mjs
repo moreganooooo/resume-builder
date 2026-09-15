@@ -10,6 +10,8 @@
 //   https://<tenant>.wd1.myworkdayjobs.com/en-US/<board>
 //   https://<tenant>.myworkdayjobs.com/<board>
 
+import { prioritizeByTitle } from './_title_priority.mjs';
+
 const WORKDAY_HOST_RE = /\.myworkdayjobs\.com/;
 
 // Workday's internal search endpoint path (consistent across tenants)
@@ -267,8 +269,12 @@ export default {
     // a slow pagination phase cannot consume the time descriptions need.
     // scan_boards.py gives workday a longer subprocess timeout to cover
     // both phases (see PROVIDER_TIMEOUT_SECONDS).
+    // Titles the profile wants go first -- see _title_priority.mjs. M&T
+    // (240 postings) and Moog (400) otherwise spent the whole budget on
+    // postings the title filter discards.
     const detailDeadline = Date.now() + WORKDAY_DETAIL_BUDGET_MS;
-    for (const job of jobs.slice(0, WORKDAY_DETAIL_FETCH_CAP)) {
+    const detailQueue = prioritizeByTitle(jobs, entry._title_filter).slice(0, WORKDAY_DETAIL_FETCH_CAP);
+    for (const job of detailQueue) {
       if (Date.now() >= detailDeadline) break;
       if (!job._externalPath || !apiBase) continue;
       job.description = await fetchJobDescription(ctx, apiBase, job._externalPath);

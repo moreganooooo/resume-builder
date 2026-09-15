@@ -584,3 +584,37 @@ class TestConcurrentCompanyFetching(unittest.TestCase):
         # The three healthy hosts still return; only the bad one is lost.
         self.assertEqual(len(jobs), 3)
         self.assertNotIn("Co2", [j["company_name"] for j in jobs])
+
+
+class TestWebsearchFullText(unittest.TestCase):
+    """A websearch hit carries only its search snippet; the posting page is
+    fetched when the snippet is thin, and kept only if it has more text."""
+
+    RAW = {"title": "Field Application Engineer", "url": "https://example.com/career/fae/", "description": "Short snippet."}
+
+    def _normalize(self, page_text, raw=None):
+        gates = [
+            "_passes_title_filter", "_passes_location_filter", "_passes_employment_filter",
+            "_passes_content_filters", "_passes_compensation_filter", "_passes_hours_filter",
+            "_passes_hybrid_preference_filter",
+        ]
+        patchers = [patch(f"scan_boards.{g}", return_value=True) for g in gates]
+        for p in patchers:
+            p.start()
+        self.addCleanup(lambda: [p.stop() for p in patchers])
+        with patch("scan_boards._fetch_posting_text", return_value=page_text) as fetch:
+            job = scan_ats._normalize_raw_job(raw or self.RAW, "websearch", "PostProcess")
+        return job, fetch
+
+    def test_thin_snippet_is_replaced_by_the_page_text(self):
+        job, fetch = self._normalize("Full posting body. " * 60)
+        fetch.assert_called_once()
+        self.assertTrue(job["description"].startswith("Full posting body."))
+
+    def test_snippet_kept_when_the_page_fetch_fails(self):
+        job, _ = self._normalize("")
+        self.assertEqual(job["description"], "Short snippet.")
+
+    def test_teaser_is_not_refetched(self):
+        _, fetch = self._normalize("x" * 2000, raw=dict(self.RAW, description_is_teaser=True))
+        fetch.assert_not_called()

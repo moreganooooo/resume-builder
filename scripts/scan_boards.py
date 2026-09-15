@@ -120,7 +120,7 @@ NODE_TIMEOUT_SECONDS = 30
 # bounds itself to ~45s of real work; this leaves headroom over that
 # rather than racing it. Dayforce's search API takes ~2s per 25-posting
 # page (ACV's 194 postings: 18s), bounded at 35s in dayforce.mjs.
-PROVIDER_TIMEOUT_SECONDS = {"workday": 105, "dayforce": 50}
+PROVIDER_TIMEOUT_SECONDS = {"workday": 105, "dayforce": 50, "icims": 50}
 POSTING_FETCH_TIMEOUT_SECONDS = 15
 MAX_DESCRIPTION_CHARS = 15_000
 # Raised from 200 on 2026-08-21, calibrated against this profile's own

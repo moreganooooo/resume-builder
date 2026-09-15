@@ -374,3 +374,55 @@ class TestMissingEmployer(unittest.TestCase):
             jobs = scan_indeed.fetch_indeed_jobs()
         self.assertEqual(len(jobs), 1)
         self.assertEqual(jobs[0]["company_name"], "Acme")
+
+
+class TestIndeedWatchlist(unittest.TestCase):
+    """Named employers with no ATS board, searched on Indeed by name."""
+
+    FILTERS = {
+        "indeed_watch_companies": [
+            "Sentient Science",
+            {"name": "Viridi Parente", "aliases": ["Viridi"]},
+        ]
+    }
+
+    def _run(self, rows, filters=FILTERS):
+        fake = MagicMock(return_value=frame_of(rows))
+        with (
+            patch("scan_boards._load_filters", return_value=filters),
+            patch("location_settings.read_settings", return_value=SETTINGS),
+            patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}),
+        ):
+            return scan_indeed.fetch_indeed_watchlist_jobs(), fake
+
+    def test_keeps_only_the_watched_employer_and_flags_it(self):
+        rows = [
+            dict(ROW, company="Sentient Science Corp.", job_url="https://indeed.test/1"),
+            dict(ROW, company="Other Co", job_url="https://indeed.test/2"),
+            dict(ROW, company="Viridi", job_url="https://indeed.test/3"),
+        ]
+        jobs, fake = self._run(rows)
+        # One search per company, by name.
+        self.assertEqual(
+            [c.kwargs["search_term"] for c in fake.call_args_list],
+            ["Sentient Science", "Viridi Parente"],
+        )
+        # The same fake frame answers both searches: each row is kept under
+        # the company it matches, once, and "Other Co" never.
+        self.assertEqual(
+            [(j["company_name"], j["watchlist_company"]) for j in jobs],
+            [("Sentient Science Corp.", "Sentient Science"), ("Viridi", "Viridi Parente")],
+        )
+
+    def test_no_watchlist_never_scrapes(self):
+        jobs, fake = self._run([ROW], filters={})
+        self.assertEqual(jobs, [])
+        fake.assert_not_called()
+
+    def test_is_a_scan_source(self):
+        import scan
+
+        self.assertIs(
+            scan.SOURCE_FETCHERS["indeed_watchlist"],
+            scan_indeed.fetch_indeed_watchlist_jobs,
+        )
