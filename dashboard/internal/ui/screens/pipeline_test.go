@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -692,5 +693,27 @@ func TestPipelineModel_MouseClick(t *testing.T) {
 	pm, _ = pm.Update(tea.MouseClickMsg{X: info.StartX + 1, Y: info.StartY})
 	if pm.cursor != 1 {
 		t.Errorf("expected cursor 1 after clicking pipeline row 1, got %d", pm.cursor)
+	}
+}
+
+// Same regression as TestJobsViewFitsTerminalWithTagsAndPay: a wrapped help
+// bar or a too-wide row/detail line grew the screen past the terminal.
+func TestPipelineViewFitsTerminal(t *testing.T) {
+	var apps []model.CareerApplication
+	for i := 0; i < 30; i++ {
+		apps = append(apps, model.CareerApplication{
+			Company: "The TJX Companies, Incorporated International",
+			Role:    "Senior Lifecycle Marketing Manager, Retention and Growth",
+			Status:  "Evaluated", Score: 4.4,
+			EmploymentType: []string{"full_time", "contract_to_hire", "part_time"},
+			PayText:        "$114,000 - $200,000 per year plus equity and bonus",
+		})
+	}
+	for _, size := range [][2]int{{80, 24}, {100, 30}, {120, 40}, {160, 45}, {220, 50}} {
+		pm := NewPipelineModel(theme.NewTheme("resume-builder"), apps, model.PipelineMetrics{Total: len(apps)}, "..", size[0], size[1])
+		pm.animDone = true
+		if n := len(strings.Split(ansi.Strip(pm.View()), "\n")); n > size[1] {
+			t.Errorf("%dx%d: view is %d lines, footer pushed off", size[0], size[1], n)
+		}
 	}
 }

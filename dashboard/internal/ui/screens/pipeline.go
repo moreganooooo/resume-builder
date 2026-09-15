@@ -906,7 +906,11 @@ func workModeRank(mode string) int {
 // URL) the split pane's declared height stayed put while an extra line got
 // inserted above it, pushing the help bar one row past the terminal.
 func (m PipelineModel) chromeRowsFixed() int {
-	rows := 5
+	// Measured, not a constant: the help bar wraps to 2-3 lines below ~200
+	// columns, and budgeting one line pushed the footer off the terminal.
+	rows := lipgloss.Height(m.renderHeader()) + lipgloss.Height(m.renderTabs()) +
+		lipgloss.Height(m.renderMetrics()) + lipgloss.Height(m.renderSortBar()) +
+		lipgloss.Height(m.renderHelp())
 	if m.searchInput || m.searchQuery != "" {
 		rows++
 	}
@@ -1074,7 +1078,7 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 		}
 
 		selected := i == m.cursor
-		line := renderSidebarRowTagged(m.theme, app.Score, app.Company, employmentTags(m.theme, app.EmploymentType), app.Role, width-4, selected)
+		line := renderSidebarRowTagged(m.theme, app.Score, app.Company, employmentTags(m.theme, app.EmploymentType), app.Role, sidebarInnerWidth(width), selected)
 		lines = append(lines, zone.Mark(fmt.Sprintf("pipeline_row_%d", i), line))
 	}
 
@@ -1138,7 +1142,7 @@ func (m PipelineModel) pipelineDetailContentLines(app model.CareerApplication, w
 	// Pay directly under the role, bold green -- same placement as Jobs.
 	if app.PayText != "" {
 		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Green).Bold(true).Render(
-			"$ "+truncateRunes(strings.TrimSpace(app.PayText), width-6)))
+			truncateRunes(strings.TrimSpace(app.PayText), width-4)))
 	}
 	content = append(content, "")
 
@@ -1229,7 +1233,7 @@ func (m PipelineModel) pipelineDetailContentLines(app model.CareerApplication, w
 		content = append(content, styles.Subtext.Render(truncateRunes(app.Notes, width-6)))
 	}
 
-	return content
+	return wrapToDetailPane(content, width)
 }
 
 func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, height int) string {
@@ -1249,6 +1253,12 @@ func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, h
 		if start > 0 && start < len(lines) {
 			lines = lines[start:]
 		}
+	}
+	// Clip to the pane's budget, as Jobs does. Unclipped, a long detail
+	// (wrapped tags, pay, notes) grew the box past the terminal and pushed
+	// the footer off.
+	if budget := detailVisibleBudget(height); len(lines) > budget {
+		lines = append(lines[:budget:budget], styles.Subtext.Render("  J ↓ more"))
 	}
 	joined := strings.Join(lines, "\n")
 	return styles.Border.Render(joined)

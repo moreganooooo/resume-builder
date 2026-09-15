@@ -1078,3 +1078,35 @@ func TestJobsModel_MouseClick(t *testing.T) {
 		t.Errorf("expected cursor 1 after clicking jobs row 1, got %d", m.cursor)
 	}
 }
+
+// A sidebar row wider than its box wraps inside the border, and the extra
+// line grows the whole screen past the terminal -- the footer help bar is
+// what falls off. Employment tags and pay made rows wider, so pin it.
+func TestJobsViewFitsTerminalWithTagsAndPay(t *testing.T) {
+	rows := []model.JobRow{}
+	for i := 0; i < 30; i++ {
+		rows = append(rows, model.JobRow{
+			Path: fmt.Sprintf("%d.json", i), Status: "Pending",
+			Company:        "The TJX Companies, Incorporated International",
+			Title:          "Senior Lifecycle Marketing Manager, Retention and Growth",
+			EmploymentType: []string{"full_time", "contract_to_hire", "part_time"},
+			PayText:        "$114,000 - $200,000 per year plus equity and bonus",
+			Evaluation:     model.Evaluation{CompositeScore: 4.4, FitScore: 4.1, InterviewOddsScore: 3.2},
+		})
+	}
+	for _, name := range []string{"catppuccin-mocha", "resume-builder"} {
+		for _, size := range [][2]int{{80, 24}, {100, 30}, {120, 40}, {160, 45}, {220, 50}} {
+			m := NewJobsModel(theme.NewTheme(name), rows, size[0], size[1])
+			lines := strings.Split(ansi.Strip(m.View()), "\n")
+			if len(lines) > size[1] {
+				t.Errorf("%s %dx%d: view is %d lines, footer pushed off", name, size[0], size[1], len(lines))
+			}
+			for _, l := range lines {
+				if w := ansi.StringWidth(l); w > size[0] {
+					t.Errorf("%s %dx%d: line %d cols wide", name, size[0], size[1], w)
+					break
+				}
+			}
+		}
+	}
+}
