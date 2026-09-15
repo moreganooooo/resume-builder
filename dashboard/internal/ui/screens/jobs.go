@@ -1784,7 +1784,7 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 		// calls -- Pipeline rows are about application progress, not fit,
 		// so they have no use for these.
 		subtitle := jobSubtitleWithScores(m.theme, job, width-4)
-		rowContent := renderSidebarRow(m.theme, job.Evaluation.CompositeScore, job.Company, subtitle, width-4, selected)
+		rowContent := renderSidebarRowTagged(m.theme, job.Evaluation.CompositeScore, job.Company, employmentTags(m.theme, job.EmploymentType), subtitle, width-4, selected)
 		lines = append(lines, zone.Mark(fmt.Sprintf("jobs_row_%d", i), rowContent))
 	}
 
@@ -1907,6 +1907,13 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 	// -- Header --
 	content = append(content, styles.Title.Render(job.Company))
 	content = append(content, styles.Value.Render(job.Title))
+	// Pay sits directly under the title, bold and green, so it is the first
+	// thing read. The posting's own wording, not the annualized number --
+	// see JobRow.PayText. Blank when unstated, which is most postings.
+	if label := job.PayLabel(); label != "" {
+		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Green).Bold(true).Render(
+			"$ "+truncateRunes(label, wrapWidth-2)))
+	}
 	if job.SourcePlatform != "" {
 		content = append(content, styles.Subtext.Render("via "+job.SourcePlatform))
 	}
@@ -1930,15 +1937,11 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 	// Blank when the posting stated no type, which is the common case --
 	// rendering "Unknown" here would imply the source was asked and
 	// declined, when most sources never publish the field at all.
-	if label := job.EmploymentLabel(); label != "" {
+	if tags := employmentTags(m.theme, job.EmploymentType); tags != "" {
+		content = append(content, styles.Subtext.Render(m.theme.Icons.Filter+" ")+tags)
+	} else if label := job.EmploymentLabel(); label != "" {
 		content = append(content, styles.Subtext.Render(
 			m.theme.Icons.Filter+" "+truncateRunes(label, wrapWidth-2)))
-	}
-	// The posting's own wording, not the annualized number -- see
-	// JobRow.PayText. Blank when unstated, which is most postings.
-	if label := job.PayLabel(); label != "" {
-		content = append(content, styles.Subtext.Render(
-			"$ "+truncateRunes(label, wrapWidth-2)))
 	}
 	// Shown for the few postings that state a schedule. This is what
 	// separates a 10-hour part-time role from a 30-hour one, which the
@@ -2507,6 +2510,35 @@ func locationBadge(t theme.Theme, job model.JobRow) string {
 		return ""
 	}
 	return lipgloss.NewStyle().Foreground(t.Sky).Render(t.Icons.Location + " " + label)
+}
+
+// employmentTags renders a posting's canonical employment types as
+// colored labels for the list and detail pane, so rows can be told apart
+// while arrowing down. "" when the posting stated no (canonical) type --
+// the common case, and not worth a gray "Unknown" on most rows.
+// Shared with Pipeline (CareerApplication carries the same canonical list).
+func employmentTags(t theme.Theme, types []string) string {
+	colors := map[string]color.Color{
+		"full_time":        t.Green,
+		"part_time":        t.Sky,
+		"contract":         t.Peach,
+		"contract_to_hire": t.Yellow,
+		"temporary":        t.Pink,
+		"internship":       t.Mauve,
+	}
+	var tags []string
+	for _, et := range types {
+		label, ok := model.EmploymentLabels[et]
+		if !ok {
+			label = et
+		}
+		c, ok := colors[et]
+		if !ok {
+			c = t.Subtext
+		}
+		tags = append(tags, lipgloss.NewStyle().Foreground(c).Bold(true).Render("["+label+"]"))
+	}
+	return strings.Join(tags, " ")
 }
 
 func jobSubtitleWithScores(t theme.Theme, job model.JobRow, width int) string {

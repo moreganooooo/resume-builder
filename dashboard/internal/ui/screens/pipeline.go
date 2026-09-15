@@ -1074,7 +1074,7 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 		}
 
 		selected := i == m.cursor
-		line := renderSidebarRow(m.theme, app.Score, app.Company, app.Role, width-4, selected)
+		line := renderSidebarRowTagged(m.theme, app.Score, app.Company, employmentTags(m.theme, app.EmploymentType), app.Role, width-4, selected)
 		lines = append(lines, zone.Mark(fmt.Sprintf("pipeline_row_%d", i), line))
 	}
 
@@ -1135,6 +1135,11 @@ func (m PipelineModel) pipelineDetailContentLines(app model.CareerApplication, w
 	// HEADER: Company & Role
 	content = append(content, styles.Title.Render(app.Company))
 	content = append(content, styles.Value.Render(app.Role))
+	// Pay directly under the role, bold green -- same placement as Jobs.
+	if app.PayText != "" {
+		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Green).Bold(true).Render(
+			"$ "+truncateRunes(strings.TrimSpace(app.PayText), width-6)))
+	}
 	content = append(content, "")
 
 	// PROOF: Score, Status, Date
@@ -1183,11 +1188,10 @@ func (m PipelineModel) pipelineDetailContentLines(app model.CareerApplication, w
 	// FILTER-PARITY FACTS (see model/career.go) -- same fields the Jobs
 	// screen surfaces, shown here read-only regardless of whether a
 	// filter narrowed to them.
-	if label := app.EmploymentLabel(); label != "" {
+	if tags := employmentTags(m.theme, app.EmploymentType); tags != "" {
+		content = append(content, styles.Subtext.Render("Employment: ")+tags)
+	} else if label := app.EmploymentLabel(); label != "" {
 		content = append(content, styles.Subtext.Render("Employment: ")+styles.Value.Render(label))
-	}
-	if app.PayText != "" {
-		content = append(content, styles.Subtext.Render("Pay: ")+styles.Value.Render(app.PayText))
 	}
 	if app.HoursText != "" {
 		content = append(content, styles.Subtext.Render("Hours: ")+styles.Value.Render(app.HoursText))
