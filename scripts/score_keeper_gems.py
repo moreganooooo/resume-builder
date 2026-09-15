@@ -50,7 +50,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import cli_art
 import theme
-from gemini_client import GeminiClient  # noqa: E402
+from gemini_client import SCORING_FALLBACKS, GeminiClient  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # CONFIG
@@ -153,6 +153,9 @@ def score_bullet(system_prompt: str, bullet: str) -> dict | None:
         contents=bullet,
         response_schema=HiddenGemSchema,
         temperature=0.0,
+        # A score: a 503 streak must not land on 3.5-flash-lite, which the
+        # default MODEL_FALLBACKS chain does from Gemma (seen 2026-09-15).
+        fallbacks=SCORING_FALLBACKS,
     )
     if raw is None:
         return None
