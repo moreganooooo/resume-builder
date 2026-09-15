@@ -36,6 +36,31 @@ class TestMimeType(unittest.TestCase):
         self.assertEqual(jd_image_ingest._mime_type("x.PDF"), "application/pdf")
 
 
+class TestUnwrapImagePdf(unittest.TestCase):
+    def _pdf_bytes(self, *images):
+        import io
+
+        buf = io.BytesIO()
+        images[0].save(buf, format="PDF", save_all=True, append_images=list(images[1:]))
+        return buf.getvalue()
+
+    def test_single_image_page_becomes_png(self):
+        from PIL import Image
+
+        out = jd_image_ingest._unwrap_image_pdf(self._pdf_bytes(Image.new("RGB", (40, 90))))
+        self.assertIsNotNone(out)
+        self.assertEqual(out[1], "image/png")
+
+    def test_multi_page_pdf_is_left_alone(self):
+        from PIL import Image
+
+        pdf = self._pdf_bytes(Image.new("RGB", (40, 90)), Image.new("RGB", (40, 90)))
+        self.assertIsNone(jd_image_ingest._unwrap_image_pdf(pdf))
+
+    def test_non_pdf_bytes_are_left_alone(self):
+        self.assertIsNone(jd_image_ingest._unwrap_image_pdf(b"not a pdf"))
+
+
 class TestDedupeStems(unittest.TestCase):
     def test_pdf_wins_over_png_for_same_stem(self):
         paths = ["/a/job.png", "/a/job.pdf"]
@@ -142,6 +167,29 @@ class TestExtractJdFromImage(unittest.TestCase):
         kwargs = mock_generate.call_args.kwargs
         self.assertEqual(kwargs["inline_file"][1], "image/png")
         self.assertEqual(kwargs["inline_file"][0], b"\x89PNG fake bytes")
+
+    def test_screencapture_pdf_is_sent_as_its_embedded_png(self):
+        # A PDF page is rasterized at low resolution; the wrapped screenshot
+        # at native size is what made a real Tesla posting's digits readable.
+        import io
+
+        import orchestrator
+        from PIL import Image
+
+        pdf_path = os.path.join(self.tmp_dir, "job.pdf")
+        Image.new("RGB", (200, 300), "white").save(pdf_path, format="PDF")
+        fake_engine = MagicMock()
+        fake_engine.load_prompt.return_value = "prompt text"
+        with patch.object(
+            orchestrator.GeminiClient,
+            "generate",
+            return_value=(json.dumps(FAKE_EXTRACTION), {}),
+        ) as mock_generate:
+            jd_image_ingest.extract_jd_from_image(pdf_path, engine=fake_engine)
+
+        sent_bytes, sent_mime = mock_generate.call_args.kwargs["inline_file"]
+        self.assertEqual(sent_mime, "image/png")
+        self.assertEqual(Image.open(io.BytesIO(sent_bytes)).size, (200, 300))
 
     def test_partial_flag_is_preserved(self):
         import orchestrator

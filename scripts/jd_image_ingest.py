@@ -78,6 +78,34 @@ def _mime_type(path: str) -> str:
     )
 
 
+def _unwrap_image_pdf(file_bytes: bytes) -> tuple[bytes, str] | None:
+    """A browser screencapture PDF is one letter-size page wrapping a single
+    ~5000px-tall screenshot, and Gemini rasterizes PDF pages at low
+    resolution -- so the model read blurred digits. On a real Tesla posting
+    that turned "2+ years" into "3+" and shifted all six pay figures, on
+    3.5-flash-lite AND 3.6-flash alike; the same model given the embedded
+    image as a PNG transcribed every figure exactly (Gemini tiles a large
+    image at native resolution). Returns that image as PNG, or None for
+    anything else (multi-page, a real text layer, several images), which is
+    then sent unchanged."""
+    import io
+
+    try:
+        from pypdf import PdfReader
+
+        pages = PdfReader(io.BytesIO(file_bytes)).pages
+        if len(pages) != 1 or len((pages[0].extract_text() or "").strip()) > 50:
+            return None
+        images = list(pages[0].images)
+        if len(images) != 1:
+            return None
+        buf = io.BytesIO()
+        images[0].image.convert("RGB").save(buf, format="PNG")
+        return buf.getvalue(), "image/png"
+    except Exception:
+        return None
+
+
 def _dedupe_stems(paths: list) -> list:
     """A browser "screencapture"-style extension often writes the SAME
     posting twice, once as .pdf and once as .png, sharing a base filename
@@ -144,6 +172,10 @@ def extract_jd_from_image(path: str, engine=None) -> dict:
         return {"_ingest_error": f"{type(e).__name__}: {e}", "_ingest_source": path}
 
     mime_type = _mime_type(path)
+    if mime_type == "application/pdf":
+        unwrapped = _unwrap_image_pdf(file_bytes)
+        if unwrapped:
+            file_bytes, mime_type = unwrapped
     prompt = engine.load_prompt("extract_jd_from_image.md")
 
     try:
