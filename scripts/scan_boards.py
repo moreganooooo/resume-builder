@@ -113,13 +113,14 @@ BOARD_PROVIDERS = [
 
 NODE_TIMEOUT_SECONDS = 30
 
-# Providers that legitimately need longer than the default. Workday is
-# the only one: it drives Playwright to paginate a JS board and then
-# fetches each posting's description over a separate budget, so 30s cut
-# it off mid-run and produced JDs with empty descriptions. Its own module
+# Providers that legitimately need longer than the default. Workday
+# drives Playwright to paginate a JS board and then fetches each
+# posting's description over a separate budget, so 30s cut it off
+# mid-run and produced JDs with empty descriptions. Its own module
 # bounds itself to ~45s of real work; this leaves headroom over that
-# rather than racing it.
-PROVIDER_TIMEOUT_SECONDS = {"workday": 105}
+# rather than racing it. Dayforce's search API takes ~2s per 25-posting
+# page (ACV's 194 postings: 18s), bounded at 35s in dayforce.mjs.
+PROVIDER_TIMEOUT_SECONDS = {"workday": 105, "dayforce": 50}
 POSTING_FETCH_TIMEOUT_SECONDS = 15
 MAX_DESCRIPTION_CHARS = 15_000
 # Raised from 200 on 2026-08-21, calibrated against this profile's own

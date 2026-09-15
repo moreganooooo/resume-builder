@@ -117,6 +117,7 @@ _ATS_HOST_PATTERNS = [
     ("smartrecruiters", "smartrecruiters.com"),
     ("workable", "workable.com"),
     ("workday", "myworkdayjobs.com"),
+    ("dayforce", "jobs.dayforcehcm.com"),
     ("taleo", "taleo.net"),
     ("rippling", "ats.rippling.com"),
     ("bamboohr", "bamboohr.com"),
