@@ -902,6 +902,25 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   re-calibrates itself as the bank grows or the embedding model changes.
   Do not reintroduce a fixed band; if you want one, measure it against
   real skill-phrase embeddings first, not bullet-to-bullet similarity.
+- **A bullet removed on purpose is recorded, not just deleted
+  (`removed-bullets.csv`, `scripts/bullet_bank_state.py`).** Every bullet
+  bank stage compares only its own input with its own output, so deleting
+  a row downstream made it look like unfinished work upstream: Stage 4
+  merged a deleted keeper back from `bullet-bank-keepers.csv` (cluster ids
+  hash their members, so a reclustered id looked "new"), and Stages 1-3
+  re-queued its raw bullet. Every stage now consults the list -- audit and
+  rewrite skip `settled_raw` (removed text plus the raw text it was
+  rewritten from), Stage 4's merge never re-adds a `final_texts` match and
+  treats a row as new only if its cluster id, normalized text AND
+  `original_bullet` are all unknown, triage drops removed rows and leaves
+  near-duplicates of existing keepers (`near_duplicate_of`) in
+  needs-review.csv with a `triage_note`, and the Bullet Bank menu counts
+  removals as done (Stage 2 is now judged by content, not mtime). Remove
+  bullets with `scripts/remove_bullets.py` (menu: "Remove Bullets"), never
+  by hand-editing the CSVs; `--backfill` / `--since-backup` record
+  removals made before the list existed. Removing a keeper does not
+  remove its siblings rewritten from the same raw bullet -- `settled_raw`
+  only stops NEW rewrites of it.
 - **Bullet uniqueness is enforced at selection time, not repair time.**
   "No repeated metric" and "no repeated opening verb" are whole-CV
   constraints, but the validator retry loop can only ask the model for a

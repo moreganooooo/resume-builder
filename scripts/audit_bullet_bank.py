@@ -13,6 +13,7 @@ import profile_paths
 
 load_dotenv(profile_paths.env_path())
 
+import bullet_bank_state
 import cli_art
 import theme
 from atomic_write import atomic_write
@@ -105,6 +106,13 @@ def run_audit(csv_path=None, out_path=None, sleep_seconds=SLEEP):
                 "starting this audit fresh instead",
             )
 
+    # Bullets removed on purpose (removed-bullets.csv, next to the output)
+    # are settled work, not a backlog -- scoring one would only feed it back
+    # into clustering and rewriting.
+    removed = bullet_bank_state.load_removed(
+        bullet_bank_state.removed_path(os.path.dirname(os.path.abspath(out_path)))
+    )
+
     total = len(df)
     skipped = 0
 
@@ -120,6 +128,8 @@ def run_audit(csv_path=None, out_path=None, sleep_seconds=SLEEP):
         # Skip if already scored in a previous run
         if bullet in already_scored_bullets:
             skipped += 1
+            continue
+        if removed.settles(bullet):
             continue
 
         processed = len(results) - skipped + 1

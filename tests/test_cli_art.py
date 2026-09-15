@@ -683,6 +683,25 @@ class TestDisplayHelp(unittest.TestCase):
         for command, description in cli_art.HELP_ENTRIES:
             self.assertIn(command, output)
         self.assertIn("launch the interactive menu", output)
+        for section, _ in cli_art.HELP_SECTIONS:
+            self.assertIn(section, output)
+
+    def test_every_cli_command_has_a_help_line(self):
+        import click
+        import cli
+
+        documented = " ".join(command for command, _ in cli_art.HELP_ENTRIES)
+        missing = []
+        for name, command in cli.cli.commands.items():
+            if isinstance(command, click.Group):
+                missing += [
+                    f"{name} {sub}"
+                    for sub in command.commands
+                    if f"resume {name} {sub}" not in documented
+                ]
+            elif f"resume {name}" not in documented:
+                missing.append(name)
+        self.assertEqual(missing, [], "add these to cli_art.HELP_SECTIONS")
 
 
 class TestScanActivity(unittest.TestCase):

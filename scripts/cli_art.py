@@ -1236,55 +1236,165 @@ def _render_scan_warnings(source_results: list) -> None:
 # help` (scripts/resume-cli.sh, which shells out to `python scripts/cli.py
 # help`) and the interactive menu's Help entry render this same list, so
 # there's exactly one place to update instead of two copies drifting apart.
-HELP_ENTRIES = [
-    ("resume", "launch the interactive menu"),
+#
+# Grouped into sections; tests/test_cli_art.py fails if a command
+# registered in cli.py is missing here, so a new command can't ship
+# without a help line.
+HELP_SECTIONS = [
     (
-        "resume bootstrap",
-        "new-user setup: ingest documents, draft your profile, build the bullet bank",
+        "Getting started",
+        [
+            ("resume", "launch the interactive menu (aliases: rb, jobkit)"),
+            (
+                "resume bootstrap",
+                "new-user setup: ingest documents, draft your profile, build the bullet bank",
+            ),
+            (
+                "resume quickstart",
+                "setup check for a new profile or machine; asks for a missing Gemini API key",
+            ),
+            (
+                "resume --profile NAME <command>",
+                "run any command against another profile, for this one command only",
+            ),
+            ("resume --version", "print the installed version"),
+            (
+                "resume activate",
+                "cd into the project and activate the venv (stays active in this shell)",
+            ),
+            ("resume cd", "just cd into the project"),
+            ("resume help", "show this cheat sheet"),
+        ],
     ),
     (
-        "resume activate",
-        "cd into the project and activate the venv (stays active in this shell)",
+        "Find jobs",
+        [
+            (
+                "resume scan",
+                "pull new postings into jds/ (verifies each is actually live via headless browser by default)",
+            ),
+            (
+                "resume scan --source jobright",
+                "pull from just one source (jobright, linkedin, indeed, boards, ats); repeatable",
+            ),
+            (
+                "resume scan --no-verify",
+                "skip the liveness check on new postings (faster, but stale listings may slip through)",
+            ),
+            (
+                "resume discover-employers",
+                "find local employers with public ATS boards (dry run; --apply to track them)",
+            ),
+            (
+                "resume liveness",
+                "check every pending JD's posting URL, move expired ones out (--refresh: recheck all)",
+            ),
+            (
+                "resume location enrich",
+                "look up office addresses for commute filtering (--all, --limit N, --allow-search-backup)",
+            ),
+            (
+                "resume dedupe",
+                "find duplicate pending jobs across sources (dry run; --apply to archive them)",
+            ),
+            (
+                "resume reconcile",
+                "sync job statuses in the database to their folders (dry run; --apply to fix)",
+            ),
+        ],
     ),
-    ("resume cd", "just cd into the project"),
-    ("resume run", "tailor+render every pending JD in jds/ (batch mode)"),
-    ("resume run jds/x.txt", "tailor+render one specific JD file"),
-    ("resume run --pick", "interactively select which pending JD(s) to tailor"),
-    ("resume coverletter jds/x.txt", "generate + render a cover letter for one JD"),
     (
-        "resume coverletter --pick",
-        "interactively select which pending JD(s) to generate a cover letter for",
+        "Score jobs",
+        [
+            ("resume evaluate", "score every pending JD at once"),
+            (
+                "resume evaluate --refresh",
+                "re-score every pending JD, including ones already scored",
+            ),
+            (
+                "resume evaluate jds/x.txt",
+                "score one JD's fit (go/no-go) without building a resume",
+            ),
+            ("resume compare A B", "side-by-side comparison of two jobs (IDs or file paths)"),
+            ("resume strategy", "application strategy coaching (--jd for one job)"),
+        ],
     ),
     (
-        "resume evaluate jds/x.txt",
-        "score a JD's fit (go/no-go) without building a resume",
+        "Build documents",
+        [
+            ("resume run", "tailor+render every pending JD in jds/ (batch mode)"),
+            ("resume run jds/x.txt", "tailor+render one specific JD file"),
+            ("resume run --pick", "interactively select which pending JD(s) to tailor"),
+            ("resume tailor jds/x.txt", "same as `resume run jds/x.txt`"),
+            (
+                "resume package jds/x.txt",
+                "full application: resume + cover letter, after liveness and fit checks",
+            ),
+            ("resume build jds/x.txt", "same as `resume package`"),
+            (
+                "resume package --pick",
+                "package several pending JDs (--force: build even if scored Skip)",
+            ),
+            (
+                "resume package --referral \"Name, relation\"",
+                "name a referral contact in the cover letter (also works on coverletter)",
+            ),
+            ("resume coverletter jds/x.txt", "generate + render a cover letter for one JD"),
+            (
+                "resume coverletter --pick",
+                "interactively select which pending JD(s) to generate a cover letter for",
+            ),
+            ("resume polish", "interactively polish an already-generated resume/cover letter"),
+            (
+                "resume sample",
+                "QA smoke test: build a sample resume + cover letter from the fixture JD",
+            ),
+        ],
     ),
-    ("resume evaluate", "score every pending JD at once"),
     (
-        "resume scan",
-        "pull new postings into jds/ (verifies each is actually live via headless browser by default)",
+        "Track and research",
+        [
+            (
+                "resume dashboard",
+                "open the Career Dashboard (browse jobs, pipeline, follow-ups)",
+            ),
+            (
+                "resume stats",
+                "pipeline insights (--platform, --companies, --scatter, --heatmap, --radar, --funnel)",
+            ),
+            ("resume funnel-drilldown", "where applications stall between stages"),
+            ("resume timeline JOB", "one application's full history (job ID or search text)"),
+            ("resume agency-view", "staffing agencies you've dealt with and their ghost rates"),
+            ("resume rag \"query\"", "search your bullet bank, stories, and knowledge docs by meaning"),
+            ("resume evidence list", "show all interview stories and negotiation points"),
+            (
+                "resume evidence stories",
+                "browse interview (STAR) stories (--archetype, --tag, -q)",
+            ),
+            (
+                "resume evidence negotiate",
+                "browse negotiation talking points (--category, -q)",
+            ),
+        ],
     ),
     (
-        "resume scan --source jobright",
-        "pull from just one source (jobright, linkedin, boards, ats)",
+        "Maintenance",
+        [
+            ("resume doctor", "check dependencies/assets/config, then run the test suite"),
+            ("resume doctor --skip-tests", "same, but skip the (slower) test-suite run"),
+            ("resume verify-sync", "check Syncthing folders, ignore rules, and database state"),
+            ("resume test", "run the full test suite (compact: dots + summary)"),
+            ("resume test -v", "same, but lists every test by name"),
+            ("resume test -vv", "same, but shows the app's own logging too"),
+            (
+                "resume scan-stream",
+                "live viewer for scan progress events (internal; reads from a pipe)",
+            ),
+        ],
     ),
-    (
-        "resume scan --no-verify",
-        "skip the liveness check on new postings (faster, but stale listings may slip through)",
-    ),
-    ("resume liveness", "check every pending JD's posting URL, move expired ones out"),
-    ("resume polish", "interactively polish an already-generated resume/cover letter"),
-    ("resume dashboard", "open the Career Dashboard (browse jobs, pipeline, follow-ups)"),
-    (
-        "resume sample",
-        "QA smoke test: build a sample resume + cover letter from the fixture JD",
-    ),
-    ("resume test", "run the full test suite (compact: dots + summary)"),
-    ("resume test -v", "same, but lists every test by name"),
-    ("resume test -vv", "same, but shows the app's own logging too"),
-    ("resume doctor", "check dependencies/assets/config, then run the test suite"),
-    ("resume doctor --skip-tests", "same, but skip the (slower) test-suite run"),
 ]
+
+HELP_ENTRIES = [entry for _, entries in HELP_SECTIONS for entry in entries]
 
 
 def display_playbook() -> None:
@@ -1344,8 +1454,12 @@ def display_help() -> None:
     )
     table.add_column("Command")
     table.add_column("What it does")
-    for command, description in HELP_ENTRIES:
-        table.add_row(command, description)
+    for i, (section, entries) in enumerate(HELP_SECTIONS):
+        if i:
+            table.add_row("", "")
+        table.add_row(f"[bold {theme.BRAND}]{section}[/bold {theme.BRAND}]", "")
+        for command, description in entries:
+            table.add_row(_escape_markup(command), description)
     console.print(
         Panel(
             table,

@@ -35,6 +35,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
+import bullet_bank_state
 import cli_art
 import profile_paths  # noqa: E402
 from atomic_write import atomic_write  # noqa: E402
@@ -44,6 +45,8 @@ NEEDS_REVIEW = os.path.join(KB_BASE, "needs-review.csv")
 KEEPERS_CSV = os.path.join(KB_BASE, "bullet-bank-keepers.csv")
 REWRITE_QUEUE = os.path.join(KB_BASE, "rewrite-queue.csv")
 RETIRED_PATH = os.path.join(KB_BASE, "retired-bullets.csv")
+KEEPERS_AUDITED = os.path.join(KB_BASE, "bullet-bank-keepers-audited.csv")
+REMOVED_PATH = bullet_bank_state.removed_path(KB_BASE)
 
 TODAY = str(date.today())
 
@@ -174,6 +177,22 @@ def existing_keeper_bullets(path) -> set:
         }
 
 
+def keeper_candidates(*paths) -> list:
+    """(company, bullet) pairs from the final and audited keeper banks, for
+    near-duplicate checks -- the audited bank is what resumes draw from, and
+    a near-copy of one of its bullets is a second version of the same fact."""
+    pairs = []
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        with open(path, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                text = row.get("Bullet Point", "").strip()
+                if text:
+                    pairs.append((row.get("Role / Company", ""), text))
+    return pairs
+
+
 def main():
     if not os.path.exists(NEEDS_REVIEW):
         cli_art.cli_info("needs-review.csv not found. Nothing to triage.")
@@ -194,6 +213,8 @@ def main():
     # adds to it, so two identical rows within the SAME needs-review.csv
     # (not just across separate past runs) are also caught.
     known_bullets = existing_keeper_bullets(KEEPERS_CSV)
+    removed = bullet_bank_state.load_removed(REMOVED_PATH)
+    candidates = keeper_candidates(KEEPERS_CSV, KEEPERS_AUDITED)
 
     for row in all_rows:
         mgr_test = str(row.get("manager_test", "")).strip().upper()
@@ -211,10 +232,23 @@ def main():
             if bullet_text and bullet_text in known_bullets:
                 n_duplicate += 1
                 continue  # already in the keeper bank -- don't re-add it, and don't leave it behind either
+            if removed.blocks(bullet_text):
+                n_duplicate += 1
+                continue  # removed on purpose (removed-bullets.csv) -- never re-add
+            twin = bullet_bank_state.near_duplicate_of(
+                bullet_text, row.get("Role / Company", ""), candidates
+            )
+            if twin:
+                # A reworded copy of a bullet already in the bank. Which
+                # wording is better is a judgment call, so a person decides.
+                row["triage_note"] = f"near-duplicate of keeper: {twin}"
+                leftover.append(row)
+                continue
             row["rewrite_status"] = "KEEPER"
             keep_rows.append(row)
             if bullet_text:
                 known_bullets.add(bullet_text)
+                candidates.append((row.get("Role / Company", ""), bullet_text))
         elif mgr_test == "FAIL" and attempts < 3:
             row["rewrite_status"] = "REWRITE"
             row["next_action"] = "REWRITE"
@@ -253,6 +287,8 @@ def main():
     # Rewrite needs-review.csv with only unrouted rows
     if leftover:
         fieldnames = list(all_rows[0].keys()) if all_rows else QUEUE_FIELDS
+        if any(r.get("triage_note") for r in leftover) and "triage_note" not in fieldnames:
+            fieldnames.append("triage_note")
         with atomic_write(NEEDS_REVIEW, newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
             writer.writeheader()
