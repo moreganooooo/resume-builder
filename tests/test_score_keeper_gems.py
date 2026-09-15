@@ -53,6 +53,12 @@ class TestScoreKeeperGems(unittest.TestCase):
         res = score_keeper_gems.score_bullet("prompt", "Grew user retention by 40%")
         self.assertIsNotNone(res)
         self.assertEqual(res["hidden_gem_score"], 95)
+        # A score may never fall back onto 3.5-flash-lite.
+        self.assertIs(
+            mock_generate.call_args.kwargs["fallbacks"],
+            score_keeper_gems.SCORING_FALLBACKS,
+        )
+        self.assertNotIn("gemini-3.5-flash-lite", score_keeper_gems.SCORING_FALLBACKS.values())
 
         # Failure returns None
         mock_generate.return_value = (None, None)

@@ -19,7 +19,7 @@ import theme
 from atomic_write import atomic_write
 
 # Import shared objects from orchestrator
-from orchestrator import CritiqueSchema, GeminiClient, ResumeEngine
+from orchestrator import SCORING_FALLBACKS, CritiqueSchema, GeminiClient, ResumeEngine
 
 SLEEP = (
     0
@@ -137,7 +137,10 @@ def run_audit(csv_path=None, out_path=None, sleep_seconds=SLEEP):
 
         try:
             critique_text, usage = GeminiClient.generate(
-                model="gemini-3.5-flash-lite",
+                # Scores, so never 3.5-flash-lite -- as primary or via
+                # fallback (gemini_client.SCORING_FALLBACKS).
+                model="gemini-3.1-flash-lite",
+                fallbacks=SCORING_FALLBACKS,
                 system_instruction=critique_system,
                 contents=(
                     f"--- BULLET ---\n{bullet}\n\n"
