@@ -443,7 +443,9 @@ func (m JobsModel) hasExtraBar() bool {
 func (m JobsModel) extraRows() int {
 	rows := 0
 	if m.hasNextBestMove() {
-		rows++
+		// Measured: a long company name wraps the banner onto a second line
+		// on narrow terminals.
+		rows += lipgloss.Height(m.renderNextBestMove())
 	}
 	if m.hasExtraBar() {
 		rows++
@@ -1371,7 +1373,10 @@ var jobsFitGroups = []struct {
 // the reservation status-picker overlays already make for themselves in
 // renderSidebarList below.
 func (m JobsModel) chromeAvailHeight(extraRows int) int {
-	h := m.height - 2 - extraRows // header + help
+	// The help bar is MEASURED, not assumed to be one line: its key list
+	// wraps to 2-3 lines below ~200 columns, and budgeting 1 pushed the
+	// bottom of the footer (or all of it) off the terminal.
+	h := m.height - lipgloss.Height(m.renderHeader()) - lipgloss.Height(m.renderHelp()) - extraRows
 	if h < 5 {
 		h = 5
 	}
@@ -1783,8 +1788,8 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 		// changing renderSidebarRow's signature, which pipeline.go also
 		// calls -- Pipeline rows are about application progress, not fit,
 		// so they have no use for these.
-		subtitle := jobSubtitleWithScores(m.theme, job, width-4)
-		rowContent := renderSidebarRowTagged(m.theme, job.Evaluation.CompositeScore, job.Company, employmentTags(m.theme, job.EmploymentType), subtitle, width-4, selected)
+		subtitle := jobSubtitleWithScores(m.theme, job, sidebarInnerWidth(width)-4)
+		rowContent := renderSidebarRowTagged(m.theme, job.Evaluation.CompositeScore, job.Company, employmentTags(m.theme, job.EmploymentType), subtitle, sidebarInnerWidth(width), selected)
 		lines = append(lines, zone.Mark(fmt.Sprintf("jobs_row_%d", i), rowContent))
 	}
 
@@ -1912,7 +1917,7 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 	// see JobRow.PayText. Blank when unstated, which is most postings.
 	if label := job.PayLabel(); label != "" {
 		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Green).Bold(true).Render(
-			"$ "+truncateRunes(label, wrapWidth-2)))
+			truncateRunes(label, wrapWidth)))
 	}
 	if job.SourcePlatform != "" {
 		content = append(content, styles.Subtext.Render("via "+job.SourcePlatform))
@@ -2308,7 +2313,7 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		content = append(content, wrapStyle.Render(job.Description))
 	}
 
-	return content
+	return wrapToDetailPane(content, width)
 }
 
 func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) string {

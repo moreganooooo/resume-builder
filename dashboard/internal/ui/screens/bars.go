@@ -135,22 +135,27 @@ func renderSidebarRow(t theme.Theme, score float64, company, subtitle string, wi
 func renderSidebarRowTagged(t theme.Theme, score float64, company, tag, subtitle string, width int, selected bool) string {
 	scoreText := scoreStyle(t, score).Render(scoreIcon(t, score) + " " + fmt.Sprintf("%.1f", score))
 
-	// compWidth: total minus score glyph+space+number (≈ 6) minus 1 guard
-	// for the PadHorizontal outer padding, so company text doesn't wrap or
-	// ellipsize a char too early on narrow sidebars.
-	compWidth := width - 7
+	// Budget from MEASURED parts: the row is rendered inside the caller's
+	// bordered box, and a line even one column too wide wraps there, which
+	// grows the sidebar past the terminal and pushes the footer off. The
+	// old fixed "width - 7" guessed the score glyph's width and ignored
+	// PadHorizontal's 4 columns.
+	base := theme.PadHorizontal(lipgloss.NewStyle())
+	contentWidth := width - base.GetHorizontalFrameSize()
+	compRoom := contentWidth - lipgloss.Width(scoreText) - 1
+	compWidth := compRoom
 	if tag != "" {
 		compWidth -= lipgloss.Width(tag) + 1
 		// Too narrow for both: the company name matters more.
 		if compWidth < 8 {
 			tag = ""
-			compWidth = width - 7
+			compWidth = compRoom
 		}
 	}
 	if compWidth < 8 {
 		compWidth = 8
 	}
-	companyText := truncateRunes(company, compWidth)
+	companyText := ansi.Truncate(company, compWidth, "…")
 	companyStyle := lipgloss.NewStyle().Foreground(t.Text)
 	if selected {
 		companyStyle = companyStyle.Bold(true)
@@ -160,17 +165,17 @@ func renderSidebarRowTagged(t theme.Theme, score float64, company, tag, subtitle
 		line1 += " " + tag
 	}
 
-	// subtitleWidth: full available width minus 1 for the outer PadHorizontal
-	subtitleWidth := width - 3
+	subtitleWidth := contentWidth
 	if subtitleWidth < 8 {
 		subtitleWidth = 8
 	}
-	subtitleText := truncateRunes(subtitle, subtitleWidth)
+	// ANSI-aware: Jobs' subtitle carries a styled Fit/Odds suffix, and
+	// cutting it by rune count counted escape codes as text ("R......").
+	subtitleText := ansi.Truncate(subtitle, subtitleWidth, "…")
 	subtitleStyle := lipgloss.NewStyle().Foreground(t.Blue)
 	line2 := subtitleStyle.Render(subtitleText)
 
 	block := line1 + "\n" + line2
-	base := theme.PadHorizontal(lipgloss.NewStyle())
 	if selected {
 		base = theme.HoverStyle(base, t)
 	}
@@ -764,4 +769,35 @@ func RenderHierarchicalFooter(t theme.Theme, width int, primary, actions, system
 func FormatOSC52Copy(text string) string {
 	b64 := base64.StdEncoding.EncodeToString([]byte(text))
 	return fmt.Sprintf("\x1b]52;c;%s\x07", b64)
+}
+
+// sidebarInnerWidth is the content width inside a sidebar box built as
+// Width(width-2) + rounded border + Padding(0, 1), the shape both Jobs and
+// Pipeline use. Measured from the style rather than hand-subtracted, so a
+// row sized to it cannot wrap inside the border.
+func sidebarInnerWidth(width int) int {
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Width(width-2).Padding(0, 1)
+	return box.GetWidth() - box.GetHorizontalFrameSize()
+}
+
+// wrapToDetailPane hard-wraps detail content to the inner width of a detail
+// pane box (Width(width-2), rounded border, Padding(1, 2) -- the shape both
+// Jobs and Pipeline use). The renderers clip content to a LINE budget
+// before the border draws it; a line wider than the box then wraps inside
+// the border after clipping, so the pane grew past its budget and pushed
+// the footer off the terminal. Wrapping first makes the budget, and the
+// scroll clamp that measures the same lines, count real rows.
+func wrapToDetailPane(content []string, width int) []string {
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Width(width-2).Padding(1, 2)
+	inner := box.GetWidth() - box.GetHorizontalFrameSize()
+	if inner <= 0 {
+		return content
+	}
+	out := make([]string, 0, len(content))
+	// Split into one entry per ROW: content blocks may hold embedded
+	// newlines, and a budget counted in blocks under-counts rows.
+	for _, block := range content {
+		out = append(out, strings.Split(ansi.Wrap(block, inner, ""), "\n")...)
+	}
+	return out
 }
