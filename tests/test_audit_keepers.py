@@ -926,3 +926,76 @@ class TestStage1AndMainFlow(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSituationalRoleBulletsAreNeverRewritten(unittest.TestCase):
+    # Situational-role bullets are judged by the primary career's manager
+    # test and always fail it, so auto-rewrite turned them MANUAL and Stage
+    # 4's MANUAL branch deleted the keeper row -- one profile lost every
+    # bullet of a situational role this way.
+
+    def setUp(self):
+        self._tmpdir = tempfile.TemporaryDirectory()
+        missing = os.path.join(self._tmpdir.name, "no-such-cluster-map.csv")
+        self._patchers = [
+            patch("audit_keepers.CLUSTER_MAP_UPDATED", missing),
+            patch("audit_keepers.CLUSTER_MAP_IN", missing),
+            patch(
+                "audit_keepers.MANUAL_ATTEMPTS_OUT",
+                os.path.join(self._tmpdir.name, "audit-manual-attempts.csv"),
+            ),
+            patch(
+                "audit_keepers.REWRITE_QUEUE_OUT",
+                os.path.join(self._tmpdir.name, "audit-rewrite-queue.csv"),
+            ),
+            patch(
+                "audit_keepers.KEEPERS_AUDITED",
+                os.path.join(self._tmpdir.name, "keepers-audited.csv"),
+            ),
+            patch("audit_keepers._all_known_keeper_cluster_ids", return_value=set()),
+            patch("audit_keepers._all_known_keeper_bullets", return_value=set()),
+            patch("audit_keepers._situational_bank_tags", return_value={"Corner Shop"}),
+        ]
+        for p in self._patchers:
+            p.start()
+
+    def tearDown(self):
+        for p in self._patchers:
+            p.stop()
+        self._tmpdir.cleanup()
+
+    def _df_keepers(self):
+        return pd.DataFrame(
+            [
+                {"Bullet Point": "Stocked shelves.", "Role / Company": "Corner Shop",
+                 "audit_status": "MANUAL", "source_cluster_id": 1},
+                {"Bullet Point": "Built a model.", "Role / Company": "Acme Corp",
+                 "audit_status": "MANUAL", "source_cluster_id": 2},
+            ]
+        )
+
+    def test_stage3_leaves_situational_bullets_out_of_the_queue(self):
+        bullets = audit_keepers.stage3_build_rewrite_queue(self._df_keepers())[
+            "Bullet Point"
+        ].tolist()
+        self.assertNotIn("Stocked shelves.", bullets)
+        self.assertIn("Built a model.", bullets)
+
+    def test_stage4_never_rewrites_or_deletes_a_situational_bullet(self):
+        df_keepers = self._df_keepers()
+        with patch("audit_keepers.process_bullet") as mock_process:
+            out = audit_keepers.stage4_auto_rewrite(
+                df_keepers.iloc[[0]], None, "", "", "", df_keepers
+            )
+        mock_process.assert_not_called()
+        self.assertIn("Stocked shelves.", out["Bullet Point"].tolist())
+
+    def test_bank_tags_come_from_situational_roles_yaml(self):
+        for p in self._patchers[-1:]:
+            p.stop()
+        self._patchers = self._patchers[:-1]
+        roles = {"roles": {"Shop": {"bank_tag": "Corner Shop"}, "Cafe": {}}}
+        with patch("situational_roles.load_situational_roles", return_value=roles):
+            self.assertEqual(
+                audit_keepers._situational_bank_tags(), {"Corner Shop", "Cafe"}
+            )

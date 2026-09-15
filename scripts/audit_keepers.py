@@ -415,6 +415,26 @@ def _known_manual_attempt_cluster_ids() -> set:
     return _read_cluster_ids_from_file(MANUAL_ATTEMPTS_OUT, col="cluster_id")
 
 
+def _situational_bank_tags() -> set:
+    """Role / Company values of the profile's situational roles
+    (situational_roles.yaml). Their bullets are judged by the primary
+    career's manager test, which they can never pass -- so auto-rewrite
+    turned every one MANUAL and Stage 4 deleted it (a profile lost all of
+    one situational role's bullets this way). They are never queued."""
+    import situational_roles
+
+    try:
+        roles = situational_roles.load_situational_roles()["roles"]
+    except Exception as e:  # a broken YAML must not block the audit
+        cli_art.friendly_warning(
+            e, "reading situational_roles.yaml", "queuing situational bullets normally"
+        )
+        return set()
+    return {
+        str(cfg.get("bank_tag") or name).strip() for name, cfg in roles.items()
+    }
+
+
 def _record_manual_attempt(
     row: "pd.Series", cluster_id, composite_score, manager_test, rewrite_attempts
 ) -> None:
@@ -1024,6 +1044,16 @@ def stage3_build_rewrite_queue(
 
     df_queue = pd.concat(queue_rows, ignore_index=True)
 
+    # Situational-role bullets are kept verbatim (see _situational_bank_tags).
+    situational = _situational_bank_tags()
+    if situational and "Role / Company" in df_queue.columns:
+        sit_mask = df_queue["Role / Company"].astype(str).str.strip().isin(situational)
+        if sit_mask.any():
+            cli_art.cli_info(
+                f"Skipped {int(sit_mask.sum())} situational-role bullet(s) -- kept as written."
+            )
+            df_queue = df_queue[~sit_mask].copy()
+
     # Deduplicate on bullet text
     before_dedup = len(df_queue)
     df_queue = df_queue.drop_duplicates(subset=["Bullet Point"], keep="first").copy()
@@ -1135,9 +1165,17 @@ def stage4_auto_rewrite(
     total = len(df_run)
     n_keep = 0
     n_manual = 0
+    situational = _situational_bank_tags()
 
     for i, (_, row) in enumerate(df_run.iterrows(), 1):
         original_bullet_text = str(row.get("Bullet Point", "")).strip()
+        # Stage 3 already filters these; this guards a queue built elsewhere,
+        # since the MANUAL path below deletes the keeper row.
+        if str(row.get("Role / Company", "")).strip() in situational:
+            cli_art.cli_info(
+                f"[{i}/{total}] Situational role -- kept as written: {original_bullet_text[:60]}"
+            )
+            continue
         bullet_preview = original_bullet_text[:60]
         cli_art.console.rule(style="dim")
         cli_art.cli_info(f"[{i}/{total}] {bullet_preview}...")

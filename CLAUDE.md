@@ -933,6 +933,13 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   removals made before the list existed. Removing a keeper does not
   remove its siblings rewritten from the same raw bullet -- `settled_raw`
   only stops NEW rewrites of it.
+  **Situational-role bullets are never auto-rewritten**
+  (`audit_keepers._situational_bank_tags()`, keyed on
+  situational_roles.yaml `bank_tag`). They are scored against the primary
+  career's manager test and always fail it, so every one went MANUAL and
+  Stage 4's MANUAL branch deleted the keeper row -- one profile lost all of
+  a situational role's bullets, another five across two roles (2026-09-15).
+  Stage 3 drops them from the queue and Stage 4 skips any that arrive.
 - **Bullet uniqueness is enforced at selection time, not repair time.**
   "No repeated metric" and "no repeated opening verb" are whole-CV
   constraints, but the validator retry loop can only ask the model for a
