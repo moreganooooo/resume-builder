@@ -14,6 +14,7 @@ if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
 
 import build_sample  # noqa: E402
+import profile_paths  # noqa: E402
 
 
 class TestResolveSampleJdPath(unittest.TestCase):
@@ -71,11 +72,16 @@ class TestBuildSample(unittest.TestCase):
         depending on which profile happens to be active when the suite
         runs (see tests/test_no_operator_identity.py's own reasoning)."""
         with tempfile.TemporaryDirectory() as tmp_dir:
+            # isolate_for_tests() rather than patching profile_root alone:
+            # a profile has FOUR roots, and the log path resolves through
+            # OUTPUT_ROOT, not profile_root. Patching just the one left
+            # build_sample() writing a real pipeline_run_*.log into the
+            # developer's own output/<profile>/ on every suite run -- the
+            # same partial-isolation trap that seeded jds/testprofile and
+            # friends.
             with patch.object(
                 build_sample, "SAMPLE_JD_PATH", "/nonexistent/sample_jd.txt"
-            ), patch(
-                "build_sample.profile_paths.profile_root", return_value=tmp_dir
-            ):
+            ), profile_paths.isolate_for_tests(tmp_dir):
                 res = build_sample.build_sample()
                 self.assertEqual(res, {"resume": {}, "coverletter": {}})
 
