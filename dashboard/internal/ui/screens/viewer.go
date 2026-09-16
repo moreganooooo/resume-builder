@@ -335,7 +335,7 @@ func (m ViewerModel) View() string {
 
 	full := lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 	if m.showHelp {
-		helpContent := renderHelpOverlay(m.theme, "Viewer", viewerHelpCategories, int(float64(m.width)*0.75), m.height-4)
+		helpContent := renderHelpOverlay(m.theme, "Viewer", viewerHelpCategories, helpOverlayWidth(m.width), m.height-4)
 		return renderModalOverlay(m.theme, full, helpContent, m.width, m.height)
 	}
 	return full

@@ -239,7 +239,7 @@ func (m ProgressModel) View() string {
 
 	full := lipgloss.JoinVertical(lipgloss.Left, header, body, help)
 	if m.showHelp {
-		helpContent := renderHelpOverlay(m.theme, "Progress", progressHelpCategories, int(float64(m.width)*0.75), m.height-4)
+		helpContent := renderHelpOverlay(m.theme, "Progress", progressHelpCategories, helpOverlayWidth(m.width), m.height-4)
 		return renderModalOverlay(m.theme, full, helpContent, m.width, m.height)
 	}
 	return full
