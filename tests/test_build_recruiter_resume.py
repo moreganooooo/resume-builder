@@ -105,6 +105,40 @@ class TestWriteBrief(unittest.TestCase):
             self.assertEqual(f.read(), "hello")
 
 
+class TestResolveInteractive(unittest.TestCase):
+    """Step 5.5's approval gate prompts through the Go/huh binary, which
+    aborts the entire build with "error opening TTY" when there is no
+    terminal -- after the whole pipeline has already been paid for."""
+
+    def test_explicit_value_wins_over_the_stream(self):
+        self.assertTrue(build_recruiter_resume._resolve_interactive(True))
+        self.assertFalse(build_recruiter_resume._resolve_interactive(False))
+
+    def test_defaults_to_false_without_a_tty(self):
+        class _NoTTY:
+            def isatty(self):
+                return False
+
+        with patch.object(build_recruiter_resume.sys, "stdin", _NoTTY()):
+            self.assertFalse(build_recruiter_resume._resolve_interactive(None))
+
+    def test_defaults_to_true_with_a_tty(self):
+        class _TTY:
+            def isatty(self):
+                return True
+
+        with patch.object(build_recruiter_resume.sys, "stdin", _TTY()):
+            self.assertTrue(build_recruiter_resume._resolve_interactive(None))
+
+    def test_survives_a_stdin_that_raises(self):
+        class _Broken:
+            def isatty(self):
+                raise ValueError("detached")
+
+        with patch.object(build_recruiter_resume.sys, "stdin", _Broken()):
+            self.assertFalse(build_recruiter_resume._resolve_interactive(None))
+
+
 class TestBuildGuards(unittest.TestCase):
     def test_bails_out_when_profile_has_no_target_roles(self):
         """Without a range to write across, the result would be a generic

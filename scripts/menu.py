@@ -2102,7 +2102,9 @@ def _handle_build_recruiter_resume() -> None:
     scroll_region_modified = True
 
     try:
-        result = build_recruiter_resume.build_recruiter_resume()
+        # Explicitly interactive: this path always has a real terminal, so
+        # Step 5.5's approval gate should prompt rather than auto-applying.
+        result = build_recruiter_resume.build_recruiter_resume(interactive=True)
         if result["resume"]:
             cli_art.display_success(
                 f"Recruiter resume built:\n"

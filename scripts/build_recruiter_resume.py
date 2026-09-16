@@ -41,6 +41,7 @@ it up during a batch `resume run` and treat it as a real application.
 import datetime
 import logging
 import os
+import sys
 
 import cli_art
 import jd_manager
@@ -166,11 +167,35 @@ def write_brief(brief_text: str) -> str:
     return brief_path
 
 
-def build_recruiter_resume() -> dict:
+def _resolve_interactive(interactive: bool | None) -> bool:
+    """Step 5.5's approval gate prompts through the Go/huh binary, which
+    needs a real TTY: it aborts the whole build with "error opening TTY"
+    when there isn't one. Hardcoding interactive=True therefore made this
+    command work from a terminal and die at the last step everywhere else
+    (a piped run, CI, a backgrounded shell) -- after paying for the entire
+    pipeline, which is the worst possible place to fail. Resolved from the
+    actual stream by default; an explicit True/False still wins, so the
+    menu can demand the prompts and a test can force either branch."""
+    if interactive is not None:
+        return interactive
+    try:
+        return bool(sys.stdin and sys.stdin.isatty())
+    except Exception:
+        return False
+
+
+def build_recruiter_resume(interactive: bool = None, fresh: bool = True) -> dict:
     """Builds one role-agnostic resume. Returns {"resume": {...}} -- the
     build_tailored_resume() return dict ({} on failure, or the real data
     plus an _output_paths key on success). No cover letter: there is no
-    employer to address one to."""
+    employer to address one to.
+
+    fresh=False keeps any existing checkpoint instead of clearing it, so an
+    interrupted run resumes rather than re-paying for every bullet audit and
+    builder call it already made. Default stays True (a full rebuild) because
+    the usual reason to re-run this is that the profile's targets changed,
+    and a stale checkpoint would silently reuse bullets mined against the
+    previous range."""
     logger = logging.getLogger("resume_pipeline")
     log_path = None
     import db as _db
@@ -225,11 +250,11 @@ def build_recruiter_resume() -> dict:
     brief_path = write_brief(brief_text)
     cli_art.print_literal(f"  Target brief written to: {brief_path}")
 
-    # Fresh every time, like the sample build: this is re-run whenever the
-    # profile's targets change, and a stale checkpoint would silently reuse
-    # bullets mined against the previous range.
     job_key = jd_manager.compute_job_key(brief_path)
-    jd_manager.delete_checkpoint(job_key)
+    if fresh:
+        jd_manager.delete_checkpoint(job_key)
+    else:
+        cli_art.print_literal("  Resuming from the existing checkpoint.")
 
     engine = orchestrator.ResumeEngine()
 
@@ -239,7 +264,7 @@ def build_recruiter_resume() -> dict:
         master_resume={},
         output_filename="Recruiter_Resume.json",
         job_key=job_key,
-        interactive=True,
+        interactive=_resolve_interactive(interactive),
         skip_company_research=True,
     )
 
@@ -254,7 +279,7 @@ def build_recruiter_resume() -> dict:
 
 
 def main():
-    result = build_recruiter_resume()
+    result = build_recruiter_resume(fresh="--resume" not in sys.argv)
     if result["resume"]:
         cli_art.console.print(
             f"  {theme.colorize_icon('success')} Recruiter resume: "
