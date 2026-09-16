@@ -70,6 +70,12 @@ GENERIC_TOKENS = {
     "pro",
 }
 
+# Category words that name a product's KIND. Dropping one is safe from a
+# single product name ("Salesforce CRM" -> "Salesforce") but not from a
+# general skill: merging "data quality" into "CRM Data Quality" narrows a
+# broad skill into a system-specific one.
+CATEGORY_TOKENS = {"crm", "cms"}
+
 # How many leading tokens two project names must share to be considered
 # the same initiative. Two is enough to bind "Adobe Sign *" together
 # without fusing unrelated projects that happen to share one word.
@@ -107,7 +113,10 @@ def plan_tool_merges(tools: List[dict]) -> Dict[str, str]:
                 long_set = set(_tokens(long))
                 if not short_set < long_set:
                     continue
-                if long_set - short_set <= GENERIC_TOKENS:
+                added = long_set - short_set
+                if added & CATEGORY_TOKENS and len(short_set) > 1:
+                    continue
+                if added <= GENERIC_TOKENS:
                     merges[_norm(short)] = long
                     break
     return merges

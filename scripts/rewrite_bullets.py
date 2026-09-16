@@ -137,6 +137,7 @@ KB_VERIFIED_FACTS = os.path.join(KB_DIR, "verified_facts.json")
 KB_VERIFIED_METRICS = os.path.join(KB_DIR, "verified_metrics.json")
 KB_VERIFIED_PROJECTS = os.path.join(KB_DIR, "verified_projects.json")
 KB_VERIFIED_TOOLS = os.path.join(KB_DIR, "verified_tools.json")
+KB_AUDITED_BANK = os.path.join(KB_DIR, "bullet-bank-keepers-audited.csv")
 KB_RECRUITER_PATTERNS = os.path.join(KB_DIR, "recruiter_memory_patterns.json")
 KB_VOICE_ANCHORS = os.path.join(KB_DIR, "voice-anchors.md")
 
@@ -793,6 +794,64 @@ def foreign_numbers(rewritten: str, allowed_text: str) -> set:
     return _numbers_in(rewritten) - _numbers_in(allowed_text)
 
 
+def _tool_pattern(name: str):
+    return re.compile(r"(?<!\w)" + re.escape(name) + r"(?!\w)", re.IGNORECASE)
+
+
+def build_tool_employer_index(tool_names, bank_rows) -> dict:
+    """{tool name: employers whose bank bullets mention it}.
+
+    The ledger cannot say where a tool was used -- nearly every entry is
+    filed under "Self / Profile" -- but the bullet bank can. All-lowercase
+    ledger names ("data quality") are concepts, not tools, and are skipped."""
+    names = set()
+    for n in tool_names:
+        n = str(n or "").strip()
+        # Bullets say "Salesforce" where the ledger says "Salesforce CRM".
+        for variant in (n, re.sub(r"\s+(CRM|CMS)$", "", n)):
+            if len(variant) >= 3 and variant != variant.lower():
+                names.add(variant)
+    rows = [(str(t or ""), str(c or "")) for t, c in bank_rows if t and c]
+    index = {}
+    for name in names:
+        low = name.lower()
+        pat = None
+        employers = set()
+        for text, company in rows:
+            if low in text.lower():
+                pat = pat or _tool_pattern(name)
+                if pat.search(text):
+                    employers.add(company)
+        if employers:
+            index[name] = employers
+    return index
+
+
+def foreign_tools(rewritten: str, allowed_text: str, role_company: str, tool_index: dict) -> set:
+    """Tool names a rewrite introduced that the bank ties only to OTHER
+    employers. The numbers check (foreign_numbers) could not see this: a
+    2026-09-16 audit found Treering's Salesforce work rewritten under Callahan
+    Creek, Mercor, and three other roles with no number to give it away."""
+    stray = set()
+    rc_tokens = _employer_tokens(role_company)
+    text_low = (rewritten or "").lower()
+    for name, employers in tool_index.items():
+        if name.lower() not in text_low:
+            continue
+        pat = _tool_pattern(name)
+        if not pat.search(rewritten) or pat.search(allowed_text or ""):
+            continue
+        if any(
+            rt in et or et in rt
+            for emp in employers
+            for et in _employer_tokens(emp)
+            for rt in rc_tokens
+        ):
+            continue
+        stray.add(name)
+    return stray
+
+
 def extract_cv_section(cv_text: str, role_company: str) -> str:
     """Narrows cv.md down to just this bullet's own company section, so
     the rewrite prompt (both tiers, but Gemma's 16k TPM budget feels it
@@ -997,6 +1056,7 @@ class KnowledgeBase:
         self.tools_entries = load_json_entries(KB_VERIFIED_TOOLS, "tools")
         # Names only -- see compact_tools_text().
         self.verified_tools = compact_tools_text(self.tools_entries)
+        self.tool_employers = self._load_tool_employer_index()
         self.recruiter_patterns = load_json_file(
             KB_RECRUITER_PATTERNS, "recruiter_memory_patterns.json"
         )
@@ -1338,6 +1398,18 @@ class KnowledgeBase:
             f"{self.gemma_static_prefix}\n\n{segment}"
             if segment
             else self.gemma_static_prefix
+        )
+
+    def _load_tool_employer_index(self) -> dict:
+        try:
+            import pandas as pd
+
+            bank = pd.read_csv(KB_AUDITED_BANK, dtype=str).fillna("")
+            rows = zip(bank["Bullet Point"], bank["Role / Company"])
+        except Exception:
+            return {}
+        return build_tool_employer_index(
+            [t.get("name") for t in self.tools_entries if isinstance(t, dict)], rows
         )
 
     def company_scoped_context(self, role_company: str, tags: str) -> str:
@@ -2004,6 +2076,27 @@ def process_bullet(
                 f"The previous rewrite introduced numbers ({', '.join(sorted(stray))}) "
                 f"that are not in this bullet or in {role_company}'s own evidence. Use "
                 f"only numbers already present there; never borrow metrics from another role."
+            )
+            if attempt < MAX_ATTEMPTS:
+                time.sleep(SLEEP_ON_RETRY)
+            continue
+
+        borrowed = foreign_tools(
+            rewritten,
+            f"{original_bullet}\n{current_bullet}\n{scoped_context}",
+            role_company,
+            getattr(kb, "tool_employers", {}) or {},
+        )
+        if borrowed:
+            cli_art.console.print(
+                f"   {theme.colorize_icon('warning')} Rejected: rewrite introduced "
+                f"tool(s) this role's bullets never use ({', '.join(sorted(borrowed))}).",
+                soft_wrap=True,
+            )
+            current_scores["weaknesses"] = (
+                f"The previous rewrite introduced tools ({', '.join(sorted(borrowed))}) "
+                f"that belong to another role's work, not {role_company}'s. Use only "
+                f"tools already in this bullet or in {role_company}'s own evidence."
             )
             if attempt < MAX_ATTEMPTS:
                 time.sleep(SLEEP_ON_RETRY)
