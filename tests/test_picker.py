@@ -469,8 +469,13 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         mock_render.assert_called_once()
         kwargs = mock_render.call_args.kwargs
         self.assertIn("Page 1/2", kwargs["title"])
-        # #, Score, Recommendation, Company, Title, Posted, Status
-        self.assertEqual(len(kwargs["columns"]), 7)
+        # #, Score, Company, Title, Posted, Status -- six, not seven: the
+        # 20-wide Recommendation column was dropped. Every row reaching this
+        # table is already filtered on recommendation != "Skip", so that
+        # column could only ever show the three "pursue" gradations, which
+        # are unrubriced judgment assigned before composite_score exists and
+        # are no longer displayed anywhere. The Score column carries it now.
+        self.assertEqual(len(kwargs["columns"]), 6)
 
     @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")

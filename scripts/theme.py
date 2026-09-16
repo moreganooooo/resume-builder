@@ -77,6 +77,38 @@ RECOMMENDATION_STYLES = {
     "Skip": f"fg:{ERROR}",
 }
 
+# Score bands for the picker tables' Score column. Those tables used to color
+# a row by its `recommendation` tier, but the three "pursue" tiers are
+# unrubriced model judgment assigned BEFORE composite_score is computed, so
+# the color could contradict the number sitting right beside it. Banding the
+# score by its own value keeps the two in agreement by construction.
+#
+# 3.5 is the same actionable bar the Go dashboard opens on
+# (screens.ActionableScore); 4.0 is the "high match" tier that dashboard's
+# NEXT BEST MOVE banner already uses. Kept in this file, next to the tier
+# colors, so one palette still covers every surface.
+SCORE_BANDS = ((4.0, SUCCESS), (3.5, BRAND), (2.5, WARNING))
+
+
+def score_color(score) -> str:
+    """Palette color for a composite score. An unscored row (None) is MUTED
+    rather than treated as 0 -- "not evaluated" and "evaluated badly" are
+    different facts, and coloring the first like the second reads as a
+    verdict that was never made."""
+    if score is None:
+        return MUTED
+    for floor, color in SCORE_BANDS:
+        if score >= floor:
+            return color
+    return MUTED
+
+
+def score_style(score) -> str:
+    """questionary Choice-title style string for a composite score. Below the
+    actionable bar stays unbolded, the same de-emphasis "Skip" gets above."""
+    color = score_color(score)
+    return f"fg:{color}" if color == MUTED else f"fg:{color} bold"
+
 # Font Awesome glyphs (Private Use Area code points Nerd Fonts patch in
 # verbatim under the nf-fa-* names) -- this is the default experience.
 _NERD_ICONS = {

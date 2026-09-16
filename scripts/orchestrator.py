@@ -3457,9 +3457,12 @@ def rescore_evaluation_with_location(
         if is_commutable_local and (rec == "Skip" or not rec):
             if comp >= 3.8:
                 ev["recommendation"] = "Strong pursue"
-            elif comp >= 3.2:
-                ev["recommendation"] = "Pursue"
             elif comp >= 2.5:
+                # Was two branches, with the >= 3.2 one emitting "Pursue" --
+                # not a member of FitEvaluationSchema's Literal, absent from
+                # theme.RECOMMENDATION_COLORS/STYLES (so it rendered unstyled),
+                # and live in 2 stored evaluations. Collapsed into the valid
+                # neighbouring tier rather than inventing a fifth label.
                 ev["recommendation"] = "Selective pursue"
             else:
                 ev["recommendation"] = "Low-priority pursue" if comp > 1.5 else "Skip"

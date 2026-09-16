@@ -235,7 +235,10 @@ func TestRenderJobDetailPaneShowsKeyFields(t *testing.T) {
 	rendered := ansi.Strip(m.renderJobDetailPane(job, 60, 100))
 
 	for _, want := range []string{
-		"Acme", "Marketing Lead", "4.7/5", "Strong pursue",
+		// No "Strong pursue" here on purpose: the detail pane deliberately
+		// no longer renders the three "pursue" gradations, only a "Skip"
+		// verdict. See renderJobDetailPane.
+		"Acme", "Marketing Lead", "4.7/5",
 		"Great fit for the role.", "Recruiter will see a match.",
 		// Human label (theme.SubscoreLabels["functional_alignment"]), not
 		// the raw snake_case schema key -- guards the P1 fix for internal-

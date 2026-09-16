@@ -2185,7 +2185,23 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 	}
 
 	content = append(content, "")
-	content = append(content, styles.Subtext.Render("Recommendation: ")+styles.Value.Render(eval.Recommendation))
+	// Only the "Skip" verdict is shown, not the three "pursue" gradations.
+	// Those gradations are unrubriced model judgment picked BEFORE Python
+	// computes composite_score, so they routinely disagree with the score
+	// rendered six lines above -- and the score is the better signal, being
+	// reproducible and already carrying the stress, proximity, legitimacy
+	// and gap adjustments the label never saw. Showing both invited the
+	// reader to weigh a guess against a measurement.
+	//
+	// "Skip" stays because it is not a point on that scale: it answers
+	// "is this a real, viable posting at all", which no fit score can. Two
+	// live examples scored >=4.0 while being an aggregator search-results
+	// link and a jobs-board category page -- the score loved them, the
+	// verdict correctly threw them out.
+	if strings.EqualFold(eval.Recommendation, "Skip") {
+		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Red).
+			Render("✗ Skip — flagged as not a viable posting"))
+	}
 	content = append(content, styles.Subtext.Render("Status: ")+jobStatusPill(job.Status))
 
 	// -- Why / Recruiter Read --

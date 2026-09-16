@@ -81,29 +81,52 @@ def _truncate(text: str, max_len: int) -> str:
 # Fixed-width columns shared between render_picker_header()'s header line
 # and every checkbox row below it, so the checkbox rows -- now the only
 # place a JD's data actually renders -- line up under the header instead
-# of the header and rows drifting out of alignment. REC_W (20) is sized
-# to the longest real value, "Low-priority pursue".
+# of the header and rows drifting out of alignment.
+#
+# _VIABLE_W (6) replaced a 20-wide "Recommendation" column sized to the
+# longest tier name, "Low-priority pursue". Those three "pursue" tiers are
+# no longer displayed -- they are unrubriced model judgment assigned before
+# composite_score is computed, so they could contradict the Score column
+# beside them -- leaving only the binary "Skip" verdict, which answers a
+# question the score cannot ("is this a real posting"). The 14 columns
+# freed go to Company and Title.
 _IDX_W = 4
 _SCORE_W = 7
-_REC_W = 20
+_VIABLE_W = 6
 _POSTED_W = 8
 _STATUS_W = 10
 
 
+def _score_legend(include_skip: bool = False) -> str:
+    """Legend swatches for the picker tables. Derived from theme.SCORE_BANDS
+    rather than restating the thresholds, so the legend cannot drift from the
+    colors the rows are actually painted with."""
+    labels = {4.0: "4.0+", 3.5: "3.5+ (actionable)", 2.5: "2.5+"}
+    parts = [
+        f"[{color}]■[/{color}] {labels.get(floor, f'{floor}+')}"
+        for floor, color in theme.SCORE_BANDS
+    ]
+    parts.append(f"[{theme.MUTED}]■[/{theme.MUTED}] below")
+    if include_skip:
+        parts.append(f"[{theme.ERROR}]■[/{theme.ERROR}] Skip (not viable)")
+    return "  ".join(parts)
+
+
 def _company_title_budget(width: int, extra_fixed: int = 0) -> tuple:
     """Splits what's left of width -- after the fixed-width columns
-    (index/score/recommendation/posted[/status]) and their separators --
-    between company and title. 35/65, since job titles tend to run
-    longer than company names, with a floor so both stay legible even on
-    a narrow terminal. extra_fixed adds any columns beyond the shared
-    index/score/recommendation/posted set (browse_and_select_jds' own
-    Status column)."""
+    (index/score/posted, plus whatever extra_fixed names) and their
+    separators -- between company and title. 35/65, since job titles tend
+    to run longer than company names, with a floor so both stay legible
+    even on a narrow terminal. extra_fixed adds the one column that
+    differs between the two tables: pick_and_process' Viable column, or
+    browse_and_select_jds' Status column. Both tables therefore render
+    exactly six columns, which is what the +16 below assumes."""
     # 6 columns' own trailing two-space separators (12) + render_picker_header's
     # Panel border/padding overhead (4) -- the header renders inside that Panel,
     # the checkbox rows below it don't, so without this the header (with its
     # extra chrome) wraps at a width the plain checkbox rows fit fine at,
     # breaking the very alignment this budget exists to guarantee.
-    fixed = _IDX_W + _SCORE_W + _REC_W + _POSTED_W + extra_fixed + 16
+    fixed = _IDX_W + _SCORE_W + _POSTED_W + extra_fixed + 16
     # Floor is deliberately low (18, not e.g. 30) -- a higher floor here
     # used to force `available` above what an ordinary 80-column terminal
     # actually has left, which guaranteed the header Panel wrapped onto a
@@ -290,17 +313,19 @@ def pick_and_process(
         current_page = start // page_size + 1
         progress_filled = min(current_page, total_pages)
         progress_bar = "█" * progress_filled + "░" * (total_pages - progress_filled)
-        company_budget, title_budget = _company_title_budget(cli_art.console.width)
-        legend = "  ".join(
-            f"[{color}]■[/{color}] {tier}"
-            for tier, color in theme.RECOMMENDATION_COLORS.items()
+        company_budget, title_budget = _company_title_budget(
+            cli_art.console.width, extra_fixed=_VIABLE_W
         )
+        # include_skip: this table renders batch_evaluate's raw results and
+        # does NOT filter Skip the way browse_and_select_jds does, so the
+        # verdict can actually appear here.
+        legend = _score_legend(include_skip=True)
         cli_art.render_picker_header(
             title=f"Page {current_page}/{total_pages} [{progress_bar}] -- rows {start + 1}-{end} of {len(results)} JD(s) evaluated",
             columns=[
                 ("#", _IDX_W, "right"),
                 ("Score", _SCORE_W, "right"),
-                ("Recommendation", _REC_W, "left"),
+                ("Viable", _VIABLE_W, "left"),
                 ("Company", company_budget, "left"),
                 ("Title", title_budget, "left"),
                 ("Posted", _POSTED_W, "right"),
@@ -309,12 +334,20 @@ def pick_and_process(
         )
 
     def choices_for_page(start, end, selected):
-        company_budget, title_budget = _company_title_budget(cli_art.console.width)
+        company_budget, title_budget = _company_title_budget(
+            cli_art.console.width, extra_fixed=_VIABLE_W
+        )
         choices = []
         for i, r in enumerate(results[start:end], start=start + 1):
             if r["error"]:
                 continue
-            style = _RECOMMENDATION_STYLES.get(r["recommendation"], "")
+            # Colored by the score itself, not by the recommendation tier --
+            # the tier is picked before the score is computed, so the two
+            # could disagree and the row's color would contradict its number.
+            style = theme.score_style(r["composite_score"])
+            is_skip = r["recommendation"] == "Skip"
+            viable = "Skip" if is_skip else ""
+            viable_style = _RECOMMENDATION_STYLES.get("Skip", "") if is_skip else ""
             posted = (
                 f"{r['posting_age_days']}d"
                 if r.get("posting_age_days") is not None
@@ -324,14 +357,14 @@ def pick_and_process(
                 [
                     i,
                     f"{r['composite_score']:.2f}/5",
-                    r["recommendation"] or "",
+                    viable,
                     r["company_name"] or "",
                     r["job_title"] or "",
                     posted,
                 ],
-                [_IDX_W, _SCORE_W, _REC_W, company_budget, title_budget, _POSTED_W],
+                [_IDX_W, _SCORE_W, _VIABLE_W, company_budget, title_budget, _POSTED_W],
                 ["right", "right", "left", "left", "left", "right"],
-                ["", style, style, "", "", ""],
+                ["", style, viable_style, "", "", ""],
             )
             choices.append(
                 questionary.Choice(
@@ -949,16 +982,16 @@ def browse_and_select_jds(
         company_budget, title_budget = _company_title_budget(
             cli_art.console.width, extra_fixed=_STATUS_W + 2
         )
-        legend = "  ".join(
-            f"[{color}]■[/{color}] {tier}"
-            for tier, color in theme.RECOMMENDATION_COLORS.items()
-        )
+        # No Skip swatch: every row reaching this table has already been
+        # filtered on recommendation != "Skip" above, so the column that
+        # used to sit here could only ever have shown the three "pursue"
+        # gradations -- which are exactly what is no longer displayed.
+        legend = _score_legend()
         cli_art.render_picker_header(
             title=f"Page {start // page_size + 1}/{total_pages} -- rows {start + 1}-{end} of {len(rows)} evaluated JD(s)",
             columns=[
                 ("#", _IDX_W, "right"),
                 ("Score", _SCORE_W, "right"),
-                ("Recommendation", _REC_W, "left"),
                 ("Company", company_budget, "left"),
                 ("Title", title_budget, "left"),
                 ("Posted", _POSTED_W, "right"),
@@ -969,18 +1002,17 @@ def browse_and_select_jds(
 
     def choices_for_page(start, end, selected):
         company_budget, title_budget = _company_title_budget(
-            cli_art.console.width, extra_fixed=_STATUS_W + 2
+            cli_art.console.width, extra_fixed=_STATUS_W
         )
         choices = []
         for i, r in enumerate(rows[start:end], start=start + 1):
             evaluation = r["evaluation"]
-            style = _RECOMMENDATION_STYLES.get(evaluation.get("recommendation"), "")
+            style = theme.score_style(evaluation.get("composite_score"))
             posted = evaluation.get("posting_age_days")
             row = _format_row(
                 [
                     i,
                     f"{evaluation.get('composite_score', 0):.2f}/5",
-                    evaluation.get("recommendation") or "",
                     r["company"] or "?",
                     r["title"] or os.path.basename(r["path"]),
                     f"{posted}d" if posted is not None else "-",
@@ -989,14 +1021,13 @@ def browse_and_select_jds(
                 [
                     _IDX_W,
                     _SCORE_W,
-                    _REC_W,
                     company_budget,
                     title_budget,
                     _POSTED_W,
                     _STATUS_W,
                 ],
-                ["right", "right", "left", "left", "left", "right", "left"],
-                ["", style, style, "", "", "", ""],
+                ["right", "right", "left", "left", "right", "left"],
+                ["", style, "", "", "", ""],
             )
             choices.append(
                 questionary.Choice(
