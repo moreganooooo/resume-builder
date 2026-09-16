@@ -262,7 +262,11 @@ def build_recruiter_resume(interactive: bool = None, fresh: bool = True) -> dict
     resume_result = engine.build_tailored_resume(
         jd_path=brief_path,
         master_resume={},
-        output_filename="Recruiter_Resume.json",
+        # The recruiter resume is the role-agnostic one, so it claims the
+        # plain "<Name>_Resume" name; every role-specific build carries its
+        # title/company (or, failing that, its JD's basename -- see
+        # _build_output_stem) and so can never collide with it.
+        output_filename=f"{profile_paths.full_name().replace(' ', '')}_Resume.json",
         job_key=job_key,
         interactive=_resolve_interactive(interactive),
         skip_company_research=True,
