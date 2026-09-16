@@ -159,6 +159,58 @@ func ColorToHex(c color.Color) string {
 	return fmt.Sprintf("#%02x%02x%02x", uint8(r>>8), uint8(g>>8), uint8(b>>8))
 }
 
+// DimFraction is how far an inactive element's color is blended toward the
+// theme background. A terminal has no alpha channel, so "semi-transparent"
+// is expressed as a blend toward whatever the text sits on -- which is what
+// opacity would have computed anyway. 0.55 is tuned to read as clearly
+// recessed while keeping each accent's hue identifiable.
+const DimFraction = 0.55
+
+// dimToward blends c toward bg by frac (0 = unchanged, 1 = bg).
+func dimToward(c, bg color.Color, frac float64) color.Color {
+	if c == nil || bg == nil {
+		return c
+	}
+	cr, cg, cb, _ := c.RGBA()
+	br, bg8, bb, _ := bg.RGBA()
+	lerp := func(from, to uint32) int {
+		f, t := float64(uint8(from>>8)), float64(uint8(to>>8))
+		return int(f + frac*(t-f))
+	}
+	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x",
+		lerp(cr, br), lerp(cg, bg8), lerp(cb, bb)))
+}
+
+// Dimmed returns a copy of the theme with every FOREGROUND color blended
+// toward Base, so a component rendered with it keeps its exact color
+// pattern at lower contrast rather than collapsing to one flat token.
+// Flattening was tried first and read as a wall of gray -- the score
+// banding, employment tag and subtitle all convey different things, and
+// dropping that distinction on every inactive row loses more information
+// than the focus is worth.
+//
+// Backgrounds (Base/Surface/Overlay) are deliberately left alone: they are
+// what the text is being blended INTO, and dimming them would move the
+// target while aiming at it.
+func (t Theme) Dimmed() Theme {
+	d := t
+	dim := func(c color.Color) color.Color { return dimToward(c, t.Base, DimFraction) }
+	d.Text = dim(t.Text)
+	d.Subtext = dim(t.Subtext)
+	d.Blue = dim(t.Blue)
+	d.Mauve = dim(t.Mauve)
+	d.Green = dim(t.Green)
+	d.Yellow = dim(t.Yellow)
+	d.Sky = dim(t.Sky)
+	d.Peach = dim(t.Peach)
+	d.Red = dim(t.Red)
+	d.Pink = dim(t.Pink)
+	d.Token.Text = dim(t.Token.Text)
+	d.Token.Subtext = dim(t.Token.Subtext)
+	d.Token.Mauve = dim(t.Token.Mauve)
+	return d
+}
+
 // RenderColorGradient takes a string and blends it from color c1 to c2 character-by-character.
 func RenderColorGradient(text string, c1, c2 color.Color) string {
 	return RenderGradient(text, ColorToHex(c1), ColorToHex(c2))
