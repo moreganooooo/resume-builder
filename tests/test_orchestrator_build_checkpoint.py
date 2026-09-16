@@ -1798,9 +1798,13 @@ class TestBuildCheckpointResume(unittest.TestCase):
         mock_subprocess_run.return_value = MagicMock(
             returncode=0, stdout="▤ Pages: 2\n", stderr=""
         )
-        # Step 4's own initial validation call must stay clean (call 1); the
-        # recommendation pass's candidate (call 2) is the one that must fail.
-        mock_validate.side_effect = [[], ["FAKE VIOLATION FOR TEST"]]
+        # Step 4's own initial validation call must stay clean (call 1), as
+        # must the recommendation pass's pre-loop baseline (call 2 -- the
+        # snapshot each candidate is diffed against); the candidate itself
+        # (call 3) is the one that must fail. A violation absent from the
+        # baseline is genuinely introduced by this recommendation, so it is
+        # still discarded.
+        mock_validate.side_effect = [[], [], ["FAKE VIOLATION FOR TEST"]]
 
         with patch.object(self.engine, "mine_bullet_bank"):
             result = self.engine.build_tailored_resume(
@@ -1819,6 +1823,116 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self.assertEqual(actions["applied"], [])
         self.assertEqual(len(actions["skipped"]), 1)
         self.assertIn("introduced a validator violation", actions["skipped"][0])
+
+    @patch("orchestrator.validate_resume.validate")
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_recommendation_pass_keeps_edit_when_violation_already_existed(
+        self, mock_generate, mock_render_html, mock_subprocess_run, mock_validate
+    ):
+        """A recommendation is judged on what IT introduced.
+
+        Step 4 ships soft violations on purpose (partition_violations makes
+        vague magnitudes non-fatal), so the resume handed to Step 5.5 routinely
+        already carries one. Comparing each candidate against zero meant that
+        leftover discarded every later recommendation as if it had caused it --
+        measured on a real build, one stray "significantly" in the Summary threw
+        away both actionable recommendations, neither of which touched it.
+        """
+        jd_manager.save_checkpoint(
+            self.job_key,
+            {
+                "jd_keywords": {"hard_skills": ["python"]},
+                "bullet_tuples": [
+                    ["Shipped a widget platform used by 10k users.", "Acme", "eng"]
+                ],
+            },
+        )
+        base_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>",
+            "SKILLS": [],
+            "EXPERIENCE": [],
+            "WHY_TEXT": "",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
+            "EDU_ACHIEVEMENT_KEY_2": "writing_content",
+        }
+        improved_summary = (
+            "<strong>A lifecycle marketer skilled in ChatGPT and Claude.</strong>"
+        )
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.RecommendationApplySchema:
+                return (
+                    json.dumps(
+                        {
+                            **base_resume,
+                            "SUMMARY_TEXT": improved_summary,
+                            "applied_recommendations": [
+                                "Name the specific AI tools used."
+                            ],
+                            "skipped_recommendations": [],
+                        }
+                    ),
+                    {},
+                )
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps(base_resume), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (
+                    json.dumps(
+                        {
+                            "summary_alignment_score": 90,
+                            "skills_relevance_score": 90,
+                            "overall_fit_score": 90,
+                            "top_third_score": 90,
+                            "flags": [],
+                            "recommendations": ["Name the specific AI tools used."],
+                        }
+                    ),
+                    {},
+                )
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(
+            returncode=0, stdout="▤ Pages: 2\n", stderr=""
+        )
+
+        # Call 1 is Step 4's own validation, kept clean so its fix loop never
+        # runs. Every call after it reports the SAME pre-existing soft
+        # violation: it is in the baseline and in the candidate alike, so the
+        # recommendation introduced nothing and must survive.
+        calls = {"n": 0}
+
+        def fake_validate(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return []
+            return ["Vague magnitude 'significantly' in Summary: pre-existing"]
+
+        mock_validate.side_effect = fake_validate
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertEqual(
+            result["SUMMARY_TEXT"],
+            improved_summary,
+            "a pre-existing violation must not discard an unrelated edit",
+        )
+        actions = result["_recommendation_actions"]
+        self.assertEqual(actions["applied"], ["Name the specific AI tools used."])
+        self.assertEqual(actions["skipped"], [])
 
     @patch("orchestrator.subprocess.run")
     @patch("orchestrator.render_html")

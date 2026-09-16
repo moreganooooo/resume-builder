@@ -7421,6 +7421,25 @@ class ResumeEngine:
             applied, skipped = state["applied"], state["skipped"]
             needs_polish = state.get("needs_polish", [])
 
+            # A recommendation is judged on what IT introduced, never on what
+            # the resume already carried. Step 4 legitimately leaves soft
+            # violations standing -- partition_violations makes vague
+            # magnitudes and filler lines non-fatal, so the build ships with
+            # them -- and comparing each candidate against zero meant a single
+            # leftover discarded EVERY later recommendation as if it had caused
+            # it. Measured on a real build: one stray "significantly" in the
+            # Summary threw away both actionable recommendations, neither of
+            # which touched that sentence. Same baseline subtraction the
+            # Why-section backfill below already does.
+            baseline_violations = validate_resume.validate(
+                resume_data,
+                style_rules_for_validation,
+                role_roster,
+                role_bullet_minimums,
+                role_bullet_maximums=role_bullet_maximums,
+                bullet_tuples=bullet_tuples,
+            )
+
             for i in range(start_index, len(recs)):
                 rec = recs[i]
                 if i > 0:
@@ -7488,7 +7507,7 @@ class ResumeEngine:
                     this_skipped = rec_result.pop("skipped_recommendations", [])
                     this_needs_input = rec_result.pop("needs_personal_input", [])
                     candidate_resume_data = normalize_resume.normalize(rec_result)
-                    rec_violations = validate_resume.validate(
+                    rec_violations_all = validate_resume.validate(
                         candidate_resume_data,
                         style_rules_for_validation,
                         role_roster,
@@ -7496,6 +7515,9 @@ class ResumeEngine:
                         role_bullet_maximums=role_bullet_maximums,
                         bullet_tuples=bullet_tuples,
                     )
+                    rec_violations = [
+                        v for v in rec_violations_all if v not in baseline_violations
+                    ]
                     if rec_violations:
                         cli_art.console.print(
                             f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
@@ -7511,6 +7533,12 @@ class ResumeEngine:
                         )
                     elif this_applied:
                         resume_data = candidate_resume_data
+                        # The accepted edit becomes the new baseline: it may
+                        # have cleared a pre-existing violation (good) or left
+                        # one standing, and the NEXT recommendation must be
+                        # judged against what the resume actually looks like
+                        # now, not against what Step 4 produced.
+                        baseline_violations = rec_violations_all
                         applied.append(rec)
                         cli_art.print_literal("    Applied.")
                     elif this_needs_input:
