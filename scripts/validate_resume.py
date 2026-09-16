@@ -38,6 +38,17 @@ _TITLE_CASE_MINOR_WORDS = {
 # A number directly preceded by "<letter>-" or "<letter>–" (e.g. the "12"
 # in "K-12" or "K–12") is part of a compound label, not a metric.
 _COMPOUND_LABEL_PREFIX = re.compile(r"[A-Za-z][-–—]$")
+# A number glued directly to a preceding letter ("S3", "EC2", "IPv4", "Q3")
+# is part of an identifier, not a measurement -- the same class as the
+# hyphenated compound labels above, minus the hyphen. _METRIC_PATTERN starts
+# matching at the digit, so it read the "3" out of "S3" as a metric: a real
+# 2026-09-16 build failed after all four retry attempts on "Metric '3' should
+# appear only once" between a Summary figure and an AWS bullet whose only "3"
+# was the service name. No repair could ever have succeeded, since that digit
+# is structural. A genuine metric is never letter-adjacent ("$3M", "15%",
+# "3x" all start clean), so this excludes identifiers without dropping
+# measurements.
+_IDENTIFIER_DIGIT_PREFIX = re.compile(r"[A-Za-z]$")
 # The unit symbols that can trail a number. These have to be consumed
 # before looking for the context word, and folded into the signature:
 # _METRIC_PATTERN ends in `[%MK]?\b`, and since "%" is not a word char
@@ -467,6 +478,13 @@ def _extract_metric_signatures(text: str) -> list[tuple[str, str]]:
     for match in _METRIC_PATTERN.finditer(text):
         start = match.start()
         if _COMPOUND_LABEL_PREFIX.search(text[max(0, start - 2) : start]):
+            continue
+        # Only when the match itself begins with the digit -- a match that
+        # starts at "$" ("US$3M") has a letter before the "$" and would be
+        # wrongly dropped by a blanket check.
+        if match.group(0)[:1].isdigit() and _IDENTIFIER_DIGIT_PREFIX.search(
+            text[max(0, start - 1) : start]
+        ):
             continue
         tail = text[match.end() : match.end() + 20]
         suffix_match = _METRIC_UNIT_SUFFIX.match(tail)

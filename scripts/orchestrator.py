@@ -1519,7 +1519,22 @@ def _micro_fix_metric_provenance(
     Grounds the rewrite in that company's OWN real bullets only, so the
     model can't repeat the mistake by reaching for a different bullet's
     number again."""
-    source_bullets = [b for b, c, _tags in bullet_tuples if c == company]
+    # Loose containment, matching _check_metric_provenance()'s own lookup:
+    # the builder writes cv.md's company ("mIQroTech Inc.") while the bank
+    # tags one specific stint ("mIQroTech Inc. — Lead Data Scientist"). Exact
+    # equality found no source bullets at all, so this repair silently
+    # returned the bullet unchanged and the retry loop burned all four
+    # attempts on a metric that was sitting in the bank the whole time.
+    needle = validate_resume._normalize_company(company)
+    source_bullets = [
+        b
+        for b, c, _tags in bullet_tuples
+        if needle
+        and (
+            needle in validate_resume._normalize_company(c)
+            or validate_resume._normalize_company(c) in needle
+        )
+    ]
     if not source_bullets:
         return bullet
     source_block = "\n".join(f"- {b}" for b in source_bullets)
@@ -1831,7 +1846,19 @@ def repair_violations_surgically(
             needle = validate_resume._normalize_company(company)
             if any(needle in p or p in needle for p in present if p):
                 continue  # a prior violation in this batch already added it
-            achievements = [b for b, c, _t in bullet_tuples if c == company]
+            # Loose containment for the same reason _micro_fix_metric_provenance
+            # uses it: a roster name can tag one stint of an employer whose
+            # rendered company is the plain name, and exact equality then finds
+            # nothing to build the entry from.
+            achievements = [
+                b
+                for b, c, _t in bullet_tuples
+                if needle
+                and (
+                    needle in validate_resume._normalize_company(c)
+                    or validate_resume._normalize_company(c) in needle
+                )
+            ]
             if not achievements:
                 continue  # nothing to build the entry from -- leave for the LLM loop
             max_b = (role_bullet_maximums or {}).get(company)
@@ -1974,7 +2001,15 @@ def repair_violations_surgically(
                 candidates = [
                     b
                     for b, c, _t in bullet_tuples
-                    if c == company and b not in existing
+                    # Loose containment, same reasoning as the roster repair
+                    # above -- an exact-match top-up is a no-op whenever the
+                    # bank tags a stint rather than the rendered company.
+                    if needle
+                    and (
+                        needle in validate_resume._normalize_company(c)
+                        or validate_resume._normalize_company(c) in needle
+                    )
+                    and b not in existing
                 ]
                 max_b = (role_bullet_maximums or {}).get(company)
                 for candidate in candidates:

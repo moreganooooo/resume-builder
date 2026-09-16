@@ -966,6 +966,21 @@ class TestDistinctiveMetricsIgnoreTheContextWord(unittest.TestCase):
             self._sigs("Drove $4M in pipeline") & self._sigs("Drove $4M+ in pipeline")
         )
 
+    def test_a_digit_glued_to_a_letter_is_an_identifier_not_a_metric(self):
+        """The "3" in "S3" is part of a service name. Left unguarded it
+        collided with an unrelated Summary figure and failed a real build
+        after all four retry attempts -- the bullet's only "3" was
+        structural, so no repair could ever have resolved it."""
+        self.assertFalse(self._sigs("Automated AWS ETL pipelines with Glue and S3"))
+        self.assertFalse(self._sigs("Provisioned EC2 instances"))
+
+    def test_identifier_guard_does_not_swallow_real_metrics(self):
+        """The guard keys on a letter immediately before the digit, so
+        ordinary measurements -- which never are -- still register."""
+        self.assertTrue(self._sigs("Cut costs by $3M"))
+        self.assertTrue(self._sigs("Improved accuracy 15%"))
+        self.assertTrue(self._sigs("Managed a 2,932-account portfolio"))
+
     def test_small_bare_integers_still_need_a_matching_context_word(self):
         self.assertFalse(
             self._sigs("Led a 10-person team")

@@ -2,8 +2,10 @@
 batch_evaluate.py -- the shared "evaluate every pending JD" scoring loop,
 reused by both `resume evaluate` (batch mode) and `resume run --pick` (the
 interactive picker). Real Gemini cost: TWO calls per pending JD (capability
-+ recruiter, both BUILDER_MODEL -- the split-agent design evaluate_fit()
-was upgraded to). See
++ recruiter, both EVAL_MODEL -- the split-agent design evaluate_fit()
+was upgraded to). Scoring calls stay on EVAL_MODEL and pass
+SCORING_FALLBACKS, so they never reach gemini-3.5-flash-lite, whose
+scores moved well past run-to-run noise (2026-09-15). See
 docs/superpowers/specs/2026-07-05-batch-evaluate-and-picker-design.md.
 """
 

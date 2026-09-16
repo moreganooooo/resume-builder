@@ -285,5 +285,87 @@ class TestNormalizeUsesActiveProfilesFixedContent(unittest.TestCase):
         self.assertEqual(result["EMAIL"], persona.EMAIL)
 
 
+class TestStintAnnotationStripping(unittest.TestCase):
+    """A roster that splits one employer into several stints keys its rows
+    "Company — Stint Title" (mine_bullet_bank's allowlist is exact-match, so
+    the rows need distinct names). That key is bookkeeping, and it reached a
+    real rendered resume as a job-meta line reading "mIQroTech Inc. — Lead
+    Data Scientist" above a job-title of "Lead Data Scientist"."""
+
+    def test_strips_the_suffix_when_it_is_this_entrys_own_title(self):
+        self.assertEqual(
+            normalize_resume._strip_stint_annotation(
+                "mIQroTech Inc. — Lead Data Scientist", "Lead Data Scientist"
+            ),
+            "mIQroTech Inc.",
+        )
+        self.assertEqual(
+            normalize_resume._strip_stint_annotation(
+                "mIQroTech Inc. — Data Scientist", "Data Scientist"
+            ),
+            "mIQroTech Inc.",
+        )
+
+    def test_leaves_a_genuine_dash_bearing_company_name_alone(self):
+        """The reason this is not a blanket "strip after the em dash": a real
+        company name may contain one, and its tail is not the job title."""
+        self.assertEqual(
+            normalize_resume._strip_stint_annotation(
+                "Smith — Jones LLC", "Data Scientist"
+            ),
+            "Smith — Jones LLC",
+        )
+        self.assertEqual(
+            normalize_resume._strip_stint_annotation("Acme Inc. — Tampa", "Engineer"),
+            "Acme Inc. — Tampa",
+        )
+
+    def test_never_strips_a_company_down_to_nothing(self):
+        self.assertEqual(
+            normalize_resume._strip_stint_annotation(
+                "— Data Scientist", "Data Scientist"
+            ),
+            "— Data Scientist",
+        )
+
+    def test_is_inert_without_a_title_or_a_suffix(self):
+        self.assertEqual(
+            normalize_resume._strip_stint_annotation("Ben & Jerry", ""), "Ben & Jerry"
+        )
+        self.assertEqual(
+            normalize_resume._strip_stint_annotation("mIQroTech Inc.", "Lead Data Scientist"),
+            "mIQroTech Inc.",
+        )
+
+
+class TestNumericPeriod(unittest.TestCase):
+    """style_rules.yaml and tailor_resume.md both already require numeric
+    MM/YYYY dates, but the builder honors it unevenly -- a real build emitted
+    "05/2021 – May 2022", which recruiter_score.yaml marks down as a mixed
+    date format. Deterministic cleanup, not more prompt text."""
+
+    def test_converts_a_spelled_out_month(self):
+        self.assertEqual(
+            normalize_resume._numeric_period("05/2021 – May 2022"), "05/2021 – 05/2022"
+        )
+        self.assertEqual(
+            normalize_resume._numeric_period("Sept 2019 – Mar 2020"), "09/2019 – 03/2020"
+        )
+
+    def test_leaves_present_and_already_numeric_dates_alone(self):
+        self.assertEqual(
+            normalize_resume._numeric_period("Jun 2022 – Present"), "06/2022 – Present"
+        )
+        self.assertEqual(
+            normalize_resume._numeric_period("05/2021 – 05/2022"), "05/2021 – 05/2022"
+        )
+
+    def test_does_not_convert_a_non_month_word_before_a_year(self):
+        self.assertEqual(
+            normalize_resume._numeric_period("Summer 2019 – Present"),
+            "Summer 2019 – Present",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
