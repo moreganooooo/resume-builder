@@ -13,14 +13,17 @@ func TestJobsExperienceBlockerFilterTogglesBackToUnrestricted(t *testing.T) {
 	m := &JobsModel{filter: "all", experienceBlockerFilter: true}
 	m.rows = []model.JobRow{
 		{Title: "A", Evaluation: model.Evaluation{
+			CompositeScore:     aboveBar,
 			ExperienceBlockers: []model.HardBlocker{{Text: "Requires 5+ years", Category: "years_experience"}},
 		}},
 		{Title: "B", Evaluation: model.Evaluation{
+			CompositeScore:     aboveBar,
 			ExperienceBlockers: []model.HardBlocker{{Text: "Bachelor's required", Category: "degree"}},
 		}},
-		{Title: "C"}, // no blockers
+		{Title: "C", Evaluation: model.Evaluation{CompositeScore: aboveBar}}, // no blockers
 		{Title: "D", Evaluation: model.Evaluation{
-			HardBlockers: []model.HardBlocker{{Text: "Active clearance required", Category: "citizenship_clearance"}},
+			CompositeScore: aboveBar,
+			HardBlockers:   []model.HardBlocker{{Text: "Active clearance required", Category: "citizenship_clearance"}},
 		}},
 	}
 	m.applyFilter()

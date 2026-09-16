@@ -486,6 +486,26 @@ func (m *JobsModel) adjustScroll() {
 // means -- that denominator used to compare m.filter against a row's
 // STATUS, which silently reported 0 for every score-based filter.
 func (m JobsModel) matchesPrimaryFilter(r model.JobRow) bool {
+	// The actionable bar applies to EVERY stop except "low". Previously it
+	// was a property of two score stops only, so cycling to "all",
+	// "pending", "completed" or "local" silently refilled the list with
+	// roles the user has already said they will not act on -- and those
+	// outnumber the rest (169 of 286 evaluated roles for one profile), so
+	// pressing [f] to narrow by location read as widening instead.
+	//
+	// "low" is the deliberate exception and the only way to see them: the
+	// bar is a preference, not a judgment, so sub-bar roles stay one
+	// keypress away rather than being archived or dropped from the export.
+	//
+	// Safe to apply unconditionally here because this screen is fed by
+	// picker.list_all_evaluated_jds() -- every row HAS a score. Roles that
+	// are pending but unevaluated never reach m.rows at all; they are
+	// counted separately and shown in the header (see WithBacklog), so no
+	// unscored role can be hidden by this.
+	if m.filter != "low" && r.Evaluation.CompositeScore < ActionableScore {
+		return false
+	}
+
 	switch m.filter {
 	case "pending", "completed":
 		return strings.EqualFold(r.Status, m.filter)
@@ -494,14 +514,16 @@ func (m JobsModel) matchesPrimaryFilter(r model.JobRow) bool {
 	case "good_fit":
 		return r.Evaluation.CompositeScore >= ActionableScore
 	case "low":
-		// Everything under the actionable bar, which the default view
-		// hides. Kept reachable rather than archived: the bar is a
+		// Everything under the actionable bar, which every other view
+		// now hides. Kept reachable rather than archived: the bar is a
 		// preference, and a role parked here is one filter press away.
 		return r.Evaluation.CompositeScore < ActionableScore
 	case "recent":
-		// "Recent" jobs are those already at the top of the list
-		// (already sorted by score), so we show the first 50 high-quality jobs
-		return r.Evaluation.CompositeScore >= 3.0
+		// "Recent" jobs are those already at the top of the list (it is
+		// sorted by score). Its own >= 3.0 threshold is gone: it sat
+		// BELOW the bar applied above, so it could only ever have
+		// admitted rows that are now excluded anyway.
+		return true
 	case "local":
 		// Commutable roles only -- see model.JobRow.IsLocal. Part of
 		// the [f] cycle rather than a filter of its own because it is
@@ -510,7 +532,8 @@ func (m JobsModel) matchesPrimaryFilter(r model.JobRow) bool {
 		// minutes away is still local.
 		return r.IsLocal()
 	}
-	// "all" has no score/status restriction
+	// "all" means every status and every location -- but still at or above
+	// the bar, per the check at the top.
 	return true
 }
 
@@ -1455,7 +1478,7 @@ var jobsHelpCategories = []helpCategory{
 		{"a", "Archive this job (removes from all filters)"},
 	}},
 	{"Filters", []helpBinding{
-		{"f", "Cycle filters: All → Pending → Completed → High Fit → Good Fit (default) → Recent → Local → Low (< 3.5)"},
+		{"f", "Cycle filters: All → Pending → Completed → High Fit → Good Fit (default) → Recent → Local → Low (< 3.5). Every stop except Low shows only roles scoring 3.5+"},
 		{"w", "Cycle workplace filter: All → Remote → Hybrid → Onsite"},
 		{"e", "Cycle employment type filter"},
 		{"$", "Cycle pay filter: All → Stated → Unstated"},

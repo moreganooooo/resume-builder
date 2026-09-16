@@ -94,9 +94,9 @@ func TestEveryCycleValueHasALabel(t *testing.T) {
 func TestEmploymentFilterNarrowsTheList(t *testing.T) {
 	m := &JobsModel{filter: "all", employmentFilter: "part_time"}
 	m.rows = []model.JobRow{
-		{Title: "A", EmploymentType: []string{"part_time"}},
-		{Title: "B", EmploymentType: []string{"full_time"}},
-		{Title: "C"}, // stated nothing
+		{Title: "A", EmploymentType: []string{"part_time"}, Evaluation: model.Evaluation{CompositeScore: aboveBar}},
+		{Title: "B", EmploymentType: []string{"full_time"}, Evaluation: model.Evaluation{CompositeScore: aboveBar}},
+		{Title: "C", Evaluation: model.Evaluation{CompositeScore: aboveBar}}, // stated no employment type
 	}
 	m.applyFilter()
 	if len(m.filtered) != 1 || m.filtered[0].Title != "A" {

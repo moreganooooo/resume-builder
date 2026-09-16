@@ -1477,20 +1477,34 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `len(...ExperienceBlockers) == 0` presence check, since `HardBlocker`
   carries no confidence field to gate on the way `RoleTrackConfidence`
   does.
-- **Browse & Manage Jobs OPENS on the actionable bar, not on every row**
-  (`screens.ActionableScore` = 3.5, `matchesPrimaryFilter`). Roles below it
+- **The actionable bar applies to EVERY Browse & Manage Jobs filter stop
+  except `LOW`, not just the default view** (`screens.ActionableScore` =
+  3.5, checked once at the top of `matchesPrimaryFilter`). Roles below it
   are ones the user has said they will not act on, and they outnumber the
   rest (169 of 286 evaluated roles for one profile, 2026-09-15), so an
-  all-rows default buries the list's whole point. Nothing is archived,
-  deleted, or excluded from any other surface -- the `[f]` cycle gained a
-  `LOW (< 3.5)` stop that shows exactly the hidden set, so the bar is one
-  keypress away in either direction. `applyFilter` and
-  `countForStatusFilter` share `matchesPrimaryFilter` deliberately: the
-  footer's count used to compare `m.filter` against a row's STATUS, so it
-  silently reported 0 for every score-based filter, and a denominator that
-  disagrees with the list reads as missing data. A test row with no score
-  is BELOW this bar and hidden by default -- several screen tests failed
-  for that unrelated reason until their fixtures were scored.
+  all-rows view buries the list's whole point. It was originally a
+  property of the two SCORE stops only, which meant cycling `[f]` to
+  `all`/`pending`/`completed`/`local` silently refilled the list with
+  those roles -- pressing `[f]` to narrow by location read as widening
+  instead. Nothing is archived, deleted, or excluded from any other
+  surface: the `LOW (< 3.5)` stop shows exactly the hidden set, so the bar
+  is one keypress away in either direction, and `recent`'s own `>= 3.0`
+  threshold was dropped as dead (it sat BELOW the bar, so it could only
+  ever admit rows the bar already excludes). Safe to apply unconditionally
+  because this screen is fed by `picker.list_all_evaluated_jds()` -- every
+  row HAS a score, and pending-but-unevaluated roles never reach `m.rows`
+  at all (counted separately, shown via `WithBacklog`). Deliberately NOT
+  extended to Pipeline (its rows include applied/interviewing roles, so a
+  score bar there could bury a live application) or to the CLI picker
+  views (no `LOW` escape hatch exists there, so sub-bar roles would become
+  unreachable). `applyFilter` and `countForStatusFilter` share
+  `matchesPrimaryFilter` deliberately: the footer's count used to compare
+  `m.filter` against a row's STATUS, so it silently reported 0 for every
+  score-based filter, and a denominator that disagrees with the list reads
+  as missing data. A test row with no score is BELOW this bar and hidden
+  by EVERY stop but `low` -- screen tests have twice failed for that
+  unrelated reason until their fixtures were scored, so fixtures that are
+  not about scoring use the `aboveBar` constant in `jobs_test.go`.
 - **`scripts/find_retroactively_excluded_roles.py` checks whether a
   PENDING role would be excluded under TODAY's config, even though it
   was saved under an older one -- two independent checks, counted

@@ -11,7 +11,11 @@ import (
 func miles(v float64) *float64 { return &v }
 
 func jobAt(workplace string, distance *float64) model.JobRow {
-	return model.JobRow{Workplace: workplace, DistanceMiles: distance}
+	return model.JobRow{
+		Workplace:     workplace,
+		DistanceMiles: distance,
+		Evaluation:    model.Evaluation{CompositeScore: aboveBar},
+	}
 }
 
 func TestNextWorkplaceFilterCycles(t *testing.T) {
