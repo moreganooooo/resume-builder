@@ -209,7 +209,11 @@ class HardBlockerSchema(BaseModel):
         "concern, but NOT what this field measures, so it does not count "
         "as a blocker downstream (see docs/hard_blockers.md's "
         "overqualification-conflation finding). Use 'n/a' for every other "
-        "category.",
+        "category. NOTE: this default does not protect the pipeline -- "
+        "evaluate_fit() reads the model's reply via GeminiClient.parse_json() "
+        "and never validates it through this schema, so a response that omits "
+        "the field arrives as None rather than 'n/a'. orchestrator."
+        "_with_normalized_direction() is what actually fills it.",
     )
 
 
