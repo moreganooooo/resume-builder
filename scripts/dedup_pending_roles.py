@@ -138,7 +138,15 @@ def run_deduplication(profile: str = None, dry_run: bool = True) -> dict:
     # duplicating it, so it is skipped here (the file represents the job);
     # any OTHER row for the same posting -- a copy under a different id --
     # still clusters with the file and is archived as a genuine duplicate.
+    #
+    # Matching that id alone is not enough: db.upsert_job() MERGES into an
+    # existing row with the same dedup_hash instead of inserting, so when a
+    # scan wrote the row before the file's sync ran, the file's own row
+    # survives under the SCANNER's id and none of the three keys above
+    # names it. Such a row then looked like a genuine duplicate of its own file
+    # (6 of Dom's roles on 2026-09-15). The row's dedup_hash is matched too.
     own_row_ids = set()
+    own_row_hashes = set()
     for path in pending_file_paths:
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -153,10 +161,19 @@ def run_deduplication(profile: str = None, dry_run: bool = True) -> dict:
                     or jd_manager.compute_job_key(path)
                 )
             )
+            own_hash = f_data.get("dedup_hash") or db.compute_job_dedup_hash(
+                f_data.get("job_title") or f_data.get("title") or "",
+                f_data.get("company_name") or f_data.get("company") or "",
+                f_data.get("location") or "",
+            )
+            if own_hash:
+                own_row_hashes.add(str(own_hash))
 
     items = {}
     for r in db_rows:
         if str(r["id"]) in own_row_ids:
+            continue
+        if r["dedup_hash"] and str(r["dedup_hash"]) in own_row_hashes:
             continue
         meta = json.loads(r["metadata_json"] or "{}")
         eval_data = meta.get("_evaluation") or {}

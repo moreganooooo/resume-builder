@@ -222,8 +222,9 @@ func NewJobsModel(t theme.Theme, rows []model.JobRow, width, height int) JobsMod
 	// titles' own "info" accent, so it reads as the same semantic color.
 	sp.Style = lipgloss.NewStyle().Foreground(t.Blue)
 	m := JobsModel{
-		rows:    rows,
-		filter:  "all",
+		rows: rows,
+		// Opens on the actionable bar, not "all" -- see ActionableScore.
+		filter:  "good_fit",
 		width:   width,
 		height:  height,
 		theme:   t,
@@ -266,27 +267,8 @@ func (m JobsModel) WithActionConfig(jobsPath, pythonPath, projectRoot string) Jo
 func (m *JobsModel) applyFilter() {
 	var out []model.JobRow
 	for _, r := range m.rows {
-		// Apply active filter based on mode
-		switch m.filter {
-		case "pending", "completed":
-			if !strings.EqualFold(r.Status, m.filter) {
-				continue
-			}
-		case "high_fit":
-			if r.Evaluation.CompositeScore < 4.0 {
-				continue
-			}
-		case "good_fit":
-			if r.Evaluation.CompositeScore < 3.5 {
-				continue
-			}
-		case "recent":
-			// "Recent" jobs are those already at the top of the list
-			// (already sorted by score), so we show the first 50 high-quality jobs
-			if r.Evaluation.CompositeScore < 3.0 {
-				continue
-			}
-			// "all" has no score/status restriction
+		if !m.matchesPrimaryFilter(r) {
+			continue
 		}
 
 		// Narrow by workplace mode. A row whose mode could not be
@@ -418,7 +400,7 @@ func (m JobsModel) countForStatusFilter() int {
 	}
 	count := 0
 	for _, r := range m.rows {
-		if strings.EqualFold(r.Status, m.filter) {
+		if m.matchesPrimaryFilter(r) {
 			count++
 		}
 	}
@@ -497,6 +479,50 @@ func (m *JobsModel) adjustScroll() {
 	}
 }
 
+// matchesPrimaryFilter reports whether one row passes the [f] filter
+// alone, ignoring the [w]/[e]/[$]/[r]/[c] narrowings and the search
+// query. Shared with countForStatusFilter so the list and the "N/M
+// matching" denominator can never disagree about what the active filter
+// means -- that denominator used to compare m.filter against a row's
+// STATUS, which silently reported 0 for every score-based filter.
+func (m JobsModel) matchesPrimaryFilter(r model.JobRow) bool {
+	switch m.filter {
+	case "pending", "completed":
+		return strings.EqualFold(r.Status, m.filter)
+	case "high_fit":
+		return r.Evaluation.CompositeScore >= 4.0
+	case "good_fit":
+		return r.Evaluation.CompositeScore >= ActionableScore
+	case "low":
+		// Everything under the actionable bar, which the default view
+		// hides. Kept reachable rather than archived: the bar is a
+		// preference, and a role parked here is one filter press away.
+		return r.Evaluation.CompositeScore < ActionableScore
+	case "recent":
+		// "Recent" jobs are those already at the top of the list
+		// (already sorted by score), so we show the first 50 high-quality jobs
+		return r.Evaluation.CompositeScore >= 3.0
+	case "local":
+		// Commutable roles only -- see model.JobRow.IsLocal. Part of
+		// the [f] cycle rather than a filter of its own because it is
+		// a way of narrowing the SAME list, and [w]'s "on-site" is
+		// not a substitute: a hybrid or unknown-mode posting ten
+		// minutes away is still local.
+		return r.IsLocal()
+	}
+	// "all" has no score/status restriction
+	return true
+}
+
+// ActionableScore is the composite score at or above which a role is
+// worth a person's attention, and the bar the Jobs screen OPENS on --
+// "good_fit" is the default filter, not "all". Below it the list is
+// dominated by roles nobody intends to act on (169 of Dom's 286 evaluated
+// roles on 2026-09-15), which buries the ones they do. Nothing is
+// archived or deleted by this: [f] reaches the LOW stop, and every other
+// surface still counts the full corpus.
+const ActionableScore = 3.5
+
 func nextJobsFilter(current string) string {
 	// Cycle through filter modes: status → score-based → more
 	switch current {
@@ -510,6 +536,10 @@ func nextJobsFilter(current string) string {
 		return "good_fit"
 	case "good_fit":
 		return "recent"
+	case "recent":
+		return "local"
+	case "local":
+		return "low"
 	default:
 		return "all"
 	}
@@ -1402,7 +1432,7 @@ var jobsHelpCategories = []helpCategory{
 		{"a", "Archive this job (removes from all filters)"},
 	}},
 	{"Filters", []helpBinding{
-		{"f", "Cycle filters: All → Pending → Completed → High Fit → Good Fit → Recent"},
+		{"f", "Cycle filters: All → Pending → Completed → High Fit → Good Fit (default) → Recent → Local → Low (< 3.5)"},
 		{"w", "Cycle workplace filter: All → Remote → Hybrid → Onsite"},
 		{"e", "Cycle employment type filter"},
 		{"$", "Cycle pay filter: All → Stated → Unstated"},
@@ -1704,6 +1734,10 @@ func (m JobsModel) getFilterLabel() string {
 		return "GOOD FIT (3.5+)"
 	case "recent":
 		return "RECENT"
+	case "local":
+		return "LOCAL (60 mi)"
+	case "low":
+		return "LOW (< 3.5)"
 	default:
 		return "ALL JOBS"
 	}

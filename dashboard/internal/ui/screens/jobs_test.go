@@ -46,17 +46,47 @@ func pressKey(s string) tea.KeyPressMsg {
 func testJobRows() []model.JobRow {
 	return []model.JobRow{
 		{Path: "a.json", Status: "Pending", Company: "Acme", Title: "Role A", Evaluation: model.Evaluation{CompositeScore: 4.5}},
-		{Path: "b.json", Status: "Completed", Company: "Beta", Title: "Role B", Evaluation: model.Evaluation{CompositeScore: 3.0}},
+		// Both rows sit at or above ActionableScore so the screen's
+		// default view shows them: these rows exercise cursors, search
+		// and archiving, not the score bar, and a row hidden by the
+		// default filter would fail those tests for an unrelated reason.
+		{Path: "b.json", Status: "Completed", Company: "Beta", Title: "Role B", Evaluation: model.Evaluation{CompositeScore: 3.6}},
 	}
 }
 
-func TestNewJobsModelDefaultsToAllFilterShowingEveryRow(t *testing.T) {
+// The screen opens on the actionable bar, not on every row: roles below
+// ActionableScore are ones the user has said they will not act on, and
+// they outnumber the rest. Nothing is deleted -- the LOW stop below
+// reaches them.
+func TestNewJobsModelDefaultsToTheActionableFilter(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
-	if m.filter != "all" {
-		t.Fatalf("expected default filter %q, got %q", "all", m.filter)
+	if m.filter != "good_fit" {
+		t.Fatalf("expected default filter %q, got %q", "good_fit", m.filter)
 	}
 	if len(m.filtered) != 2 {
 		t.Fatalf("expected 2 filtered rows, got %d", len(m.filtered))
+	}
+}
+
+func TestDefaultViewHidesRowsBelowTheActionableScoreAndLowFilterShowsThem(t *testing.T) {
+	rows := []model.JobRow{
+		{Title: "actionable", Evaluation: model.Evaluation{CompositeScore: 3.5}},
+		{Title: "below", Evaluation: model.Evaluation{CompositeScore: 3.4}},
+	}
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), rows, 100, 30)
+	if len(m.filtered) != 1 || m.filtered[0].Title != "actionable" {
+		t.Fatalf("expected only the actionable row by default, got %+v", m.filtered)
+	}
+	// 3.5 itself is actionable -- the bar is inclusive.
+	m.filter = "low"
+	m.applyFilter()
+	if len(m.filtered) != 1 || m.filtered[0].Title != "below" {
+		t.Fatalf("expected only the below-bar row under LOW, got %+v", m.filtered)
+	}
+	// The footer's "N matching" count must agree with the list; it used
+	// to compare the filter against a row's STATUS and report 0 here.
+	if got := m.countForStatusFilter(); got != 1 {
+		t.Fatalf("expected count 1 to match the filtered list, got %d", got)
 	}
 }
 
@@ -81,6 +111,10 @@ func TestCursorMovementClampsAtBoundaries(t *testing.T) {
 
 func TestFilterCyclesAllPendingCompletedAll(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	// Start from "all" explicitly: the screen now OPENS on "good_fit",
+	// and this test is about the cycle's order, not its entry point.
+	m.filter = "all"
+	m.applyFilter()
 
 	m, _ = m.Update(pressKey("f"))
 	if m.filter != "pending" {
@@ -112,8 +146,36 @@ func TestFilterCyclesAllPendingCompletedAll(t *testing.T) {
 		t.Fatalf("expected filter to cycle to %q, got %q", "recent", m.filter)
 	}
 	m, _ = m.Update(pressKey("f"))
+	if m.filter != "local" {
+		t.Fatalf("expected filter to cycle to %q, got %q", "local", m.filter)
+	}
+	m, _ = m.Update(pressKey("f"))
+	if m.filter != "low" {
+		t.Fatalf("expected filter to cycle to %q, got %q", "low", m.filter)
+	}
+	m, _ = m.Update(pressKey("f"))
 	if m.filter != "all" {
 		t.Fatalf("expected filter to cycle back to %q, got %q", "all", m.filter)
+	}
+}
+
+// The "local" filter keeps rows with a measured distance inside
+// model.LocalRadiusMiles and drops both far-away rows and rows whose
+// distance was never resolved -- absence of a signal is not evidence a
+// posting qualifies, same rule as the other filters on this screen.
+func TestLocalFilterKeepsOnlyNearbyRowsWithAMeasuredDistance(t *testing.T) {
+	near, far := 11.4, 2112.3
+	m := &JobsModel{
+		filter: "local",
+		rows: []model.JobRow{
+			{Title: "near", DistanceMiles: &near},
+			{Title: "far", DistanceMiles: &far},
+			{Title: "unknown"},
+		},
+	}
+	m.applyFilter()
+	if len(m.filtered) != 1 || m.filtered[0].Title != "near" {
+		t.Fatalf("expected only the nearby row, got %+v", m.filtered)
 	}
 }
 
@@ -555,10 +617,12 @@ func TestRenderSidebarListOverlaysStatusPickerWhenOpen(t *testing.T) {
 
 func searchTestJobRows() []model.JobRow {
 	return []model.JobRow{
-		{Path: "a.json", Status: "Pending", Company: "Stripe", Title: "Backend Engineer"},
-		{Path: "b.json", Status: "Completed", Company: "Anthropic", Title: "AI Safety Engineer"},
-		{Path: "c.json", Status: "Pending", Company: "Acme Corp", Title: "Senior PM, Voice AI"},
-		{Path: "d.json", Status: "Completed", Company: "Globex", Title: "Platform Engineer"},
+		// Scored above ActionableScore for the same reason as
+		// testJobRows: these rows are here to be searched, not filtered.
+		{Path: "a.json", Status: "Pending", Company: "Stripe", Title: "Backend Engineer", Evaluation: model.Evaluation{CompositeScore: 4.0}},
+		{Path: "b.json", Status: "Completed", Company: "Anthropic", Title: "AI Safety Engineer", Evaluation: model.Evaluation{CompositeScore: 4.0}},
+		{Path: "c.json", Status: "Pending", Company: "Acme Corp", Title: "Senior PM, Voice AI", Evaluation: model.Evaluation{CompositeScore: 4.0}},
+		{Path: "d.json", Status: "Completed", Company: "Globex", Title: "Platform Engineer", Evaluation: model.Evaluation{CompositeScore: 4.0}},
 	}
 }
 
@@ -641,7 +705,7 @@ func TestSlashOpensJobsSearchAndTypingDoesNotTriggerShortcuts(t *testing.T) {
 	if m.searchQuery != "fu" {
 		t.Fatalf("expected typed letters to become the search query, got %q", m.searchQuery)
 	}
-	if m.filter != "all" {
+	if m.filter != "good_fit" {
 		t.Fatalf("expected filter cycle NOT to fire while typing 'f', got filter=%q", m.filter)
 	}
 	if m.statusPicker {
@@ -971,7 +1035,9 @@ func TestJobs_SubstringHighlight(t *testing.T) {
 func TestJobs_ArchiveConfirmation(t *testing.T) {
 	th := theme.NewTheme("catppuccin-mocha")
 	rows := []model.JobRow{
-		{Path: "test.json", Company: "Target Corp", Title: "Lead", Status: "Pending"},
+		// Scored above ActionableScore so the default view shows it --
+		// with no row under the cursor, 'x' has nothing to archive.
+		{Path: "test.json", Company: "Target Corp", Title: "Lead", Status: "Pending", Evaluation: model.Evaluation{CompositeScore: 4.0}},
 	}
 	m := NewJobsModel(th, rows, 120, 30)
 

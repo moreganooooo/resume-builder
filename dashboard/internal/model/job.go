@@ -184,6 +184,24 @@ func (j JobRow) HasDistance() bool {
 	return j.DistanceMiles != nil
 }
 
+// LocalRadiusMiles bounds what the Jobs screen's [f] "LOCAL" filter
+// counts as local. A measured distance alone is NOT enough: the
+// scan-time radius gate keeps "unresolvable" postings for review (see
+// scripts/location_filter.py), and location_enricher.py can resolve one
+// of those to a real address afterwards -- which is how a Seattle
+// posting ends up on this screen carrying 2,112 miles. This is a VIEW
+// threshold, deliberately generous relative to a typical commute radius,
+// so nothing is hidden that a person might still consider drivable.
+const LocalRadiusMiles = 60.0
+
+// IsLocal reports whether this row has a measured distance inside
+// LocalRadiusMiles. A row with no distance is excluded -- absence of a
+// signal is not evidence a posting qualifies, the same rule the
+// workplace/employment/role-track filters follow.
+func (j JobRow) IsLocal() bool {
+	return j.DistanceMiles != nil && *j.DistanceMiles <= LocalRadiusMiles
+}
+
 // Miles returns the measured distance, and whether there was one.
 func (j JobRow) Miles() (float64, bool) {
 	if j.DistanceMiles == nil {

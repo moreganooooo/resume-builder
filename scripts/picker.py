@@ -7,11 +7,13 @@ tailor-pick/coverletter-pick items -- one implementation instead of four.
 
 import json
 import os
+import re
 import sys
 
 import batch_evaluate
 import cli_art
 import compensation
+import db
 import employment_type
 import jd_manager
 import location_filter
@@ -598,6 +600,14 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
     return rows
 
 
+def _normalize_posting_text(text: str) -> str:
+    """Collapses a company or title to a comparable key. Deliberately the
+    same normalization dedup_pending_roles.normalize_text() uses, so the
+    two modules cannot disagree about whether two records are the same
+    posting."""
+    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
+
+
 def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
     """Evaluated jobs that live only in data.db, in the same dict shape.
 
@@ -618,6 +628,19 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
         return []
 
     seen = set()
+    # A file's own row is NOT always keyed by compute_job_key. upsert_job
+    # merges into an existing row with the same dedup_hash rather than
+    # inserting a new one, so when a scan wrote the row before the file's
+    # sync ran, the surviving row keeps the SCANNER's id -- and matching on
+    # the id alone then fails to recognize it as the file's own row, listing
+    # one posting twice (6 of Dom's roles on 2026-09-15: an M&T "Data
+    # Engineer" file whose expected key 7274d9... has no row at all, beside
+    # row a8bba... holding that same file's evaluation). Identity is
+    # therefore also matched on the posting itself, by the same two rules
+    # dedup_pending_roles clusters on: dedup_hash, else normalized
+    # company + title.
+    seen_hashes = set()
+    seen_company_title = set()
     for row in file_rows:
         path = row.get("path") or ""
         seen.add(os.path.basename(path))
@@ -625,6 +648,18 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
             seen.add(jd_manager.compute_job_key(path))
         except (OSError, ValueError):
             pass
+        title = row.get("title") or ""
+        company = row.get("company") or ""
+        if title and company:
+            seen_company_title.add(
+                (_normalize_posting_text(company), _normalize_posting_text(title))
+            )
+            try:
+                seen_hashes.add(
+                    db.compute_job_dedup_hash(title, company, row.get("location") or "")
+                )
+            except Exception:  # noqa: BLE001 -- identity is a best-effort match
+                pass
 
     try:
         conn = db.get_db()
@@ -633,7 +668,7 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
 
     try:
         records = conn.execute(
-            "SELECT id, title, company, location, status, metadata_json"
+            "SELECT id, title, company, location, status, dedup_hash, metadata_json"
             " FROM jobs WHERE status = 'pending'"
         ).fetchall()
     except Exception:
@@ -645,6 +680,13 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
     for record in records:
         job_id = str(record["id"])
         if job_id in seen or os.path.basename(job_id) in seen:
+            continue
+        if record["dedup_hash"] and str(record["dedup_hash"]) in seen_hashes:
+            continue
+        if (
+            _normalize_posting_text(record["company"]),
+            _normalize_posting_text(record["title"]),
+        ) in seen_company_title:
             continue
 
         try:
