@@ -774,7 +774,13 @@ func TestJobsSearchBarRendersMatchCountAndAppearsInHelpOverlay(t *testing.T) {
 		t.Fatalf("expected View() to render the active search bar, got %q", rendered)
 	}
 
-	overlay := ansi.Strip(renderHelpOverlay(theme.NewTheme("catppuccin-mocha"), "Jobs", jobsHelpCategories, 100, 30))
+	// Tall enough to render every category. This assertion is about the
+	// `/` binding being DOCUMENTED, not about the overlay fitting a
+	// particular terminal -- renderHelpOverlay truncates with a "grow the
+	// terminal" hint when it doesn't fit, so a short fixture height fails
+	// this test for a reason that has nothing to do with the binding. At
+	// 30 rows it did exactly that once the Actions list grew by one entry.
+	overlay := ansi.Strip(renderHelpOverlay(theme.NewTheme("catppuccin-mocha"), "Jobs", jobsHelpCategories, 100, 50))
 	if !strings.Contains(overlay, "/") || !strings.Contains(overlay, "Search company/title") {
 		t.Fatalf("expected `/` search binding documented in the help overlay, got %q", overlay)
 	}

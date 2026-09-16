@@ -1041,6 +1041,14 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 		m.progress = newModel
 		return m, cmd
 
+	case URLOpenFailedMsg:
+		// Without this the OS-open failure (no default browser in a
+		// headless/SSH session) is silently discarded and "o" looks
+		// like a no-op -- the same reasoning that put this case on
+		// Pipeline.
+		m.notice = fmt.Sprintf("Could not open URL: %v", msg.Err)
+		return m, nil
+
 	case tea.MouseClickMsg:
 		if m.actionInProgress != "" {
 			return m, nil
@@ -1273,6 +1281,20 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			}
 			m.cursor = 0
 			m.applyFilter()
+		case "o":
+			// Deliberately the SAME message and OS-open handler
+			// Pipeline's own "o" uses (main.go), not a parallel one, so
+			// the two screens cannot drift in behavior or in which
+			// platforms they support. This is also the keyboard
+			// fallback for the detail pane's OSC8 apply link on
+			// terminals that don't support hyperlinks.
+			if job, ok := m.CurrentJob(); ok {
+				if job.SourceURL != "" {
+					url := job.SourceURL
+					return m, func() tea.Msg { return OpenURLMsg{URL: url} }
+				}
+				m.notice = "No job URL saved for this posting"
+			}
 		case "s":
 			m.actionInProgress = "scan"
 			m.actionStartedAt = time.Now()
@@ -1424,6 +1446,7 @@ var jobsHelpCategories = []helpCategory{
 		{"s", "Scan for new job postings"},
 		{"b", "Batch evaluate pending jobs"},
 		{"L", "Sweep stale postings"},
+		{"o", "Open this job posting in your browser"},
 		{"l", "Check posting liveness"},
 		{"m", "Compute Skills Gap Matrix for this job"},
 		{"M", "Compute Skills Gap Matrix for pending jobs missing one (bulk, capped)"},
@@ -2006,14 +2029,11 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		// (iTerm2, kitty, WezTerm). The LABEL is short rather than the
 		// URL itself -- these are ATS URLs with long opaque query
 		// strings, and showing one told the reader nothing while
-		// costing two lines. The trade that buys: terminals without
-		// OSC8 support degrade to the label as plain text, and unlike
-		// Pipeline (PipelineOpenURLMsg) this screen has NO open-in-
-		// browser keybinding, so on those terminals the URL becomes
-		// unreachable from this pane rather than merely ugly. Worth it
-		// against a wrapped, auto-linkified, already-broken URL -- but
-		// if a Jobs-screen open key ever lands, this is the comment
-		// that should stop being a caveat.
+		// costing two lines. Terminals without OSC8 support degrade to
+		// the label as plain text, which would strand the URL -- so
+		// "o" (this screen's open-in-browser key, sharing Pipeline's
+		// OpenURLMsg) is the fallback that makes the short label safe
+		// to use here.
 		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Blue).
 			Render(termenv.Hyperlink(job.SourceURL, "↗ Open job posting")))
 		content = append(content, "")
@@ -2464,6 +2484,7 @@ func (m JobsModel) renderHelp() string {
 			keyStyle.Render("d") + descStyle.Render(" nearest  ") +
 			keyStyle.Render("p") + descStyle.Render(" pay  ") +
 			keyStyle.Render("r") + descStyle.Render(" managers  ") +
+			keyStyle.Render("o") + descStyle.Render(" open  ") +
 			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
 			keyStyle.Render("m") + descStyle.Render(" matrix  ") +
 			keyStyle.Render("t") + descStyle.Render(" tailor  ") +

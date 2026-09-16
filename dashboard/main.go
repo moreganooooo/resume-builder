@@ -318,7 +318,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.startTransition(m.previousState)
 
-	case screens.PipelineOpenURLMsg:
+	case screens.OpenURLMsg:
 		return m, func() tea.Msg {
 			var err error
 			switch runtime.GOOS {
@@ -332,7 +332,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				err = exec.Command("xdg-open", msg.URL).Run()
 			}
 			if err != nil {
-				return screens.PipelineURLOpenFailedMsg{Err: err}
+				return screens.URLOpenFailedMsg{Err: err}
 			}
 			return nil
 		}
