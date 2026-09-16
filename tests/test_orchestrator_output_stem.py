@@ -52,7 +52,24 @@ class TestBuildOutputStem(unittest.TestCase):
         self.assertEqual(stem, f"{self.stem_prefix}_4MINDS")
         self.assertNotIn("Unknown", stem)
 
-    def test_both_missing_falls_back_to_just_the_name(self):
+    def test_both_missing_falls_back_to_the_jd_basename(self):
+        """Still no invented placeholder -- but the bare name is not a safe
+        fallback either, because it is the SAME name for every meta-less
+        JD. The JD's own filename is already distinctive, so it separates
+        them without making anything up."""
         with patch("orchestrator.jd_manager.extract_job_meta", return_value=("", "")):
             stem = orchestrator._build_output_stem("jds/some_file.json")
-        self.assertEqual(stem, self.stem_prefix)
+        self.assertEqual(stem, f"{self.stem_prefix}_somefile")
+        self.assertNotIn("Unknown", stem)
+
+    def test_two_meta_less_jds_do_not_share_one_stem(self):
+        """The real bug this guards: a bare stem meant each meta-less build
+        silently overwrote the previous one's rendered PDF -- and the
+        recruiter resume's, which deliberately uses the bare name."""
+        with patch("orchestrator.jd_manager.extract_job_meta", return_value=("", "")):
+            first = orchestrator._build_output_stem("jds/2026-09-15_Acme_Analyst.json")
+            second = orchestrator._build_output_stem("jds/2026-09-16_Globex_Eng.json")
+        self.assertNotEqual(first, second)
+        # ...and neither may claim the recruiter resume's plain name.
+        self.assertNotEqual(first, self.stem_prefix)
+        self.assertNotEqual(second, self.stem_prefix)

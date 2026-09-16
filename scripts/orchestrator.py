@@ -3673,13 +3673,27 @@ def _build_output_stem(jd_path: str) -> str:
     segments are each included only when known -- omitted entirely (not a
     placeholder like "Unknown") when missing, since a filename with a
     placeholder in it would always need fixing before sending, whereas
-    e.g. "AlexMercer_CampaignManager_Resume" is still sendable as-is."""
+    e.g. "AlexMercer_CampaignManager_Resume" is still sendable as-is.
+
+    When NEITHER is known the stem falls back to the JD file's own
+    basename rather than the bare candidate name. A bare stem is not a
+    harmless shorter name -- it is the SAME name for every meta-less JD,
+    so each such build silently overwrote the last one's PDF (and the
+    recruiter resume's, which is deliberately the bare name). The JD
+    filename is already distinctive in practice
+    ("2026-09-15_Customerio_SeniorDataScientist"), so it separates those
+    builds without inventing a placeholder."""
     job_title, company_name = jd_manager.extract_job_meta(jd_path)
     parts = [profile_paths.full_name().replace(" ", "")]
     if job_title:
         parts.append(jd_manager.sanitize_for_filename(job_title))
     if company_name:
         parts.append(jd_manager.sanitize_for_filename(company_name))
+    if not job_title and not company_name:
+        basename = os.path.splitext(os.path.basename(jd_path))[0]
+        sanitized = jd_manager.sanitize_for_filename(basename)
+        if sanitized:
+            parts.append(sanitized)
     return "_".join(parts)
 
 
@@ -7618,7 +7632,17 @@ class ResumeEngine:
         cli_art.console.rule(
             "Step 7: Rendering HTML and generating PDF...", style="dim", align="left"
         )
-        stem = _build_output_stem(jd_path)
+        # The JSON honors an explicit output_filename but the HTML/PDF/DOCX
+        # used to re-derive their own stem from jd_path, so a caller that
+        # named its JSON got differently-named siblings -- the recruiter
+        # build wrote Recruiter_Resume.json beside a DominickColosimo_Resume.pdf
+        # that overwrote an unrelated build. Deriving the stem from the
+        # filename actually used keeps all four in step. No-op for normal
+        # runs: output_filename defaults to this same stem above.
+        if output_filename and output_filename.endswith("_Resume.json"):
+            stem = output_filename[: -len("_Resume.json")]
+        else:
+            stem = _build_output_stem(jd_path)
         html_out = os.path.join(self.output_html_dir, f"{stem}_Resume.html")
         pdf_out = os.path.join(self.output_pdf_dir, f"{stem}_Resume.pdf")
         pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
