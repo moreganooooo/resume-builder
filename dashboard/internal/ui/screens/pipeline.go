@@ -105,6 +105,7 @@ const (
 	filterRejected  = "rejected"
 	filterDiscarded = "discarded"
 	filterTop       = "top"
+	filterLow       = "low"
 )
 
 type pipelineTab struct {
@@ -118,6 +119,7 @@ var pipelineTabs = []pipelineTab{
 	{filterApplied, "APPLIED"},
 	{filterInterview, "INTERVIEW"},
 	{filterTop, "TOP ≥4"},
+	{filterLow, "LOW <3.5"},
 	{filterSkip, "SKIP"},
 	{filterRejected, "REJECTED"},
 	{filterDiscarded, "DISCARDED"},
@@ -786,6 +788,37 @@ func matchesSearch(app model.CareerApplication, query string) bool {
 	return false
 }
 
+// hasRealWorldProgress reports whether an application has been acted on
+// outside the tool. These statuses are the reason the actionable bar is
+// NOT a blanket score test on this screen: Pipeline, unlike Browse &
+// Manage Jobs, holds live applications, and hiding the role you are
+// interviewing for because it scored 3.4 would be a bug, not a filter.
+// Rejected counts as progress too -- it is the record of something you
+// actually did, not a role you passed over.
+func hasRealWorldProgress(norm string) bool {
+	switch norm {
+	case "applied", "responded", "interview", "offer", "rejected":
+		return true
+	}
+	return false
+}
+
+// belowActionableBar reports whether a row is one the user has said they
+// will not act on: it carries a real score, sits under ActionableScore,
+// and has never been acted on.
+//
+// The Score > 0 test is load-bearing. JobRowsToApplications sets Score
+// unconditionally but leaves ScoreRaw empty for an unevaluated job, so in
+// the Score field alone "never evaluated" and "scored 0" are identical --
+// and an unevaluated role is precisely one the user has not triaged yet,
+// so hiding it would bury the work rather than the noise.
+func belowActionableBar(app model.CareerApplication, norm string) bool {
+	if hasRealWorldProgress(norm) {
+		return false
+	}
+	return app.Score > 0 && app.Score < ActionableScore
+}
+
 func (m *PipelineModel) applyFilterAndSort() {
 	var filtered []model.CareerApplication
 
@@ -800,7 +833,20 @@ func (m *PipelineModel) applyFilterAndSort() {
 		norm := data.NormalizeStatus(app.Status)
 		switch currentFilter {
 		case filterAll:
-			filtered = append(filtered, app)
+			if !belowActionableBar(app, norm) {
+				filtered = append(filtered, app)
+			}
+		case filterEvaluated:
+			if norm == filterEvaluated && !belowActionableBar(app, norm) {
+				filtered = append(filtered, app)
+			}
+		case filterLow:
+			// The escape hatch: exactly the set ALL and EVALUATED hide,
+			// so the bar is one keypress away in either direction and
+			// nothing becomes unreachable.
+			if belowActionableBar(app, norm) {
+				filtered = append(filtered, app)
+			}
 		case filterTop:
 			if app.Score >= 4.0 && norm != "skip" {
 				filtered = append(filtered, app)
@@ -987,6 +1033,8 @@ var pipelineHelpCategories = []helpCategory{
 		{"$", "Cycle pay-disclosure mode"},
 		{"t", "Toggle manager-track only"},
 		{"x", "Toggle years/degree blocker only"},
+		{"", "ALL / EVALUATED hide scored roles under 3.5; LOW <3.5 shows them"},
+		{"", "Roles you have applied to are never hidden by that bar"},
 	}},
 	{"Exit", []helpBinding{
 		{"Esc", "Clear search, or back to Main Menu"},
@@ -1434,9 +1482,23 @@ func (m PipelineModel) countForFilter(filter string) int {
 	count := 0
 	for _, app := range m.apps {
 		norm := data.NormalizeStatus(app.Status)
+		// This switch must stay in step with applyFilterAndSort's: a tab
+		// count that disagrees with the list it labels reads as missing
+		// data (the same bug Jobs had when its footer count compared the
+		// filter against a row's status).
 		switch filter {
 		case filterAll:
-			count++
+			if !belowActionableBar(app, norm) {
+				count++
+			}
+		case filterEvaluated:
+			if norm == filterEvaluated && !belowActionableBar(app, norm) {
+				count++
+			}
+		case filterLow:
+			if belowActionableBar(app, norm) {
+				count++
+			}
 		case filterTop:
 			if app.Score >= 4.0 && norm != "skip" {
 				count++
