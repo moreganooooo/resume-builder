@@ -1051,8 +1051,8 @@ func ComputeProgressMetrics(apps []model.CareerApplication) model.ProgressMetric
 	if pm.Quadrants.ReadyToApply > 0 {
 		proofDensity = int(math.Min(100, 75+float64(pm.Quadrants.ReadyToApply)*2))
 	}
-	techBreadth := int(math.Min(100, float64(len(pm.PlatformStats))*15 + 40))
-	conversionScore := int(math.Min(100, pm.ResponseRate*1.5 + 50))
+	techBreadth := int(math.Min(100, float64(len(pm.PlatformStats))*15+40))
+	conversionScore := int(math.Min(100, pm.ResponseRate*1.5+50))
 	if conversionScore < 50 {
 		conversionScore = 65
 	}
