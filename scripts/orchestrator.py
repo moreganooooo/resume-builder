@@ -135,6 +135,29 @@ EMBED_DIM = 768  # gemini-embedding-2 native dimension
 GEMMA_MINIMAL_JSON = True
 MAX_REWRITE_PARSE_FAILURES = 2
 
+# A sick Gemma used to cost over an hour PER BULLET: rewrites run with
+# model_fallback=False, so one call retried Gemma alone 6 times -- each try
+# paying GEMMA_MIN_INTERVAL_SECS (65s), up to a 180s timeout and up to 90s
+# of backoff -- and the handoff needed two such calls to fail. Probed
+# 2026-09-16: both flash-lites answering in <1s while gemma-4-31b-it took
+# 21s, 500'd, then took 59s. So a Gemma rewrite gets few retries, a Gemma
+# call that fails hands off at once, and the failure benches Gemma for the
+# rest of the build (and later builds in the same process) for a while.
+GEMMA_REWRITE_MAX_RETRIES = 2
+GEMMA_REWRITE_BENCH_SECS = 15 * 60
+_gemma_rewrite_benched_until = 0.0
+
+
+def _bench_gemma_rewrites() -> None:
+    global _gemma_rewrite_benched_until
+    _gemma_rewrite_benched_until = time.monotonic() + GEMMA_REWRITE_BENCH_SECS
+
+
+def _starting_rewrite_model() -> str:
+    if time.monotonic() < _gemma_rewrite_benched_until:
+        return REWRITE_FALLBACK_MODEL
+    return REWRITE_MODEL
+
 # Matches rewrite_bullets.py's REWRITE_MAX_OUTPUT_TOKENS exactly -- bounds
 # wasted cost/latency on a real failure mode (2026-07-16) where a model
 # produces a valid answer up front, then degenerates into repeating a
@@ -5365,11 +5388,12 @@ class ResumeEngine:
                             f"   {theme.colorize_icon('hint')} segment bundle (Tier 2): {len(segment_bundle):,} chars (Gemma: {len(segment_bundle_gemma):,} chars)"
                         )
 
-                    active_rewrite_model = REWRITE_MODEL
+                    active_rewrite_model = _starting_rewrite_model()
                     rewrite_parse_failures = 0
                     rewritten_bullet = bullet
 
                     for rw_attempt in range(MAX_REWRITE_PARSE_FAILURES + 1):
+                        rewrite_text = None
                         is_gemma_attempt = "gemma" in active_rewrite_model.lower()
                         use_minimal = GEMMA_MINIMAL_JSON and is_gemma_attempt
                         runner_schema = (
@@ -5441,6 +5465,11 @@ class ResumeEngine:
                                 temperature=0.7,
                                 max_output_tokens=REWRITE_MAX_OUTPUT_TOKENS,
                                 model_fallback=False,
+                                **(
+                                    {"max_retries": GEMMA_REWRITE_MAX_RETRIES}
+                                    if is_gemma_attempt
+                                    else {}
+                                ),
                             )
 
                             if not rewrite_text:
@@ -5514,10 +5543,15 @@ class ResumeEngine:
                                 f"   {theme.colorize_icon('warning')}  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}",
                                 soft_wrap=True,
                             )
+                            # No text back means Gemma itself failed (a parse
+                            # error on real text keeps its second try).
+                            gemma_unavailable = is_gemma_attempt and not rewrite_text
+                            if gemma_unavailable:
+                                _bench_gemma_rewrites()
                             if (
                                 rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
-                                and active_rewrite_model != REWRITE_FALLBACK_MODEL
-                            ):
+                                or gemma_unavailable
+                            ) and active_rewrite_model != REWRITE_FALLBACK_MODEL:
                                 cli_art.console.print(
                                     f"   {theme.colorize_icon('warning')} FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}",
                                     soft_wrap=True,
