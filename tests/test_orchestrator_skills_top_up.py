@@ -177,13 +177,26 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
         _, added = self._run(resume, {"tools": ["spaCy"]})
         self.assertEqual(added, [])
 
-    def test_skips_an_append_that_lands_in_the_widow_dead_band(self):
+    def test_measures_the_printed_width_not_the_bold_markup(self):
+        # The label's four asterisks are not rendered. Counting them made
+        # every line read 4 chars too long, so an append could be refused
+        # for crossing a limit the printed line never reaches. This line
+        # prints at 102, so ", spaCy" lands at 109 of an allowed 110.
         line = "**Languages & Frameworks:** " + ", ".join(["Python"] * 10)
         self.assertEqual(len(line), 106)
+        self.assertEqual(len(orchestrator._plain_skills_line(line)), 102)
         resume = _resume([line])
         _, added = self._run(resume, {"tools": ["spaCy"]})
-        # 106 + ", spaCy" = 113, inside the illegal 111-134 dead band, so
-        # the append would trade a missing keyword for a layout violation.
+        self.assertEqual(added, ["spaCy"])
+
+    def test_skips_an_append_that_lands_in_the_widow_dead_band(self):
+        line = "**Languages & Frameworks:** " + ", ".join(["Python"] * 11)
+        self.assertEqual(len(orchestrator._plain_skills_line(line)), 110)
+        resume = _resume([line])
+        _, added = self._run(resume, {"tools": ["spaCy"]})
+        # 110 printed + ", spaCy" = 117, inside the illegal 111-134 dead
+        # band, so the append would trade a missing keyword for a layout
+        # violation.
         self.assertEqual(added, [])
 
     def test_skips_a_keyword_cv_md_does_not_group(self):

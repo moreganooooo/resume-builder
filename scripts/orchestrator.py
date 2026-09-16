@@ -1480,10 +1480,25 @@ def _compose_skills_line(label: str, items: list) -> str:
     return f"**{label}:** " + ", ".join(items)
 
 
+def _plain_skills_line(line: str) -> str:
+    """The line as it is PRINTED -- the bold markup around the label is not
+    rendered, so it must not be measured. Deliberately the same substitution
+    validate_resume._check_skills_line_lengths applies, because a geometry
+    judgment made here and a violation reported there must agree about how
+    wide a line is."""
+    return re.sub(r"\*\*(.+?)\*\*", r"\1", line or "")
+
+
 def _skills_line_legal(line: str, max_chars: int, wrap_min: int) -> bool:
     """One printed line, or two full ones -- never the widow dead band in
-    between (the same geometry _micro_refactor_skills_line repairs)."""
-    length = len(line)
+    between (the same geometry _micro_refactor_skills_line repairs).
+
+    Measured on the PRINTED width. Counting the label's four asterisks made
+    every line read 4 chars longer than it renders, so an append could be
+    refused for crossing a limit the rendered line never reaches -- and the
+    validator, which strips the markup, would then have passed the very line
+    this step declined to produce."""
+    length = len(_plain_skills_line(line))
     return length <= max_chars or (wrap_min <= length <= 2 * max_chars)
 
 
