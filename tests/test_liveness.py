@@ -405,6 +405,60 @@ class TestVerifyJdPaths(unittest.TestCase):
         self.assertEqual(result["expired_source_paths"], [])
         self.assertTrue(os.path.exists(self.with_url_path))
 
+    def test_indeed_url_is_recorded_blocked_without_a_browser_visit(self):
+        indeed_path = os.path.join(self.tmp_dir, "indeed.json")
+        with open(indeed_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "source_url": "https://www.indeed.com/viewjob?jk=abc123",
+                    "job_title": "Test",
+                },
+                f,
+            )
+
+        with patch("liveness.subprocess.Popen") as mock_popen:
+            result = liveness.verify_jd_paths([indeed_path])
+
+        mock_popen.assert_not_called()
+        self.assertEqual(result["blocked"], 1)
+        self.assertEqual(result["moved"], 0)
+        self.assertTrue(os.path.exists(indeed_path))
+        self.assertEqual(jd_manager.read_liveness(indeed_path)["result"], "blocked")
+
+    @patch("liveness.subprocess.Popen")
+    def test_a_checkable_url_alongside_an_indeed_one_is_still_checked(
+        self, mock_popen
+    ):
+        indeed_path = os.path.join(self.tmp_dir, "indeed2.json")
+        with open(indeed_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {"source_url": "https://indeed.com/viewjob?jk=x", "job_title": "T"}, f
+            )
+        mock_popen.side_effect = _mock_popen(
+            returncode=0,
+            stdout=json.dumps(
+                [
+                    {
+                        "job_key": "abc",
+                        "source_file": self.with_url_path,
+                        "url": "https://example.com/job/1",
+                        "result": "active",
+                        "code": "apply_control_visible",
+                        "reason": "ok",
+                    },
+                ]
+            ),
+        )
+
+        result = liveness.verify_jd_paths([self.with_url_path, indeed_path])
+
+        self.assertEqual(result["active"], 1)
+        self.assertEqual(result["blocked"], 1)
+
+    def test_a_lookalike_host_is_still_checked(self):
+        self.assertFalse(liveness._is_uncheckable("https://notindeed.com/job/1"))
+        self.assertTrue(liveness._is_uncheckable("https://ca.indeed.com/viewjob?jk=1"))
+
     def test_does_not_call_get_pending_jds(self):
         # verify_jd_paths operates only on the paths it's given -- it
         # must never fall back to scanning the whole pending queue.

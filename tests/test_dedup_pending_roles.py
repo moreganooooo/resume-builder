@@ -120,3 +120,15 @@ class TestDedupClustering(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_a_file_and_the_scanner_row_it_merged_into_are_not_duplicates(self):
+        # db.upsert_job MERGES a file's sync into an existing row with the
+        # same dedup_hash rather than inserting, so the surviving row keeps
+        # the SCANNER's id -- which is none of source_job_id/id/filename.
+        # Matching ids alone made the file a duplicate of its own mirror
+        # row, and an --apply run would have archived that row and churned
+        # it straight back (6 of a profile's roles, 2026-09-15).
+        self._add_file("2026-09-01_MTB_Data_Engineer.json", "M&T Bank", "Data Engineer", "h9")
+        self._add_row("a8bba43919", "M&T Bank", "Data Engineer", "h9")
+        result = dedup_pending_roles.run_deduplication(dry_run=True)
+        self.assertEqual(result["total_clusters"], 0)

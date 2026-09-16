@@ -800,7 +800,23 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   one or more data.db rows: copies under different ids, plus the file's own
   row, keyed as `jd_manager._sync_jd_to_db()` keys it (`source_job_id`,
   else `id`, else a content hash -- never the filename; that own row is
-  skipped, since it mirrors the file). The dedupe keeps one copy per
+  skipped, since it mirrors the file). **Matching that id is not enough to
+  find the own row.** `db.upsert_job` MERGES a file's sync into an existing
+  row with the same `dedup_hash` instead of inserting, so when a scan wrote
+  the row before the file synced, the surviving row keeps the SCANNER's id
+  and none of those three keys names it -- the file's expected own-row id
+  then has no row at all. Both readers therefore also match the POSTING:
+  `dedup_hash`, else normalized company + title (`picker`'s
+  `_normalize_posting_text`, deliberately the same normalization
+  `dedup_pending_roles.normalize_text()` uses, so the two cannot disagree
+  about identity). Unfixed, this had two faces on one bug: `picker.
+  _database_only_rows` listed such a posting a SECOND time, which is what
+  "duplicates cropping up" actually was -- a display double-count, not a
+  dedupe failure -- and `run_deduplication`'s `own_row_ids` clustered a
+  file with its own mirror row, so an `--apply` run would have archived the
+  row holding that file's evaluation and `_sync_jd_to_db` would churn it
+  straight back (6 of a profile's roles, 2026-09-15; 0 after the fix). The
+  post-scan dedupe at `scan.py:352` was never the problem. The dedupe keeps one copy per
   posting, the file when there is one, so a 2026-09-13 `--apply` run
   dropped pending ROWS 154->65 and 509->96 while distinct pending postings
   went 154->154 and 458->455. Count across files + rows, never rows alone.
@@ -846,6 +862,17 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   reader and the classifier cannot disagree about the threshold. A fast
   page pays nothing; raising the fixed wait for every URL would have
   added minutes to a sweep already running 15.
+  **A host whose block is TOTAL is recorded blocked without a visit**
+  (`liveness.UNCHECKABLE_HOSTS`, currently just `indeed.com`, matched by
+  host SUFFIX and applied in `_verify_candidates()` -- the one chokepoint
+  both the standalone sweep and scan.py's post-scan verify go through).
+  Every Indeed URL answers with its own "Request Blocked" 403, so a real
+  check can only ever return `blocked`; spending a browser navigation per
+  posting to rediscover that is pure cost (~20 of them on one 2026-09-15
+  scan). The verdict written is the same one a visit would have produced,
+  so nothing is dropped or treated as expired. Only add a host here whose
+  block is total -- a host that sometimes answers is what a real check is
+  for.
 - **A JD with no description is never written (`scan.run_scan`).**
   Writing one makes the emptiness permanent -- `job_key_known()` skips
   that posting on every later scan, so the good version never lands.
@@ -1450,6 +1477,20 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `len(...ExperienceBlockers) == 0` presence check, since `HardBlocker`
   carries no confidence field to gate on the way `RoleTrackConfidence`
   does.
+- **Browse & Manage Jobs OPENS on the actionable bar, not on every row**
+  (`screens.ActionableScore` = 3.5, `matchesPrimaryFilter`). Roles below it
+  are ones the user has said they will not act on, and they outnumber the
+  rest (169 of 286 evaluated roles for one profile, 2026-09-15), so an
+  all-rows default buries the list's whole point. Nothing is archived,
+  deleted, or excluded from any other surface -- the `[f]` cycle gained a
+  `LOW (< 3.5)` stop that shows exactly the hidden set, so the bar is one
+  keypress away in either direction. `applyFilter` and
+  `countForStatusFilter` share `matchesPrimaryFilter` deliberately: the
+  footer's count used to compare `m.filter` against a row's STATUS, so it
+  silently reported 0 for every score-based filter, and a denominator that
+  disagrees with the list reads as missing data. A test row with no score
+  is BELOW this bar and hidden by default -- several screen tests failed
+  for that unrelated reason until their fixtures were scored.
 - **`scripts/find_retroactively_excluded_roles.py` checks whether a
   PENDING role would be excluded under TODAY's config, even though it
   was saved under an older one -- two independent checks, counted

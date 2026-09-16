@@ -54,6 +54,46 @@ _LIVENESS_ICON_BY_RESULT = {
 }
 
 
+# Hosts that answer every headless visit with a bot-block page, so a real
+# check can only ever return `blocked` -- Indeed's own "Request Blocked"
+# 403 (see liveness-core.mjs's BLOCKED_PATTERNS, which exists because of
+# it). Spending a browser navigation and its share of the sweep's time
+# budget to rediscover that on every posting is pure cost: measured on a
+# 2026-09-15 Dom scan, every one of ~20 Indeed URLs came back
+# `blocked -- pattern matched: request blocked`, mixed in with the roles
+# the sweep could actually judge. These are recorded as `blocked` without
+# a visit, which is the same verdict with the same meaning ("we were
+# never shown the page", never "expired"), so nothing is dropped or
+# treated as gone. Only add a host here whose block is total -- a host
+# that sometimes answers is exactly what a real check is for.
+UNCHECKABLE_HOSTS = ("indeed.com",)
+
+_UNCHECKABLE_REASON = "host always blocks automated checks; not visited"
+
+
+def _is_uncheckable(url: str) -> bool:
+    """True when `url`'s host is one a real check can only ever report
+    blocked for. Matched by host SUFFIX (so ca.indeed.com counts and
+    notindeed.com does not), same rule as inbox_sync._is_ats_domain."""
+    if not isinstance(url, str):
+        return False
+    try:
+        from urllib.parse import urlparse
+
+        host = (urlparse(url).hostname or "").lower()
+    except ValueError:
+        return False
+    return any(host == h or host.endswith("." + h) for h in UNCHECKABLE_HOSTS)
+
+
+def _split_uncheckable(candidates: list) -> tuple:
+    """Partitions candidates into (checkable, uncheckable)."""
+    checkable, uncheckable = [], []
+    for c in candidates:
+        (uncheckable if _is_uncheckable(c.get("url")) else checkable).append(c)
+    return checkable, uncheckable
+
+
 @contextlib.contextmanager
 def _resolve_activity(activity):
     """Reuses a shared activity when the caller (scan.py's run_scan())
@@ -427,12 +467,33 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
     entirely since these are brand new. Silently returns all-zero on an
     empty candidate list -- callers embedding this in a larger flow
     (scan.py) shouldn't get a standalone "nothing to check" message."""
+    # Record the always-blocked hosts without a browser visit (see
+    # UNCHECKABLE_HOSTS). Done here rather than in the two candidate
+    # gatherers because this is the single chokepoint both the standalone
+    # sweep and scan.py's post-scan verify pass go through.
+    candidates, uncheckable = _split_uncheckable(candidates)
+    for c in uncheckable:
+        source_file = c.get("source_file")
+        if not source_file:
+            continue
+        if os.path.exists(source_file):
+            jd_manager.save_liveness(source_file, "blocked", _UNCHECKABLE_REASON)
+        else:
+            _save_liveness_to_db(source_file, "blocked", _UNCHECKABLE_REASON)
+    if uncheckable:
+        cli_art.console.print(
+            f"\n  {theme.colorize_icon('skip')}  {len(uncheckable)} posting(s) on "
+            "sites that block automated checks (Indeed) were not visited -- "
+            "they stay in your list.",
+            soft_wrap=True,
+        )
+
     if not candidates:
         return {
             "active": 0,
             "likely_active": 0,
             "expired": 0,
-            "blocked": 0,
+            "blocked": len(uncheckable),
             "uncertain": 0,
             "moved": 0,
             "expired_source_paths": [],
@@ -623,7 +684,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                     "active": 0,
                     "likely_active": 0,
                     "expired": 0,
-                    "blocked": 0,
+                    "blocked": len(uncheckable),
                     "uncertain": 0,
                     "moved": 0,
                     "expired_source_paths": [],
@@ -638,7 +699,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                     "active": 0,
                     "likely_active": 0,
                     "expired": 0,
-                    "blocked": 0,
+                    "blocked": len(uncheckable),
                     "uncertain": 0,
                     "moved": 0,
                     "expired_source_paths": [],
@@ -734,7 +795,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
         "active": counts.get("active", 0),
         "likely_active": counts.get("likely_active", 0),
         "expired": counts.get("expired", 0),
-        "blocked": counts.get("blocked", 0),
+        "blocked": counts.get("blocked", 0) + len(uncheckable),
         "uncertain": counts.get("uncertain", 0),
         "moved": moved,
         "expired_source_paths": expired_source_paths,
