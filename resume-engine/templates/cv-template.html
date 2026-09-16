@@ -64,13 +64,13 @@
     font-size: 9.75pt;
     font-weight: 400;
     /* 1.2 -> 1.15 resume-wide (2026-09-04): measured via a same-JSON,
-       same-format (US Letter), CSS-only A/B render of a real prior build
-       (MorganEscott_ContentStrategist_AbnormalAI_Resume.json) -- page-1
-       trailing whitespace went from 169.5pt/2.35in to 46.5pt/0.65in, a
+       same-format (US Letter), CSS-only A/B render of a real prior
+       two-page build -- page-1 trailing whitespace went from
+       169.5pt/2.35in to 46.5pt/0.65in, a
        ~123pt/1.7in recovery. That's far bigger than a naive per-line
        estimate because it compounds across every wrapped line in a dense
        multi-page resume, not just once. Reduces (not eliminates) how often
-       a role like Inside Sales Team spills to page 2 and how often a
+       a long role block spills to page 2 and how often a
        bullet lands close enough to the wrap boundary to trigger the
        widow-repair loop -- that same A/B pair stayed at 2 pages both
        before and after, so this narrows the gap a lot without being a
@@ -272,7 +272,8 @@
     font-weight: 800;
   }
 
-  /* Career note: optional one-sentence italic note (Treering only) */
+  /* Career note: optional one-sentence italic note, rendered only for
+     roles whose profile data supplies one. */
   .career-note {
     font-size: 9.75pt;
     font-style: italic;
