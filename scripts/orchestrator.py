@@ -2946,6 +2946,21 @@ def confirm_missing_coverage_keywords_interactively(missing: list[str]) -> list[
         verified_tools_data = {"tools": []}
     tools = verified_tools_data.setdefault("tools", [])
 
+    # "Missing" means the finished resume did not use a keyword, not that the
+    # candidate lacks it. Asking about ledger skills re-prompted the same
+    # dozen names every build and appended a duplicate on each "yes".
+    known = {" ".join(str(t.get("name", "")).lower().split()) for t in tools}
+    already = [kw for kw in missing if " ".join(kw.lower().split()) in known]
+    missing = [kw for kw in missing if " ".join(kw.lower().split()) not in known]
+    if already:
+        cli_art.detail(
+            "Already in your verified skills, just not used on this resume: "
+            + ", ".join(already),
+            level=cli_art.NORMAL,
+        )
+    if not missing:
+        return []
+
     cli_art.detail(
         "The finished resume is missing some JD keywords. Confirm any you "
         "actually have -- they'll be added to your verified skills ledger:",
