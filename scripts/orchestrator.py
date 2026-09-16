@@ -1450,11 +1450,41 @@ def _parse_cv_skill_groups(cv_text: str) -> dict:
         if not match:
             continue
         label = match.group("label").strip()
-        for item in match.group("items").split(","):
-            item = item.strip()
+        # "AWS (Glue, SageMaker, S3, RDS)" is four skills, not one: a naive
+        # comma split yields "AWS (Glue" and "RDS)", so S3 gets a group and
+        # RDS silently does not -- which is what made RDS look structurally
+        # unplaceable when it was only ever a parsing bug.
+        for item in re.sub(r"[()]", " ", match.group("items")).split(","):
+            # Collapsed, because stripping the parens leaves "AWS  Glue"
+            # double-spaced and these keys are looked up against items as
+            # they are RENDERED on a skills line ("AWS Glue").
+            item = re.sub(r"\s+", " ", item).strip()
             if item:
                 groups.setdefault(item.casefold(), label)
     return groups
+
+
+def _skill_tokens(text: str) -> set:
+    return {t.casefold() for t in re.findall(r"[A-Za-z0-9]+", text or "")}
+
+
+def _skill_line_items(line: str) -> tuple:
+    match = _SKILLS_LINE_LABEL.match(line or "")
+    if not match:
+        return None, []
+    items = [i.strip() for i in match.group("items").split(",") if i.strip()]
+    return match.group("label").strip(), items
+
+
+def _compose_skills_line(label: str, items: list) -> str:
+    return f"**{label}:** " + ", ".join(items)
+
+
+def _skills_line_legal(line: str, max_chars: int, wrap_min: int) -> bool:
+    """One printed line, or two full ones -- never the widow dead band in
+    between (the same geometry _micro_refactor_skills_line repairs)."""
+    length = len(line)
+    return length <= max_chars or (wrap_min <= length <= 2 * max_chars)
 
 
 def _title_case_skill(name: str) -> str:
@@ -1474,6 +1504,133 @@ def _label_tokens(label: str) -> set:
     return {t for t in re.findall(r"[A-Za-z]+", label or "") if len(t) > 3}
 
 
+# A ledger name longer than this is a sentence, not a skills-line item
+# ("Technical documentation for cross-functional/non-technical
+# stakeholders"). It still proves the skill is verified; the concise form
+# of the keyword itself is what gets rendered.
+_LEDGER_FORM_MAX_CHARS = 45
+
+
+def _resolve_verified_skill(keyword: str, ledger_names: list, cv_groups: dict) -> tuple:
+    """Returns (render_forms, cv_label) for a keyword the candidate can be
+    shown to already have, else None.
+
+    Evidence is deliberately looser than an exact ledger-name match -- "S3"
+    is verified by the ledger's "AWS S3", and "technical documentation" by
+    a cv.md entry that spells out the audience -- because nothing here is
+    trusted on the strength of the match alone: the caller re-runs the
+    coverage check and keeps the append only if the keyword actually moved
+    to matched. That verification is what makes the looseness safe.
+
+    A keyword with evidence but no cv.md group still returns None: knowing
+    the candidate has a skill is not knowing where it belongs."""
+    keyword_tokens = _skill_tokens(keyword)
+    if not keyword_tokens:
+        return None
+
+    forms = []
+    verified = False
+    for name in ledger_names:
+        name_tokens = _skill_tokens(name)
+        if keyword_tokens == name_tokens:
+            verified = True
+            forms.append(name)
+        elif keyword_tokens < name_tokens:
+            verified = True
+            if len(name) <= _LEDGER_FORM_MAX_CHARS:
+                forms.append(name)
+
+    label = None
+    for item, group in cv_groups.items():
+        item_tokens = _skill_tokens(item)
+        if keyword_tokens == item_tokens or keyword_tokens < item_tokens:
+            verified = True
+            label = group
+            break
+
+    if not verified or not label:
+        return None
+
+    forms.append(str(keyword).strip())
+    ordered, seen = [], set()
+    for form in forms:
+        cased = _title_case_skill(form)
+        if cased.casefold() not in seen:
+            seen.add(cased.casefold())
+            ordered.append(cased)
+    return ordered, label
+
+
+def _place_verified_skill(
+    lines: list, form: str, label: str, targets: list, cv_groups: dict,
+    max_chars: int, wrap_min: int,
+) -> list:
+    """Returns a new SKILLS list with `form` placed under `label`, or None
+    when it cannot be placed legally."""
+    new_lines = list(lines)
+    if targets:
+        index = targets[0]
+        candidate = f"{new_lines[index].rstrip().rstrip(',')}, {form}"
+        if not _skills_line_legal(candidate, max_chars, wrap_min):
+            return None
+        new_lines[index] = candidate
+        return new_lines
+
+    # The cv.md group has no line on the page at all, so make one -- and
+    # bring home the items already rendered elsewhere that belong to it.
+    # Relocation is deliberately limited to this case: moving an item whose
+    # group ALREADY has a line only shuffles crowding around, and on a real
+    # build it pushed a line that was exactly at the limit into the dead
+    # band, losing two keywords to gain none.
+    moved = []
+    for i, line in enumerate(new_lines):
+        line_label, items = _skill_line_items(line)
+        if line_label is None:
+            continue
+        belongs = [it for it in items if cv_groups.get(it.casefold()) == label]
+        keep = [it for it in items if cv_groups.get(it.casefold()) != label]
+        # Never strip a line empty to fill a new one.
+        if not belongs or not keep:
+            continue
+        rebuilt = _compose_skills_line(line_label, keep)
+        if not _skills_line_legal(rebuilt, max_chars, wrap_min):
+            continue
+        new_lines[i] = rebuilt
+        moved.extend(belongs)
+
+    created = _compose_skills_line(label, moved + [form])
+    if not _skills_line_legal(created, max_chars, wrap_min):
+        return None
+    new_lines.append(created)
+    return new_lines
+
+
+def _skills_add_hallucinated_tool(old_lines: list, new_lines: list) -> bool:
+    try:
+        before = len(validate_resume._check_hallucinated_tools({"SKILLS": old_lines}))
+        after = len(validate_resume._check_hallucinated_tools({"SKILLS": new_lines}))
+    except Exception:
+        return True
+    return after > before
+
+
+def _keyword_now_credited(
+    resume_data: dict, new_lines: list, jd_keywords: dict, keyword: str
+) -> bool:
+    """The whole safety model: an edit is kept only if the check it exists
+    to satisfy agrees the keyword is now present."""
+    trial = dict(resume_data)
+    trial["SKILLS"] = new_lines
+    try:
+        still = validate_resume.check_keyword_coverage(
+            trial, jd_keywords, {}
+        ).get("missing") or []
+    except Exception:
+        return False
+    target = str(keyword).strip().casefold()
+    return not any(str(m).strip().casefold() == target for m in still)
+
+
 def _top_up_verified_skills(
     resume_data: dict, jd_keywords: dict, style_rules: dict, cv_text: str,
     verified_names: list,
@@ -1484,17 +1641,24 @@ def _top_up_verified_skills(
 
     Deterministic and LLM-free. The keyword-coverage check is the thing
     being satisfied, so this asks that same function which keywords are
-    missing rather than re-deriving the answer -- the two cannot disagree
-    about what counts as present. Every candidate comes FROM the verified
-    ledger by definition, which is what makes this safe where the old
-    "add 1-2 relevant skills" prompt was not (see
-    _micro_refactor_skills_line): there is nothing here to invent.
+    missing -- and then re-asks it to confirm each edit actually landed,
+    so the fix and the check it satisfies cannot disagree about what
+    counts as present.
 
-    Skips rather than guesses, in three places -- an unverified keyword, a
-    skill cv.md doesn't group, and a group with no clear home on the page.
-    A resume that stays silent about spaCy is a small loss; one that lists
-    spaCy under "Visualization & Communication" because that line had room
-    is a wrong resume."""
+    Every candidate is evidenced by the verified ledger or the candidate's
+    own cv.md, which is what makes this safe where the old "add 1-2
+    relevant skills" prompt was not (see _micro_refactor_skills_line):
+    there is nothing here to invent. Evidence alone is not enough, though.
+    An edit is kept only when the coverage check credits the keyword
+    afterwards, which is what lets the match be loose enough to see that
+    "S3" is the ledger's "AWS S3" without a loose match ever talking
+    itself into a placement.
+
+    Skips rather than guesses: an unevidenced keyword, a skill cv.md
+    doesn't group, and a group with two plausible homes are all left
+    alone. A resume silent about spaCy is a small loss; one listing spaCy
+    under "Visualization & Communication" because that line had room is a
+    wrong resume."""
     skills = resume_data.get("SKILLS")
     if not skills or not jd_keywords:
         return resume_data, []
@@ -1507,7 +1671,7 @@ def _top_up_verified_skills(
     if not missing:
         return resume_data, []
 
-    ledger = {str(n).strip().casefold(): str(n).strip() for n in verified_names if n}
+    ledger = [str(n).strip() for n in verified_names if str(n or "").strip()]
     cv_groups = _parse_cv_skill_groups(cv_text)
     skills_section = (style_rules or {}).get("skills_section", {})
     max_chars = skills_section.get("line_max_chars", 110)
@@ -1516,44 +1680,34 @@ def _top_up_verified_skills(
     lines = list(skills)
     added = []
     for keyword in missing:
-        key = str(keyword).strip().casefold()
-        name = ledger.get(key)
-        if not name:
+        resolved = _resolve_verified_skill(keyword, ledger, cv_groups)
+        if not resolved:
             continue
-        label = cv_groups.get(key) or cv_groups.get(name.casefold())
-        if not label:
-            continue
+        forms, label = resolved
         wanted = _label_tokens(label)
         targets = [
-            i
-            for i, line in enumerate(lines)
-            if (_SKILLS_LINE_LABEL.match(line) or None)
-            and wanted & _label_tokens(_SKILLS_LINE_LABEL.match(line).group("label"))
+            i for i, line in enumerate(lines)
+            if wanted & _label_tokens(_skill_line_items(line)[0])
         ]
-        # Exactly one home, or none: two plausible lines is not a placement.
-        if len(targets) != 1:
+        # Two plausible homes is not a placement.
+        if len(targets) > 1:
             continue
-        index = targets[0]
-        display = _title_case_skill(name)
-        candidate = f"{lines[index].rstrip().rstrip(',')}, {display}"
-        length = len(candidate)
-        # The same dead band _micro_refactor_skills_line repairs -- an append
-        # that lands in it trades a missing keyword for a layout violation.
-        if length > max_chars and (length < wrap_min or length > 2 * max_chars):
-            continue
-        try:
-            before = len(
-                validate_resume._check_hallucinated_tools({"SKILLS": [lines[index]]})
+        # Forms run most-specific first (the ledger's own name), falling back
+        # to the keyword's concise form when the ledger spells it as a
+        # sentence. The first one that places legally and earns credit wins.
+        for form in forms:
+            trial = _place_verified_skill(
+                lines, form, label, targets, cv_groups, max_chars, wrap_min
             )
-            after = len(
-                validate_resume._check_hallucinated_tools({"SKILLS": [candidate]})
-            )
-        except Exception:
-            continue
-        if after > before:
-            continue
-        lines[index] = candidate
-        added.append(display)
+            if trial is None:
+                continue
+            if _skills_add_hallucinated_tool(lines, trial):
+                continue
+            if not _keyword_now_credited(resume_data, trial, jd_keywords, keyword):
+                continue
+            lines = trial
+            added.append(form)
+            break
 
     if not added:
         return resume_data, []
