@@ -1994,6 +1994,31 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 	}
 	content = append(content, "")
 
+	// -- Apply link --
+	// Above Scores, because it is the one thing in this pane a reader
+	// acts on rather than reads; below the fold it took a scroll to
+	// reach.
+	if job.SourceURL != "" {
+		// An OSC8 span, not plain text: a raw URL long enough to wrap
+		// under this pane's fixed Width gets auto-linkified by the
+		// terminal as two separate truncated URLs, one per visual line.
+		// The span stays one link across a wrap where it's supported
+		// (iTerm2, kitty, WezTerm). The LABEL is short rather than the
+		// URL itself -- these are ATS URLs with long opaque query
+		// strings, and showing one told the reader nothing while
+		// costing two lines. The trade that buys: terminals without
+		// OSC8 support degrade to the label as plain text, and unlike
+		// Pipeline (PipelineOpenURLMsg) this screen has NO open-in-
+		// browser keybinding, so on those terminals the URL becomes
+		// unreachable from this pane rather than merely ugly. Worth it
+		// against a wrapped, auto-linkified, already-broken URL -- but
+		// if a Jobs-screen open key ever lands, this is the comment
+		// that should stop being a caveat.
+		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Blue).
+			Render(termenv.Hyperlink(job.SourceURL, "↗ Open job posting")))
+		content = append(content, "")
+	}
+
 	// -- Scores --
 	content = append(content, accent.Render("Scores"))
 	content = append(content,
@@ -2049,6 +2074,58 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 
 			content = append(content, fmt.Sprintf("  %s  %s  %s", styles.Subtext.Render(paddedLabel), bar, valStr))
 		}
+	}
+
+	// -- Stress & Stretch --
+	// Sits directly under Scores, and is the one block here that renders
+	// UNCONDITIONALLY. Both halves feed composite_score deterministically
+	// in Python (orchestrator.fit_composite_score), so their absence is a
+	// result, not a lack of data: zero detected stress categories earns
+	// LOW_STRESS_BONUS, which is deliberately larger than any single
+	// category's penalty because finding a comfortable role is the stated
+	// goal rather than merely dodging red flags. Rendering nothing for a
+	// clean posting hid exactly the case the bonus exists to reward, and
+	// left the score on the row unexplained. The detailed gap/blocker
+	// lists stay down in the Why section -- an addressable gap must not
+	// read as disqualifying, per this pane's existing separation of gaps
+	// from hard blockers.
+	content = append(content, "")
+	content = append(content, accent.Render("Stress & Stretch"))
+
+	// StressSignals is display-only: the count that actually scores is
+	// recomputed from the posting body at evaluation time and never
+	// stored, so this explains the score rather than being its input.
+	if job.HasStressSignals() {
+		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Yellow).
+			Render(fmt.Sprintf("Stress signals: %d", len(job.StressSignals))))
+		for _, s := range job.StressSignals {
+			content = append(content, "  • "+s)
+		}
+	} else {
+		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Green).
+			Render("No stress signals detected — earned the low-stress bonus"))
+	}
+
+	// Stretch is assembled from fields that already exist rather than a
+	// new LLM judgment: level_plausibility (screen risk) plus
+	// StretchEvidence, the sharpest single CapabilityGaps entry restated
+	// as one sentence. len(CapabilityGaps) costs a deterministic penalty
+	// (STRETCH_GAP_PENALTY_PER_ITEM), so the count is stated here to
+	// explain the number on the row. See
+	// docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md.
+	if n := len(eval.CapabilityGaps); n > 0 {
+		content = append(content, styles.Subtext.Render(
+			fmt.Sprintf("Experience gaps: %d (detailed below)", n)))
+	} else {
+		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Green).
+			Render("No experience gaps flagged"))
+	}
+	if lp, ok := eval.FitSubscores["level_plausibility"]; ok {
+		content = append(content, styles.Subtext.Render("Screen risk: ")+
+			styles.Value.Render(fmt.Sprintf("%.0f/5", lp)))
+	}
+	if eval.StretchEvidence != "" {
+		content = append(content, wrapStyle.Render(eval.StretchEvidence))
 	}
 
 	// -- Skills Gap Matrix --
@@ -2134,23 +2211,6 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		}
 	}
 
-	// Stretch is assembled from fields that already exist rather than a new
-	// LLM judgment: level_plausibility (screen risk) plus StretchEvidence,
-	// the sharpest single entry of CapabilityGaps restated as one sentence.
-	// len(CapabilityGaps) also now costs a deterministic penalty in
-	// composite_score (orchestrator.fit_composite_score's
-	// STRETCH_GAP_PENALTY_PER_ITEM) -- shown here so the number on the row
-	// is explained, not just displayed. See
-	// docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md.
-	if eval.StretchEvidence != "" {
-		content = append(content, "")
-		content = append(content, accent.Render("Stretch for this candidate"))
-		if lp, ok := eval.FitSubscores["level_plausibility"]; ok {
-			content = append(content, styles.Value.Render(fmt.Sprintf("Screen risk: %.0f/5", lp)))
-		}
-		content = append(content, wrapStyle.Render(eval.StretchEvidence))
-	}
-
 	// role_track is a display facet here and never a scan-time or database
 	// gate (see model.JobRow's RoleTrack doc): a labeled holdout found zero
 	// people managers among 49 title-only-signal postings, and ~40% of
@@ -2170,21 +2230,6 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		content = append(content, accent.Render("Role track")+" "+styles.Value.Render(label))
 		if eval.RoleTrackEvidence != "" {
 			content = append(content, wrapStyle.Render("\""+eval.RoleTrackEvidence+"\""))
-		}
-	}
-
-	// Deterministic phrase categories from scripts/stress_signals.py.
-	// StressSignals itself is display-only -- the count that actually
-	// drives composite_score (orchestrator.fit_composite_score's
-	// LOW_STRESS_BONUS/STRESS_SIGNAL_PENALTY_PER_CATEGORY) is computed
-	// fresh at evaluation time from the posting's description, not stored
-	// on JobRow, so this list is shown to explain the score, not as the
-	// scoring input itself.
-	if job.HasStressSignals() {
-		content = append(content, "")
-		content = append(content, accent.Render("Stress signals in posting"))
-		for _, s := range job.StressSignals {
-			content = append(content, "  • "+s)
 		}
 	}
 
@@ -2265,21 +2310,6 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 			}
 		}
 		content = append(content, pipelineStr)
-	}
-
-	// -- Apply link --
-	if job.SourceURL != "" {
-		content = append(content, "")
-		content = append(content, accent.Render("Apply"))
-		// Wrapped in a single OSC8 hyperlink span (not plain text) so a
-		// terminal's own URL auto-detection can't split it at the visual
-		// line-wrap point -- a plain long URL wraps to two lines under this
-		// pane's fixed Width, and terminals that auto-linkify plain text
-		// treat each wrapped line as its own separate, truncated URL. An
-		// OSC8 span stays one link across the wrap in terminals that
-		// support it (iTerm2, kitty, WezTerm); it silently degrades to the
-		// plain URL text in ones that don't.
-		content = append(content, lipgloss.NewStyle().Foreground(m.theme.Blue).Render(termenv.Hyperlink(job.SourceURL, job.SourceURL)))
 	}
 
 	// -- Research highlights --
