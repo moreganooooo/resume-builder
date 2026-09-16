@@ -178,6 +178,15 @@ func renderSidebarRowTagged(t theme.Theme, score float64, company, tag, subtitle
 	block := line1 + "\n" + line2
 	if selected {
 		base = theme.HoverStyle(base, t)
+	} else {
+		// A terminal has no alpha channel, so "50% opacity" on an inactive
+		// row is expressed as a collapse to one muted token: the eye is
+		// meant to land on the row the detail pane is actually describing.
+		// The strip is load-bearing -- line1/line2 already carry the score,
+		// employment tag and subtitle colors as embedded SGR codes, and an
+		// outer Foreground() cannot override an inner one, so without it
+		// this would render identically to before.
+		block = lipgloss.NewStyle().Foreground(t.Subtext).Render(ansi.Strip(block))
 	}
 	return base.Render(block)
 }
