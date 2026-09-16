@@ -3987,6 +3987,36 @@ def _resolve_company_location(research: dict | None, jd_data: dict) -> str:
 _SMALL_TITLE_WORDS = {"and", "of", "for", "the", "to", "in", "on", "at", "a", "an"}
 
 
+_WORD_COUNT_VIOLATION = re.compile(r"Expected (\d+)-(\d+) words across body paragraphs, got (\d+)")
+
+
+def _word_count_fix_guidance(violations) -> str:
+    """Turns a word-count violation into an explicit instruction.
+
+    Listed under "change nothing else", a bare "got 184" produced small
+    edits that never closed the gap: one sample took 184 -> 200 -> 234 ->
+    235 across every retry and still shipped short."""
+    for v in violations:
+        m = _WORD_COUNT_VIOLATION.search(str(v))
+        if not m:
+            continue
+        low, high, got = (int(x) for x in m.groups())
+        target = (low + high) // 2
+        if got < low:
+            return (
+                f"\n\nLENGTH IS THE MAIN FIX: the body paragraphs total {got} words; "
+                f"rewrite them to about {target} words (add roughly {target - got}). "
+                "Give each body paragraph one or two more sentences of concrete, "
+                "verified detail from the background context -- never filler."
+            )
+        if got > high:
+            return (
+                f"\n\nLENGTH IS THE MAIN FIX: the body paragraphs total {got} words; "
+                f"cut them to about {target} (remove roughly {got - target})."
+            )
+    return ""
+
+
 def _coverletter_role_title(jd_data: dict, stem: str) -> str:
     """The role title a cover letter names in its first paragraph: the
     posting's own job_title, else Part 1 of the matching resume's tagline
@@ -6749,6 +6779,7 @@ class ResumeEngine:
                 f"=== ORIGINAL COVER LETTER JSON ===\n{json.dumps(letter_data, indent=2)}\n\n"
                 f"=== ISSUES TO FIX (change nothing else) ===\n"
                 + "\n".join(f"- {v}" for v in violations)
+                + _word_count_fix_guidance(violations)
             )
             fix_temperature = round(0.2 * (attempt - 1), 2)
             fix_text, _ = GeminiClient.generate(
