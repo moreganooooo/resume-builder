@@ -85,7 +85,7 @@ from render_resume_docx import render_resume_docx
 # company against each heading, so it works with no manual setup. No
 # circular-import risk: rewrite_bullets imports only profile_paths, and
 # bullet_feedback above already pulls it into this chain.
-from rewrite_bullets import extract_cv_section
+from rewrite_bullets import compact_tools_text, extract_cv_section
 
 # --- MODEL STRATEGY ---
 # CRITIQUE_MODEL: handles bullet critique (high-frequency) and the post-build
@@ -4544,9 +4544,16 @@ class ResumeEngine:
             if os.path.exists(fpath):
                 try:
                     with open(fpath, "r", encoding="utf-8") as f:
-                        data = json.dumps(
-                            json.load(f), ensure_ascii=False, separators=(",", ":")
+                        loaded = json.load(f)
+                    # Names only -- the whole entries cost ~77k tokens a
+                    # call on a large ledger; see compact_tools_text().
+                    data = (
+                        compact_tools_text(loaded.get("tools", []))
+                        if fname == "verified_tools.json"
+                        else json.dumps(
+                            loaded, ensure_ascii=False, separators=(",", ":")
                         )
+                    )
                     cli_art.detail(
                         f"   {theme.colorize_icon('success')} Loaded {fname} ({len(data):,} chars)"
                     )
@@ -4629,9 +4636,16 @@ class ResumeEngine:
             if os.path.exists(fpath):
                 try:
                     with open(fpath, "r", encoding="utf-8") as f:
-                        data = json.dumps(
-                            json.load(f), ensure_ascii=False, separators=(",", ":")
+                        loaded = json.load(f)
+                    # Names only -- the whole entries cost ~77k tokens a
+                    # call on a large ledger; see compact_tools_text().
+                    data = (
+                        compact_tools_text(loaded.get("tools", []))
+                        if fname == "verified_tools.json"
+                        else json.dumps(
+                            loaded, ensure_ascii=False, separators=(",", ":")
                         )
+                    )
                     sections.append(f"{header}\n{note}\n{data}")
                 except Exception as e:
                     cli_art.console.print(
