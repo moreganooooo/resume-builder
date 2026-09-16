@@ -36,16 +36,16 @@ type PipelineOpenReportMsg struct {
 	JobURL string
 }
 
-// PipelineOpenURLMsg is emitted when a job URL should be opened in browser.
-type PipelineOpenURLMsg struct {
+// OpenURLMsg is emitted when a job URL should be opened in browser.
+type OpenURLMsg struct {
 	URL string
 }
 
-// PipelineURLOpenFailedMsg is emitted when the OS command to open a job URL
+// URLOpenFailedMsg is emitted when the OS command to open a job URL
 // (open/xdg-open/etc., run from main.go) fails -- e.g. no default browser
 // configured in a headless/SSH session. Previously that error was silently
 // discarded, leaving the user to wonder why "o" did nothing.
-type PipelineURLOpenFailedMsg struct {
+type URLOpenFailedMsg struct {
 	Err error
 }
 
@@ -334,7 +334,7 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 			return m, tickStarfield()
 		}
 		return m, nil
-	case PipelineURLOpenFailedMsg:
+	case URLOpenFailedMsg:
 		m.notice = fmt.Sprintf("Could not open URL: %v", msg.Err)
 		return m, nil
 	case tea.MouseClickMsg:
@@ -570,7 +570,7 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 		if app, ok := m.CurrentApp(); ok {
 			if app.JobURL != "" {
 				return m, func() tea.Msg {
-					return PipelineOpenURLMsg{URL: app.JobURL}
+					return OpenURLMsg{URL: app.JobURL}
 				}
 			}
 			m.notice = "No job URL saved for this application"
