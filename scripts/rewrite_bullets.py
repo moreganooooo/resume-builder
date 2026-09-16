@@ -613,6 +613,30 @@ def load_json_file(path: str, label: str) -> str:
         return ""
 
 
+def compact_tools_text(tools: list) -> str:
+    """The tool ledger as the prompt needs it: names, grouped by employer.
+
+    The prompt uses this list as a guard -- never claim a tool not on it --
+    and a name is all that guard reads. Serializing whole entries (id,
+    category, confidence, use_notes, tr_references) cost ~77k tokens per
+    call on a 1,429-tool ledger (2026-09-16): that put every flash-lite
+    call near its 250k-per-minute cap and every Gemma call far over its
+    16k, so builds crawled on 429s. Names grouped this way are ~10% of it.
+    """
+    groups: dict = {}
+    for entry in tools or []:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or "").strip()
+        if not name:
+            continue
+        employer = str(entry.get("employer") or "").strip() or "Any employer"
+        names = groups.setdefault(employer, [])
+        if name.lower() not in (n.lower() for n in names):
+            names.append(name)
+    return "\n".join(f"{emp}: {', '.join(names)}" for emp, names in groups.items())
+
+
 def load_json_entries(path: str, list_key: str) -> list:
     """Loads a KB file shaped like {"_meta": {...}, "<list_key>": [...]}
     and returns the parsed list of entry dicts -- unlike load_json_file,
@@ -966,12 +990,13 @@ class KnowledgeBase:
         )
         self.metrics_entries = load_json_entries(KB_VERIFIED_METRICS, "metrics")
         self.projects_entries = load_json_entries(KB_VERIFIED_PROJECTS, "projects")
-        self.verified_tools = load_json_file(KB_VERIFIED_TOOLS, "verified_tools.json")
         # Parsed-entries forms, for the Gemma-tier filtering below -- kept
         # alongside the pre-serialized load_json_file() strings above,
         # which the FULL (flash-lite) static prefix still uses whole.
         self.facts_entries = load_json_entries(KB_VERIFIED_FACTS, "facts")
         self.tools_entries = load_json_entries(KB_VERIFIED_TOOLS, "tools")
+        # Names only -- see compact_tools_text().
+        self.verified_tools = compact_tools_text(self.tools_entries)
         self.recruiter_patterns = load_json_file(
             KB_RECRUITER_PATTERNS, "recruiter_memory_patterns.json"
         )
