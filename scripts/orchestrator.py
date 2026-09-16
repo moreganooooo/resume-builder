@@ -267,7 +267,6 @@ KB_ALLOWLIST = sorted(
         "evidence-guide.csv",
         "evidence_graph.json",
         "extracted-screenshot-metrics.csv",
-        "portals.yml",
         "profile.yml",
         "recruiter_memory_patterns.json",
         "summaries-and-skills-clean.csv",
@@ -310,7 +309,6 @@ KB_ALLOWLIST = sorted(
 KB_REQUIRED_FILES = frozenset(
     [
         "cv.md",
-        "portals.yml",
         "profile.yml",
         "user-background-guide.md",
         "verified_metrics.json",
@@ -4268,7 +4266,15 @@ class ResumeEngine:
                     continue
                 try:
                     with open(filepath, "r", encoding="utf-8") as f:
-                        master_context += f"--- START OF {filename} ---\n{f.read()}\n--- END OF {filename} ---\n\n"
+                        content = f.read()
+                    if filename.endswith(".json"):
+                        # Pretty-printed JSON is mostly whitespace, and the
+                        # full tools ledger alone pushed this prompt past the
+                        # free tier's 250k tokens/minute, so every retry 429'd.
+                        loaded = json.loads(content)
+                        content = (compact_tools_text(loaded.get("tools", [])) if filename == "verified_tools.json"
+                                   else json.dumps(loaded, ensure_ascii=False, separators=(",", ":")))
+                    master_context += f"--- START OF {filename} ---\n{content}\n--- END OF {filename} ---\n\n"
                 except Exception as e:
                     cli_art.console.print(
                         f"  {theme.colorize_icon('warning')} Could not load KB file {filename}: {e}",
