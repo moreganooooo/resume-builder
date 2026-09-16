@@ -457,6 +457,55 @@ class TestBrowseAndSelectJds(unittest.TestCase):
 
     @patch("picker.cli_art.render_picker_header")
     @patch("picker.list_all_evaluated_jds")
+    def test_roles_below_the_actionable_bar_never_reach_the_table(
+        self, mock_list, mock_render
+    ):
+        rows = [
+            _row("jds/above.json", picker.ACTIONABLE_SCORE, "Strong pursue"),
+            _row("jds/below.json", picker.ACTIONABLE_SCORE - 0.1, "Selective pursue"),
+            _row("jds/unscored.json", None, "Selective pursue"),
+        ]
+        mock_list.return_value = rows
+        mock_question = MagicMock()
+        # Ask for all three back. Only a row that actually reached the table
+        # can be returned, so this pins the filter end-to-end rather than
+        # asserting on how the table was rendered.
+        mock_question.ask.return_value = [
+            "jds/above.json",
+            "jds/below.json",
+            "jds/unscored.json",
+            picker._NAV_DONE,
+        ]
+        with patch("picker.questionary.checkbox", return_value=mock_question):
+            result = picker.browse_and_select_jds()
+        # The bar is inclusive at ACTIONABLE_SCORE, and a role with no score
+        # at all cannot clear it -- unlike the dashboard's Pipeline, this
+        # view is fed only by evaluated rows, so there is no unevaluated
+        # case to spare here.
+        self.assertEqual([r["path"] for r in result], ["jds/above.json"])
+
+    @patch("picker.cli_art.render_picker_header")
+    @patch("picker.list_all_evaluated_jds")
+    def test_all_rows_filtered_out_says_so_instead_of_advising_an_evaluation(
+        self, mock_list, mock_render
+    ):
+        # Telling someone whose roles all sit below the bar to go run an
+        # evaluation is advice for a problem they do not have -- they have
+        # already evaluated every one of these.
+        mock_list.return_value = [_row("jds/a.json", 1.2, "Selective pursue")]
+        with (
+            patch("picker.questionary.checkbox") as mock_checkbox,
+            patch("picker.cli_art.console.print") as mock_print,
+        ):
+            result = picker.browse_and_select_jds()
+        self.assertEqual(result, [])
+        mock_checkbox.assert_not_called()
+        printed = mock_print.call_args[0][0]
+        self.assertIn("below", printed)
+        self.assertNotIn("Evaluate ALL Pending Roles", printed)
+
+    @patch("picker.cli_art.render_picker_header")
+    @patch("picker.list_all_evaluated_jds")
     def test_renders_the_header_for_the_current_page_only(self, mock_list, mock_render):
         rows = [
             _row(f"jds/{i}.json", 5.0 - i * 0.01, "Strong pursue") for i in range(5)
@@ -511,7 +560,7 @@ class TestBrowseAndSelectJds(unittest.TestCase):
             ),
             _row(
                 "jds/b.json",
-                3.0,
+                3.8,
                 "Selective pursue",
                 status="Completed",
                 title="Role B",
@@ -533,8 +582,11 @@ class TestBrowseAndSelectJds(unittest.TestCase):
         self, mock_list, mock_render
     ):
         rows = [
+            # "low" here means lower-scoring, not below the actionable bar --
+            # this test is about result ORDER, so both rows must clear the bar
+            # or the second one never reaches the table to be ordered.
             _row("jds/high.json", 4.8, "Strong pursue"),
-            _row("jds/low.json", 2.5, "Low-priority pursue"),
+            _row("jds/low.json", 3.6, "Low-priority pursue"),
         ]
         mock_list.return_value = rows
         mock_question = MagicMock()

@@ -96,12 +96,18 @@ _VIABLE_W = 6
 _POSTED_W = 8
 _STATUS_W = 10
 
+# The score at or above which a role is worth acting on. Named once here
+# because the legend and browse_and_select_jds's own filter must agree
+# about it; the Go dashboard carries the same number as
+# screens.ActionableScore.
+ACTIONABLE_SCORE = 3.5
+
 
 def _score_legend(include_skip: bool = False) -> str:
     """Legend swatches for the picker tables. Derived from theme.SCORE_BANDS
     rather than restating the thresholds, so the legend cannot drift from the
     colors the rows are actually painted with."""
-    labels = {4.0: "4.0+", 3.5: "3.5+ (actionable)", 2.5: "2.5+"}
+    labels = {4.0: "4.0+", ACTIONABLE_SCORE: f"{ACTIONABLE_SCORE}+ (actionable)", 2.5: "2.5+"}
     parts = [
         f"[{color}]■[/{color}] {labels.get(floor, f'{floor}+')}"
         for floor, color in theme.SCORE_BANDS
@@ -965,9 +971,31 @@ def browse_and_select_jds(
     (list_all_evaluated_jds()'s dict shape, best-score-first) -- empty if
     there's nothing to show, the prompt is aborted (Ctrl-C), or nothing
     gets checked."""
-    rows = list_all_evaluated_jds(statuses=statuses)
+    all_rows = list_all_evaluated_jds(statuses=statuses)
+    # The actionable bar, matching the dashboard's Browse & Manage Jobs
+    # screen (screens.ActionableScore). Roles below it are ones the user has
+    # said they will not act on, and they outnumber the rest, so an
+    # unfiltered table buries its own point. Unlike the dashboard there is
+    # no LOW stop to reach them from here -- accepted deliberately
+    # (2026-09-16, explicit user decision): nothing is archived, deleted, or
+    # dropped from any export, and the dashboard's own LOW <3.5 tab still
+    # lists exactly this set.
+    rows = [
+        r
+        for r in all_rows
+        if (r["evaluation"].get("composite_score") or 0) >= ACTIONABLE_SCORE
+    ]
     if not rows:
-        if statuses == ["Pending"]:
+        if all_rows:
+            # "Nothing scored well enough" is a different problem from
+            # "nothing evaluated" -- telling someone whose roles all sit
+            # below the bar to go run an evaluation is advice for a problem
+            # they do not have.
+            hint = (
+                f"Nothing to browse -- all {len(all_rows)} evaluated JD(s) score below "
+                f"{ACTIONABLE_SCORE}.\nHint: the dashboard's Pipeline LOW <3.5 tab lists them."
+            )
+        elif statuses == ["Pending"]:
             hint = 'Nothing to browse -- no evaluated Pending JDs.\nHint: run "Evaluate ALL Pending Roles" first, then they\'ll appear here.'
         elif statuses == ["Completed"]:
             hint = "Nothing to browse -- no Completed JDs yet.\nHint: tailor a resume for a role first, then it'll appear here."

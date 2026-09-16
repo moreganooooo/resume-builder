@@ -1493,11 +1493,31 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   ever admit rows the bar already excludes). Safe to apply unconditionally
   because this screen is fed by `picker.list_all_evaluated_jds()` -- every
   row HAS a score, and pending-but-unevaluated roles never reach `m.rows`
-  at all (counted separately, shown via `WithBacklog`). Deliberately NOT
-  extended to Pipeline (its rows include applied/interviewing roles, so a
-  score bar there could bury a live application) or to the CLI picker
-  views (no `LOW` escape hatch exists there, so sub-bar roles would become
-  unreachable). `applyFilter` and `countForStatusFilter` share
+  at all (counted separately, shown via `WithBacklog`). **Extended to
+  Pipeline and the CLI picker on 2026-09-16, but NOT as the same blanket
+  test** -- Pipeline holds live applications, and `JobRowsToApplications`
+  sets `Score` unconditionally while leaving `ScoreRaw` empty for an
+  unevaluated job, so in the `Score` field alone "never evaluated" and
+  "genuinely scored 0" are identical. `pipeline.go`'s `belowActionableBar()`
+  therefore hides a row only when it carries a real score (`Score > 0` --
+  load-bearing: an unevaluated role is one the user has not triaged YET,
+  so hiding it buries the work rather than the noise) AND
+  `hasRealWorldProgress()` is false (`applied`/`responded`/`interview`/
+  `offer`/`rejected` are exempt -- hiding the role you are interviewing for
+  because it scored 3.4 is a bug, not a filter; rejected counts as progress
+  because it records something actually done). A new `LOW <3.5` tab shows
+  exactly that hidden set, mirroring Jobs. Because of the `Score > 0` gate,
+  unscored Pipeline fixtures are exempt by design and the fixture trap
+  below does not bite there. The CLI picker (`picker.ACTIONABLE_SCORE`,
+  filtering `browse_and_select_jds`) has NO escape hatch -- sub-bar roles
+  are unreachable from those views, accepted explicitly by the user, since
+  nothing is archived or dropped from any export and the dashboard's own
+  two `LOW` stops still reach them. Its empty-state hint distinguishes
+  "all filtered out" from "nothing evaluated"; `pick_and_process` is
+  deliberately NOT filtered (it processes paths the caller handed it and
+  builds from `evaluate_all_pending()` results, not `list_all_evaluated_jds()`).
+  `applyFilterAndSort` and `countForFilter` must stay in step for the same
+  reason the two Jobs functions do, below. `applyFilter` and `countForStatusFilter` share
   `matchesPrimaryFilter` deliberately: the footer's count used to compare
   `m.filter` against a row's STATUS, so it silently reported 0 for every
   score-based filter, and a denominator that disagrees with the list reads
