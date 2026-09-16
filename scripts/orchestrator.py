@@ -74,6 +74,19 @@ from render_coverletter_docx import render_coverletter_docx
 from render_html import render_html
 from render_resume_docx import render_resume_docx
 
+# This module had its own copy, and it was the STALE one: it matched only
+# via fixed_content.CV_SECTION_KEYWORDS (scaffolded empty for every
+# bootstrapped profile and never auto-populated) and split only on "### "
+# headings, while bootstrap_profile._assemble_cv_draft() writes "## Title
+# — Company (dates)". Both conditions failed for any normally-generated
+# profile, so it returned the WHOLE cv.md unconditionally -- which is the
+# input that let a rewrite borrow another job's numbers. rewrite_bullets'
+# version keeps the hand-curated override and falls back to matching the
+# company against each heading, so it works with no manual setup. No
+# circular-import risk: rewrite_bullets imports only profile_paths, and
+# bullet_feedback above already pulls it into this chain.
+from rewrite_bullets import extract_cv_section
+
 # --- MODEL STRATEGY ---
 # CRITIQUE_MODEL: handles bullet critique (high-frequency) and the post-build
 #   holistic resume critique. gemini-3.5-flash-lite gives the best free-tier
@@ -379,30 +392,6 @@ def is_deep_evidence_bullet(role_company: str, keywords: list) -> bool:
         return False
     rc = role_company.lower()
     return any(kw in rc for kw in keywords)
-
-
-def extract_cv_section(cv_text: str, role_company: str) -> str:
-    if not cv_text or not role_company:
-        return cv_text
-    rc_lower = role_company.lower()
-    fixed_content = profile_paths.fixed_content_module()
-    matched_heading = None
-    for keywords, heading in fixed_content.CV_SECTION_KEYWORDS:
-        if any(kw in rc_lower for kw in keywords):
-            matched_heading = heading
-            break
-    if not matched_heading:
-        return cv_text
-    sections = re.split(r"(?=^### )", cv_text, flags=re.MULTILINE)
-    for section in sections:
-        # The title AND company lines, not a fixed 60 characters: with a
-        # "### Title\n**Company**" block, a long title pushed the company past
-        # char 60 and the section was never found (e.g. "### Tax
-        # Administrative Assistant (Seasonal)\n**DeJoy, Knauff & Blood**").
-        header = "\n".join(section.strip().split("\n", 2)[:2]).lower()
-        if matched_heading.lower() in header:
-            return section.strip()
-    return cv_text
 
 
 def _tag_context_map() -> dict:
