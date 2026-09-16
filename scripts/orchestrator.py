@@ -1427,6 +1427,141 @@ Keep the **Category Name:** format. Return ONLY the rewritten skills line."""
     return line if after > before else cleaned
 
 
+_SKILLS_LINE_LABEL = re.compile(r"^\s*\*\*(?P<label>[^*]+?):\*\*\s*(?P<items>.*)$")
+
+
+def _parse_cv_skill_groups(cv_text: str) -> dict:
+    """Maps each skill in cv.md's "## Core Skills" block to its own category
+    label, casefolded -> label. That grouping is the only trustworthy source
+    for WHERE a skill belongs: verified_tools.json's `category` is None for
+    the large majority of entries (58 of 71 on the profile this was built
+    for), so routing on it would silently place almost everything nowhere --
+    or, worse, anywhere."""
+    groups = {}
+    in_block = False
+    for raw in (cv_text or "").splitlines():
+        line = raw.strip()
+        if line.startswith("## "):
+            in_block = line[3:].strip().casefold() == "core skills"
+            continue
+        if not in_block:
+            continue
+        match = _SKILLS_LINE_LABEL.match(line)
+        if not match:
+            continue
+        label = match.group("label").strip()
+        for item in match.group("items").split(","):
+            item = item.strip()
+            if item:
+                groups.setdefault(item.casefold(), label)
+    return groups
+
+
+def _title_case_skill(name: str) -> str:
+    """"supervised & unsupervised learning" -> "Supervised & Unsupervised
+    Learning", but "spaCy" and "NLTK" are left exactly as the ledger spells
+    them. Skills lines are Title Case by style rule, and the validator
+    reports lowercase words on them as a violation -- so appending a
+    ledger name verbatim would fix a coverage miss by introducing a style
+    one. A token carrying any uppercase of its own is already spelled the
+    way its owner spells it; only all-lowercase words are touched."""
+    return " ".join(
+        word.capitalize() if word.islower() else word for word in (name or "").split(" ")
+    )
+
+
+def _label_tokens(label: str) -> set:
+    return {t for t in re.findall(r"[A-Za-z]+", label or "") if len(t) > 3}
+
+
+def _top_up_verified_skills(
+    resume_data: dict, jd_keywords: dict, style_rules: dict, cv_text: str,
+    verified_names: list,
+) -> tuple:
+    """Appends JD keywords the candidate is ALREADY verified for, but which
+    the finished resume happens not to say, onto the matching SKILLS line.
+    Returns (new_resume_data, added_names); never mutates its input.
+
+    Deterministic and LLM-free. The keyword-coverage check is the thing
+    being satisfied, so this asks that same function which keywords are
+    missing rather than re-deriving the answer -- the two cannot disagree
+    about what counts as present. Every candidate comes FROM the verified
+    ledger by definition, which is what makes this safe where the old
+    "add 1-2 relevant skills" prompt was not (see
+    _micro_refactor_skills_line): there is nothing here to invent.
+
+    Skips rather than guesses, in three places -- an unverified keyword, a
+    skill cv.md doesn't group, and a group with no clear home on the page.
+    A resume that stays silent about spaCy is a small loss; one that lists
+    spaCy under "Visualization & Communication" because that line had room
+    is a wrong resume."""
+    skills = resume_data.get("SKILLS")
+    if not skills or not jd_keywords:
+        return resume_data, []
+    try:
+        missing = validate_resume.check_keyword_coverage(
+            resume_data, jd_keywords, {}
+        ).get("missing") or []
+    except Exception:
+        return resume_data, []
+    if not missing:
+        return resume_data, []
+
+    ledger = {str(n).strip().casefold(): str(n).strip() for n in verified_names if n}
+    cv_groups = _parse_cv_skill_groups(cv_text)
+    skills_section = (style_rules or {}).get("skills_section", {})
+    max_chars = skills_section.get("line_max_chars", 110)
+    wrap_min = max_chars + skills_section.get("widow_min_chars", 25)
+
+    lines = list(skills)
+    added = []
+    for keyword in missing:
+        key = str(keyword).strip().casefold()
+        name = ledger.get(key)
+        if not name:
+            continue
+        label = cv_groups.get(key) or cv_groups.get(name.casefold())
+        if not label:
+            continue
+        wanted = _label_tokens(label)
+        targets = [
+            i
+            for i, line in enumerate(lines)
+            if (_SKILLS_LINE_LABEL.match(line) or None)
+            and wanted & _label_tokens(_SKILLS_LINE_LABEL.match(line).group("label"))
+        ]
+        # Exactly one home, or none: two plausible lines is not a placement.
+        if len(targets) != 1:
+            continue
+        index = targets[0]
+        display = _title_case_skill(name)
+        candidate = f"{lines[index].rstrip().rstrip(',')}, {display}"
+        length = len(candidate)
+        # The same dead band _micro_refactor_skills_line repairs -- an append
+        # that lands in it trades a missing keyword for a layout violation.
+        if length > max_chars and (length < wrap_min or length > 2 * max_chars):
+            continue
+        try:
+            before = len(
+                validate_resume._check_hallucinated_tools({"SKILLS": [lines[index]]})
+            )
+            after = len(
+                validate_resume._check_hallucinated_tools({"SKILLS": [candidate]})
+            )
+        except Exception:
+            continue
+        if after > before:
+            continue
+        lines[index] = candidate
+        added.append(display)
+
+    if not added:
+        return resume_data, []
+    result = dict(resume_data)
+    result["SKILLS"] = lines
+    return result, added
+
+
 def _micro_dedupe_metric(
     text: str, number: str, other_metrics: list[str], field_label: str
 ) -> str:
@@ -7638,6 +7773,41 @@ class ResumeEngine:
         resume_data = company_research.apply_vocabulary_substitutions_to_resume(
             resume_data, checkpoint.get("vocabulary_substitutions", [])
         )
+
+        # A JD keyword the candidate is ALREADY verified for, that the
+        # finished resume simply doesn't happen to say, is lost credit
+        # rather than an honest gap -- and neither existing safety net
+        # catches it. Step 1.5 flags keywords absent from the verified set
+        # (an already-verified skill is correctly not a gap), and the
+        # post-build prompt only offers to ADD one to the ledger. Nothing
+        # asked whether a verified, JD-matching skill reached the page.
+        # Deliberately before Step 6's save, so the JSON, HTML and PDF all
+        # agree; see _top_up_verified_skills for why it skips rather than
+        # guesses at placement.
+        try:
+            import skills_menu
+
+            _verified_names = [
+                (t.get("name") or "").strip()
+                for t in (skills_menu._load_verified_tools() or {}).get("tools", [])
+            ]
+            with open(os.path.join(self.kb_dir, "cv.md"), "r", encoding="utf-8") as f:
+                _cv_text = f.read()
+        except Exception:
+            _verified_names, _cv_text = [], ""
+        if _verified_names and _cv_text:
+            resume_data, _topped_up = _top_up_verified_skills(
+                resume_data,
+                jd_keywords,
+                style_rules_for_validation,
+                _cv_text,
+                _verified_names,
+            )
+            if _topped_up:
+                cli_art.print_literal(
+                    "  Restored verified skill(s) the JD asks for: "
+                    + cli_art._escape_markup(", ".join(_topped_up))
+                )
 
         # --- Step 6: Save output ---
         output_path = os.path.join(self.output_json_dir, output_filename)
