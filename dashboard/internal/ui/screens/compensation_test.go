@@ -65,8 +65,8 @@ func TestPayFilterCycleRecoversFromAnUnknownValue(t *testing.T) {
 
 func TestPayFilterNarrowsByDisclosureNotAmount(t *testing.T) {
 	m := JobsModel{rows: []model.JobRow{
-		{Title: "discloses", PayAnnualMax: floatPtr(95000), PayText: "$95,000/yr"},
-		{Title: "silent"},
+		{Title: "discloses", PayAnnualMax: floatPtr(95000), PayText: "$95,000/yr", Evaluation: model.Evaluation{CompositeScore: aboveBar}},
+		{Title: "silent", Evaluation: model.Evaluation{CompositeScore: aboveBar}},
 	}}
 
 	m.payFilter = "stated"

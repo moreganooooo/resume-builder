@@ -43,6 +43,14 @@ func pressKey(s string) tea.KeyPressMsg {
 	}
 }
 
+// aboveBar is a score clearing ActionableScore, for fixtures that are not
+// about scoring at all. EVERY filter stop except "low" now hides rows below
+// the bar, and a row with no Evaluation scores 0 -- so an unscored fixture
+// is filtered out before the filter under test ever sees it, and the test
+// fails for a reason it was never written to check. Reach for this whenever
+// a new fixture's rows must simply be visible.
+const aboveBar = 4.0
+
 func testJobRows() []model.JobRow {
 	return []model.JobRow{
 		{Path: "a.json", Status: "Pending", Company: "Acme", Title: "Role A", Evaluation: model.Evaluation{CompositeScore: 4.5}},
@@ -168,14 +176,46 @@ func TestLocalFilterKeepsOnlyNearbyRowsWithAMeasuredDistance(t *testing.T) {
 	m := &JobsModel{
 		filter: "local",
 		rows: []model.JobRow{
-			{Title: "near", DistanceMiles: &near},
-			{Title: "far", DistanceMiles: &far},
-			{Title: "unknown"},
+			{Title: "near", DistanceMiles: &near, Evaluation: model.Evaluation{CompositeScore: aboveBar}},
+			{Title: "far", DistanceMiles: &far, Evaluation: model.Evaluation{CompositeScore: aboveBar}},
+			{Title: "unknown", Evaluation: model.Evaluation{CompositeScore: aboveBar}},
 		},
 	}
 	m.applyFilter()
 	if len(m.filtered) != 1 || m.filtered[0].Title != "near" {
 		t.Fatalf("expected only the nearby row, got %+v", m.filtered)
+	}
+}
+
+// The actionable bar belongs to the SCREEN, not to the two score stops.
+// Before this, cycling [f] to "all", "pending", "completed" or "local"
+// silently refilled the list with roles the user had already said they
+// would not act on -- and those outnumber the rest, so pressing [f] to
+// narrow by location read as widening instead. "low" is the deliberate
+// exception and the only way to reach them: the bar is a preference, not
+// a judgment, so nothing is archived or dropped from any export.
+func TestSubActionableRowsAreHiddenEverywhereExceptTheLowStop(t *testing.T) {
+	rows := []model.JobRow{
+		{Path: "a.json", Status: "Pending", Title: "worth doing", DistanceMiles: miles(4.2),
+			Evaluation: model.Evaluation{CompositeScore: aboveBar}},
+		{Path: "b.json", Status: "Pending", Title: "below the bar", DistanceMiles: miles(4.2),
+			Evaluation: model.Evaluation{CompositeScore: ActionableScore - 0.1}},
+	}
+
+	for _, filter := range []string{"all", "pending", "local", "recent", "high_fit", "good_fit"} {
+		m := &JobsModel{filter: filter, rows: rows}
+		m.applyFilter()
+		for _, r := range m.filtered {
+			if r.Title == "below the bar" {
+				t.Errorf("filter %q showed a sub-%.1f row", filter, ActionableScore)
+			}
+		}
+	}
+
+	m := &JobsModel{filter: "low", rows: rows}
+	m.applyFilter()
+	if len(m.filtered) != 1 || m.filtered[0].Title != "below the bar" {
+		t.Fatalf("the low stop must show exactly the hidden set, got %+v", m.filtered)
 	}
 }
 
@@ -671,9 +711,9 @@ func TestJobsSearchIsCaseInsensitive(t *testing.T) {
 // search-within-active-tab behavior.
 func TestJobsSearchComposesWithActiveFilter(t *testing.T) {
 	rows := []model.JobRow{
-		{Path: "a.json", Status: "Pending", Company: "Stripe", Title: "Backend Engineer"},
-		{Path: "b.json", Status: "Completed", Company: "Stripe", Title: "Frontend Engineer"},
-		{Path: "c.json", Status: "Completed", Company: "Anthropic", Title: "AI Engineer"},
+		{Path: "a.json", Status: "Pending", Company: "Stripe", Title: "Backend Engineer", Evaluation: model.Evaluation{CompositeScore: aboveBar}},
+		{Path: "b.json", Status: "Completed", Company: "Stripe", Title: "Frontend Engineer", Evaluation: model.Evaluation{CompositeScore: aboveBar}},
+		{Path: "c.json", Status: "Completed", Company: "Anthropic", Title: "AI Engineer", Evaluation: model.Evaluation{CompositeScore: aboveBar}},
 	}
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), rows, 100, 30)
 

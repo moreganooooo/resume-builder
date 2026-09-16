@@ -48,11 +48,11 @@ func TestIsManagerTrackRejectsICAndUnknown(t *testing.T) {
 func TestRoleTrackFilterTogglesBackToUnrestricted(t *testing.T) {
 	m := &JobsModel{filter: "all", roleTrackFilter: true}
 	m.rows = []model.JobRow{
-		{Title: "A", Evaluation: model.Evaluation{RoleTrack: "manager", RoleTrackConfidence: "high"}},
-		{Title: "B", Evaluation: model.Evaluation{RoleTrack: "player_coach", RoleTrackConfidence: "high"}},
-		{Title: "C", Evaluation: model.Evaluation{RoleTrack: "manager", RoleTrackConfidence: "medium"}},
-		{Title: "D", Evaluation: model.Evaluation{RoleTrack: "ic", RoleTrackConfidence: "high"}},
-		{Title: "E"}, // stated nothing
+		{Title: "A", Evaluation: model.Evaluation{CompositeScore: aboveBar, RoleTrack: "manager", RoleTrackConfidence: "high"}},
+		{Title: "B", Evaluation: model.Evaluation{CompositeScore: aboveBar, RoleTrack: "player_coach", RoleTrackConfidence: "high"}},
+		{Title: "C", Evaluation: model.Evaluation{CompositeScore: aboveBar, RoleTrack: "manager", RoleTrackConfidence: "medium"}},
+		{Title: "D", Evaluation: model.Evaluation{CompositeScore: aboveBar, RoleTrack: "ic", RoleTrackConfidence: "high"}},
+		{Title: "E", Evaluation: model.Evaluation{CompositeScore: aboveBar}}, // stated no role track
 	}
 	m.applyFilter()
 	if len(m.filtered) != 2 {

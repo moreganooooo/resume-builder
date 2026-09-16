@@ -57,6 +57,42 @@ than archived only because the reasoning is worth keeping; move it to
 ## Medium
 
 
+### Give `recommendation` a real rubric, or narrow it to a viability verdict
+
+Deferred from 2026-09-15, when the *display* half of this shipped (the three
+"pursue" tiers are no longer shown anywhere; composite score is displayed
+instead, and the invalid `"Pursue"` value emitted by `orchestrator.py` was
+fixed). What is left is the stored-data half, which costs an API call per
+pending role and so was deliberately not bundled in.
+
+The problem, measured over 1,899 evaluated JDs:
+
+- **No rubric exists.** `resume-engine/prompts/evaluate_fit.md` and
+  `evaluate_recruiter.md` tell the model only *"Exactly one of: 'Strong
+  pursue', 'Selective pursue', 'Low-priority pursue', 'Skip'"* -- no score
+  bands, no criteria. The subjectivity is the direct result.
+- **The label is assigned BEFORE Python computes `composite_score`**, so the
+  two are not functions of each other and disagree freely: 64 'Strong
+  pursue' rows sit below the 3.5 actionable bar; 18 'Selective pursue' sit
+  above 4.2. Medians order sanely (4.22 / 3.45 / 3.05), tails do not.
+
+The proposed shape, and the reason it is not simply "delete the field":
+`Skip` is **not** a point on the fit scale. It answers "is this a real,
+viable posting", which no score can -- verified live, two roles scoring
+>= 4.0 were an aggregator search-results link and a jobs-board category
+page, and the Skip verdict correctly caught both while the score loved
+them. It also still drives archival (`batch_evaluate`) and three
+`picker.py` gates. So: narrow the schema `Literal` to a binary viability
+verdict, rewrite the prompt instruction to ask only that question (which
+is also the first time the field would get an actual rubric), and drop the
+three gradations from the stored data.
+
+Cost and prerequisites: a `jd_manager.SCORING_VERSION` bump (and the
+`picker.SCORING_EPOCH` question) plus one API call per pending role to
+re-evaluate -- batch it with any other scoring change rather than spending
+it alone. Worth doing only if the labels still feel wrong now that they are
+off-screen; the cheap half may well have been enough.
+
 ### Strengthen evidence-guide.csv for cover letters
 
 Split off from the evidence-bank/merge discussion 2026-07-21, decoupled
