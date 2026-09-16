@@ -1199,6 +1199,22 @@ def _page1_condense_instruction(
     roles by character count, since bullet length (not bullet count) is
     the wasted space causing the spill.
     """
+    top = _page1_condense_targets(resume_data, profile_data)
+    bullet_list = "\n".join(f'- ({company}) "{bullet}"' for _, company, bullet in top)
+    roles_str = ", ".join(overflow_roles)
+    return (
+        f"{roles_str} must fit entirely on page 1 but is currently spilling onto page 2, "
+        "even though the resume is already 2 pages or fewer overall -- each job entry is "
+        "kept intact and never split across a page break, so the page-1 content above it "
+        "just needs to run a little shorter. Tighten the wording of 1-2 of these longest "
+        "page-1 bullets so each fits on ONE line (108 characters or fewer) -- shorten "
+        "phrasing only, keep every metric, keyword, and the core claim intact, and do not "
+        f"remove any bullet or change any other section:\n{bullet_list}"
+    )
+
+
+def _page1_condense_targets(resume_data: dict, profile_data: dict) -> list:
+    """The longest page-1 bullets, as (length, company, bullet)."""
     page1_companies = {
         str(role.get("name", "")).strip()
         for role in (profile_data.get("roles") or [])
@@ -1215,18 +1231,37 @@ def _page1_condense_instruction(
         for bullet in job.get("achievements") or []:
             candidates.append((len(bullet), company, bullet))
     candidates.sort(key=lambda c: c[0], reverse=True)
-    top = candidates[:4]
-    bullet_list = "\n".join(f'- ({company}) "{bullet}"' for _, company, bullet in top)
-    roles_str = ", ".join(overflow_roles)
-    return (
-        f"{roles_str} must fit entirely on page 1 but is currently spilling onto page 2, "
-        "even though the resume is already 2 pages or fewer overall -- each job entry is "
-        "kept intact and never split across a page break, so the page-1 content above it "
-        "just needs to run a little shorter. Tighten the wording of 1-2 of these longest "
-        "page-1 bullets so each wraps to one fewer line -- shorten phrasing only, keep "
-        "every metric, keyword, and the core claim intact, and do not remove any bullet "
-        f"or change any other section:\n{bullet_list}"
-    )
+    return candidates[:4]
+
+
+def _merge_condensed_bullets(original: dict, condensed: dict, targets: set) -> dict:
+    """Keeps only the condense call's edits to the targeted bullets.
+
+    The call returns a whole resume, and wording drift in bullets it was never
+    asked to touch added a dozen fresh widow violations per attempt, so every
+    attempt of a 2026-09-16 build was discarded. A bullet is taken from the
+    condensed copy only when it was a target and the job/position lines up."""
+    merged = copy.deepcopy(original)
+    new_jobs = condensed.get("EXPERIENCE") or []
+    for i, job in enumerate(merged.get("EXPERIENCE") or []):
+        if i >= len(new_jobs):
+            break
+        new_bullets = new_jobs[i].get("achievements") or []
+        bullets = job.get("achievements") or []
+        if len(new_bullets) != len(bullets):
+            continue
+        for j, bullet in enumerate(bullets):
+            if bullet in targets and new_bullets[j]:
+                bullets[j] = new_bullets[j]
+    return merged
+
+
+def _newly_introduced(violations: list, baseline: list) -> list:
+    """Violations absent before an edit. Judging an edit by ALL violations
+    rejected every condense attempt on a resume that already carried four
+    leftover widows the edit never touched."""
+    before = set(str(v) for v in baseline)
+    return [v for v in violations if str(v) not in before]
 
 
 def _why_backfill_instruction(resume_data: dict, research_block: str) -> str:
@@ -8243,15 +8278,31 @@ class ResumeEngine:
                     # Enforce the scope instead of relying on instruction-
                     # following alone.
                     condensed["SKILLS"] = resume_data.get("SKILLS")
-                    condensed_resume_data = normalize_resume.normalize(condensed)
-                    condense_violations = validate_resume.validate(
-                        condensed_resume_data,
-                        style_rules_for_validation,
-                        role_roster,
-                        role_bullet_minimums,
+                    condense_targets = {
+                        b for _, _, b in _page1_condense_targets(resume_data, _p_yaml)
+                    }
+                    condensed_resume_data = _merge_condensed_bullets(
+                        resume_data, normalize_resume.normalize(condensed), condense_targets
+                    )
+                    _validate_kwargs = dict(
                         role_bullet_maximums=role_bullet_maximums,
                         bullet_tuples=bullet_tuples,
                     )
+                    baseline_violations = validate_resume.validate(
+                        resume_data, style_rules_for_validation, role_roster,
+                        role_bullet_minimums, **_validate_kwargs,
+                    )
+                    condense_violations = _newly_introduced(
+                        validate_resume.validate(
+                            condensed_resume_data, style_rules_for_validation,
+                            role_roster, role_bullet_minimums, **_validate_kwargs,
+                        ),
+                        baseline_violations,
+                    )
+                    if condensed_resume_data == resume_data:
+                        condense_violations = condense_violations or [
+                            "No targeted bullet was shortened -- rewrite at least one listed bullet to 108 characters or fewer."
+                        ]
                     if not condense_violations:
                         resume_data = condensed_resume_data
                         render_html(resume_data, html_out)
