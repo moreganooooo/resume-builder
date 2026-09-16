@@ -142,19 +142,13 @@ MAX_REWRITE_PARSE_FAILURES = 2
 # 2026-09-16: both flash-lites answering in <1s while gemma-4-31b-it took
 # 21s, 500'd, then took 59s. So a Gemma rewrite gets few retries, a Gemma
 # call that fails hands off at once, and the failure benches Gemma for the
-# rest of the build (and later builds in the same process) for a while.
+# rest of the build (and later builds in the same process) for a while --
+# via gemini_client's shared bench, which the Bullet Bank stages use too.
 GEMMA_REWRITE_MAX_RETRIES = 2
-GEMMA_REWRITE_BENCH_SECS = 15 * 60
-_gemma_rewrite_benched_until = 0.0
-
-
-def _bench_gemma_rewrites() -> None:
-    global _gemma_rewrite_benched_until
-    _gemma_rewrite_benched_until = time.monotonic() + GEMMA_REWRITE_BENCH_SECS
 
 
 def _starting_rewrite_model() -> str:
-    if time.monotonic() < _gemma_rewrite_benched_until:
+    if gemini_client.is_benched(REWRITE_MODEL):
         return REWRITE_FALLBACK_MODEL
     return REWRITE_MODEL
 
@@ -400,6 +394,7 @@ MAX_BACKOFF_SECS = 90
 
 from gemini_client import SCORING_FALLBACKS, GeminiClient  # replaces the inline class
 from gemini_client import SustainedFailureError
+import gemini_client
 
 # ---------------------------------------------------------------------------
 # TIER 2 SEGMENT HELPERS  (ported verbatim from rewrite_bullets.py)
@@ -5547,7 +5542,7 @@ class ResumeEngine:
                             # error on real text keeps its second try).
                             gemma_unavailable = is_gemma_attempt and not rewrite_text
                             if gemma_unavailable:
-                                _bench_gemma_rewrites()
+                                gemini_client.bench_model(active_rewrite_model)
                             if (
                                 rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
                                 or gemma_unavailable

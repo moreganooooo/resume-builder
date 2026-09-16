@@ -122,6 +122,7 @@ SCORING_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
 # orchestrator.py lives in the same scripts/ directory as this file.
 # Import GeminiClient only — orchestrator.py has no module-level client object.
 from gemini_client import SCORING_FALLBACKS, GeminiClient, SustainedFailureError  # noqa: E402
+import gemini_client  # noqa: E402
 
 CLUSTER_MAP_IN = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 CLUSTER_MAP_OUT = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv")
@@ -1856,6 +1857,10 @@ def process_bullet(
     current_scores = original_scores.copy()
     last_rewrite = last_reasoning = last_gaps = ""
     active_rewrite_model = start_model or REWRITE_MODEL
+    # A Gemma failure on an earlier bullet benches it, so this bullet does
+    # not pay the 65s pacing and retry ladder to rediscover that.
+    if gemini_client.is_benched(active_rewrite_model):
+        active_rewrite_model = REWRITE_FALLBACK_MODEL
     rewrite_parse_failures = 0
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -1925,6 +1930,7 @@ def process_bullet(
                         f"   {theme.colorize_icon('warning')} Gemma exhausted retries — switching to fallback model: {REWRITE_FALLBACK_MODEL}",
                         soft_wrap=True,
                     )
+                    gemini_client.bench_model(active_rewrite_model)
                     active_rewrite_model = REWRITE_FALLBACK_MODEL
                     time.sleep(SLEEP_ON_RETRY)
                     continue
