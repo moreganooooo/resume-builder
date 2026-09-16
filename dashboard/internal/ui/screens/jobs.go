@@ -2545,8 +2545,20 @@ func renderSpringBar(t theme.Theme, val float64, maxVal float64, width int) stri
 	}
 	emptyCount := width - fillCount
 
-	filledStr := strings.Repeat("█", fillCount)
-	emptyStr := strings.Repeat("░", emptyCount)
+	// Half-height (upper) blocks, not full "█"/"░". A full block paints
+	// its whole cell, so stacked bars in the Skills Gap Matrix and the
+	// subscore list fuse into one solid slab -- ten rows at 100% read as
+	// a single rectangle with no way to see where one skill ends and the
+	// next begins. Drawing in the cell's top half leaves its bottom half
+	// as background, which is the divider: a consistent thin gap under
+	// every bar, costing zero extra rows (a real separator line between
+	// rows would double the block's height).
+	//
+	// Filled and empty must use the SAME glyph, or the two halves of one
+	// bar sit at different heights and the bar looks broken; only the
+	// color distinguishes them.
+	filledStr := strings.Repeat("▀", fillCount)
+	emptyStr := strings.Repeat("▀", emptyCount)
 
 	var c lipgloss.Style
 	if ratio >= 0.8 {
