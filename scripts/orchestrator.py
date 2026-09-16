@@ -8419,10 +8419,10 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     # the existing lazy `import db` pattern used later in this function
     if not _db._is_unisolated_test_write():
         try:
-            output_root = profile_paths.output_dir()
-            os.makedirs(output_root, exist_ok=True)
+            log_root = profile_paths.logs_dir()
+            os.makedirs(log_root, exist_ok=True)
             timestamp = datetime.datetime.now().isoformat().replace(":", "-")
-            log_path = os.path.join(output_root, f"pipeline_run_{timestamp}.log")
+            log_path = os.path.join(log_root, f"pipeline_run_{timestamp}.log")
             logger = logging.getLogger("resume_pipeline")
             if logger.handlers:
                 logger.handlers.clear()

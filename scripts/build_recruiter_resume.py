@@ -202,10 +202,10 @@ def build_recruiter_resume(interactive: bool = None, fresh: bool = True) -> dict
 
     if not logger.handlers and not _db._is_unisolated_test_write():
         try:
-            output_root = profile_paths.output_dir()
-            os.makedirs(output_root, exist_ok=True)
+            log_root = profile_paths.logs_dir()
+            os.makedirs(log_root, exist_ok=True)
             timestamp = datetime.datetime.now().isoformat().replace(":", "-")
-            log_path = os.path.join(output_root, f"pipeline_run_{timestamp}.log")
+            log_path = os.path.join(log_root, f"pipeline_run_{timestamp}.log")
             handler = logging.FileHandler(log_path, encoding="utf-8")
             handler.setFormatter(
                 logging.Formatter(
