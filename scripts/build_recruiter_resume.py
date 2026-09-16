@@ -134,7 +134,7 @@ def build_target_brief(profile_data: dict, cv_text: str = "") -> str:
 
     cv_text = (cv_text or "").strip()
     if cv_text:
-        lines += ["=== CANDIDATE CV (supporting evidence) ===", cv_text, ""]
+        lines += [orchestrator.RECRUITER_CV_MARKER, cv_text, ""]
 
     return "\n".join(lines).rstrip() + "\n"
 

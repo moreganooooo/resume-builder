@@ -1427,6 +1427,26 @@ Keep the **Category Name:** format. Return ONLY the rewritten skills line."""
     return line if after > before else cleaned
 
 
+# Header under which build_recruiter_resume.build_target_brief() appends the
+# candidate's whole cv.md. Shared so the writer and the gate below can never
+# disagree about where the brief ends and the supporting evidence begins.
+RECRUITER_CV_MARKER = "=== CANDIDATE CV (supporting evidence) ==="
+
+
+def _situational_gate_text(jd_text: str) -> str:
+    """The part of a JD the situational-role keyword gate may read.
+
+    For a real posting that is all of it. A recruiter brief, though, embeds
+    the candidate's entire CV as supporting evidence -- and a CV describes
+    every situational job the candidate has held, so its trigger words
+    ("payroll", "newspaper", "graphic design") are all there by definition.
+    Gating on it cleared every situational role on every recruiter build: 7
+    of 7 on one profile, versus 0 from the brief's own role list. The gate
+    asks whether the ROLES being targeted call for that experience; the CV
+    is the answer to a different question."""
+    return (jd_text or "").split(RECRUITER_CV_MARKER, 1)[0]
+
+
 _SKILLS_LINE_LABEL = re.compile(r"^\s*\*\*(?P<label>[^*]+?):\*\*\s*(?P<items>.*)$")
 
 
@@ -6842,7 +6862,7 @@ class ResumeEngine:
             return {}
 
         situational_candidates = situational_roles.detect_situational_candidates(
-            jd_text
+            _situational_gate_text(jd_text)
         )
         if situational_candidates:
             cli_art.print_literal(
