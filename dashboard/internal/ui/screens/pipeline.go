@@ -1078,7 +1078,10 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 		}
 
 		selected := i == m.cursor
-		line := renderSidebarRowTagged(m.theme, app.Score, app.Company, employmentTags(m.theme, app.EmploymentType), app.Role, sidebarInnerWidth(width), selected)
+		// Dimmed alongside the rest of the row -- the tag is already
+		// rendered by the time renderSidebarRowTagged sees it.
+		tags := employmentTags(rowTheme(m.theme, selected), app.EmploymentType)
+		line := renderSidebarRowTagged(m.theme, app.Score, app.Company, tags, app.Role, sidebarInnerWidth(width), selected)
 		lines = append(lines, zone.Mark(fmt.Sprintf("pipeline_row_%d", i), line))
 	}
 

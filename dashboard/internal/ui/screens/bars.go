@@ -83,6 +83,17 @@ func fitBar(left, right string, width, reserved int, bg color.Color) (string, st
 // scoreStyle colors a composite/interview-probability score by tier --
 // shared by jobs.go's CompositeScore and pipeline.go's Score, which use the
 // identical thresholds.
+// rowTheme returns the palette a sidebar row should draw itself with: the
+// theme as-is when the row is the one the detail pane is describing, and a
+// dimmed copy otherwise, so the eye lands on the active row without any
+// row losing its color coding.
+func rowTheme(t theme.Theme, selected bool) theme.Theme {
+	if selected {
+		return t
+	}
+	return t.Dimmed()
+}
+
 func scoreStyle(t theme.Theme, score float64) lipgloss.Style {
 	switch {
 	case score >= 4.2:
@@ -133,6 +144,11 @@ func renderSidebarRow(t theme.Theme, score float64, company, subtitle string, wi
 // width is reserved before the company is truncated, so a long company
 // name is cut rather than the tag.
 func renderSidebarRowTagged(t theme.Theme, score float64, company, tag, subtitle string, width int, selected bool) string {
+	// Every color below resolves from t, so dimming the whole theme once
+	// here recolors the score, company and subtitle together and keeps
+	// their relationships intact. The `tag` arrives already rendered, so
+	// its caller has to dim it the same way -- see rowTheme's callers.
+	t = rowTheme(t, selected)
 	scoreText := scoreStyle(t, score).Render(scoreIcon(t, score) + " " + fmt.Sprintf("%.1f", score))
 
 	// Budget from MEASURED parts: the row is rendered inside the caller's
@@ -178,15 +194,6 @@ func renderSidebarRowTagged(t theme.Theme, score float64, company, tag, subtitle
 	block := line1 + "\n" + line2
 	if selected {
 		base = theme.HoverStyle(base, t)
-	} else {
-		// A terminal has no alpha channel, so "50% opacity" on an inactive
-		// row is expressed as a collapse to one muted token: the eye is
-		// meant to land on the row the detail pane is actually describing.
-		// The strip is load-bearing -- line1/line2 already carry the score,
-		// employment tag and subtitle colors as embedded SGR codes, and an
-		// outer Foreground() cannot override an inner one, so without it
-		// this would render identically to before.
-		block = lipgloss.NewStyle().Foreground(t.Subtext).Render(ansi.Strip(block))
 	}
 	return base.Render(block)
 }

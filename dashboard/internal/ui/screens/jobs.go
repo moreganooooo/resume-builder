@@ -1823,7 +1823,10 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 		// calls -- Pipeline rows are about application progress, not fit,
 		// so they have no use for these.
 		subtitle := jobSubtitleWithScores(m.theme, job, sidebarInnerWidth(width)-4)
-		rowContent := renderSidebarRowTagged(m.theme, job.Evaluation.CompositeScore, job.Company, employmentTags(m.theme, job.EmploymentType), subtitle, sidebarInnerWidth(width), selected)
+		// The tag is rendered before it reaches renderSidebarRowTagged, so
+		// it can't be dimmed there with the rest of the row.
+		tags := employmentTags(rowTheme(m.theme, selected), job.EmploymentType)
+		rowContent := renderSidebarRowTagged(m.theme, job.Evaluation.CompositeScore, job.Company, tags, subtitle, sidebarInnerWidth(width), selected)
 		lines = append(lines, zone.Mark(fmt.Sprintf("jobs_row_%d", i), rowContent))
 	}
 
