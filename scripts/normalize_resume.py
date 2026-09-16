@@ -25,6 +25,60 @@ _SECTION_DEFAULTS = {
 # the 1st pass already renamed the field it reads its key from.
 _RENAME_SUFFIX_PATTERN = re.compile(r"\s*\(Now [^)]+\)$")
 
+# A profile whose roster splits one employer into several stints keys those
+# rows -- and the bullet bank's tags -- as "Company — Stint Title", because
+# mine_bullet_bank()'s roster allowlist is exact-match and both rows need
+# distinct names. That key is bookkeeping, not display text: it reached the
+# rendered resume as a job-meta line reading "mIQroTech Inc. — Lead Data
+# Scientist" directly above a job-title of "Lead Data Scientist" (observed
+# 2026-09-16, both stints).
+#
+# Deliberately NOT a blanket "strip everything after an em dash": a real
+# company name may legitimately contain one. The suffix is removed only when
+# it is exactly this entry's own title, which is the annotation case and
+# cannot collide with a genuine name.
+_STINT_SUFFIX_SEPARATORS = ("—", "–", "-")
+
+
+def _strip_stint_annotation(company: str, title: str) -> str:
+    """"mIQroTech Inc. — Lead Data Scientist" + title "Lead Data Scientist"
+    -> "mIQroTech Inc.". Returns company unchanged when the suffix is not
+    the title, or when stripping would leave nothing."""
+    if not company or not title:
+        return company
+    for sep in _STINT_SUFFIX_SEPARATORS:
+        head, found, tail = company.rpartition(sep)
+        if found and tail.strip().casefold() == title.strip().casefold():
+            return head.strip() or company
+    return company
+
+
+# Dates are numeric MM/YYYY per style_rules.yaml ("Dates always numeric
+# (08/2016 not August 2016)") and tailor_resume.md, but the builder model
+# honors that unevenly -- a real build emitted "05/2021 – May 2022", numeric
+# start and spelled-out end, which recruiter_score.yaml then marks down as
+# "Mixed date formats". The rule is already in the prompt, so this is a
+# deterministic cleanup rather than more prompt text.
+_MONTHS = {
+    "jan": "01", "feb": "02", "mar": "03", "apr": "04",
+    "may": "05", "jun": "06", "jul": "07", "aug": "08",
+    "sep": "09", "oct": "10", "nov": "11", "dec": "12",
+}
+_SPELLED_MONTH_YEAR = re.compile(r"\b([A-Za-z]{3,9})\.?\s+(\d{4})\b")
+
+
+def _numeric_period(period: str) -> str:
+    """"05/2021 – May 2022" -> "05/2021 – 05/2022". Leaves anything it does
+    not recognize (notably "Present") untouched."""
+    if not period:
+        return period
+
+    def _sub(match):
+        month = _MONTHS.get(match.group(1)[:3].casefold())
+        return f"{month}/{match.group(2)}" if month else match.group(0)
+
+    return _SPELLED_MONTH_YEAR.sub(_sub, period)
+
 
 def _and_to_ampersand(text: str) -> str:
     return re.sub(r"\band\b", "&", text, flags=re.IGNORECASE)
@@ -85,6 +139,13 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
         for job in result["EXPERIENCE"]:
             job = dict(job)
             company = _RENAME_SUFFIX_PATTERN.sub("", job.get("company", ""))
+            # Before the fixed_content lookups below, so they key off the real
+            # company name rather than a roster stint key that would match
+            # nothing in COMPANY_META/CLIENTS/etc.
+            company = _strip_stint_annotation(company, job.get("title", ""))
+            job["company"] = company
+            if job.get("period"):
+                job["period"] = _numeric_period(job["period"])
 
             if (
                 career_break_entry
