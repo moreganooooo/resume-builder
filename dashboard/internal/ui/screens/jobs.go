@@ -2545,20 +2545,27 @@ func renderSpringBar(t theme.Theme, val float64, maxVal float64, width int) stri
 	}
 	emptyCount := width - fillCount
 
-	// Half-height (upper) blocks, not full "█"/"░". A full block paints
+	// Three-quarter-height blocks, not full "█"/"░". A full block paints
 	// its whole cell, so stacked bars in the Skills Gap Matrix and the
 	// subscore list fuse into one solid slab -- ten rows at 100% read as
 	// a single rectangle with no way to see where one skill ends and the
-	// next begins. Drawing in the cell's top half leaves its bottom half
-	// as background, which is the divider: a consistent thin gap under
-	// every bar, costing zero extra rows (a real separator line between
-	// rows would double the block's height).
+	// next begins. Leaving a quarter of the cell as background is the
+	// divider: a consistent thin gap between bars, costing zero extra
+	// rows (a real separator line between rows would double the block's
+	// height).
 	//
-	// Filled and empty must use the SAME glyph, or the two halves of one
+	// "▆" is the LOWER three-quarters block, so the gap lands at the TOP
+	// of each cell. That is the only direction available -- Unicode has
+	// eighth-block ramps for lower blocks (▁▂▃▄▅▆▇) but only a single
+	// half block for upper ("▀"), so an upper three-quarters glyph to
+	// put the gap underneath instead does not exist. Which edge holds
+	// the gap doesn't matter visually; having one does.
+	//
+	// Filled and empty must use the SAME glyph, or the two parts of one
 	// bar sit at different heights and the bar looks broken; only the
 	// color distinguishes them.
-	filledStr := strings.Repeat("▀", fillCount)
-	emptyStr := strings.Repeat("▀", emptyCount)
+	filledStr := strings.Repeat("▆", fillCount)
+	emptyStr := strings.Repeat("▆", emptyCount)
 
 	var c lipgloss.Style
 	if ratio >= 0.8 {
