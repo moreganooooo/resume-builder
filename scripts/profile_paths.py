@@ -552,6 +552,19 @@ def checkpoints_dir(profile: str = None) -> str:
     return os.path.join(output_dir(profile), "checkpoints")
 
 
+def logs_dir(profile: str = None) -> str:
+    """Per-run pipeline logs (pipeline_run_<timestamp>.log).
+
+    Their own subfolder because they accumulate one file per build and
+    were burying the actual deliverables -- output/<profile>/ is where a
+    user looks for a finished resume, not a run transcript. Kept inside
+    output/ rather than data/ since a log belongs to the build that
+    produced it; .gitignore's `*.log` is a global pattern and still
+    matches here, and output/<profile>/ is already a Syncthing root, so
+    nothing else has to change."""
+    return os.path.join(output_dir(profile), "logs")
+
+
 def data_dir(profile: str = None) -> str:
     return os.path.join(DATA_ROOT, profile or active_profile())
 
