@@ -1,10 +1,10 @@
 """_top_up_verified_skills restores JD keywords the candidate is already
-verified for but whose name the finished resume happens not to say.
+verified for but which the finished resume happens not to say.
 
-The interesting assertions are the SKIPS: this step is only safe because it
-refuses to place a skill it cannot place correctly. A resume silent about
-spaCy is a small loss; one listing spaCy under "Visualization &
-Communication" because that line had room is a wrong resume.
+The interesting assertions are the SKIPS and the verification gate. Match
+evidence is deliberately loose -- "S3" is proven by the ledger's "AWS S3" --
+and that is only safe because every edit is kept solely on the strength of
+the coverage check crediting the keyword afterwards.
 """
 
 import os
@@ -16,19 +16,27 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 import orchestrator  # noqa: E402
 
+# The AWS parenthetical is load-bearing: a naive comma split reads it as
+# "AWS (Glue" and "RDS)", which silently denies RDS a category.
 CV_TEXT = """# CV
 
 ## Core Skills
 
 **Languages & Libraries:** Python, SQL, spaCy, NLTK
 **Machine Learning & Statistics:** Regression, supervised & unsupervised learning
-**Scientific Computing:** Mathematica, Fortran
+**Data Engineering & Cloud:** AWS (Glue, S3, RDS), Git
+**Visualization & Communication:** Matplotlib, technical documentation for non-technical stakeholders
+**Scientific Computing:** Mathematica, Fortran, signal processing
 
 ## Experience
 """
 
-LEDGER = ["Python", "SQL", "spaCy", "NLTK", "Mathematica", "Fortran",
-          "Supervised & unsupervised learning"]
+LEDGER = [
+    "Python", "SQL", "spaCy", "NLTK", "Mathematica", "Fortran", "Git",
+    "Supervised & unsupervised learning", "AWS Glue", "AWS S3", "AWS RDS",
+    "Matplotlib", "Signal processing",
+    "Technical documentation for cross-functional/non-technical stakeholders",
+]
 
 
 def _resume(skills):
@@ -41,9 +49,9 @@ def _resume(skills):
 
 class TestTopUpVerifiedSkills(unittest.TestCase):
     def setUp(self):
-        # The candidate's real ledger is the active profile's, which the
-        # suite must not depend on -- this step's own guard is what is
-        # under test, not the profile it happens to run against.
+        # The real ledger is the active profile's, which the suite must not
+        # depend on -- this step's own guard is under test, not the profile
+        # it happens to run against.
         patcher = patch.object(
             orchestrator.validate_resume,
             "_check_hallucinated_tools",
@@ -67,7 +75,7 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
 
     def test_title_cases_the_appended_name_not_the_jd_keywords_casing(self):
         # Skills lines are Title Case by style rule and the validator
-        # reports lowercase words on them -- appending the ledger's
+        # reports lowercase words on them, so appending the ledger's
         # "Supervised & unsupervised learning" verbatim would fix a
         # coverage miss by introducing a style violation.
         resume = _resume(["**Machine Learning & Statistics:** Regression"])
@@ -75,15 +83,14 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
             resume, {"hard_skills": ["supervised & unsupervised learning"]}
         )
         self.assertEqual(added, ["Supervised & Unsupervised Learning"])
-        self.assertTrue(result["SKILLS"][0].endswith("Supervised & Unsupervised Learning"))
+        self.assertTrue(
+            result["SKILLS"][0].endswith("Supervised & Unsupervised Learning")
+        )
 
     def test_preserves_a_name_that_carries_its_own_capitals(self):
         self.assertEqual(orchestrator._title_case_skill("spaCy"), "spaCy")
         self.assertEqual(orchestrator._title_case_skill("NLTK"), "NLTK")
-        self.assertEqual(
-            orchestrator._title_case_skill("time-series modeling"),
-            "Time-series Modeling",
-        )
+        self.assertEqual(orchestrator._title_case_skill("AWS S3"), "AWS S3")
 
     def test_never_mutates_the_input(self):
         resume = _resume(["**Languages & Frameworks:** Python, SQL"])
@@ -93,20 +100,74 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
         self.assertEqual(resume["SKILLS"], original)
         self.assertIsNot(result["SKILLS"], resume["SKILLS"])
 
-    def test_skips_a_keyword_that_is_not_verified(self):
+    # --- evidence widened beyond an exact ledger name ---
+
+    def test_a_ledger_superset_name_proves_a_bare_keyword(self):
+        resume = _resume(["**Data Engineering & Cloud:** AWS Glue"])
+        result, added = self._run(resume, {"tools": ["S3"]})
+        self.assertEqual(added, ["AWS S3"])
+        self.assertIn("AWS S3", result["SKILLS"][0])
+
+    def test_a_parenthesised_cv_group_still_places_its_skills(self):
+        # RDS only looked structurally unplaceable because "RDS)" never
+        # matched anything -- a parsing bug, not a missing skill.
+        resume = _resume(["**Data Engineering & Cloud:** AWS Glue"])
+        _, added = self._run(resume, {"tools": ["RDS"]})
+        self.assertEqual(added, ["AWS RDS"])
+
+    def test_falls_back_to_the_concise_form_when_the_ledger_spells_a_sentence(self):
+        resume = _resume(["**Visualization & Communication:** Matplotlib"])
+        result, added = self._run(resume, {"hard_skills": ["technical documentation"]})
+        self.assertEqual(added, ["Technical Documentation"])
+        self.assertNotIn("cross-functional", result["SKILLS"][0])
+
+    # --- the verification gate ---
+
+    def test_keeps_nothing_the_coverage_check_does_not_credit(self):
         resume = _resume(["**Languages & Frameworks:** Python, SQL"])
-        result, added = self._run(resume, {"tools": ["Snowflake"]}, ledger=["Python"])
+        with patch.object(
+            orchestrator.validate_resume,
+            "check_keyword_coverage",
+            return_value={"missing": ["spaCy"], "matched": [], "score": 0, "band": "x"},
+        ):
+            result, added = self._run(resume, {"tools": ["spaCy"]})
         self.assertEqual(added, [])
         self.assertEqual(result, resume)
 
-    def test_skips_when_no_rendered_line_matches_the_cv_category(self):
-        # Mathematica is grouped under "Scientific Computing", which has no
-        # home on this page -- the Visualization line has room, and that is
-        # exactly the placement this must refuse to make.
-        resume = _resume(["**Visualization & Communication:** Matplotlib, Tableau"])
+    # --- creating a home for a group that has none ---
+
+    def test_creates_a_line_for_a_group_with_no_home_and_brings_its_items_back(self):
+        resume = _resume([
+            "**Visualization & Communication:** Matplotlib, Signal Processing",
+        ])
         result, added = self._run(resume, {"tools": ["Mathematica"]})
+        self.assertEqual(added, ["Mathematica"])
+        self.assertEqual(
+            result["SKILLS"][0], "**Visualization & Communication:** Matplotlib"
+        )
+        self.assertEqual(
+            result["SKILLS"][1],
+            "**Scientific Computing:** Signal Processing, Mathematica",
+        )
+
+    def test_never_empties_an_existing_line_to_fill_a_new_one(self):
+        resume = _resume(["**Visualization & Communication:** Signal Processing"])
+        result, added = self._run(resume, {"tools": ["Fortran"]})
+        self.assertEqual(added, ["Fortran"])
+        self.assertEqual(
+            result["SKILLS"][0], "**Visualization & Communication:** Signal Processing"
+        )
+        self.assertEqual(result["SKILLS"][1], "**Scientific Computing:** Fortran")
+
+    # --- refusals ---
+
+    def test_skips_a_keyword_with_no_evidence_at_all(self):
+        resume = _resume(["**Languages & Frameworks:** Python, SQL"])
+        result, added = self._run(
+            resume, {"tools": ["Snowflake"]}, ledger=["Python"]
+        )
         self.assertEqual(added, [])
-        self.assertNotIn("Mathematica", result["SKILLS"][0])
+        self.assertEqual(result, resume)
 
     def test_skips_when_two_lines_match_the_category(self):
         resume = _resume([
@@ -144,6 +205,13 @@ class TestParseCvSkillGroups(unittest.TestCase):
         groups = orchestrator._parse_cv_skill_groups(CV_TEXT)
         self.assertEqual(groups["spacy"], "Languages & Libraries")
         self.assertEqual(groups["fortran"], "Scientific Computing")
+
+    def test_splits_a_parenthesised_vendor_group_into_its_skills(self):
+        groups = orchestrator._parse_cv_skill_groups(CV_TEXT)
+        # The vendor prefix stays attached to the first item, which is what
+        # makes it "AWS Glue" rather than a bare, meaningless "Glue".
+        for key in ("s3", "rds", "aws glue"):
+            self.assertEqual(groups[key], "Data Engineering & Cloud", key)
 
     def test_ignores_bold_lines_outside_core_skills(self):
         cv = "## Experience\n\n**Tools Used:** Excel, Word\n"
