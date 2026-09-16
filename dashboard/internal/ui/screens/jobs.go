@@ -2558,12 +2558,18 @@ func locationBadge(t theme.Theme, job model.JobRow) string {
 // Shared with Pipeline (CareerApplication carries the same canonical list).
 func employmentTags(t theme.Theme, types []string) string {
 	colors := map[string]color.Color{
-		"full_time":        t.Green,
+		// full_time is deliberately NOT Green: it is by far the most common
+		// tag, and it renders on the same line as the composite score, whose
+		// own scale runs green/teal at the high end -- two unrelated meanings
+		// in one color read as if the tag were saying something about the
+		// score. Mauve is the palette's purple and is otherwise unused here
+		// now that internship has moved to Blue.
+		"full_time":        t.Mauve,
 		"part_time":        t.Sky,
 		"contract":         t.Peach,
 		"contract_to_hire": t.Yellow,
 		"temporary":        t.Pink,
-		"internship":       t.Mauve,
+		"internship":       t.Blue,
 	}
 	var tags []string
 	for _, et := range types {
