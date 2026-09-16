@@ -1349,6 +1349,10 @@ HELP_SECTIONS = [
                 "resume sample",
                 "QA smoke test: build a sample resume + cover letter from the fixture JD",
             ),
+            (
+                "resume recruiter",
+                "build one role-agnostic resume for a staffing-agency meeting (no specific opening)",
+            ),
         ],
     ),
     (

@@ -3054,6 +3054,36 @@ def _blocker_text(blocker) -> str:
     return (blocker or "").strip()
 
 
+def _with_normalized_direction(blocker):
+    """Fills a missing/None `direction` on a hard blocker.
+
+    HardBlockerSchema declares `direction` with default="n/a", but that
+    default NEVER executes: evaluate_fit() parses the model's reply with
+    GeminiClient.parse_json() and passes the raw dicts straight through --
+    `response_schema` is only a generation hint to Gemini, not validation.
+    Measured 2026-09-16: 47 of Dom's 311 years_experience blockers and 128
+    of Morgan's 159 carried direction=None, Dom's all on the CURRENT
+    scoring version, so this is live rather than legacy.
+
+    years_experience normalizes to "under_qualified" and every other
+    category to "n/a". That choice is deliberately behavior-preserving:
+    the only consumer, the over_qualified filter below, drops nothing for
+    a None today, so mapping None to under_qualified changes no score --
+    it just makes the stored record say what the pipeline already assumed.
+    Every undirected entry sampled was of that shape ("5+ years", "7+
+    years"). Defaulting the other way would silently delete real blockers.
+    """
+    if not isinstance(blocker, dict):
+        return blocker
+    if blocker.get("direction") in ("under_qualified", "over_qualified", "n/a"):
+        return blocker
+    normalized = dict(blocker)
+    normalized["direction"] = (
+        "under_qualified" if normalized.get("category") == "years_experience" else "n/a"
+    )
+    return normalized
+
+
 def is_spurious_commute_blocker(blocker) -> bool:
     """Returns True if a hard blocker is merely a routine onsite/hybrid requirement
     or local commute prompt that is resolved because the job is within the candidate's
@@ -3267,6 +3297,12 @@ def rescore_evaluation_with_location(
     # entry tagged over_qualified still zeroed a retail role on
     # 2026-09-14). And a "blocker" whose text is just the job title is the
     # model disqualifying the role for being what it is.
+    # Fill `direction` before anything reads it -- the filter immediately
+    # below keys on it, and the model omits the field often enough that
+    # trusting the prompt alone would leave the same gap (see
+    # _with_normalized_direction for why the schema default never fires).
+    blockers = [_with_normalized_direction(b) for b in blockers]
+
     title_key = " ".join(str(job_title or "").lower().split())
     blockers = [
         b
@@ -6417,6 +6453,8 @@ class ResumeEngine:
         output_filename: str = None,
         job_key: str = None,
         interactive: bool = False,
+        *,
+        skip_company_research: bool = False,
     ) -> dict | None:
         """
         Full pipeline: JD -> keywords -> mine bullets -> audit -> build -> critique.
@@ -6426,6 +6464,17 @@ class ResumeEngine:
         behind an explicit per-recommendation y/n before any of them are applied,
         so gap-filling content never lands in the resume without approval. Approval
         choices are checkpointed so a resumed run doesn't re-prompt.
+
+        skip_company_research=True is for a build with no employer on the other
+        end of it -- currently only the recruiter resume (build_recruiter_resume.py),
+        whose "JD" is synthesized from the candidate's own profile. It must be
+        explicit rather than left to degrade on its own: research_company()'s
+        Tier 3 falls back to the JD's own text, so a candidate-derived brief
+        would come back as confident "company research" about the candidate,
+        and the Why section would then be addressed to a company that does not
+        exist. With research empty, research_block is "" and SECTION_WHY /
+        WHY_TEXT are optional in TemplateSchema, so the Why section is simply
+        omitted and validate_resume's Why checks stay dormant.
 
         Gap 1 fix: kb_context is placed in builder_system (system_instruction)
         rather than combined_contents. The full ~457k-token KB now forms a
@@ -6536,8 +6585,12 @@ class ResumeEngine:
             jd_manager.save_checkpoint(job_key, checkpoint)
         cli_art.print_literal(f"  {len(bullet_tuples)} bullet tuples retrieved.")
         # --- Step 2b: Load company research and vocabulary substitutions early ---
-        research = jd_manager.read_research(jd_path)
-        if research:
+        research = None if skip_company_research else jd_manager.read_research(jd_path)
+        if skip_company_research:
+            cli_art.print_literal(
+                "  No employer on this build -- skipping company research and the Why section."
+            )
+        elif research:
             cli_art.console.print(
                 f"  {theme.colorize_icon('success')} Loaded saved company research from JD.",
                 soft_wrap=True,

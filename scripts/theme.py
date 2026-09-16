@@ -112,6 +112,10 @@ def score_style(score) -> str:
 # Font Awesome glyphs (Private Use Area code points Nerd Fonts patch in
 # verbatim under the nf-fa-* names) -- this is the default experience.
 _NERD_ICONS = {
+    # nf-fa-star. Written as an escape rather than the literal glyph: the
+    # rest of this table is private-use codepoints, which do not survive
+    # every editor/transport intact.
+    "recruiter": "",
     "success": "",  # nf-fa-check
     "error": "",  # nf-fa-times
     "warning": "",  # nf-fa-exclamation_triangle
@@ -166,6 +170,14 @@ _UNICODE_ICONS = {
     "resume": "▶",  # U+25B6 play triangle
     "complete": "✓",  # U+2713 check mark, consistent with success
     "gem": "✦",  # U+2726 four-pointed star
+    # U+25C9 fisheye. Its own token rather than reusing "gem" or "hint":
+    # those both render ✦, and two items in one visible list sharing a
+    # glyph is what test_menu's icon-uniqueness check exists to catch.
+    # Deliberately outside test_theme's emoji ranges (U+2600-27BF et al)
+    # rather than added to its TEXT_ALLOWLIST -- a star (U+2605) would
+    # have meant widening that list to admit this one glyph, which is how
+    # the emoji this table has twice reverted to got in.
+    "recruiter": "◉",
     "location": "⌂",  # U+2302 house -- place/commute (never the pin emoji)
     "filter": "▽",  # U+25BD white down triangle -- a funnel, i.e. exclusion
     "knowledge": "⇪",  # U+21EA upward arrow from bar -- adding new material
@@ -242,6 +254,7 @@ _ICON_COLORS = {
     "resume": BRAND_ACCENT,  # purple
     "complete": SUCCESS,  # green
     "gem": WARNING,  # gold
+    "recruiter": WARNING,  # gold, same family as gem -- a standout deliverable
     "location": INFO,  # light blue
     "filter": INFO,  # light blue -- same family as location, a sibling gate
     "knowledge": BRAND,  # blue, same family as bullet_bank -- a sibling action

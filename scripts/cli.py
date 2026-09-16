@@ -19,6 +19,7 @@ if __name__ == "__main__" and not profile_paths.preflight_profile():
 
 import batch_evaluate
 import bootstrap_menu
+import build_recruiter_resume
 import build_sample
 
 # No `import questionary` here: this module's own prompts now go through
@@ -820,6 +821,25 @@ def sample_cmd():
         )
     else:
         cli_art.display_error("Sample build failed -- see output above for details.")
+        raise SystemExit(1)
+
+
+@cli.command(name="recruiter")
+def recruiter_cmd():
+    """Builds ONE role-agnostic resume for a staffing/employment agency meeting,
+    where there's no specific opening to tailor against -- the brief is synthesized
+    from this profile's own target roles and background, not a fake job posting."""
+    cli_art.display_banner("Recruiter resume: role-agnostic build")
+    result = build_recruiter_resume.build_recruiter_resume()
+    if result["resume"]:
+        cli_art.display_success(
+            f"Recruiter resume built:\n"
+            f"  {result['resume']['_output_paths']['pdf']}"
+        )
+    else:
+        cli_art.display_error(
+            "Recruiter resume build failed -- see output above for details."
+        )
         raise SystemExit(1)
 
 

@@ -32,6 +32,7 @@ import batch_evaluate
 import bootstrap_bullet_bank
 import bootstrap_menu
 import bootstrap_profile
+import build_recruiter_resume
 import build_sample
 import bullet_bank_menu
 import charm_prompt
@@ -667,6 +668,12 @@ def _build_settings_upkeep_choices() -> list:
         questionary.Choice(
             title=_icon_title("build", "↳ Generate Sample Resume + Cover Letter (QA)"),
             value="build_sample",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "recruiter", "↳ Generate Recruiter Resume (no specific role)"
+            ),
+            value="build_recruiter_resume",
         ),
         questionary.Separator(" "),
         questionary.Choice(
@@ -2069,6 +2076,49 @@ def _handle_build_sample() -> None:
     _pause_and_return()
 
 
+def _handle_build_recruiter_resume() -> None:
+    """Builds one role-agnostic resume for a staffing-agency meeting.
+
+    Unlike _handle_build_sample above, this is a real deliverable rather
+    than a smoke test -- but it shares that function's shape because it
+    has the same needs: a long, chatty pipeline run that must not scroll
+    the banner away, and no run_pipeline() side effects (nothing is moved
+    to completed/ or logged as an application, because no application was
+    made). No cover letter is offered: there is no employer to address
+    one to."""
+    scroll_region_modified = False
+
+    sys.stdout.write("\x1b[2J\x1b[H")
+    sys.stdout.flush()
+    cli_art.display_compact_banner("SETTINGS & UPKEEP | RECRUITER RESUME")
+    cli_art.display_execution_footer()
+
+    import shutil
+
+    _, rows = shutil.get_terminal_size()
+    sys.stdout.write(f"\x1b[5;{rows-1}r")
+    sys.stdout.write("\x1b[5;1H")
+    sys.stdout.flush()
+    scroll_region_modified = True
+
+    try:
+        result = build_recruiter_resume.build_recruiter_resume()
+        if result["resume"]:
+            cli_art.display_success(
+                f"Recruiter resume built:\n"
+                f"  {result['resume']['_output_paths']['pdf']}"
+            )
+        else:
+            cli_art.display_error(
+                "Recruiter resume build failed -- see output above for details."
+            )
+    finally:
+        if scroll_region_modified:
+            sys.stdout.write("\x1b[r")
+            sys.stdout.flush()
+    _pause_and_return()
+
+
 def _handle_settings_upkeep() -> bool:
     """Settings & Upkeep -- the general home for background/administrative
     tasks (renamed from "Maintenance" in the 2026-08 menu collapse; same
@@ -2131,6 +2181,9 @@ def _handle_settings_upkeep() -> bool:
             continue
         if choice == "build_sample":
             _handle_build_sample()
+            continue
+        if choice == "build_recruiter_resume":
+            _handle_build_recruiter_resume()
             continue
         if choice == "check_updates":
             _handle_check_updates()
