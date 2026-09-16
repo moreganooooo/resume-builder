@@ -223,6 +223,23 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 RETRYABLE = {429, 500, 502, 503, 504}
 SERVER_ERRORS = {500, 502, 503, 504}
 HIGH_DEMAND_STATUS = 503
+
+# A model that just failed outright is benched for a while, so the NEXT
+# bullet starts on its fallback instead of paying the failing model's
+# pacing and retry ladder again. One shared bench, so the resume builder and
+# the Bullet Bank stages agree on whether Gemma is currently usable. Probed
+# 2026-09-16: both flash-lites answering in <1s while gemma-4-31b-it took
+# 21s, 500'd, then took 59s -- and every Gemma call also waits 65s first.
+MODEL_BENCH_SECS = 15 * 60
+_benched_until: dict = {}
+
+
+def bench_model(model: str, seconds: float = MODEL_BENCH_SECS) -> None:
+    _benched_until[model] = time.monotonic() + seconds
+
+
+def is_benched(model: str) -> bool:
+    return time.monotonic() < _benched_until.get(model, 0.0)
 BASE_BACKOFF_SECS = 8
 MAX_BACKOFF_SECS = 90
 
