@@ -3401,19 +3401,20 @@ def rescore_evaluation_with_location(
         )
     ]
     ev["experience_blockers"] = experience_blockers
-    # Same filter on the persisted list: the Jobs detail pane and
-    # `resume evaluate` render ev["hard_blockers"] directly, so leaving
-    # over_qualified entries there displays a "blocker" on a role whose
-    # score was deliberately left intact.
-    ev["hard_blockers"] = [
-        b
-        for b in blockers
-        if not (
-            isinstance(b, dict)
-            and b.get("category") == "years_experience"
-            and b.get("direction") == "over_qualified"
-        )
-    ]
+    # The persisted display list is exactly the disqualifying set. The Jobs
+    # detail pane renders hard_blockers and experience_blockers as two
+    # separate labeled blocks, so any category living in BOTH lists printed
+    # twice -- a degree requirement showed up once as a hard blocker and
+    # again as an experience blocker on the same role. Only over_qualified
+    # entries were being filtered here, which left every years_experience
+    # and degree blocker duplicated.
+    #
+    # Reusing disqualifying_blockers rather than repeating its predicate
+    # keeps the two from drifting, and subsumes the over_qualified case:
+    # those are years_experience, so the category filter already drops them.
+    # Scoring is unaffected -- it reads disqualifying_blockers, which is
+    # unchanged.
+    ev["hard_blockers"] = disqualifying_blockers
 
     # Opt-in IC-only preference (content_settings.py's role_track editor).
     # Confidence-gated the same way as the Jobs/Pipeline view filters
