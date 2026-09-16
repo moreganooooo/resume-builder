@@ -825,12 +825,19 @@ def sample_cmd():
 
 
 @cli.command(name="recruiter")
-def recruiter_cmd():
+@click.option(
+    "--resume",
+    "resume_run",
+    is_flag=True,
+    default=False,
+    help="Continue from the last run's checkpoint instead of rebuilding from scratch.",
+)
+def recruiter_cmd(resume_run):
     """Builds ONE role-agnostic resume for a staffing/employment agency meeting,
     where there's no specific opening to tailor against -- the brief is synthesized
     from this profile's own target roles and background, not a fake job posting."""
     cli_art.display_banner("Recruiter resume: role-agnostic build")
-    result = build_recruiter_resume.build_recruiter_resume()
+    result = build_recruiter_resume.build_recruiter_resume(fresh=not resume_run)
     if result["resume"]:
         cli_art.display_success(
             f"Recruiter resume built:\n"
