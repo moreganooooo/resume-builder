@@ -421,6 +421,35 @@ func RenderHelpOverlay(t theme.Theme, title string, categories []HelpCategory, w
 	return renderHelpOverlay(t, title, internalCats, width, height)
 }
 
+// modalBoxWidth is the single source of truth for how wide a centered modal
+// is drawn. renderHelpOverlay's callers need it too, because a help overlay
+// is drawn TWICE: it builds its own full-width header/footer and its own
+// bordered body, and renderModalOverlay then re-renders that whole block
+// inside a SECOND border. While the two sized themselves independently --
+// callers asked for 75% of the terminal, the modal capped itself at 100
+// columns -- every terminal wider than ~133 columns handed the modal a block
+// wider than its own content area, and lipgloss WRAPPED the overflow out past
+// the left border rather than truncating it. renderHelpOverlay's own
+// ansi.Truncate guard cannot catch that: it clips to the width it was given,
+// which was already the wrong one.
+func modalBoxWidth(termWidth int) int {
+	w := int(float64(termWidth) * 0.8)
+	if w > 100 {
+		w = 100 // Cap at 100 columns
+	}
+	if w < 40 {
+		w = 40 // Minimum 40 columns
+	}
+	return w
+}
+
+// helpOverlayWidth is what a caller must pass to renderHelpOverlay whenever
+// the result is going into renderModalOverlay: the modal's box, minus the two
+// columns its own border occupies.
+func helpOverlayWidth(termWidth int) int {
+	return modalBoxWidth(termWidth) - 2
+}
+
 func renderHelpOverlay(t theme.Theme, title string, categories []helpCategory, width, height int) string {
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
@@ -546,14 +575,9 @@ func renderModalOverlay(t theme.Theme, background string, content string, width,
 	bgLines := strings.Split(background, "\n")
 	contentLines := strings.Split(content, "\n")
 
-	// Modal dimensions: 80% of screen width, centered
-	modalWidth := int(float64(width) * 0.8)
-	if modalWidth > 100 {
-		modalWidth = 100 // Cap at 100 columns
-	}
-	if modalWidth < 40 {
-		modalWidth = 40 // Minimum 40 columns
-	}
+	// Modal dimensions: 80% of screen width, centered (see modalBoxWidth,
+	// which callers sizing modal CONTENT must use as well).
+	modalWidth := modalBoxWidth(width)
 	modalHeight := len(contentLines) + 4 // +4 for border/padding
 
 	// Ensure we don't exceed screen height

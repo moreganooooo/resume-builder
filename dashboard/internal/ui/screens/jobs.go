@@ -1478,7 +1478,8 @@ var jobsHelpCategories = []helpCategory{
 		{"a", "Archive this job (removes from all filters)"},
 	}},
 	{"Filters", []helpBinding{
-		{"f", "Cycle filters: All → Pending → Completed → High Fit → Good Fit (default) → Recent → Local → Low (< 3.5). Every stop except Low shows only roles scoring 3.5+"},
+		{"f", "Cycle filters: All / Pending / Completed / High Fit / Good Fit"},
+		{"", "/ Recent / Local / Low. Only Low shows roles under 3.5"},
 		{"w", "Cycle workplace filter: All → Remote → Hybrid → Onsite"},
 		{"e", "Cycle employment type filter"},
 		{"$", "Cycle pay filter: All → Stated → Unstated"},
@@ -1602,7 +1603,7 @@ func (m JobsModel) View() string {
 
 	// Render help as a centered modal overlay if showing
 	if m.showHelp {
-		helpContent := renderHelpOverlay(m.theme, "Jobs", jobsHelpCategories, int(float64(m.width)*0.75), m.height-4)
+		helpContent := renderHelpOverlay(m.theme, "Jobs", jobsHelpCategories, helpOverlayWidth(m.width), m.height-4)
 		return renderModalOverlay(m.theme, fullContent, helpContent, m.width, m.height)
 	}
 

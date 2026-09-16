@@ -1042,7 +1042,7 @@ func (m PipelineModel) View() string {
 	}
 
 	if m.showHelp {
-		helpContent := renderHelpOverlay(m.theme, "Pipeline", pipelineHelpCategories, int(float64(m.width)*0.75), m.height-4)
+		helpContent := renderHelpOverlay(m.theme, "Pipeline", pipelineHelpCategories, helpOverlayWidth(m.width), m.height-4)
 		return renderModalOverlay(m.theme, full, helpContent, m.width, m.height)
 	}
 
