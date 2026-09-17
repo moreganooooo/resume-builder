@@ -1703,6 +1703,43 @@ def _resolve_verified_skill(keyword: str, ledger_names: list, cv_groups: dict) -
     return ordered, label
 
 
+# How many one-line skills rows the top-up may grow into two in one build.
+MAX_SKILLS_ROWS_NEWLY_WRAPPED = 1
+
+
+def _ledger_verifies(keyword: str, ledger_names: list) -> bool:
+    keyword_tokens = _skill_tokens(keyword)
+    return bool(keyword_tokens) and any(
+        keyword_tokens <= _skill_tokens(name) for name in ledger_names
+    )
+
+
+def _assign_skill_groups_with_model(keywords: list, labels: list) -> dict:
+    """One small call: which of these existing skills rows does each verified
+    skill belong on? Returns {keyword: label}; unsure answers are omitted."""
+    prompt = (
+        "Place each skill on the resume skills row it most naturally belongs to. "
+        "Use ONLY the row labels given, spelled exactly. If no row clearly fits a "
+        "skill, leave that skill out rather than forcing it.\n\n"
+        "ROWS:\n" + "\n".join(f"- {l}" for l in labels)
+        + "\n\nSKILLS:\n" + "\n".join(f"- {k}" for k in keywords)
+        + '\n\nReturn JSON: {"placements": [{"skill": "...", "row": "..."}]}'
+    )
+    text, _usage = GeminiClient.generate(
+        model=BUILDER_MODEL,
+        system_instruction="You organize resume skills sections. Return only JSON.",
+        contents=prompt,
+        temperature=0.0,
+        max_retries=2,
+    )
+    data = GeminiClient.parse_json(text or "") or {}
+    return {
+        str(p.get("skill", "")).strip(): str(p.get("row", "")).strip()
+        for p in data.get("placements") or []
+        if isinstance(p, dict)
+    }
+
+
 def _place_verified_skill(
     lines: list, form: str, label: str, targets: list, cv_groups: dict,
     max_chars: int, wrap_min: int,
@@ -1775,7 +1812,7 @@ def _keyword_now_credited(
 
 def _top_up_verified_skills(
     resume_data: dict, jd_keywords: dict, style_rules: dict, cv_text: str,
-    verified_names: list,
+    verified_names: list, assign_groups=None,
 ) -> tuple:
     """Appends JD keywords the candidate is ALREADY verified for, but which
     the finished resume happens not to say, onto the matching SKILLS line.
@@ -1820,17 +1857,59 @@ def _top_up_verified_skills(
     wrap_min = max_chars + skills_section.get("widow_min_chars", 25)
 
     lines = list(skills)
+    # cv.md cannot group every ledger skill, so verified keywords it does not
+    # group are handed to `assign_groups` (one model call at the build site):
+    # it picks a home among the rows already on the page, or none. Its answer
+    # only supplies a LOCATION -- the ledger still has to verify the skill,
+    # and the coverage check still has to credit the edit.
+    if assign_groups:
+        ungrouped = [
+            k for k in missing
+            if _ledger_verifies(k, ledger)
+            and not _resolve_verified_skill(k, ledger, cv_groups)
+        ]
+        labels = [
+            _skill_line_items(line)[0] for line in lines
+            if _skill_line_items(line)[0]
+        ]
+        if ungrouped and labels:
+            try:
+                assigned = assign_groups(ungrouped, labels) or {}
+            except Exception:
+                assigned = {}
+            cv_groups = dict(cv_groups)
+            for keyword, label in assigned.items():
+                if label in labels and keyword in ungrouped:
+                    cv_groups.setdefault(str(keyword).casefold(), label)
+
     added = []
+    deferred = []
     for keyword in missing:
         resolved = _resolve_verified_skill(keyword, ledger, cv_groups)
         if not resolved:
             continue
         forms, label = resolved
         wanted = _label_tokens(label)
-        targets = [
-            i for i, line in enumerate(lines)
-            if wanted & _label_tokens(_skill_line_items(line)[0])
-        ]
+        # The row already holding this group's own skills is its home, even
+        # when the model renamed the row ("CRM & RevOps" lists Data Hygiene,
+        # which cv.md files under "CRM & Marketing Operations") -- a shared
+        # word like "Marketing" would otherwise point at the wrong row.
+        kin = {
+            i: sum(
+                1 for item in _skill_line_items(line)[1]
+                if cv_groups.get(item.casefold()) == label
+            )
+            for i, line in enumerate(lines)
+        }
+        # One stray item is a misplacement to move, not a home; two is a home.
+        best_kin = max(kin.values(), default=0)
+        if best_kin >= 2:
+            targets = [i for i in kin if kin[i] == best_kin]
+        else:
+            targets = [
+                i for i, line in enumerate(lines)
+                if wanted & _label_tokens(_skill_line_items(line)[0])
+            ]
         # A shared word ("Marketing" in both "Email & Lifecycle Marketing" and
         # "CRM & Marketing Operations") is not a tie when one label matches
         # far better; keep only the strongest overlap before judging.
@@ -1847,6 +1926,7 @@ def _top_up_verified_skills(
         # Forms run most-specific first (the ledger's own name), falling back
         # to the keyword's concise form when the ledger spells it as a
         # sentence. The first one that places legally and earns credit wins.
+        placed = False
         for form in forms:
             trial = _place_verified_skill(
                 lines, form, label, targets, cv_groups, max_chars, wrap_min
@@ -1859,7 +1939,41 @@ def _top_up_verified_skills(
                 continue
             lines = trial
             added.append(form)
+            placed = True
             break
+        if not placed and len(targets) == 1:
+            deferred.append((targets[0], keyword, forms[-1]))
+
+    # One item rarely fits a nearly-full row: it lands in the widow dead band.
+    # Several together can FILL a second line, which is legal. Only
+    # MAX_SKILLS_ROWS_NEWLY_WRAPPED rows may grow this way, so a keyword-heavy
+    # posting cannot turn every row into two.
+    wrapped = 0
+    by_row = {}
+    for index, keyword, form in deferred:
+        by_row.setdefault(index, []).append((keyword, form))
+    for index, items in sorted(by_row.items(), key=lambda kv: -len(kv[1])):
+        if wrapped >= MAX_SKILLS_ROWS_NEWLY_WRAPPED:
+            break
+        base = lines[index]
+        if len(_plain_skills_line(base)) > max_chars:
+            continue
+        kept, trial = [], list(lines)
+        for keyword, form in items:
+            attempt = list(trial)
+            attempt[index] = f"{attempt[index].rstrip().rstrip(',')}, {form}"
+            if len(_plain_skills_line(attempt[index])) > 2 * max_chars:
+                break
+            if _skills_add_hallucinated_tool(trial, attempt):
+                continue
+            if not _keyword_now_credited(resume_data, attempt, jd_keywords, keyword):
+                continue
+            trial = attempt
+            kept.append(form)
+        if kept and _skills_line_legal(trial[index], max_chars, wrap_min):
+            lines = trial
+            added.extend(kept)
+            wrapped += 1
 
     if not added:
         return resume_data, []
@@ -8187,6 +8301,7 @@ class ResumeEngine:
                 style_rules_for_validation,
                 _cv_text,
                 _verified_names,
+                assign_groups=_assign_skill_groups_with_model,
             )
             if _topped_up:
                 cli_art.print_literal(

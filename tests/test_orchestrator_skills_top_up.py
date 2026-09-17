@@ -159,6 +159,84 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
         )
         self.assertEqual(result["SKILLS"][1], "**Scientific Computing:** Fortran")
 
+    # --- rows that need company to wrap ---
+
+    def test_several_items_together_fill_a_second_line_one_alone_cannot(self):
+        # 105 printed: any single append lands in the 111-134 dead band,
+        # but three together reach a legal two-line row.
+        line = "**Scientific Computing:** " + ", ".join(["Fortran"] * 9) + ", Fo"
+        self.assertEqual(len(orchestrator._plain_skills_line(line)), 105)
+        ledger = LEDGER + ["Numerical Methods", "Finite Element Modeling"]
+        cv = CV_TEXT.replace(
+            "signal processing", "signal processing, numerical methods, finite element modeling"
+        )
+        _, added = self._run(
+            _resume([line]),
+            {"tools": ["Mathematica", "Numerical Methods", "Finite Element Modeling"]},
+            cv_text=cv, ledger=ledger,
+        )
+        self.assertEqual(len(added), 3)
+
+    def test_only_one_row_may_newly_wrap_per_build(self):
+        a = "**Scientific Computing:** " + ", ".join(["Fortran"] * 9) + ", Fo"
+        b = "**Languages & Libraries:** " + ", ".join(["Python"] * 11)
+        b = b[: len(b) - (len(orchestrator._plain_skills_line(b)) - 105)]
+        ledger = LEDGER + ["Numerical Methods", "Finite Element Modeling",
+                           "Pandas Profiling", "Scikit Learn Pipelines"]
+        cv = CV_TEXT.replace(
+            "signal processing", "signal processing, numerical methods, finite element modeling"
+        ).replace("spaCy, NLTK", "spaCy, NLTK, pandas profiling, scikit learn pipelines")
+        result, _ = self._run(
+            _resume([a, b]),
+            {"tools": ["Mathematica", "Numerical Methods", "Finite Element Modeling",
+                       "spaCy", "Pandas Profiling", "Scikit Learn Pipelines"]},
+            cv_text=cv, ledger=ledger,
+        )
+        wrapped = [l for l in result["SKILLS"]
+                   if len(orchestrator._plain_skills_line(l)) > 110]
+        self.assertEqual(len(wrapped), 1)
+
+    def test_the_row_holding_the_groups_skills_wins_over_a_shared_label_word(self):
+        resume = _resume([
+            "**Scientific Computing Tools:** Matplotlib",
+            "**Research Stack:** Fortran, Signal Processing",
+        ])
+        result, added = self._run(resume, {"tools": ["Mathematica"]})
+        self.assertEqual(added, ["Mathematica"])
+        self.assertEqual(result["SKILLS"][1], "**Research Stack:** Fortran, Signal Processing, Mathematica")
+
+    # --- skills cv.md never grouped ---
+
+    def test_model_assigned_row_places_a_verified_ungrouped_skill(self):
+        resume = _resume(["**Languages & Frameworks:** Python, SQL"])
+        calls = []
+
+        def assign(keywords, labels):
+            calls.append((keywords, labels))
+            return {"Pandas": "Languages & Frameworks"}
+
+        result, added = orchestrator._top_up_verified_skills(
+            resume, {"tools": ["Pandas"]}, {}, CV_TEXT, LEDGER + ["Pandas"],
+            assign_groups=assign,
+        )
+        self.assertEqual(calls, [(["Pandas"], ["Languages & Frameworks"])])
+        self.assertEqual(added, ["Pandas"])
+
+    def test_model_never_asked_about_an_unverified_skill_or_trusted_off_list(self):
+        resume = _resume(["**Languages & Frameworks:** Python, SQL"])
+        seen = []
+
+        def assign(keywords, labels):
+            seen.extend(keywords)
+            return {"Pandas": "Invented Row"}
+
+        _, added = orchestrator._top_up_verified_skills(
+            resume, {"tools": ["Pandas", "Snowflake"]}, {}, CV_TEXT,
+            LEDGER + ["Pandas"], assign_groups=assign,
+        )
+        self.assertEqual(seen, ["Pandas"])
+        self.assertEqual(added, [])
+
     # --- refusals ---
 
     def test_skips_a_keyword_with_no_evidence_at_all(self):
