@@ -74,7 +74,12 @@ def _normalize(text: str) -> str:
         text = text.replace(original, replacement)
     for ligature, expansion in _LIGATURE_EXPANSIONS.items():
         text = text.replace(ligature, expansion)
-    return re.sub(r"\s+", " ", text).strip().lower()
+    text = re.sub(r"\s+", " ", text)
+    # A line that breaks right after a hyphen ("16-sequence") comes out of
+    # the text layer as "16- sequence". Nothing was dropped, so close the gap
+    # (the same rule runs on both sides of every comparison).
+    text = re.sub(r"(?<=\w)- (?=\w)", "-", text)
+    return text.strip().lower()
 
 
 def _expand_ligatures(token: str) -> str:
