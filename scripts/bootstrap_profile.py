@@ -2138,9 +2138,10 @@ def collect_excluded_roles(dry_run: bool = False) -> list:
     cli_art.console.print()
 
     selected = cli_art.checkbox(
-        "Any of these that aren't real roles/employers? (space to select, "
-        "enter to confirm; leave blank for none)",
+        "Any of these that aren't real roles/employers? (click or space to "
+        "toggle, a for all shown, / to filter; leave blank for none)",
         choices=[questionary.Choice(title=c, value=c) for c in companies],
+        grid=True,
     )
     return list(selected) if selected else []
 
@@ -2242,8 +2243,10 @@ def collect_situational_roles(dry_run: bool = False) -> list:
 
     selected = cli_art.checkbox(
         "Any of these past roles you'd only want to show up for specific kinds "
-        "of jobs? (space to select, enter to confirm; leave blank for none)",
+        "of jobs? (click or space to toggle, a for all shown, / to filter; "
+        "leave blank for none)",
         choices=[questionary.Choice(title=c, value=c) for c in companies],
+        grid=True,
     )
     if not selected:
         cli_art.cli_info("None selected -- every past role will show on every resume.")

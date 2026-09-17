@@ -481,3 +481,74 @@ class TestDismissedSkills(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSkillsMaintenanceViews(unittest.TestCase):
+    """The maintenance screens read a ledger with thousands of entries, so
+    they summarize and group rather than printing it."""
+
+    TOOLS = [
+        {"id": "tool_001", "name": "Salesforce CRM", "category": "CRM"},
+        {"id": "tool_002", "name": "salesforce crm", "category": "CRM"},
+        {"id": "tool_003", "name": "Figma", "category": "Design"},
+        {"id": "tool_004", "name": None, "category": None},
+    ]
+
+    def test_duplicate_names_are_case_insensitive(self):
+        self.assertEqual(skills_menu._duplicate_names(self.TOOLS), ["salesforce crm"])
+
+    def test_blank_names_are_never_counted_as_duplicates(self):
+        self.assertEqual(skills_menu._duplicate_names([{"name": ""}, {"name": None}]), [])
+
+    def test_null_category_groups_under_uncategorized(self):
+        self.assertEqual(
+            sorted(skills_menu._by_category(self.TOOLS)),
+            ["CRM", "Design", "Uncategorized"],
+        )
+
+    def test_dashboard_summarizes_instead_of_listing_every_skill(self):
+        with patch.object(skills_menu.cli_art.console, "print") as mock_print:
+            skills_menu._display_skills_dashboard(self.TOOLS)
+        out = "\n".join(str(c.args[0]) for c in mock_print.call_args_list if c.args)
+        self.assertIn("4", out)  # the total
+        self.assertIn("Remove Skills in Bulk", out)  # the duplicate hint
+        self.assertNotIn("Figma", out)  # no per-skill rows
+
+    def test_skill_label_marks_duplicates(self):
+        dupes = set(skills_menu._duplicate_names(self.TOOLS))
+        self.assertTrue(skills_menu._skill_label(self.TOOLS[0], dupes).startswith("⧉ "))
+        self.assertFalse(skills_menu._skill_label(self.TOOLS[2], dupes).startswith("⧉ "))
+
+    @patch("skills_menu._pause")
+    @patch("skills_menu._save_verified_tools", return_value=True)
+    def test_bulk_remove_deletes_only_confirmed_selection(self, mock_save, _pause):
+        data = {"tools": list(self.TOOLS)}
+        with (
+            patch.object(skills_menu.cli_art, "checkbox", return_value=["tool_002"]),
+            patch.object(skills_menu.cli_art, "confirm", return_value=True),
+        ):
+            skills_menu._bulk_remove_skills(data)
+        self.assertEqual(
+            [t["id"] for t in data["tools"]], ["tool_001", "tool_003", "tool_004"]
+        )
+        mock_save.assert_called_once()
+
+    @patch("skills_menu._pause")
+    @patch("skills_menu._save_verified_tools", return_value=True)
+    def test_bulk_remove_declined_confirmation_writes_nothing(self, mock_save, _pause):
+        data = {"tools": list(self.TOOLS)}
+        with (
+            patch.object(skills_menu.cli_art, "checkbox", return_value=["tool_002"]),
+            patch.object(skills_menu.cli_art, "confirm", return_value=False),
+        ):
+            skills_menu._bulk_remove_skills(data)
+        self.assertEqual(len(data["tools"]), 4)
+        mock_save.assert_not_called()
+
+    @patch("skills_menu._save_verified_tools", return_value=True)
+    def test_bulk_remove_cancelled_picker_writes_nothing(self, mock_save):
+        data = {"tools": list(self.TOOLS)}
+        with patch.object(skills_menu.cli_art, "checkbox", return_value=None):
+            skills_menu._bulk_remove_skills(data)
+        self.assertEqual(len(data["tools"]), 4)
+        mock_save.assert_not_called()
