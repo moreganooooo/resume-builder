@@ -271,7 +271,9 @@ def run(max_roles: int = DEFAULT_MAX_ROLES) -> int:
         cli_art.detail(
             "Now select any of the remaining tools/skills that are "
             "DEFINITELY NOT part of your background -- these will be "
-            "permanently hidden from future Pending Pipeline scans.",
+            "permanently hidden from future Pending Pipeline scans. "
+            "Click or press space to toggle, a to select/deselect "
+            "everything shown, / to filter.",
             level=cli_art.NORMAL,
         )
         dismiss_choices = [
@@ -281,6 +283,7 @@ def run(max_roles: int = DEFAULT_MAX_ROLES) -> int:
         to_dismiss = cli_art.checkbox(
             "Select tools/skills to permanently dismiss (not applicable):",
             choices=dismiss_choices,
+            grid=True,
         )
         if to_dismiss:
             dismissed = set(skills_menu._load_dismissed_skills())

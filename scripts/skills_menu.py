@@ -8,6 +8,7 @@ import json
 import os
 import sys
 
+import charm_prompt
 import cli_art
 import profile_paths
 import questionary
@@ -131,10 +132,16 @@ def _manage_dismissed_skills():
         _pause()
         return
 
-    choices = [questionary.Choice(name, name) for name in dismissed]
+    cli_art.detail(
+        f"{len(dismissed)} dismissed skill(s). Click or press space to "
+        "toggle, a to select/deselect everything shown, / to filter.",
+        level=cli_art.NORMAL,
+    )
+    choices = [questionary.Choice(name, name) for name in sorted(dismissed)]
     selected = cli_art.checkbox(
         "Select any to restore (they'll be eligible to reappear in future scans):",
         choices=choices,
+        grid=True,
     )
     if not selected:
         return
@@ -160,27 +167,62 @@ def _generate_next_id(tools: list) -> str:
     return f"tool_{highest + 1:03d}"
 
 
-def _display_skills_dashboard(tools: list):
-    cli_art.console.print("[bold cyan]Active Skills Inventory[/bold cyan]")
-    cli_art.console.print(f"Total Verified Tools/Skills: [green]{len(tools)}[/green]\n")
+def _by_category(tools: list) -> dict:
+    """Groups tools by category name.
 
-    # Display table of skills grouped by category
-    categories = {}
-    # `or`, not a .get() default: a key that is PRESENT but null (possible
-    # from a merged/extracted ledger entry) returned None, and sorting None
-    # against str raised TypeError and took the whole Skills screen down.
+    `or`, not a .get() default: a key that is PRESENT but null (possible
+    from a merged/extracted ledger entry) returned None, and sorting None
+    against str raised TypeError and took the whole Skills screen down.
+    """
+    categories: dict = {}
     for t in tools:
-        cat = t.get("category") or "Uncategorized"
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(t)
+        categories.setdefault(t.get("category") or "Uncategorized", []).append(t)
+    return categories
+
+
+def _duplicate_names(tools: list) -> list:
+    """Names appearing on more than one entry, case-insensitively.
+
+    A ledger merged from several extraction runs accumulates these
+    ("Salesforce CRM" four times), and they are the main thing a
+    maintenance pass is here to clean up.
+    """
+    counts: dict = {}
+    for t in tools:
+        key = (t.get("name") or "").strip().lower()
+        if key:
+            counts[key] = counts.get(key, 0) + 1
+    return sorted(n for n, c in counts.items() if c > 1)
+
+
+def _display_skills_dashboard(tools: list):
+    """A one-screen summary, never the whole ledger.
+
+    Printing every entry (1,400+ on a real profile) pushed the action menu
+    off the bottom of the terminal and buried it in scrollback; the full
+    list belongs in the pickers below, which filter and paginate.
+    """
+    categories = _by_category(tools)
+    dupes = _duplicate_names(tools)
+
+    cli_art.console.print("[bold cyan]Active Skills Inventory[/bold cyan]")
+    summary = (
+        f"[green]{len(tools)}[/green] verified tool(s)/skill(s) across "
+        f"[green]{len(categories)}[/green] categor(ies)"
+    )
+    if dupes:
+        summary += f", [yellow]{len(dupes)}[/yellow] duplicated name(s)"
+    cli_art.console.print(summary)
 
     for cat, items in sorted(categories.items()):
-        cli_art.console.print(f"[bold yellow]▪ {cat}[/bold yellow]")
-        for item in sorted(items, key=lambda x: x.get("name") or ""):
-            cli_art.console.print(
-                f"  - [white]{item.get('name')}[/white] ([cyan]{item.get('confidence')}[/cyan])"
-            )
+        cli_art.console.print(
+            f"  [bold yellow]▪ {cat}[/bold yellow] [dim]— {len(items)}[/dim]"
+        )
+    if dupes:
+        shown = ", ".join(dupes[:5]) + (" …" if len(dupes) > 5 else "")
+        cli_art.console.print(
+            f"  [dim]Duplicates: {shown} — use Remove Skills in Bulk to clean up.[/dim]"
+        )
     cli_art.console.print()
 
 
@@ -358,6 +400,70 @@ def _delete_skill(data: dict, tool_id: str):
             _pause()
 
 
+def _skill_label(tool: dict, dupes: set) -> str:
+    """One picker row. `⧉` marks a name the ledger holds more than once,
+    which is what makes a cleanup pass possible without opening each entry."""
+    mark = "⧉ " if (tool.get("name") or "").strip().lower() in dupes else ""
+    return (
+        f"{mark}[{tool.get('category') or 'Uncategorized'}] "
+        f"{tool.get('name')} ({tool.get('confidence')})"
+    )
+
+
+def _sorted_tools(tools: list) -> list:
+    return sorted(
+        tools,
+        key=lambda x: ((x.get("category") or ""), (x.get("name") or "").lower()),
+    )
+
+
+def _bulk_remove_skills(data: dict):
+    """Deletes several ledger entries in one pass, on the same grid the
+    Skill Gap Scan uses -- removing merge duplicates one at a time through
+    the details screen is what made them accumulate."""
+    tools = data.get("tools", [])
+    if not tools:
+        cli_art.detail("No skills to remove yet.", level=cli_art.NORMAL)
+        _pause()
+        return
+
+    dupes = set(_duplicate_names(tools))
+    cli_art.detail(
+        f"{len(tools)} skill(s); ⧉ marks a name that appears more than once. "
+        "Click or press space to toggle, a to select/deselect everything "
+        "shown, / to filter.",
+        level=cli_art.NORMAL,
+    )
+    choices = [
+        questionary.Choice(_skill_label(t, dupes), t.get("id"))
+        for t in _sorted_tools(tools)
+    ]
+    selected = cli_art.checkbox(
+        "Select skills/tools to remove from your verified ledger:",
+        choices=choices,
+        grid=True,
+    )
+    if not selected:
+        return
+
+    names = [
+        t.get("name") for t in tools if t.get("id") in set(selected) and t.get("name")
+    ]
+    if not cli_art.confirm(
+        f"Permanently remove {len(selected)} skill(s)? "
+        f"({', '.join(names[:5])}{' …' if len(names) > 5 else ''})",
+        default=False,
+    ):
+        cli_art.detail("Cancelled -- no changes made.", level=cli_art.NORMAL)
+        _pause()
+        return
+
+    data["tools"] = [t for t in tools if t.get("id") not in set(selected)]
+    if _save_verified_tools(data):
+        cli_art.display_success(f"Removed {len(selected)} skill(s) from the ledger.")
+        _pause()
+
+
 def _view_skill_details(data: dict, tool_id: str):
     tools = data.get("tools", [])
     tool = next((t for t in tools if t.get("id") == tool_id), None)
@@ -436,6 +542,7 @@ def run_skills_menu():
         _display_skills_dashboard(tools)
 
         choices = [
+            charm_prompt.Heading("Skills & Tools"),
             questionary.Choice("➕  Add New Skill/Tool", "add_skill"),
         ]
         if tools:
@@ -444,20 +551,21 @@ def run_skills_menu():
                     "◉  Select a Skill to View/Edit/Delete", "select_skill"
                 )
             )
-        choices.append(
+            choices.append(
+                questionary.Choice("✗  Remove Skills in Bulk", "bulk_remove")
+            )
+        choices += [
+            charm_prompt.Heading("Career Facts"),
             questionary.Choice(
                 "★  Review Staged Career Facts (D10 Gate)", "review_staged_facts"
-            )
-        )
-        choices.append(
-            questionary.Choice("📜  View Verified Facts Ledger", "view_facts_ledger")
-        )
-        choices.append(
+            ),
+            questionary.Choice("📜  View Verified Facts Ledger", "view_facts_ledger"),
+            charm_prompt.Heading("Maintenance"),
             questionary.Choice(
                 "🚫  Manage Dismissed Skills (Not My Background)", "manage_dismissed"
-            )
-        )
-        choices.append(questionary.Choice("⬅  Back to Settings & Upkeep", "back"))
+            ),
+            questionary.Choice("⬅  Back to Settings & Upkeep", "back"),
+        ]
 
         action = cli_art.select("Skills Actions", choices=choices)
         if not action or action == "back":
@@ -484,16 +592,30 @@ def run_skills_menu():
             _manage_dismissed_skills()
             continue
 
+        if action == "bulk_remove":
+            _bulk_remove_skills(data)
+            continue
+
         if action == "select_skill":
-            # Build list of skills for selection
+            # Grouped under category headings, the same shape as this menu --
+            # a flat 1,400-row list is unusable without them.
+            dupes = set(_duplicate_names(tools))
             skill_choices = []
-            for t in sorted(
-                tools,
-                key=lambda x: ((x.get("category") or ""), (x.get("name") or "").lower()),
-            ):
-                label = f"[{t.get('category')}] {t.get('name')} ({t.get('confidence')})"
-                skill_choices.append(questionary.Choice(label, t.get("id")))
-            skill_choices.append(questionary.Choice("Cancel", "back"))
+            current_cat = None
+            for t in _sorted_tools(tools):
+                cat = t.get("category") or "Uncategorized"
+                if cat != current_cat:
+                    current_cat = cat
+                    skill_choices.append(charm_prompt.Heading(cat))
+                name = t.get("name")
+                mark = "⧉ " if (name or "").strip().lower() in dupes else ""
+                skill_choices.append(
+                    questionary.Choice(
+                        f"{mark}{name} ({t.get('confidence')})", t.get("id")
+                    )
+                )
+            skill_choices.append(charm_prompt.Heading("  "))
+            skill_choices.append(questionary.Choice("⬅  Cancel", "back"))
 
             selected_id = cli_art.select(
                 "Select a skill to manage:", choices=skill_choices
