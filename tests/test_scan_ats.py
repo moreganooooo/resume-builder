@@ -580,7 +580,8 @@ class TestConcurrentCompanyFetching(unittest.TestCase):
             ]
 
         mock_run.side_effect = flaky
-        jobs = scan_ats.fetch_ats_jobs()
+        with self.assertLogs(level="ERROR"):  # expected; keep it out of the readout
+            jobs = scan_ats.fetch_ats_jobs()
         # The three healthy hosts still return; only the bad one is lost.
         self.assertEqual(len(jobs), 3)
         self.assertNotIn("Co2", [j["company_name"] for j in jobs])

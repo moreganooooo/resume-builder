@@ -172,6 +172,7 @@ def _build_find_jobs_choices() -> list:
     the audit specifically praised that pattern for signaling "you're one
     level down from the main menu" and asked for it here too."""
     return [
+        charm_prompt.Heading("Find"),
         questionary.Choice(
             title=_icon_title("discovery", "↳ Scan for New Jobs"), value="scan"
         ),
@@ -179,10 +180,7 @@ def _build_find_jobs_choices() -> list:
             title=_icon_title("save", "↳ Add Job Description Manually"),
             value="add_manual_jd",
         ),
-        questionary.Choice(
-            title=_icon_title("complete", "↳ Check Job Posting Liveness"),
-            value="liveness",
-        ),
+        charm_prompt.Heading("Score"),
         questionary.Choice(
             title=_icon_title("evaluate", "↳ Evaluate Pending Roles"),
             value="evaluate_all",
@@ -190,6 +188,11 @@ def _build_find_jobs_choices() -> list:
         questionary.Choice(
             title=_icon_title("build", "↳ Re-score Outdated Evaluations"),
             value="rescore_stale",
+        ),
+        charm_prompt.Heading("Clean Up"),
+        questionary.Choice(
+            title=_icon_title("complete", "↳ Check Job Posting Liveness"),
+            value="liveness",
         ),
         questionary.Choice(
             title=_icon_title("utility", "↳ Archive Stale Postings"),
@@ -202,6 +205,7 @@ def _build_find_jobs_choices() -> list:
 def _build_build_documents_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why."""
     return [
+        charm_prompt.Heading("One Role"),
         questionary.Choice(
             title=_icon_title(
                 "build", "↳ Build Full Application Package (Resume + Cover Letter)"
@@ -213,15 +217,17 @@ def _build_build_documents_choices() -> list:
             value="tailor_pick",
         ),
         questionary.Choice(
+            title=_icon_title("save", "↳ Write Cover Letter for Specific Role(s)"),
+            value="coverletter_pick",
+        ),
+        charm_prompt.Heading("Many Roles"),
+        questionary.Choice(
             title=_icon_title(
                 "evaluate", "↳ Customize Resume for All Pending Roles (Batch Run)"
             ),
             value="tailor_all",
         ),
-        questionary.Choice(
-            title=_icon_title("save", "↳ Write Cover Letter for Specific Role(s)"),
-            value="coverletter_pick",
-        ),
+        charm_prompt.Heading("Refine"),
         questionary.Choice(
             title=_icon_title("gem", "↳ Polish a Resume or Cover Letter With Gemini"),
             value="polish",
@@ -602,11 +608,7 @@ def _build_settings_upkeep_choices() -> list:
     last_run = maintenance.get_last_run("doctor")
     last_run_label = f"(last run: {last_run[:10]})" if last_run else "(never run)"
     return [
-        questionary.Choice(
-            title=_icon_title("utility", f"↳ Run Doctor Checks {last_run_label}"),
-            value="doctor",
-        ),
-        questionary.Separator(" "),
+        charm_prompt.Heading("Your Skills"),
         questionary.Choice(
             title=_icon_title("bullet_bank", "↳ View & Manage Profile Skills"),
             value="manage_skills",
@@ -623,13 +625,7 @@ def _build_settings_upkeep_choices() -> list:
             title=_icon_title("warning", "↳ Recompute Stale (0%) Skill Gap Matrices"),
             value="clear_stale_skill_matrices",
         ),
-        questionary.Separator(" "),
-        questionary.Choice(
-            title=_icon_title(
-                "discovery", "↳ Manage Scraping, Boards & Search Queries"
-            ),
-            value="manage_scraping",
-        ),
+        charm_prompt.Heading("Job Search Preferences"),
         questionary.Choice(
             title=_icon_title(
                 "location", f"↳ Location & Commute Radius {_location_filter_label()}"
@@ -649,11 +645,18 @@ def _build_settings_upkeep_choices() -> list:
             ),
             value="manage_scoring_weights",
         ),
+        charm_prompt.Heading("Job Sources"),
+        questionary.Choice(
+            title=_icon_title(
+                "discovery", "↳ Manage Scraping, Boards & Search Queries"
+            ),
+            value="manage_scraping",
+        ),
         questionary.Choice(
             title=_icon_title("evaluate", "↳ Discover Local Employers with ATS Boards"),
             value="discover_employers",
         ),
-        questionary.Separator(" "),
+        charm_prompt.Heading("Your Voice & Story"),
         questionary.Choice(
             title=_icon_title("save", "↳ Writing Voice & Samples"),
             value="manage_voice",
@@ -665,6 +668,7 @@ def _build_settings_upkeep_choices() -> list:
             ),
             value="manage_narrative",
         ),
+        charm_prompt.Heading("Test Documents"),
         questionary.Choice(
             title=_icon_title("build", "↳ Generate Sample Resume + Cover Letter (QA)"),
             value="build_sample",
@@ -675,7 +679,11 @@ def _build_settings_upkeep_choices() -> list:
             ),
             value="build_recruiter_resume",
         ),
-        questionary.Separator(" "),
+        charm_prompt.Heading("System & Profiles"),
+        questionary.Choice(
+            title=_icon_title("utility", f"↳ Run Doctor Checks {last_run_label}"),
+            value="doctor",
+        ),
         questionary.Choice(
             title=_icon_title("next", "↳ Check for GitHub Updates"),
             value="check_updates",

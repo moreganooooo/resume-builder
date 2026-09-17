@@ -308,7 +308,8 @@ class TestFetchIndeedJobs(unittest.TestCase):
         # Scraping is fragile by nature -- a block or a layout change
         # must not abort the whole scan run.
         fake = MagicMock(side_effect=RuntimeError("blocked"))
-        with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}):
+        with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}), \
+                self.assertLogs(level="ERROR"):
             self.assertEqual(scan_indeed.fetch_indeed_jobs(), [])
 
     @patch("location_settings.read_settings", return_value=SETTINGS)

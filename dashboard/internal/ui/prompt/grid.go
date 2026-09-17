@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"strings"
 	"time"
@@ -17,7 +18,10 @@ import (
 // runGrid renders a full-screen, multi-column checkbox ("grid" spec type)
 // for long lists -- skill_gap_scan.py's pending-pipeline skill list can run
 // into the hundreds, and huh's single-column MultiSelect showed ~24 at a
-// time. The grid fills the terminal, reflows on resize, toggles on mouse
+// time. Options labeled "[Category] Name" are grouped into one section per
+// category (in the order the caller sent them), and each section fills
+// top-to-bottom, then left-to-right, so an alphabetical list reads like a
+// newspaper. It fills the terminal, reflows on resize, toggles on mouse
 // click, and throttles held arrow keys so a key-repeat burst doesn't sail
 // past the intended item.
 func runGrid(t theme.Theme, spec Spec) (Result, error) {
@@ -53,17 +57,28 @@ const (
 	gridHeaderRows = 4 // title, status, filter, blank
 	gridFooterRows = 2 // blank, help
 	gridMinColW    = 22
-	gridMaxColW    = 44
+	gridMaxColW    = 40
 )
+
+// gridLine is one rendered row of the body: a section header, a spacer, or
+// a row of cells (option indices, -1 for an empty slot in a short column).
+type gridLine struct {
+	header string
+	count  int
+	cells  []int
+}
 
 type gridModel struct {
 	t         theme.Theme
 	title     string
 	opts      []Option
+	cats      []string // parsed category per option ("" when unlabeled)
+	names     []string // label without the "[Category] " prefix
 	checked   []bool
-	visible   []int // indices into opts matching the filter
-	cursor    int   // index into visible
-	offset    int   // first visible ROW
+	visible   []int // option indices matching the filter, in caller order
+	lines     []gridLine
+	cursor    int // option index under the cursor, -1 when nothing visible
+	offset    int // first body line shown
 	filter    string
 	filtering bool
 	width     int
@@ -72,11 +87,25 @@ type gridModel struct {
 	aborted   bool
 }
 
+func splitCategory(label string) (string, string) {
+	if strings.HasPrefix(label, "[") {
+		if end := strings.Index(label, "] "); end > 0 {
+			return label[1:end], label[end+2:]
+		}
+	}
+	return "", label
+}
+
 func newGridModel(t theme.Theme, spec Spec) gridModel {
 	m := gridModel{
 		t: t, title: spec.Message, opts: spec.Options,
 		checked: make([]bool, len(spec.Options)),
 		width:   100, height: 30,
+	}
+	for _, o := range spec.Options {
+		c, n := splitCategory(o.Label)
+		m.cats = append(m.cats, c)
+		m.names = append(m.names, n)
 	}
 	m.applyFilter()
 	return m
@@ -90,18 +119,19 @@ func (m *gridModel) applyFilter() {
 			m.visible = append(m.visible, i)
 		}
 	}
-	m.cursor, m.offset = 0, 0
+	m.cursor, m.offset = -1, 0
+	if len(m.visible) > 0 {
+		m.cursor = m.visible[0]
+	}
+	m.layout()
 }
 
 func (m gridModel) colWidth() int {
 	longest := 0
-	for _, o := range m.opts {
-		if w := ansi.StringWidth(o.Label); w > longest {
-			longest = w
-		}
+	for _, n := range m.names {
+		longest = max(longest, ansi.StringWidth(n))
 	}
-	w := longest + 5 // "✓ " marker + gap
-	return max(gridMinColW, min(gridMaxColW, w))
+	return max(gridMinColW, min(gridMaxColW, longest+5)) // "✓ " + gap
 }
 
 func (m gridModel) cols() int {
@@ -112,29 +142,108 @@ func (m gridModel) pageRows() int {
 	return max(1, m.height-gridHeaderRows-gridFooterRows)
 }
 
-func (m *gridModel) move(d int) {
-	n := len(m.visible)
-	if n == 0 {
-		return
+// layout rebuilds the body lines: one section per category run, each laid
+// out column-major (down, then across) with balanced column heights.
+func (m *gridModel) layout() {
+	m.lines = m.lines[:0]
+	cols := m.cols()
+	for start := 0; start < len(m.visible); {
+		cat := m.cats[m.visible[start]]
+		end := start
+		for end < len(m.visible) && m.cats[m.visible[end]] == cat {
+			end++
+		}
+		section := m.visible[start:end]
+		if len(m.lines) > 0 {
+			m.lines = append(m.lines, gridLine{})
+		}
+		if cat != "" {
+			m.lines = append(m.lines, gridLine{header: cat, count: len(section)})
+		}
+		rows := (len(section) + cols - 1) / cols
+		for r := 0; r < rows; r++ {
+			line := gridLine{cells: make([]int, cols)}
+			for c := 0; c < cols; c++ {
+				line.cells[c] = -1
+				if i := c*rows + r; i < len(section) {
+					line.cells[c] = section[i]
+				}
+			}
+			m.lines = append(m.lines, line)
+		}
+		start = end
 	}
-	m.cursor = max(0, min(n-1, m.cursor+d))
 	m.scrollToCursor()
 }
 
-func (m *gridModel) scrollToCursor() {
-	row, rows := m.cursor/m.cols(), m.pageRows()
-	if row < m.offset {
-		m.offset = row
-	} else if row >= m.offset+rows {
-		m.offset = row - rows + 1
+// cursorPos finds the body line and column of the cursor.
+func (m gridModel) cursorPos() (int, int) {
+	for li, l := range m.lines {
+		for c, o := range l.cells {
+			if o == m.cursor && o >= 0 {
+				return li, c
+			}
+		}
+	}
+	return -1, -1
+}
+
+// moveVert steps to the nearest cell line above/below (crossing section
+// headers), staying in the same column or the closest filled one to its left.
+func (m *gridModel) moveVert(dir int) {
+	li, col := m.cursorPos()
+	if li < 0 {
+		return
+	}
+	for l := li + dir; l >= 0 && l < len(m.lines); l += dir {
+		cells := m.lines[l].cells
+		for c := min(col, len(cells)-1); c >= 0; c-- {
+			if cells[c] >= 0 {
+				m.cursor = cells[c]
+				m.scrollToCursor()
+				return
+			}
+		}
 	}
 }
 
-func (m *gridModel) toggle(vi int) {
-	if vi >= 0 && vi < len(m.visible) {
-		i := m.visible[vi]
-		m.checked[i] = !m.checked[i]
+// moveHoriz steps to the neighboring column on the same row, skipping the
+// empty slots a short final column leaves.
+func (m *gridModel) moveHoriz(dir int) {
+	li, col := m.cursorPos()
+	if li < 0 {
+		return
 	}
+	cells := m.lines[li].cells
+	for c := col + dir; c >= 0 && c < len(cells); c += dir {
+		if cells[c] >= 0 {
+			m.cursor = cells[c]
+			return
+		}
+	}
+}
+
+func (m *gridModel) scrollToCursor() {
+	li, _ := m.cursorPos()
+	if li < 0 {
+		return
+	}
+	// Keep a section's header in view when its first row is focused.
+	top := li
+	if li > 0 && m.lines[li-1].header != "" {
+		top = li - 1
+	}
+	rows := m.pageRows()
+	if top < m.offset {
+		m.offset = top
+	} else if li >= m.offset+rows {
+		m.offset = li - rows + 1
+	}
+	m.clampOffset()
+}
+
+func (m *gridModel) clampOffset() {
+	m.offset = max(0, min(m.offset, len(m.lines)-m.pageRows()))
 }
 
 func (m gridModel) selectedCount() int {
@@ -153,29 +262,28 @@ func (m gridModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.scrollToCursor()
+		m.layout()
 
 	case tea.MouseClickMsg:
 		if msg.Button != tea.MouseLeft {
 			break
 		}
-		row := msg.Y - gridHeaderRows
+		li := m.offset + msg.Y - gridHeaderRows
 		col := (msg.X - 1) / m.colWidth()
-		if row >= 0 && row < m.pageRows() && msg.X >= 1 && col < m.cols() {
-			vi := (m.offset+row)*m.cols() + col
-			if vi < len(m.visible) {
-				m.cursor = vi
-				m.toggle(vi)
+		if msg.Y >= gridHeaderRows && li < len(m.lines) && li < m.offset+m.pageRows() && msg.X >= 1 {
+			if cells := m.lines[li].cells; col < len(cells) && cells[col] >= 0 {
+				m.cursor = cells[col]
+				m.checked[m.cursor] = !m.checked[m.cursor]
 			}
 		}
 
 	case tea.MouseWheelMsg:
-		maxOff := max(0, (len(m.visible)+m.cols()-1)/m.cols()-m.pageRows())
 		if msg.Button == tea.MouseWheelUp {
-			m.offset = max(0, m.offset-1)
+			m.offset--
 		} else if msg.Button == tea.MouseWheelDown {
-			m.offset = min(maxOff, m.offset+1)
+			m.offset++
 		}
+		m.clampOffset()
 
 	case tea.KeyPressMsg:
 		key := msg.String()
@@ -201,25 +309,35 @@ func (m gridModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		moves := map[string]int{
-			"left": -1, "h": -1, "right": 1, "l": 1,
-			"up": -m.cols(), "k": -m.cols(), "down": m.cols(), "j": m.cols(),
-			"pgup": -m.cols() * m.pageRows(), "pgdown": m.cols() * m.pageRows(),
+		moves := map[string]func(){
+			"up": func() { m.moveVert(-1) }, "k": func() { m.moveVert(-1) },
+			"down": func() { m.moveVert(1) }, "j": func() { m.moveVert(1) },
+			"left": func() { m.moveHoriz(-1) }, "h": func() { m.moveHoriz(-1) },
+			"right": func() { m.moveHoriz(1) }, "l": func() { m.moveHoriz(1) },
+			"pgup":   func() { m.page(-1) },
+			"pgdown": func() { m.page(1) },
 		}
-		if d, ok := moves[key]; ok {
+		if mv, ok := moves[key]; ok {
 			if now := time.Now(); now.Sub(m.lastMove) >= repeatThrottle {
 				m.lastMove = now
-				m.move(d)
+				mv()
 			}
 			return m, nil
 		}
 		switch key {
 		case "home", "g":
-			m.cursor, m.offset = 0, 0
+			if len(m.visible) > 0 {
+				m.cursor, m.offset = m.visible[0], 0
+			}
 		case "end", "G":
-			m.move(len(m.visible))
+			if len(m.visible) > 0 {
+				m.cursor = m.visible[len(m.visible)-1]
+				m.scrollToCursor()
+			}
 		case "space", "x":
-			m.toggle(m.cursor)
+			if m.cursor >= 0 {
+				m.checked[m.cursor] = !m.checked[m.cursor]
+			}
 		case "ctrl+a", "a":
 			// Toggle every item currently shown (respects the filter).
 			allOn := true
@@ -249,56 +367,70 @@ func (m gridModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// categoryColor tints the "[Category]" prefix skill_gap_scan.py puts on
-// each label, so groups read at a glance in a dense grid.
-func (m gridModel) categoryColor(cat string) lipgloss.Style {
-	c := m.t.Sky
-	switch strings.ToLower(cat) {
-	case "tool":
-		c = m.t.Blue
-	case "platform":
-		c = m.t.Mauve
-	case "skill":
-		c = m.t.Peach
-	case "certification":
-		c = m.t.Yellow
+func (m *gridModel) page(dir int) {
+	for i := 0; i < m.pageRows(); i++ {
+		m.moveVert(dir)
 	}
-	return lipgloss.NewStyle().Foreground(c)
 }
 
-func (m gridModel) renderCell(vi, w int) string {
-	i := m.visible[vi]
-	o := m.opts[i]
-	focused := vi == m.cursor
-
-	mark := lipgloss.NewStyle().Foreground(m.t.Overlay).Render("○")
-	if m.checked[i] {
-		mark = lipgloss.NewStyle().Foreground(m.t.Green).Bold(true).Render("✓")
+// categoryColor gives each section its own accent; unknown categories
+// take a stable color from the rest of the palette.
+func (m gridModel) categoryColor(cat string) lipgloss.Style {
+	palette := []color.Color{m.t.Blue, m.t.Peach, m.t.Mauve, m.t.Yellow, m.t.Sky, m.t.Pink}
+	known := map[string]int{"tool": 0, "hard skill": 1, "core function": 2, "skill": 3}
+	idx, ok := known[strings.ToLower(cat)]
+	if !ok {
+		sum := 0
+		for _, r := range cat {
+			sum += int(r)
+		}
+		idx = 4 + sum%2
 	}
+	return lipgloss.NewStyle().Foreground(palette[idx])
+}
 
-	label := o.Label
-	textW := w - 3
-	var body string
-	if strings.HasPrefix(label, "[") {
-		if end := strings.Index(label, "] "); end > 0 {
-			cat := label[1:end]
-			name := ansi.Truncate(label[end+2:], max(1, textW-2), "…")
-			nameStyle := lipgloss.NewStyle().Foreground(m.t.Text)
-			if m.checked[i] {
-				nameStyle = nameStyle.Foreground(m.t.Green)
-			}
-			body = m.categoryColor(cat).Render("▍") + " " + nameStyle.Render(name)
+func pluralize(cat string) string {
+	if strings.HasSuffix(cat, "s") {
+		return cat
+	}
+	return cat + "s"
+}
+
+func (m gridModel) renderCell(o, w int) string {
+	if o < 0 {
+		return strings.Repeat(" ", w)
+	}
+	mark := lipgloss.NewStyle().Foreground(m.t.Overlay).Render("○")
+	nameStyle := lipgloss.NewStyle().Foreground(m.t.Text)
+	if m.checked[o] {
+		mark = lipgloss.NewStyle().Foreground(m.t.Green).Bold(true).Render("✓")
+		nameStyle = nameStyle.Foreground(m.t.Green)
+	}
+	name := nameStyle.Render(ansi.Truncate(m.names[o], w-4, "…"))
+	style := lipgloss.NewStyle().Width(w - 1)
+	if o == m.cursor {
+		style = style.Background(m.t.Surface).Bold(true)
+	}
+	return style.Render(mark+" "+name) + " "
+}
+
+func (m gridModel) renderHeader(l gridLine) string {
+	accent := m.categoryColor(l.header)
+	selected := 0
+	for _, o := range m.visible {
+		if m.cats[o] == l.header && m.checked[o] {
+			selected++
 		}
 	}
-	if body == "" {
-		body = lipgloss.NewStyle().Foreground(m.t.Text).Render(ansi.Truncate(label, textW, "…"))
+	dim := lipgloss.NewStyle().Foreground(m.t.Subtext)
+	title := accent.Bold(true).Render("▍" + strings.ToUpper(pluralize(l.header)))
+	meta := fmt.Sprintf(" %d", l.count)
+	if selected > 0 {
+		meta += fmt.Sprintf(" · %d selected", selected)
 	}
-
-	cell := lipgloss.NewStyle().Width(w - 1).Render(mark + " " + body)
-	if focused {
-		cell = lipgloss.NewStyle().Width(w - 1).Background(m.t.Surface).Bold(true).Render(mark + " " + body)
-	}
-	return cell + " "
+	used := ansi.StringWidth(pluralize(l.header)) + 1 + len(meta) + 2
+	rule := strings.Repeat("─", max(0, m.cols()*m.colWidth()-used))
+	return title + dim.Render(meta+" ") + lipgloss.NewStyle().Foreground(m.t.Overlay).Render(rule)
 }
 
 func (m gridModel) View() tea.View {
@@ -312,22 +444,23 @@ func (m gridModel) View() tea.View {
 		dim.Render(fmt.Sprintf("  ·  %d shown of %d", len(m.visible), len(m.opts))) + "\n")
 	switch {
 	case m.filtering:
-		b.WriteString(" " + accent.Render("/ ") + m.filter + lipgloss.NewStyle().Foreground(m.t.Mauve).Render("█") + "\n\n")
+		b.WriteString(" " + accent.Render("/ ") + m.filter + accent.Render("█") + "\n\n")
 	case m.filter != "":
 		b.WriteString(" " + dim.Render("filter: ") + m.filter + dim.Render("  (esc to clear)") + "\n\n")
 	default:
 		b.WriteString("\n\n")
 	}
 
-	cols, w, rows := m.cols(), m.colWidth(), m.pageRows()
-	totalRows := (len(m.visible) + cols - 1) / cols
-	for r := m.offset; r < m.offset+rows; r++ {
-		if r < totalRows {
+	w, rows := m.colWidth(), m.pageRows()
+	for li := m.offset; li < m.offset+rows; li++ {
+		if li < len(m.lines) {
+			l := m.lines[li]
 			b.WriteString(" ")
-			for c := 0; c < cols; c++ {
-				if vi := r*cols + c; vi < len(m.visible) {
-					b.WriteString(m.renderCell(vi, w))
-				}
+			if l.header != "" {
+				b.WriteString(m.renderHeader(l))
+			}
+			for _, o := range l.cells {
+				b.WriteString(m.renderCell(o, w))
 			}
 		}
 		b.WriteString("\n")
@@ -337,8 +470,9 @@ func (m gridModel) View() tea.View {
 		b.WriteString(dim.Render(" no matches"))
 	}
 	pos := ""
-	if totalRows > rows {
-		pos = fmt.Sprintf("rows %d–%d of %d  ·  ", m.offset+1, min(totalRows, m.offset+rows), totalRows)
+	if len(m.lines) > rows {
+		pct := 100 * (m.offset + rows) / len(m.lines)
+		pos = fmt.Sprintf("%d%%  ·  ", min(100, pct))
 	}
 	key := lipgloss.NewStyle().Foreground(m.t.Blue).Bold(true)
 	help := []string{

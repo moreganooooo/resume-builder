@@ -21,6 +21,7 @@ import subprocess
 import sys
 
 import cli_art
+import charm_prompt
 import questionary
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -671,7 +672,7 @@ def _build_choices() -> list:
     if standalone:
         choices.append(questionary.Separator(" "))
         choices.append(
-            questionary.Separator("── Ongoing Maintenance (optional, run anytime) ──")
+            charm_prompt.Heading("Ongoing Maintenance (optional, run anytime)")
         )
         for entry in standalone:
             choices.append(

@@ -75,12 +75,15 @@ class TestSearch(unittest.TestCase):
         # results, never abort the scan run around it.
         module = MagicMock()
         module.DDGS.return_value.text.side_effect = RuntimeError("rate limited")
-        with patch.dict("sys.modules", {"ddgs": module}):
+        with patch.dict("sys.modules", {"ddgs": module}), self.assertLogs(level="ERROR"):
             self.assertEqual(websearch_ddg.search("marketing"), [])
 
     def test_missing_library_returns_empty(self):
-        with patch.dict("sys.modules", {"ddgs": None}):
+        # assertLogs captures the expected "not installed" error so it
+        # doesn't print into `resume doctor`'s readout as if it were real.
+        with patch.dict("sys.modules", {"ddgs": None}), self.assertLogs(level="ERROR") as logs:
             self.assertEqual(websearch_ddg.search("marketing"), [])
+        self.assertIn("ddgs is not installed", logs.output[0])
 
 
 class TestSweepBackendChoice(unittest.TestCase):

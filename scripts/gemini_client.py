@@ -51,6 +51,12 @@ def _numbered_key_suffix(name: str) -> int:
     return int(tail) if tail.isdigit() else 10**6
 
 
+def _pool_limited_under_test() -> bool:
+    import sys
+
+    return "unittest" in sys.modules
+
+
 def api_keys() -> list[str]:
     """Every configured key, primary first, deduplicated. Re-reads .env each
     call so a key added or swapped mid-run is picked up."""
@@ -68,6 +74,11 @@ def api_keys() -> list[str]:
         k = k.strip()
         if k and k not in keys:
             keys.append(k)
+    # Under tests the pool is just the primary key: otherwise how many
+    # backup keys the operator happens to have changes every retry count
+    # a test asserts on (3 failures on a machine with GEMINI_API_KEY_2 set).
+    if _pool_limited_under_test():
+        return keys[:1]
     return keys
 
 

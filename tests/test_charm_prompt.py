@@ -146,6 +146,32 @@ class TestSelect(unittest.TestCase):
         self.assertEqual(values, ["a", "b"])
 
 
+    @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
+    @patch("charm_prompt.interactive_subprocess.run")
+    def test_headings_are_sent_as_non_selectable_section_titles(
+        self, mock_run, mock_compile
+    ):
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=json.dumps({"value": "a"}), stderr=""
+        )
+        charm_prompt.select(
+            "Pick one",
+            [
+                charm_prompt.Heading("Group"),
+                questionary.Choice(title="A", value="a"),
+                questionary.Separator(" "),
+            ],
+        )
+        spec = json.loads(mock_run.call_args[0][0][3])
+        self.assertEqual(
+            spec["options"],
+            [
+                {"label": "Group", "value": "", "heading": True},
+                {"label": "A", "value": "a"},
+            ],
+        )
+
+
 class TestCheckbox(unittest.TestCase):
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)

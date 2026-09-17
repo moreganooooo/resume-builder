@@ -50,6 +50,26 @@ _DASHBOARD_DIR = os.path.join(_PROJECT_ROOT, "dashboard")
 _BIN_PATH = os.path.join(_DASHBOARD_DIR, "bin", "prompt")
 
 
+class Heading(questionary.Separator):
+    """A section title inside a select menu. Still a Separator, so
+    questionary's fallback renders it and never lets it be chosen; the Go
+    binary receives it as {"heading": true} and draws a styled section
+    header the cursor skips (dashboard/internal/ui/prompt/sections.go)."""
+
+    def __init__(self, text: str):
+        super().__init__(text)
+
+
+def _select_option(choice):
+    """Options for a select spec: headings kept as headings, every other
+    non-selectable row dropped (see _is_selectable)."""
+    if isinstance(choice, Heading):
+        return {"label": choice.title, "value": "", "heading": True}
+    if _is_selectable(choice):
+        return _option_dict(choice)
+    return None
+
+
 def _is_selectable(choice) -> bool:
     """False for a questionary.Separator or any explicitly-disabled Choice
     -- both carry a non-None .disabled (Separator defaults it to "-").
@@ -222,7 +242,7 @@ def select(message: str, choices: list, default: str | None = None):
     spec = {
         "type": "select",
         "message": message,
-        "options": [_option_dict(c) for c in choices if _is_selectable(c)],
+        "options": [o for o in map(_select_option, choices) if o is not None],
     }
     if default is not None:
         spec["default_value"] = default

@@ -46,6 +46,8 @@ func newForm(t theme.Theme, group *huh.Group) *huh.Form {
 type Option struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
+	// Heading marks a non-selectable section title (select only).
+	Heading bool `json:"heading,omitempty"`
 }
 
 // Spec describes the prompt to render, decoded from the CLI argument JSON.
@@ -95,6 +97,9 @@ func Run(t theme.Theme, spec Spec) (Result, error) {
 	case "confirm":
 		return runConfirm(t, spec)
 	case "select":
+		if hasHeadings(spec) {
+			return runSections(t, spec)
+		}
 		return runSelect(t, spec)
 	case "checkbox":
 		return runCheckbox(t, spec)
