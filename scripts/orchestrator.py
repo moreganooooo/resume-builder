@@ -1810,6 +1810,34 @@ def _keyword_now_credited(
     return not any(str(m).strip().casefold() == target for m in still)
 
 
+def _drop_target_role_titles(jd_keywords, profile_data: dict):
+    """Removes keywords that are just one of the candidate's target_roles.
+
+    The recruiter build's brief lists those titles, and extraction read them
+    as skills: "Email Marketing Specialist" can never be matched by a resume,
+    so each one was a guaranteed miss (16 of 28 on 2026-09-16) and an item
+    the post-build prompt offered to add to the verified ledger. A title is
+    not a skill in a real posting either."""
+    if not isinstance(jd_keywords, dict):
+        return jd_keywords
+    targets = (profile_data or {}).get("target_roles") or {}
+    titles = set()
+    for group in (targets.values() if isinstance(targets, dict) else [targets]):
+        for title in group if isinstance(group, list) else [group]:
+            if isinstance(title, str) and title.strip():
+                titles.add(title.strip().casefold())
+    if not titles:
+        return jd_keywords
+    cleaned = dict(jd_keywords)
+    for key in ("tools", "hard_skills", "core_functions"):
+        if isinstance(cleaned.get(key), list):
+            cleaned[key] = [
+                k for k in cleaned[key]
+                if not (isinstance(k, str) and k.strip().casefold() in titles)
+            ]
+    return cleaned
+
+
 def _top_up_verified_skills(
     resume_data: dict, jd_keywords: dict, style_rules: dict, cv_text: str,
     verified_names: list, assign_groups=None,
@@ -7231,6 +7259,9 @@ class ResumeEngine:
                 )
             checkpoint["jd_keywords"] = jd_keywords
             jd_manager.save_checkpoint(job_key, checkpoint)
+        jd_keywords = _drop_target_role_titles(
+            jd_keywords, profile_paths.profile_yaml() or {}
+        )
         cli_art.print_literal(
             f"  Keywords extracted: {_summarize_keywords(jd_keywords)}"
         )
