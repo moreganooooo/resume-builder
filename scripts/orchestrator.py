@@ -1300,6 +1300,28 @@ def _merge_condensed_bullets(original: dict, condensed: dict, targets: set) -> d
     return merged
 
 
+def _keep_clean_bullet_edits(original: dict, edited: dict, new_violations) -> dict:
+    """Applies edited bullets one at a time, keeping each that introduces no
+    violation (`new_violations(data)` returns the list). Bullets are aligned
+    by job and position, as in _merge_condensed_bullets."""
+    kept = copy.deepcopy(original)
+    edited_jobs = edited.get("EXPERIENCE") or []
+    for i, job in enumerate(kept.get("EXPERIENCE") or []):
+        if i >= len(edited_jobs):
+            break
+        new_bullets = edited_jobs[i].get("achievements") or []
+        bullets = job.get("achievements") or []
+        if len(new_bullets) != len(bullets):
+            continue
+        for j, bullet in enumerate(list(bullets)):
+            if not new_bullets[j] or new_bullets[j] == bullet:
+                continue
+            bullets[j] = new_bullets[j]
+            if new_violations(kept):
+                bullets[j] = bullet
+    return kept
+
+
 def _newly_introduced(violations: list, baseline: list) -> list:
     """Violations absent before an edit. Judging an edit by ALL violations
     rejected every condense attempt on a resume that already carried four
@@ -1704,7 +1726,7 @@ def _resolve_verified_skill(keyword: str, ledger_names: list, cv_groups: dict) -
 
 
 # How many one-line skills rows the top-up may grow into two in one build.
-MAX_SKILLS_ROWS_NEWLY_WRAPPED = 1
+MAX_SKILLS_ROWS_NEWLY_WRAPPED = 2
 
 
 def _ledger_verifies(keyword: str, ledger_names: list) -> bool:
@@ -1836,6 +1858,23 @@ def _drop_target_role_titles(jd_keywords, profile_data: dict):
                 if not (isinstance(k, str) and k.strip().casefold() in titles)
             ]
     return cleaned
+
+
+def verified_jd_skills(jd_keywords, verified_names: list) -> list:
+    """JD tools/hard skills the ledger verifies, in JD order. Handed to the
+    builder so it fills SKILLS with these first -- the post-build top-up can
+    only squeeze items into space the builder already spent."""
+    if not isinstance(jd_keywords, dict):
+        return []
+    ledger = [str(n).strip() for n in verified_names or [] if str(n or "").strip()]
+    seen, out = set(), []
+    for key in ("tools", "hard_skills"):
+        for k in jd_keywords.get(key) or []:
+            if isinstance(k, str) and k.strip() and k.casefold() not in seen:
+                if _ledger_verifies(k, ledger):
+                    seen.add(k.casefold())
+                    out.append(k.strip())
+    return out
 
 
 def _top_up_verified_skills(
@@ -7485,8 +7524,30 @@ class ResumeEngine:
                 f"- [{company or 'unknown company'}] {b}"
                 for b, company in zip(refined_bullets, bullet_companies)
             )
+            try:
+                import skills_menu
+
+                _priority_skills = verified_jd_skills(
+                    jd_keywords,
+                    [
+                        (t.get("name") or "").strip()
+                        for t in (skills_menu._load_verified_tools() or {}).get("tools", [])
+                    ],
+                )
+            except Exception:
+                _priority_skills = []
+            _priority_block = (
+                "=== VERIFIED SKILLS THIS JD ASKS FOR ===\n"
+                "The candidate is verified for every skill below AND the job asks for it. "
+                "Give each a place in SKILLS before any generic item the JD never names "
+                "(e.g. drop \"Dashboards\" to make room for \"Report & Dashboard Building\"). "
+                "Keep line-length rules; shorten or cut non-JD items rather than skipping these.\n"
+                + "\n".join(f"- {k}" for k in _priority_skills)
+                + "\n\n"
+            ) if _priority_skills else ""
             combined_contents = (
-                f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
+                _priority_block
+                + f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
                 f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
                 f"=== MASTER RESUME ===\n{json.dumps(master_resume, indent=2)}\n\n"
                 f"=== REFINED BULLETS ===\n{bullets_block}"
@@ -8542,6 +8603,27 @@ class ResumeEngine:
                         condense_violations = condense_violations or [
                             "No targeted bullet was shortened -- rewrite at least one listed bullet to 108 characters or fewer."
                         ]
+                    if condense_violations and condensed_resume_data != resume_data:
+                        # One widow among four shortened bullets used to throw
+                        # away all four, so every attempt of a 2026-09-16
+                        # build was discarded. Keep each edit that is clean
+                        # on its own.
+                        partial = _keep_clean_bullet_edits(
+                            resume_data, condensed_resume_data,
+                            lambda data: _newly_introduced(
+                                validate_resume.validate(
+                                    data, style_rules_for_validation, role_roster,
+                                    role_bullet_minimums, **_validate_kwargs,
+                                ),
+                                baseline_violations,
+                            ),
+                        )
+                        if partial != resume_data:
+                            cli_art.print_literal(
+                                f"  Kept the condensed bullets that passed validation; "
+                                f"{len(condense_violations)} violating edit(s) reverted."
+                            )
+                            condensed_resume_data, condense_violations = partial, []
                     if not condense_violations:
                         resume_data = condensed_resume_data
                         render_html(resume_data, html_out)

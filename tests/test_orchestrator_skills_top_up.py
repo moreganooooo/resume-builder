@@ -177,7 +177,8 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
         )
         self.assertEqual(len(added), 3)
 
-    def test_only_one_row_may_newly_wrap_per_build(self):
+    @patch.object(orchestrator, "MAX_SKILLS_ROWS_NEWLY_WRAPPED", 1)
+    def test_wraps_stop_at_the_per_build_cap(self):
         a = "**Scientific Computing:** " + ", ".join(["Fortran"] * 9) + ", Fo"
         b = "**Languages & Libraries:** " + ", ".join(["Python"] * 11)
         b = b[: len(b) - (len(orchestrator._plain_skills_line(b)) - 105)]
