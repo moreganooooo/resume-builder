@@ -2008,9 +2008,10 @@ def checkbox(message: str, choices, **kwargs):
     import sys
 
     if "unittest" in sys.modules:
+        kwargs.pop("grid", None)
         kwargs.setdefault("style", QUESTIONARY_STYLE)
         return questionary.checkbox(message, choices=choices, **kwargs).ask()
-    return charm_prompt.checkbox(message, choices)
+    return charm_prompt.checkbox(message, choices, grid=kwargs.get("grid", False))
 
 
 def password(message: str) -> str | None:

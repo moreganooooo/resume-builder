@@ -211,8 +211,8 @@ def run(max_roles: int = DEFAULT_MAX_ROLES) -> int:
         f"Found {len(gaps)} tool(s)/skill(s) across your pending pipeline not "
         "yet in your verified profile, grouped by category below. Check any "
         "you have legitimate experience with to add them to your verified "
-        "tools ledger. Tip: press ctrl+a to select/deselect everything at "
-        "once, or start typing to filter the list.",
+        "tools ledger. Click or press space to toggle, "
+        "a to select/deselect everything shown, / to filter.",
         level=cli_art.NORMAL,
     )
 
@@ -225,7 +225,9 @@ def run(max_roles: int = DEFAULT_MAX_ROLES) -> int:
         for g in ordered_gaps
     ]
     selected = cli_art.checkbox(
-        "Select verified skills/tools to add to your profile:", choices=choices
+        "Select verified skills/tools to add to your profile:",
+        choices=choices,
+        grid=True,
     )
     if selected is None:
         cli_art.detail("Cancelled -- no changes made.", level=cli_art.NORMAL)

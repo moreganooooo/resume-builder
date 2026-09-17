@@ -238,13 +238,15 @@ def select(message: str, choices: list, default: str | None = None):
     return data["value"]
 
 
-def checkbox(message: str, choices: list) -> list | None:
+def checkbox(message: str, choices: list, grid: bool = False) -> list | None:
     if not _go_available():
         return questionary.checkbox(
             message, choices=choices, style=cli_art.QUESTIONARY_STYLE
         ).ask()
     spec = {
-        "type": "checkbox",
+        # "grid" is a full-screen multi-column, mouse-clickable variant for
+        # long lists (dashboard/internal/ui/prompt/grid.go).
+        "type": "grid" if grid else "checkbox",
         "message": message,
         "options": [_option_dict(c) for c in choices if _is_selectable(c)],
     }

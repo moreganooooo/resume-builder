@@ -98,6 +98,8 @@ func Run(t theme.Theme, spec Spec) (Result, error) {
 		return runSelect(t, spec)
 	case "checkbox":
 		return runCheckbox(t, spec)
+	case "grid":
+		return runGrid(t, spec)
 	case "text":
 		return runText(t, spec)
 	case "filepicker":
