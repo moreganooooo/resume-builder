@@ -89,6 +89,7 @@ profiles/*/board_scanner/scan_filters.yml
 # Only visible once the pattern above started working; they are local
 # safety copies, never something to commit.
 profiles/*/board_scanner/*.bak-*
+profiles/morgan/board_scanner/tracked_companies.yml
 data/*/
 
 
