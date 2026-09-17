@@ -220,6 +220,18 @@ def check_gemini_api_key() -> dict:
         if in_file
         else ("set in shell environment" if has_key else "not found")
     )
+    if has_key:
+        try:
+            import gemini_client
+
+            count = len(gemini_client.api_keys())
+        except Exception:
+            count = 1
+        detail += (
+            f" -- {count} keys pooled, rotating on rate limits"
+            if count > 1
+            else " -- tip: add GEMINI_API_KEY_2/_3 (from other Cloud projects) for more quota"
+        )
     return _check(
         "GEMINI_API_KEY",
         has_key,

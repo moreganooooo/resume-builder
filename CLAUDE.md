@@ -478,6 +478,15 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   infrastructure, the employer is read from the subject instead
   (`COMPANY_IN_SUBJECT`).
 - **Embedded ACID SQLite Store (`db.py`):** `profiles/<profile>/data.db` manages connection pooling, schema initialization, and database queries for job postings, application funnel status transitions, and bullet bank achievements with transaction safety and indexed query performance.
+- **Multiple Gemini keys pool per profile (`gemini_client.api_keys()`).**
+  `.env` may hold `GEMINI_API_KEY`, `GEMINI_API_KEY_2`, `_3`, ... and/or a
+  comma-separated `GEMINI_API_KEYS`; primary first, deduplicated. A 429
+  cools that key down for that MODEL only (server RetryInfo, else 60s) and
+  the call retries at once on the next fresh key -- no backoff, no model
+  fallback, no retry spent (`mark_key_rate_limited`). Covers generate(),
+  generate_grounded(), embed() and embed_bullet_bank.embed_batch(). Quota is
+  per Cloud PROJECT, so keys from one project add nothing. Context caches
+  are keyed per API key, since a cachedContent belongs to its key's project.
 - **Dynamic Credentials Shield (`gemini_client.py`):** `gemini_client.py` calculates API authorization headers dynamically per call via `_get_auth_headers()`, ensuring profile switches immediately adopt the active profile's `GEMINI_API_KEY`.
 - **Typst Vector PDF Engine (`render_typst.py`):** Provides sub-second vector PDF generation directly from structured `.typ` document templates without headless browser overhead.
 - **Tests must not depend on who is operating the checkout.** Use

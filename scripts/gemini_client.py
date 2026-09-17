@@ -32,26 +32,80 @@ from dotenv import load_dotenv
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
-_KEY_INDEX = 0
+# --- API key pool ----------------------------------------------------------
+# A profile's .env may hold several keys: GEMINI_API_KEY, GEMINI_API_KEY_2,
+# GEMINI_API_KEY_3 (any number), and/or a comma-separated GEMINI_API_KEYS.
+# Free-tier quota is per Google Cloud PROJECT and per model, so extra keys
+# only add quota when each comes from a different project.
+#
+# When a key 429s on a model, it is cooled down for that model only and the
+# next call picks the first key still fresh for it -- a bulk run switches
+# keys immediately instead of sleeping out a backoff on a spent one. Keys are
+# tried in their listed order, so the primary key is used whenever it can be.
+_KEY_COOLDOWNS: dict[tuple[str, str], float] = {}
+DEFAULT_KEY_COOLDOWN_SECS = 60.0
 
 
-def rotate_api_key() -> str:
-    """Rotates to the next available API key in GEMINI_API_KEYS if present."""
-    global _KEY_INDEX
-    _KEY_INDEX += 1
-    return _get_api_key()
+def _numbered_key_suffix(name: str) -> int:
+    tail = name[len("GEMINI_API_KEY_"):]
+    return int(tail) if tail.isdigit() else 10**6
 
 
-def _get_api_key() -> str:
-    # Always read current environment variable dynamically
+def api_keys() -> list[str]:
+    """Every configured key, primary first, deduplicated. Re-reads .env each
+    call so a key added or swapped mid-run is picked up."""
     load_dotenv(profile_paths.env_path(), override=True)
-    keys_str = os.environ.get("GEMINI_API_KEYS")
-    if keys_str:
-        keys = [k.strip() for k in keys_str.split(",") if k.strip()]
-        if keys:
-            return keys[_KEY_INDEX % len(keys)]
+    ordered = [os.environ.get("GEMINI_API_KEY", "")]
+    numbered = sorted(
+        (n for n in os.environ if n.startswith("GEMINI_API_KEY_")),
+        key=_numbered_key_suffix,
+    )
+    ordered += [os.environ[n] for n in numbered]
+    ordered += (os.environ.get("GEMINI_API_KEYS") or "").split(",")
+    ordered.append(os.environ.get("GOOGLE_API_KEY", ""))
+    keys: list[str] = []
+    for k in ordered:
+        k = k.strip()
+        if k and k not in keys:
+            keys.append(k)
+    return keys
 
-    return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
+
+def _get_api_key(model: str = "") -> str:
+    """The first key not cooling down for `model`; if all are, the one whose
+    cooldown ends soonest."""
+    keys = api_keys()
+    if not keys:
+        return ""
+    now = time.time()
+    for k in keys:
+        if _KEY_COOLDOWNS.get((k, model), 0) <= now:
+            return k
+    return min(keys, key=lambda k: _KEY_COOLDOWNS.get((k, model), 0))
+
+
+def mark_key_rate_limited(key: str, model: str = "", secs: float | None = None) -> bool:
+    """Cools `key` down for `model`. Returns True when another key is fresh
+    for that model right now, i.e. an immediate retry is worth making."""
+    if not key:
+        return False
+    _KEY_COOLDOWNS[(key, model)] = time.time() + (secs or DEFAULT_KEY_COOLDOWN_SECS)
+    return _get_api_key(model) != key and _KEY_COOLDOWNS.get(
+        (_get_api_key(model), model), 0
+    ) <= time.time()
+
+
+def rotate_api_key(model: str = "") -> str:
+    """Back-compat: cool the current key and return the next one."""
+    mark_key_rate_limited(_get_api_key(model), model)
+    return _get_api_key(model)
+
+
+def key_label(key: str) -> str:
+    """Safe-to-print identifier for a key: its position and last 4 chars."""
+    keys = api_keys()
+    pos = keys.index(key) + 1 if key in keys else 0
+    return f"key {pos}/{len(keys)} (…{key[-4:]})"
 
 
 # Tests that genuinely mean to hit the live API set RESUME_ALLOW_TEST_NETWORK=1.
@@ -70,7 +124,7 @@ def _blocked_under_test() -> bool:
     return "unittest" in sys.modules and not os.environ.get(_TEST_NETWORK_ENV)
 
 
-def _get_auth_headers() -> dict:
+def _get_auth_headers(model: str = "") -> dict:
     """Builds the per-call auth header -- and is the single chokepoint
     where a test can be stopped from reaching the real API.
 
@@ -91,7 +145,7 @@ def _get_auth_headers() -> dict:
             "A test tried to call the live Gemini API. Mock the client for this "
             f"test, or set {_TEST_NETWORK_ENV}=1 if it genuinely needs the network."
         )
-    return {"x-goog-api-key": _get_api_key()}
+    return {"x-goog-api-key": _get_api_key(model)}
 
 
 def generate_grounded(
@@ -116,16 +170,20 @@ def generate_grounded(
         body["toolConfig"] = tool_config
     fallbacks = grounded_fallbacks(tools)
     failures = 0
-    for attempt in range(max_retries):
+    key_switches = 0
+    for attempt in range(max_retries + len(api_keys())):
+        if attempt - key_switches >= max_retries:
+            break
         # Two failures on one model -> its same-quota-family backup.
         if failures >= 2 and model in fallbacks:
             model = fallbacks[model]
             url = f"{BASE_URL}/{model}:generateContent"
             failures = 0
+        headers = {**_get_auth_headers(model), "Content-Type": "application/json"}
         try:
             response = requests.post(
                 url,
-                headers={**_get_auth_headers(), "Content-Type": "application/json"},
+                headers=headers,
                 json=body,
                 timeout=90,
             )
@@ -145,6 +203,12 @@ def generate_grounded(
             return (text.strip() or None), (candidate.get("groundingMetadata") or {})
         if response is not None and response.status_code not in (429, 500, 502, 503, 504):
             return None, {}
+        if response is not None and response.status_code == 429:
+            if mark_key_rate_limited(
+                headers["x-goog-api-key"], model, _server_retry_delay_secs(response)
+            ):
+                key_switches += 1
+                continue  # a fresh key: retry now, no backoff, no fallback
         failures += 1
         time.sleep(min(5 * 2**attempt, 30))
     return None, {}
@@ -412,8 +476,11 @@ class GeminiClient:
         if base_model in cls._cache_unavailable_models:
             return None
 
+        # A cachedContent belongs to the Cloud project of the key that made
+        # it, so each pooled key gets its own cache entry.
+        api_key = _get_api_key(model)
         key = hashlib.sha256(
-            f"{base_model}:{system_instruction}".encode("utf-8")
+            f"{api_key}:{base_model}:{system_instruction}".encode("utf-8")
         ).hexdigest()
         now = time.time()
 
@@ -429,7 +496,7 @@ class GeminiClient:
             "ttl": "1200s",  # 20 minutes
         }
         try:
-            req_headers = {**_get_auth_headers(), "Content-Type": "application/json"}
+            req_headers = {**_get_auth_headers(model), "Content-Type": "application/json"}
             resp = requests.post(
                 cache_url, json=payload, headers=req_headers, timeout=30
             )
@@ -694,8 +761,12 @@ class GeminiClient:
         elif fallbacks is None:
             fallbacks = MODEL_FALLBACKS
         failure_streak = 0
+        key_switches = 0
 
-        for attempt in range(max_retries):
+        for attempt in range(max_retries + len(api_keys())):
+            # Switching to a fresh key after a 429 doesn't spend a retry.
+            if attempt - key_switches >= max_retries:
+                break
             if "gemma" in model.lower():
                 elapsed = time.time() - GeminiClient._last_gemma_call_ts
                 if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS:
@@ -827,11 +898,12 @@ class GeminiClient:
                 body["tools"] = tools
 
             rate_limiter.acquire(1.0)
+            used_key = _get_auth_headers(model)["x-goog-api-key"]
             try:
                 resp = requests.post(
                     url,
                     json=body,
-                    headers=_get_auth_headers(),
+                    headers={"x-goog-api-key": used_key},
                     timeout=GeminiClient._timeout,
                 )
                 # Self-healing fallback: if cachedContent expired or was evicted (HTTP 400), fall back immediately
@@ -860,7 +932,7 @@ class GeminiClient:
                     resp = requests.post(
                         url,
                         json=body,
-                        headers=_get_auth_headers(),
+                        headers={"x-goog-api-key": used_key},
                         timeout=GeminiClient._timeout,
                     )
             except requests.exceptions.RequestException as e:
@@ -894,8 +966,17 @@ class GeminiClient:
             if resp.status_code in SERVER_ERRORS:
                 failure_streak += 1
             elif resp.status_code == 429:
+                if mark_key_rate_limited(
+                    used_key, model, _server_retry_delay_secs(resp)
+                ):
+                    key_switches += 1
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} Rate limited on {key_label(used_key)} -- "
+                        f"switching to {key_label(_get_api_key(model))}.",
+                        soft_wrap=True,
+                    )
+                    continue
                 failure_streak += 1
-                rotate_api_key()
 
             if resp.status_code == HIGH_DEMAND_STATUS:
                 cli_art.console.print(
@@ -1007,7 +1088,7 @@ class GeminiClient:
             raise SustainedFailureError(
                 f"GeminiClient.generate() exhausted retries on {failures} consecutive "
                 f"calls (model={model}) -- this looks like a sustained quota issue, not "
-                "a transient blip. Swap GEMINI_API_KEY/GOOGLE_API_KEY in .env and re-run."
+                "a transient blip. Add backup keys (GEMINI_API_KEY_2, GEMINI_API_KEY_3 -- each from a different Google Cloud project) to .env, or swap GEMINI_API_KEY, and re-run."
             )
         return None, {}
 
@@ -1026,9 +1107,14 @@ class GeminiClient:
         }
         rate_limiter.acquire(1.0)
         try:
-            resp = requests.post(
-                url, json=payload, headers=_get_auth_headers(), timeout=30
-            )
+            headers = _get_auth_headers(EMBED_MODEL)
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            if resp.status_code == 429 and mark_key_rate_limited(
+                headers["x-goog-api-key"], EMBED_MODEL
+            ):
+                resp = requests.post(
+                    url, json=payload, headers=_get_auth_headers(EMBED_MODEL), timeout=30
+                )
             resp.raise_for_status()
             return resp.json().get("embedding", {}).get("values")
         except Exception as e:
