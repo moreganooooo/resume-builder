@@ -34,6 +34,15 @@ def _icon_glyph(title):
     return title[0][1]
 
 
+def _first_option(choices):
+    return next(c for c in choices
+                if isinstance(c, questionary.Choice) and not isinstance(c, questionary.Separator))
+
+
+def _doctor_choice(choices):
+    return next(c for c in choices if getattr(c, "value", None) == "doctor")
+
+
 class TestChoicesAndHandlers(unittest.TestCase):
     # As of the 2026-08 menu collapse (design-audit-approved 7-item tree),
     # every leaf action except "bullet_bank"/"settings_upkeep" (which open
@@ -198,9 +207,9 @@ class TestChoicesAndHandlers(unittest.TestCase):
                 menu._build_settings_upkeep_choices,
             ):
                 theme.set_icon_set("nerd")
-                nerd_title = _title_text(builder()[0].title)
+                nerd_title = _title_text(_first_option(builder()).title)
                 theme.set_icon_set("unicode")
-                unicode_title = _title_text(builder()[0].title)
+                unicode_title = _title_text(_first_option(builder()).title)
                 self.assertNotEqual(nerd_title, unicode_title, builder.__name__)
         finally:
             theme.set_icon_set(original)
@@ -1027,7 +1036,7 @@ class TestHandleSettingsUpkeep(unittest.TestCase):
         mock_select.return_value.ask.return_value = "back"
         menu._handle_settings_upkeep()
         choices = mock_select.call_args.kwargs["choices"]
-        self.assertIn("never run", _title_text(choices[0].title))
+        self.assertIn("never run", _title_text(_doctor_choice(choices).title))
 
     @patch("menu.maintenance.get_last_run", return_value="2026-07-22T10:00:00")
     @patch("menu.questionary.select")
@@ -1035,7 +1044,7 @@ class TestHandleSettingsUpkeep(unittest.TestCase):
         mock_select.return_value.ask.return_value = "back"
         menu._handle_settings_upkeep()
         choices = mock_select.call_args.kwargs["choices"]
-        self.assertIn("2026-07-22", _title_text(choices[0].title))
+        self.assertIn("2026-07-22", _title_text(_doctor_choice(choices).title))
 
     @patch("menu._handle_run_doctor")
     @patch("menu.maintenance.get_last_run", return_value=None)
