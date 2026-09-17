@@ -1213,6 +1213,50 @@ def _page1_condense_instruction(
     )
 
 
+def _page1_overflow_trim(resume_data: dict, profile_data: dict):
+    """Drops one bullet from profile.yml's `page1_overflow_trim_role` so a
+    must_fit_page_1 role below it can rise onto page 1. Returns
+    (new_resume_data, removed_bullet), or None when that role is unset,
+    absent, already at its min_bullets, or has nothing unprotected to give.
+
+    Condensing wording reclaims a line or two; a spilled job block is
+    usually far taller (one profile's was ~10 lines, and five condense
+    calls never moved it). A metric-free bullet goes first, then the
+    longest, since it frees the most space."""
+    trim_role = str((profile_data or {}).get("page1_overflow_trim_role") or "").strip()
+    if not trim_role:
+        return None
+    key = validate_resume._normalize_company(trim_role)
+    role_cfg = next(
+        (r for r in profile_data.get("roles") or []
+         if validate_resume._normalize_company(str(r.get("name", ""))) == key),
+        {},
+    )
+    minimum = int(role_cfg.get("min_bullets") or 0)
+    protected = [
+        validate_resume._normalize_company(str(p).split(":")[0])
+        for p in profile_data.get("protected_bullets") or []
+    ]
+    for j_index, job in enumerate(resume_data.get("EXPERIENCE") or []):
+        company = validate_resume._normalize_company(job.get("company", ""))
+        if key not in company and company not in key:
+            continue
+        bullets = list(job.get("achievements") or [])
+        if len(bullets) <= minimum:
+            return None
+        candidates = [
+            b for b in bullets
+            if not any(p and p in validate_resume._normalize_company(b) for p in protected)
+        ]
+        if not candidates:
+            return None
+        victim = min(candidates, key=lambda b: (bool(re.search(r"\d", b)), -len(b)))
+        trimmed = copy.deepcopy(resume_data)
+        trimmed["EXPERIENCE"][j_index]["achievements"] = [b for b in bullets if b is not victim]
+        return trimmed, victim
+    return None
+
+
 def _page1_condense_targets(resume_data: dict, profile_data: dict) -> list:
     """The longest page-1 bullets, as (length, company, bullet)."""
     page1_companies = {
@@ -1510,6 +1554,7 @@ def _parse_cv_skill_groups(cv_text: str) -> dict:
     or, worse, anywhere."""
     groups = {}
     in_block = False
+    parent = None
     for raw in (cv_text or "").splitlines():
         line = raw.strip()
         if line.startswith("## "):
@@ -1517,10 +1562,21 @@ def _parse_cv_skill_groups(cv_text: str) -> dict:
             continue
         if not in_block:
             continue
-        match = _SKILLS_LINE_LABEL.match(line)
+        # A bare "**Email & Lifecycle Marketing**" heads nested
+        # "* **Operations & Stack:** ..." rows. The resume's skills lines use
+        # the heading, so its sub-rows' skills belong to it; reading only
+        # one-line groups left every nested skill with no home at all.
+        heading = re.match(r"^\*\*(?P<label>[^*:]+)\*\*$", line)
+        if heading:
+            parent = heading.group("label").strip()
+            continue
+        nested = re.match(r"^[*-]\s+", line)
+        if not nested:
+            parent = None
+        match = _SKILLS_LINE_LABEL.match(line[nested.end():] if nested else line)
         if not match:
             continue
-        label = match.group("label").strip()
+        label = parent if (nested and parent) else match.group("label").strip()
         # "AWS (Glue, SageMaker, S3, RDS)" is four skills, not one: a naive
         # comma split yields "AWS (Glue" and "RDS)", so S3 gets a group and
         # RDS silently does not -- which is what made RDS look structurally
@@ -1775,6 +1831,16 @@ def _top_up_verified_skills(
             i for i, line in enumerate(lines)
             if wanted & _label_tokens(_skill_line_items(line)[0])
         ]
+        # A shared word ("Marketing" in both "Email & Lifecycle Marketing" and
+        # "CRM & Marketing Operations") is not a tie when one label matches
+        # far better; keep only the strongest overlap before judging.
+        if len(targets) > 1:
+            overlap = {
+                i: len(wanted & _label_tokens(_skill_line_items(lines[i])[0]))
+                for i in targets
+            }
+            best = max(overlap.values())
+            targets = [i for i in targets if overlap[i] == best]
         # Two plausible homes is not a placement.
         if len(targets) > 1:
             continue
@@ -8243,6 +8309,18 @@ class ResumeEngine:
                     )
                 cli_art.print_subprocess_output(pdf_result.stdout)
                 break
+
+            if page_count <= 2 and overflow_roles and page1_condense_attempt >= 1:
+                page1_trim = _page1_overflow_trim(resume_data, _p_yaml)
+                if page1_trim:
+                    resume_data, removed_bullet = page1_trim
+                    cli_art.print_literal(
+                        f"  Condensing wording was not enough; dropped a "
+                        f"{_p_yaml.get('page1_overflow_trim_role')} bullet so "
+                        f"{', '.join(overflow_roles)} can fit on page 1: {removed_bullet}"
+                    )
+                    render_html(resume_data, html_out)
+                    continue
 
             if page_count <= 2 and overflow_roles:
                 page1_condense_attempt += 1

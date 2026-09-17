@@ -169,13 +169,22 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
         self.assertEqual(added, [])
         self.assertEqual(result, resume)
 
-    def test_skips_when_two_lines_match_the_category(self):
+    def test_skips_when_two_lines_match_the_category_equally(self):
         resume = _resume([
-            "**Languages & Libraries:** Python",
+            "**Languages & Tools:** Python",
             "**Languages & Frameworks:** SQL",
         ])
         _, added = self._run(resume, {"tools": ["spaCy"]})
         self.assertEqual(added, [])
+
+    def test_the_exact_category_line_wins_over_a_partial_match(self):
+        resume = _resume([
+            "**Languages & Libraries:** Python",
+            "**Languages & Frameworks:** SQL",
+        ])
+        result, added = self._run(resume, {"tools": ["spaCy"]})
+        self.assertEqual(added, ["spaCy"])
+        self.assertEqual(result["SKILLS"][0], "**Languages & Libraries:** Python, spaCy")
 
     def test_measures_the_printed_width_not_the_bold_markup(self):
         # The label's four asterisks are not rendered. Counting them made
