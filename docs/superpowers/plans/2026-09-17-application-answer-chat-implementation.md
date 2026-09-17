@@ -555,11 +555,11 @@ total, mostly in tests.
 
 # Crush Alignment Review (2026-09-17)
 
-Checked against Crush v0.95.0, the version installed here. The live app
-opens to provider onboarding on this machine (no provider configured, and
-none was configured for this review), so the chat layout was read from
-Crush's source (`internal/ui/`, including its `AGENTS.md`). **These notes
-override earlier layout and key choices where they differ.**
+Checked against Crush v0.95.0, the version installed here: first from
+Crush's source (`internal/ui/`, including its `AGENTS.md`), then against the
+running app at 130×40 once a provider was configured (section K). **These
+notes override earlier layout and key choices where they differ; K overrides
+H and I where they disagree.**
 
 ## H. What Crush actually does, and what we adopt
 
@@ -583,9 +583,11 @@ override earlier layout and key choices where they differ.**
 - **No model picker dialog.** Crush is multi-provider; this app has one
   provider and a tested fallback chain. The model is a `profile.yml` setting,
   shown in the answer footer.
-- **No slash commands in the composer.** Crush moved actions into `ctrl+p`.
-  The earlier `/limit N` becomes a palette command ("Set character limit…").
-  Typing `/` stays literal, since application questions may contain it.
+- **`/` opens the palette only from an empty composer.** Live Crush shows
+  "/ or ctrl+p commands" while the editor is empty and drops the `/` hint as
+  soon as text is typed, so `/` inside a question stays literal. We adopt
+  exactly that. There are no typed slash commands: the earlier `/limit N`
+  becomes a palette command ("Set character limit…").
 - **No full ASCII logo** in chat. The dashboard has its own brand. The
   compact header uses the existing dashboard wordmark in the same one-line
   diagonal layout.
@@ -616,4 +618,29 @@ Added to `answers_test.go`:
   missing and pending.
 
 Update to Task 10's key list: remove `alt+enter`, `ctrl+s` shorten and
-`/limit` (moved to the palette); add `ctrl+o`, `ctrl+p`, `ctrl+d`, `ctrl+g`.
+`/limit` (moved to the palette); add `ctrl+o`, `ctrl+p`, `/` (empty composer
+only), `ctrl+d`, `ctrl+g`.
+
+## K. Live check (Crush running, one short prompt)
+
+What the running app showed that the source reading missed or got wrong:
+
+| Observed live | Change to the plan |
+|---|---|
+| In the wide layout the **logo sits at the top of the sidebar**, not in a one-line header. The chat column has no header at all. The one-line diagonal header is compact mode only. | Wide: the sidebar starts with the wordmark + `╱` fill, then Title · Company · score. Compact (<120×30): the one-line header from H. |
+| The sidebar shows an **auto-generated session title**, the model, **context usage ("1% (16.3K) $0.00")**, then ruled sections (Modified Files, LSPs, MCPs), each reading "None" when empty. | Sidebar: short question title (the question text, truncated; no extra model call), model, **prompt size vs. `MAX_PROMPT_CHARS`** (e.g. "31% of context"), then ruled sections Questions / Sources / Warnings with "None" empty states. |
+| The **info line** is `◇ <model> via <provider> in 1s` followed by a `───` rule filling the column, which visually closes the reply. | Footer: `◇ gemini-3.5-flash-lite in 3.2s · 2 sources · ⚠ 1 ───…`, rule to width. |
+| A **focused assistant message** gets a `▌` bar down every line of the body; the info line stays outside the bar. The user message keeps its thin `│`. | Same: `▌` in `t.Green` on body lines only. |
+| The **unfocused composer** swaps its `>` prompt for `:::` on every line; the placeholder is "Ready...". | Composer prompt `>` when focused, `:::` when not; placeholder "Paste an application question…". |
+| **Help hints change with focus**: the editor shows `tab focus chat • / or ctrl+p commands • …`; the chat shows `tab focus editor • ↑↓ scroll • shift+↑↓ scroll one item • b/pgup page up …`. | The hint bar is built per focus mode (C10), not one static list. |
+| **Full help (`ctrl+g`)** is a multi-column grid replacing the hint bar: `u`/`d` half page, `b`/`f` page, `g`/`G`, `shift+↑↓` one item, `c/y` copy, `esc` clear selection, `l/→` focus sidebar, `ctrl+n` new session, `ctrl+s` sessions. | Adopt the grid and these scroll keys. `ctrl+n` = new question, `l/→` focuses the sidebar question list (as well as `ctrl+s`). |
+| **Palette:** centered bordered box, "Commands" title with `╱` fill, a "Type to filter" input, shortcuts right-aligned, footer `tab switch selection • ↑/↓ choose • enter confirm • esc cancel`. Includes "Toggle Sidebar". | Same layout; add "Toggle Sidebar" and show shortcuts beside each command. |
+| `shift+tab` switches **mode** (Crush's agent modes). | Not applicable. `shift+tab` stays reverse focus (C10). |
+| A short **reasoning summary** is shown above the reply. | Not applicable (no thinking output from our calls); skip. |
+
+Tests added for K (`answers_test.go`): `/` opens the palette only when the
+composer is empty; hint text differs between editor and chat focus; the
+composer prompt is `:::` when unfocused; the wide layout puts the wordmark in
+the sidebar and compact mode puts it in the header; the sidebar shows the
+context percentage and "None" empty states; `u`/`d`/`b`/`f` scroll the
+transcript.
