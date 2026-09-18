@@ -85,7 +85,11 @@ from render_resume_docx import render_resume_docx
 # company against each heading, so it works with no manual setup. No
 # circular-import risk: rewrite_bullets imports only profile_paths, and
 # bullet_feedback above already pulls it into this chain.
-from rewrite_bullets import compact_tools_text, extract_cv_section
+from rewrite_bullets import (
+    compact_tools_text,
+    date_anchors,
+    extract_cv_section,
+)
 
 # --- MODEL STRATEGY ---
 # CRITIQUE_MODEL: handles bullet critique (high-frequency) and the post-build
@@ -195,6 +199,11 @@ Rewrite goals:
 - Use only information supported by the provided context.
 - Use only metrics verified in the provided context.
 - Do not invent scope, ownership, tools, or results.
+- Do not anchor achievements to school years, calendar dates, or seasons (e.g. "in the
+  2020-21 school year", "during Q3") — the role's period line already carries the
+  timeframe. Drop such qualifiers entirely rather than rewording them.
+- Do not append filler purpose clauses ("ensuring optimal performance and accuracy",
+  "to support high-value campaign execution") — end on the concrete outcome instead.
 
 If the context is not strong enough to support an improved claim, keep the rewrite
 conservative and explain the limitation in context_gaps.
@@ -277,6 +286,18 @@ KB_ALLOWLIST = sorted(
         "verified_metrics.json",
         "verified_projects.json",
         "verified_tools.json",
+        # Hand-curated register anchor: verbatim summaries from resumes the
+        # candidate wrote and liked (see voice-favorites.md itself). Lives
+        # next to voice-anchors.md deliberately -- build_voice_anchors.py
+        # regenerates that file from application-answers-index.csv and would
+        # clobber anything merged into it, so the favorites stay in their own
+        # regeneration-proof file. Full tier / builder only: never add this
+        # to build_audit_static_prefix_gemma() -- gemma-4-31b-it's 16k TPM
+        # cap leaves little headroom once the segment bundle is added, and
+        # this file costs ~1.1k tokens per call. Absence is fine:
+        # get_active_kb_files() skips missing files, and no bootstrap flow
+        # claims to write this.
+        "voice-favorites.md",
         "voice-anchors.md",
     ]
 )
@@ -561,6 +582,7 @@ def build_rewrite_prompt(
     parts.extend(
         [
             f"Rewrite this bullet for {persona} roles.",
+            f"Bullet tags: {tags or '(none)'} -- used by the VERB TAXONOMY's archetype_allows exception.",
             f"Known weaknesses to fix: {weakness_text}",
             f"Bullet to rewrite: {bullet}",
         ]
@@ -2322,7 +2344,11 @@ def partition_violations(violations: list[str]) -> tuple[list[str], list[str]]:
             or "wrap to a 3rd line" in v
             # A wording-quality nudge: worth a fix attempt, never a failed build.
             or v.startswith("Vague magnitude")
+            or v.startswith("Vague count")
             or v.startswith("Generic filler line")
+            or v.startswith("Prose rhythm")
+            or v.startswith("Date anchor")
+            or v.startswith("Advisory word")
         ):
             soft.append(v)
         else:
@@ -2351,6 +2377,63 @@ def repair_violations_surgically(
     current_data, opener_modified = auto_fix_forbidden_openers(
         current_data, style_rules
     )
+
+    # 1b. Deterministic Trailing-Punctuation Strip (0ms, zero tokens).
+    # _check_bullet_trailing_punctuation's fix -- a 2026-09-17 sample build
+    # shipped "Coached a remote pod of SDRs ... benchmarks." -- is pure
+    # text surgery, so it never needs the LLM loop.
+    punct_modified = False
+    punct_violations = [
+        v for v in violations if v.startswith("Bullet ends with trailing punctuation")
+    ]
+    if punct_violations:
+        for container_key, list_key in (("EXPERIENCE", "achievements"), ("EDUCATION", "bullets")):
+            for entry in current_data.get(container_key, []):
+                texts = entry.get(list_key, [])
+                for idx, bullet in enumerate(texts):
+                    stripped = bullet.strip()
+                    if validate_resume._TRAILING_PUNCTUATION_RE.search(stripped):
+                        new_text = stripped.rstrip()
+                        while validate_resume._TRAILING_PUNCTUATION_RE.search(new_text):
+                            new_text = (
+                                validate_resume._TRAILING_PUNCTUATION_RE.sub(
+                                    "", new_text
+                                ).rstrip()
+                            )
+                        if new_text and new_text != bullet:
+                            entry[list_key][idx] = new_text
+                            punct_modified = True
+
+    # 1c. Surgical Skills Fragment Removal (0ms, zero tokens). "Assets"
+    # alone as a skills item is truncated filler, not a skill -- the
+    # hallucinated-tool check passes it because the verified ledger has
+    # compound names bearing the word ("derivative content assets"). Drop
+    # the bare fragment item and keep the rest of the line byte-identical;
+    # if the shortened line falls into the wrap dead band, the dead-band
+    # repair in step 3 below re-fits it.
+    fragment_modified = False
+    fragment_violations = [
+        v for v in violations if v.startswith("Skills line contains fragment item")
+    ]
+    if fragment_violations:
+        for idx, line in enumerate(current_data.get("SKILLS", [])):
+            fragments = validate_resume.skills_fragment_items(line)
+            if not fragments:
+                continue
+            match = validate_resume._SKILLS_LINE_RE.match(line.strip())
+            if not match:
+                continue
+            items = [p.strip() for p in re.split(r"[,;|]", match.group("items")) if p.strip()]
+            kept = [
+                p
+                for p in items
+                if p.lower() not in validate_resume._SKILLS_FRAGMENT_WORDS
+            ]
+            if kept and kept != items:
+                current_data["SKILLS"][idx] = (
+                    f"**{match.group('label')}:** " + ", ".join(kept)
+                )
+                fragment_modified = True
 
     # 2. Surgical Bullet Widow Repair
     widow_violations = [
@@ -2752,6 +2835,8 @@ def repair_violations_surgically(
         verb_modified
         or order_modified
         or opener_modified
+        or punct_modified
+        or fragment_modified
         or widow_modified
         or skills_modified
         or hallucination_modified
@@ -3271,6 +3356,21 @@ def _review_recommendations_interactively(
         level=cli_art.NORMAL,
     )
     import sys
+
+    # Headless guard, same shape as confirm_jd_skill_gaps_interactively's:
+    # a non-TTY run (piped sample build, CI) has no way to answer, and the
+    # old behavior was an EOFError traceback from prompt_toolkit instead of
+    # a clean "no recommendations approved". Under unittest the loop still
+    # runs so tests can drive it with patched prompts.
+    if "unittest" not in sys.modules and not sys.stdin.isatty():
+        cli_art.detail(
+            "Non-interactive session -- declining all recommendations. Re-run from a "
+            "terminal to review them.",
+            level=cli_art.NORMAL,
+        )
+        checkpoint["approved_recommendations"] = []
+        jd_manager.save_checkpoint(job_key, checkpoint)
+        return []
 
     approved_recs = []
     for idx, rec in enumerate(recs, start=1):
@@ -4622,6 +4722,7 @@ class ResumeEngine:
         certs = credentials.get("certifications") or []
         education = credentials.get("education") or []
         voice_example = profile_data.get("voice_calibration_example")
+        voice_preferences = profile_data.get("voice_preferences") or {}
 
         if (
             not roles
@@ -4629,6 +4730,7 @@ class ResumeEngine:
             and not certs
             and not education
             and not voice_example
+            and not voice_preferences.get("summary_first_person")
         ):
             return ""
 
@@ -4747,6 +4849,22 @@ class ResumeEngine:
         if voice_example:
             lines.append(
                 f'\nVoice Calibration Example (this candidate\'s authentic voice): "{voice_example}"'
+            )
+
+        # Per-profile Summary voice policy (profile.yml's
+        # voice_preferences.summary_first_person). Deliberately phrased as a
+        # property of THIS candidate's documented register, and only emitted
+        # when the profile opts in -- a profile without the key gets no line
+        # and tailor_resume.md's default (pronoun-free Summary) applies.
+        if (profile_data.get("voice_preferences") or {}).get(
+            "summary_first_person"
+        ):
+            lines.append(
+                "\nSummary Voice: first person (\"I've owned...\") is this candidate's real "
+                "register -- their own favorite summaries all speak as \"I\" (see the "
+                "=== VOICE FAVORITES === context block when present). Write the Summary in "
+                "first person; never third person (\"She leads...\", \"[Name] is a...\"). "
+                "Bullets, Skills, and Education stay pronoun-free regardless."
             )
 
         return "\n".join(lines)
@@ -4918,6 +5036,24 @@ class ResumeEngine:
                 "=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n"
             )
 
+        voice_favorites_path = os.path.join(self.kb_dir, "voice-favorites.md")
+        if os.path.exists(voice_favorites_path):
+            try:
+                with open(voice_favorites_path, "r", encoding="utf-8") as f:
+                    data = f.read()
+                cli_art.detail(
+                    f"   {theme.colorize_icon('success')} Loaded voice-favorites.md ({len(data):,} chars)"
+                )
+                sections.append(
+                    "=== VOICE FAVORITES (summaries the candidate wrote and liked -- match this register) ===\n"
+                    f"{data}"
+                )
+            except Exception as e:
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} build_audit_static_prefix: could not load voice-favorites.md: {e}",
+                    soft_wrap=True,
+                )
+
         if include_evidence_guide:
             evidence_guide_path = os.path.join(self.kb_dir, "evidence-guide.csv")
             if os.path.exists(evidence_guide_path):
@@ -5003,6 +5139,16 @@ class ResumeEngine:
             sections.append(
                 "=== VOICE ANCHORS (real past answers, themes and quotes worth echoing) ===\n"
             )
+
+        # Deliberately NOT here: voice-favorites.md. This slim tier exists
+        # because gemma-4-31b-it's 16k TPM cap leaves little headroom once
+        # the KB segment bundle is added (2026-07-16), and the favorites add
+        # ~1.1k tokens per rewrite call across every bullet in the run. The
+        # register they teach matters for the BUILDER (flash-lite, full
+        # tier) and cover letters, both of which load it via
+        # build_audit_static_prefix()/load_knowledge_base(); Gemma's rewrite
+        # register is covered by the two rewrite-goal lines in
+        # REWRITE_SYSTEM_BASE instead.
 
         return "\n\n".join(sections)
 
@@ -5494,6 +5640,7 @@ class ResumeEngine:
         verb_taxonomy_curated = {
             "priority_tiers": verb_taxonomy.get("priority_tiers", {}),
             "avoid": verb_taxonomy.get("avoid", []),
+            "archetype_allows": verb_taxonomy.get("archetype_allows", {}),
         }
         language_quality_curated = {
             "weak_verbs": language_quality.get("weak_verbs", {}),
@@ -5514,6 +5661,11 @@ class ResumeEngine:
                     "",
                     "=== VERB TAXONOMY (priority tiers) ===",
                     "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
+                    "Per-bullet exception: when the bullet's own tags (shown in the prompt below) "
+                    "match any tag name in archetype_allows.match_tags, the verbs in "
+                    "archetype_allows.allowed_from_avoid are acceptable openers for that bullet -- "
+                    "for craft/creative work the honest verb IS the plain creation verb. For every "
+                    "other bullet the avoid list applies in full.",
                     json.dumps(verb_taxonomy_curated),
                     "",
                     "=== LANGUAGE QUALITY RULES ===",
@@ -5847,7 +5999,31 @@ class ResumeEngine:
                                 rescore_data
                             )
 
-                            if rewrite_composite >= original_composite:
+                            # Date-anchor rule, decided BEFORE the composite
+                            # comparison (mirrors rewrite_bullets.best_version's
+                            # margin bypass and process_bullet's rejection): a
+                            # rewrite that KEEPS a school-year/calendar anchor
+                            # loses outright, and a rewrite that DROPS one wins
+                            # outright -- the composite can't see this failure
+                            # mode, and the margin/criteria would otherwise let
+                            # the anchored original survive a marginal rewrite
+                            # (observed live 2026-09-17, "in the 2020-21 season").
+                            original_anchors = date_anchors(bullet)
+                            rewrite_anchors = date_anchors(candidate_bullet)
+
+                            if rewrite_anchors:
+                                rewritten_bullet = bullet
+                                critique_to_record = critique_data
+                                cli_art.detail(
+                                    f"   {theme.colorize_icon('hint')} KEPT original (rewrite kept a calendar anchor: {', '.join(rewrite_anchors)})"
+                                )
+                            elif original_anchors:
+                                rewritten_bullet = candidate_bullet
+                                critique_to_record = rescore_data
+                                cli_art.detail(
+                                    f"   {theme.colorize_icon('success')} ACCEPTED rewrite (dropped calendar anchor {', '.join(original_anchors)})"
+                                )
+                            elif rewrite_composite >= original_composite:
                                 rewritten_bullet = candidate_bullet
                                 cli_art.detail(
                                     f"   {theme.colorize_icon('success')} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})"
@@ -7439,6 +7615,26 @@ class ResumeEngine:
         # from a checkpoint, so style_rules_for_validation must be in scope
         # even when the fresh-build branch below never executes.
         style_rules_for_validation = self.load_yaml(self.rules_dir, "style_rules.yaml")
+        # Per-profile Summary voice policy: profile.yml's
+        # voice_preferences.summary_first_person opts this profile into
+        # first-person Summaries (validated the same way -- validate_resume
+        # reads the flag off this style_rules dict, the same pattern as its
+        # enforce_star flag). Deliberately NOT a shared-rules change:
+        # first-person summaries are one candidate's documented register
+        # (their voice-favorites.md), not a universal style; a profile
+        # without the key keeps the pronoun-free Summary.
+        style_rules_for_validation["summary_first_person"] = bool(
+            (_p_yaml or {}).get("voice_preferences", {}).get("summary_first_person")
+        )
+        # Same per-profile pattern: voice_preferences.prose_advisory_words
+        # downgrades the named single words to soft advisories in Summary/
+        # Why only (see validate_resume._check_forbidden_phrases). Empty by
+        # default -- the hard ban applies everywhere unless the profile
+        # opts in, exactly like summary_first_person.
+        style_rules_for_validation["prose_advisory_words"] = list(
+            (_p_yaml or {}).get("voice_preferences", {}).get("prose_advisory_words")
+            or []
+        )
         # Same reason, same place: the post-trim gate runs on the resumed path
         # too, so the roster can't be computed inside the fresh-build branch.
         role_roster = _required_role_roster(_p_yaml)

@@ -161,7 +161,7 @@ class TestMetricProvenanceRepair(unittest.TestCase):
                         "Standardized campaign templates by building "
                         "JSON-based content mockups, increasing content "
                         "scalability across 100+ assets",
-                        "Did other unrelated work.",
+                        "Did other unrelated work",
                     ],
                     "career_note": "",
                 }
@@ -194,7 +194,7 @@ class TestMetricProvenanceRepair(unittest.TestCase):
             "mockups, increasing content scalability across 100+ assets",
             achievements,
         )
-        self.assertEqual(achievements[1], "Did other unrelated work.")
+        self.assertEqual(achievements[1], "Did other unrelated work")
         self.assertEqual(remaining, [])
 
     @patch("orchestrator.GeminiClient.generate")

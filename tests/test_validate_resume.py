@@ -265,20 +265,65 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume._check_metric_uniqueness(resume)
         self.assertTrue(any("41" in v for v in violations))
 
+    def test_allows_first_person_pronoun_in_summary(self):
+        # 2026-09-17: the Summary is the one generated section where this
+        # candidate's own favorite resumes all speak as "I" (see the
+        # profile's voice-favorites.md). It is a PER-PROFILE opt-in --
+        # profile.yml's voice_preferences.summary_first_person, carried to
+        # the validator on the style_rules dict (same pattern as
+        # enforce_star) -- not a universal style change. Bullets, skills,
+        # and education keep the strict ban under both settings.
+        opted_in = {**STYLE_RULES, "summary_first_person": True}
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = (
+            "<strong>I'm a lifecycle marketer with 10+ years of experience.</strong> "
+            "I've owned full-funnel messaging across channels."
+        )
+        violations = validate_resume.validate(resume, opted_in)
+        self.assertFalse(any("pronoun" in v.lower() for v in violations))
+
+    def test_first_person_summary_stays_flagged_without_the_opt_in(self):
+        # Default (no voice_preferences.summary_first_person): the shared
+        # pronoun-free rule still applies to the Summary. This keeps the
+        # test operator-independent -- it must not depend on whose profile
+        # happens to be active on the machine running the suite.
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = (
+            "<strong>I'm a lifecycle marketer with 10+ years of experience.</strong>"
+        )
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("pronoun" in v.lower() for v in violations))
+
     def test_flags_pronoun_outside_why_section(self):
         resume = _valid_resume()
-        resume["SUMMARY_TEXT"] = "<strong>I am a lifecycle marketer.</strong>"
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "I led the lifecycle marketing team to record open rates",
+        ]
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("pronoun" in v.lower() for v in violations))
 
     def test_flags_third_person_pronoun_in_summary(self):
-        # The Summary should read as positioning, not third-person biography --
-        # "She specializes in..." is as much a violation as "I specialize in...".
+        # The Summary should read as the candidate's own voice, not a
+        # third-person biography -- "She specializes in..." is a violation
+        # even for a profile that opted into first-person Summaries.
+        opted_in = {**STYLE_RULES, "summary_first_person": True}
         resume = _valid_resume()
         resume["SUMMARY_TEXT"] = (
             "<strong>Alex is a lifecycle marketer.</strong> She leads CRM strategy."
         )
-        violations = validate_resume.validate(resume, STYLE_RULES)
+        violations = validate_resume.validate(resume, opted_in)
+        self.assertTrue(any("pronoun" in v.lower() for v in violations))
+
+    def test_flags_third_person_pronoun_hiding_in_first_person_summary(self):
+        # First person doesn't grant a blanket exemption: a summary that is
+        # mostly "I" but slips in a "her"/"she" is still flagged.
+        opted_in = {**STYLE_RULES, "summary_first_person": True}
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = (
+            "<strong>I'm a lifecycle marketer.</strong> "
+            "My teams trusted her judgment on segmentation."
+        )
+        violations = validate_resume.validate(resume, opted_in)
         self.assertTrue(any("pronoun" in v.lower() for v in violations))
 
     def test_allows_pronoun_inside_why_section(self):
@@ -288,6 +333,224 @@ class TestValidateResume(unittest.TestCase):
         )
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertEqual(violations, [])
+
+    def test_flags_count_standin_that_replaced_a_verified_figure(self):
+        # 2026-09-17 sample build: "1,578 schools" in the bank became
+        # "thousands of schools" in the generated bullet -- the rewrite
+        # swapped the verified figure for a vague count. Soft violation,
+        # but the fix loop is told exactly which figure to restore.
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Managed a $15.1M portfolio of thousands of schools across 100+ districts",
+        ]
+        bullet_tuples = [
+            (
+                "Managed a $15.1M portfolio of 1,578 schools across 100+ districts",
+                "Treering",
+                "[mgmt]",
+            ),
+        ]
+        violations = validate_resume._check_vague_magnitudes(resume, bullet_tuples)
+        self.assertTrue(any("thousands of schools" in v.lower() for v in violations))
+        self.assertTrue(any("1,578" in v for v in violations))
+
+    def test_allows_count_standin_when_no_source_figure_exists(self):
+        # "hundreds of conferences" with no number anywhere in the
+        # company's own source bullets is legitimate vagueness about a
+        # genuinely uncounted fact -- nothing to restore, nothing to flag.
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Spoke at hundreds of conferences about lifecycle marketing strategy",
+        ]
+        bullet_tuples = [
+            (
+                "Represented the lifecycle marketing team at industry events",
+                "Treering",
+                "[generalist]",
+            ),
+        ]
+        violations = validate_resume._check_vague_magnitudes(resume, bullet_tuples)
+        self.assertFalse(any("hundreds" in v.lower() for v in violations))
+
+    def test_allows_count_standin_when_the_figure_is_already_stated(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Managed a $15.1M portfolio of thousands of schools, including 1,578 active accounts",
+        ]
+        bullet_tuples = [
+            (
+                "Managed a $15.1M portfolio of 1,578 schools across 100+ districts",
+                "Treering",
+                "[mgmt]",
+            ),
+        ]
+        violations = validate_resume._check_vague_magnitudes(resume, bullet_tuples)
+        self.assertFalse(any("thousands of schools" in v.lower() for v in violations))
+
+    def test_count_standin_match_requires_the_same_noun(self):
+        # "thousands of emails" must not be "fixed" with the verified
+        # figure about schools -- the count attaches to a different noun.
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Sent thousands of emails from a $15.1M portfolio of accounts",
+        ]
+        bullet_tuples = [
+            (
+                "Managed a $15.1M portfolio of 1,578 schools across 100+ districts",
+                "Treering",
+                "[mgmt]",
+            ),
+        ]
+        violations = validate_resume._check_vague_magnitudes(resume, bullet_tuples)
+        self.assertFalse(any("thousands of emails" in v.lower() for v in violations))
+
+    def test_flags_bullet_ending_with_trailing_punctuation(self):
+        # 2026-09-17 sample build: a builder-produced bullet shipped ending
+        # in a period. The Step 3 critique enforces the rule on bank
+        # bullets, but nothing on the builder path re-checked it.
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"].append(
+            "Coached a remote pod of SDRs on messaging, beating company reply rate benchmarks."
+        )
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("trailing punctuation" in v.lower() for v in violations))
+
+    def test_flags_trailing_punctuation_in_education_bullet(self):
+        resume = _valid_resume()
+        resume["EDUCATION"] = [
+            {
+                "institution": "University of Kansas",
+                "bullets": ["Produced editorial content across channels."],
+            },
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("trailing punctuation" in v.lower() for v in violations))
+
+    def test_allows_bullet_with_internal_punctuation(self):
+        # Only the END matters -- periods inside abbreviations or
+        # sentence-internal structure are fine.
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"].append(
+            "Led weekly QA for U.S. and U.K. sends across 30+ campaigns"
+        )
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("trailing punctuation" in v.lower() for v in violations))
+
+    def test_flags_bare_fragment_item_in_skills_line(self):
+        # 2026-09-17 sample build shipped "...Content Operations, Assets" --
+        # a bare generic noun the hallucination check passed because the
+        # verified ledger holds compound names bearing the word.
+        resume = _valid_resume()
+        resume["SKILLS"] = [
+            "**Content Strategy:** Content Marketing, Campaign Messaging, Content Operations, Assets",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("fragment item" in v.lower() for v in violations))
+
+    def test_allows_qualified_compound_items_in_skills_line(self):
+        # The same word inside a qualified compound ("Brand Assets") or a
+        # real skill is fine -- only a BARE generic noun is a fragment.
+        resume = _valid_resume()
+        resume["SKILLS"] = [
+            "**Creative & Content:** Brand Assets, Asset Management, Copywriting, CMS Platforms",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("fragment item" in v.lower() for v in violations))
+
+    def test_flags_monotonous_prose_rhythm_in_why_section(self):
+        # 2026-09-17: the generated Why section was five near-identically
+        # paced sentences -- the "AI-beige" cadence voice_metrics.py
+        # already measures for cover letters. Soft violation (nudge only).
+        resume = _valid_resume()
+        resume["WHY_TEXT"] = (
+            "<p>I believe this company builds meaningful products for people. "
+            "I have built meaningful systems for teams over ten years. "
+            "I want to bring meaningful strategy to your mission. "
+            "I care deeply about meaningful communication with customers. "
+            "I would be excited to contribute meaningful work here.</p>"
+        )
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("Prose rhythm" in v for v in violations))
+
+    def test_prose_rhythm_skips_short_prose(self):
+        # A 5-line Summary is 3-4 sentences; burstiness stats on samples
+        # that small are noise, so the check stays quiet.
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = (
+            "<strong>Lifecycle marketer.</strong> I build things. "
+            "I have built other things too. Scaled campaigns."
+        )
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("Prose rhythm" in v for v in violations))
+
+    def test_varied_prose_rhythm_passes(self):
+        resume = _valid_resume()
+        resume["WHY_TEXT"] = (
+            "<p>Your mission matters to me. Across ten years I have built content systems, "
+            "campaign operations, and training programs that turned scattered messaging into "
+            "something coherent, measurable, and genuinely useful for the people receiving it. "
+            "That is the work I want to keep doing. Your platform is where I would do it.</p>"
+        )
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("Prose rhythm" in v for v in violations))
+
+    def test_advisory_word_downgrades_to_soft_in_prose_for_opted_profile(self):
+        # 2026-09-17: the candidate's own favorite summaries use
+        # "passionate" as a grounded first-person adjective (the Rula
+        # sample). The per-profile prose_advisory_words opt-in downgrades
+        # the single word to a soft advisory in Summary/Why only.
+        opted_in = {
+            **STYLE_RULES,
+            "prose_advisory_words": ["passionate", "driven", "dynamic"],
+        }
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = (
+            "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> "
+            "I'm passionate about communication that meets people where they are."
+        )
+        violations = validate_resume.validate(resume, opted_in)
+        self.assertTrue(any(v.startswith("Advisory word 'passionate'") for v in violations))
+        self.assertFalse(
+            any(v.startswith("Forbidden phrase 'passionate'") for v in violations)
+        )
+
+    def test_advisory_word_stays_hard_without_the_opt_in(self):
+        resume = _valid_resume()
+        resume["SUMMARY_TEXT"] = (
+            "<strong>Lifecycle marketer with 8 years in CRM strategy.</strong> "
+            "I'm passionate about communication that meets people where they are."
+        )
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any(v.startswith("Forbidden phrase 'passionate'") for v in violations))
+
+    def test_advisory_word_stays_hard_in_bullets_and_multiword_phrases(self):
+        # The downgrade covers single words in Summary/Why ONLY: bullets
+        # and multi-word clichés ("results-driven professional") keep the
+        # hard ban even for an opted-in profile.
+        opted_in = {
+            **STYLE_RULES,
+            "prose_advisory_words": ["passionate", "driven", "dynamic"],
+        }
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Passionate about CRM hygiene, led quarterly list-cleanup audits",
+        ]
+        resume["SUMMARY_TEXT"] = (
+            "<strong>Results-driven professional with 8 years in CRM strategy.</strong>"
+        )
+        violations = validate_resume.validate(resume, opted_in)
+        self.assertTrue(any(v.startswith("Forbidden phrase 'passionate'") for v in violations))
+        # "results-driven professional" trips several entries of the list
+        # ("results-driven", "results-driven professional", "driven
+        # professional"); any hard hit proves the multi-word cliché was
+        # not downgraded.
+        self.assertTrue(
+            any(
+                v.startswith("Forbidden phrase 'results-driven")
+                or v.startswith("Forbidden phrase 'driven professional'")
+                for v in violations
+            )
+        )
 
     def test_allows_pronoun_inside_career_note(self):
         # career_note is hand-authored fixed content, unconditionally
@@ -1150,3 +1413,22 @@ class TestStrictSemanticSkillGuardrail(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_flags_surviving_date_anchor_as_soft_violation(self):
+        # Final backstop: whatever path a school-year/calendar anchor takes
+        # to the resume, the validator nudges it out ("the role's period
+        # line already dates the work").
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Achieved a 38% reply rate across 751 contacts in the 2020-21 school year",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("Date anchor" in v for v in violations))
+
+    def test_timeless_achievement_passes_the_date_anchor_check(self):
+        resume = _valid_resume()
+        resume["EXPERIENCE"][0]["achievements"] = [
+            "Achieved a 38% reply rate across 751 district contacts",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("Date anchor" in v for v in violations))

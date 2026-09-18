@@ -232,6 +232,12 @@ def _build_build_documents_choices() -> list:
             title=_icon_title("gem", "↳ Polish a Resume or Cover Letter With Gemini"),
             value="polish",
         ),
+        questionary.Choice(
+            title=_icon_title(
+                "utility", "↳ Re-render an Existing Document (PDF from JSON, no AI)"
+            ),
+            value="rerender",
+        ),
         questionary.Choice(title="Back", value="back"),
     ]
 
@@ -1875,6 +1881,46 @@ def _handle_polish() -> bool:
     return False
 
 
+def _handle_rerender() -> bool:
+    """Re-renders an existing output/json document to HTML + PDF with zero
+    Gemini calls -- the recovery path when a PDF was deleted (or a renderer
+    change landed) and the JSON is the surviving artifact. Found missing the
+    hard way 2026-09-17: a deleted PDF had no menu path back to it, and the
+    two-command recovery lived only in this assistant's head."""
+    json_path = polish_module.pick_polish_target()
+    if not json_path:
+        cli_art.cli_info("Nothing to re-render -- no saved documents found.")
+        _pause_and_return()
+        return False
+    doc_type = polish_module.detect_doc_type(json_path)
+    if doc_type is None:
+        cli_art.console.print(
+            f"{cli_art.WARNING} Unrecognized document type: {json_path}"
+        )
+        _pause_and_return()
+        return False
+    with cli_art.thinking_status("Re-rendering HTML + PDF (no AI calls)..."):
+        result = polish_module.render_existing_json(json_path, doc_type)
+    if result.get("pdf"):
+        cli_art.console.print(f"{cli_art.SUCCESS} Re-rendered:")
+        cli_art.console.print(f"  HTML: {result['html']}")
+        cli_art.console.print(f"  PDF:  {result['pdf']}")
+        try:
+            subprocess.run(
+                ["open", result["pdf"]] if sys.platform == "darwin"
+                else ["xdg-open", result["pdf"]],
+                capture_output=True,
+            )
+        except Exception:
+            pass
+    else:
+        # save_and_render's convention, same wording: the JSON survived --
+        # only this render attempt is missing.
+        cli_art.cli_info("The JSON was untouched -- only this render attempt is missing.")
+    _pause_and_return()
+    return False
+
+
 def _handle_bullet_bank() -> bool:
     bullet_bank_menu.run_bullet_bank_menu()
     return False
@@ -3036,6 +3082,7 @@ _HANDLERS = {
     "browse_jobs": _handle_browse_jobs,
     "career_dashboard": _handle_career_dashboard,
     "polish": _handle_polish,
+    "rerender": _handle_rerender,
     "stale_sweep": _handle_stale_sweep,
     "help": _handle_help,
     "check_updates": _handle_check_updates,

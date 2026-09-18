@@ -613,3 +613,17 @@ avoid:
   - facilitated
   - supported
   - assisted
+
+# Plain creation verbs the avoid list bans for operational/leadership
+# bullets. 2026-09-17: for craft/creative work ("Wrote copy for 30+
+# projects...", "Created campaign calendars..."), the honest opener IS the
+# plain verb, and forcing "Produced"/"Delivered" distorts it -- the Step 3
+# rewrites were swapping a candidate's own accurate verbs for
+# consultant-speak to satisfy this list. A rewrite may open with
+# allowed_from_avoid when the bullet's own tags match any name in
+# match_tags (matched against the ACTIVE profile's tag names from its
+# profile.yml tags: block -- a profile without such configured tags never
+# triggers the exception, so this stays profile-safe).
+archetype_allows:
+  allowed_from_avoid: [created, developed]
+  match_tags: [content, writing, brand, design, creative]
