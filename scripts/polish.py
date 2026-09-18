@@ -237,6 +237,24 @@ def generate_candidate(
 
     style_rules = engine.load_yaml(engine.rules_dir, "style_rules.yaml")
     if doc_type == "resume":
+        # Same per-profile Summary voice policy as the main build pipeline:
+        # the active profile's voice_preferences.summary_first_person opts
+        # in (see orchestrator's identical wiring). Without this, a polish
+        # edit that kept the profile's own first-person Summary register
+        # would be reported as a pronoun violation the main build allows.
+        style_rules["summary_first_person"] = bool(
+            (profile_paths.profile_yaml() or {})
+            .get("voice_preferences", {})
+            .get("summary_first_person")
+        )
+        # Same per-profile pattern as the main build pipeline (see
+        # orchestrator's identical wiring for prose_advisory_words).
+        style_rules["prose_advisory_words"] = list(
+            (profile_paths.profile_yaml() or {})
+            .get("voice_preferences", {})
+            .get("prose_advisory_words")
+            or []
+        )
         candidate = normalize_resume.normalize(result)
         if "_recommendation_actions" in doc:
             candidate["_recommendation_actions"] = doc["_recommendation_actions"]
@@ -345,6 +363,55 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
         "pdf": pdf_path,
         "backup": backup_path,
     }
+
+
+def render_existing_json(json_path: str, doc_type: str) -> dict:
+    """Re-renders an existing output/json document to HTML + PDF with ZERO
+    Gemini calls -- the recovery path when a PDF was deleted (or a renderer
+    change landed) and the JSON is the surviving artifact. Same render +
+    generate-pdf.mjs shape as save_and_render, minus the save/backup: the
+    JSON is read, never written. Resume renders target 2 pages (the
+    tightening loop needs --max-pages=2 or every two-page resume comes out
+    crunched -- see generate-pdf.mjs's target-page logic); the cover
+    letter's single-page target stays the default."""
+    with open(json_path, encoding="utf-8") as f:
+        doc = json.load(f)
+
+    stem = stem_from_json_path(json_path, doc_type)
+    suffix = "_Resume" if doc_type == "resume" else "_CoverLetter"
+    html_path = os.path.join(OUTPUT_HTML_DIR, f"{stem}{suffix}.html")
+    pdf_path = os.path.join(OUTPUT_PDF_DIR, f"{stem}{suffix}.pdf")
+    os.makedirs(os.path.dirname(html_path), exist_ok=True)
+    os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+
+    if doc_type == "resume":
+        render_html(doc, html_path)
+    else:
+        render_coverletter(doc, html_path)
+
+    pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
+    args = ["node", pdf_script, html_path, pdf_path, "--format=letter"]
+    if doc_type == "resume":
+        args.append("--max-pages=2")
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=PDF_GENERATION_TIMEOUT_SECONDS,
+            env={**os.environ, "RESUME_BUILDER_ICONS": theme.icon_set_name()},
+        )
+    except subprocess.TimeoutExpired:
+        cli_art.console.print(
+            f"{cli_art.WARNING} PDF generation timed out after {PDF_GENERATION_TIMEOUT_SECONDS}s "
+            "(the JSON was untouched -- re-run to try again)."
+        )
+        return {"json": json_path, "html": html_path, "pdf": None}
+    if result.returncode != 0:
+        cli_art.friendly_subprocess_error(result.stderr, "re-rendering the PDF")
+        return {"json": json_path, "html": html_path, "pdf": None}
+
+    return {"json": json_path, "html": html_path, "pdf": pdf_path}
 
 
 _POLISH_PAGE_SIZE = 50

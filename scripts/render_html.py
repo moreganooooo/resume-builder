@@ -15,6 +15,7 @@ from html import escape
 from pathlib import Path
 
 import cli_art
+import normalize_resume
 import theme
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -118,8 +119,21 @@ def build_experience_html(jobs: list[dict]) -> str:
     sep = '<span class="sep">|</span>'
     html = []
     for job in jobs:
+        # Optional craft-area sub-headers (the candidate's own favorites
+        # group a multi-hat role under italic labels like "Creative
+        # Strategy & Brand Voice:"). grouped_achievements splits the entry
+        # on achievement_group_starts (normalize_resume sanitizes the map),
+        # so every renderer shares one grouping code path.
+        # Each segment carries its own <ul> so grouped and ungrouped
+        # entries share one shape; no wrapper here (the old hardcoded
+        # <ul>{bullets_html}</ul> nested ULs inside ULs -- invalid HTML --
+        # the moment a grouped entry landed).
         bullets_html = "".join(
-            f"<li>{escape(b)}</li>" for b in job.get("achievements", [])
+            f'<div class="job-group-label">{escape(label)}:</div>'
+            f'<ul>{"".join(f"<li>{escape(b)}</li>" for b in bullets)}</ul>'
+            if label
+            else f'<ul>{"".join(f"<li>{escape(b)}</li>" for b in bullets)}</ul>'
+            for label, bullets in normalize_resume.grouped_achievements(job)
         )
         career_note = (
             f'<div class="career-note"><strong>Career Note:</strong> {escape(job["career_note"])}</div>'
@@ -154,7 +168,7 @@ def build_experience_html(jobs: list[dict]) -> str:
           <div class="job-title">{_preserve_arrow_glyph(escape(job.get("title","")))}</div>
           <div class="job-meta">{meta_line}</div>
           {clients}
-          <ul>{bullets_html}</ul>
+          {bullets_html}
           {career_note}
         </div>""")
     return "\n".join(html)

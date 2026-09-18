@@ -19,6 +19,8 @@ import json
 import os
 import re
 
+import normalize_resume
+
 from docx import Document
 
 
@@ -122,8 +124,14 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
                 run.bold = True
                 p.add_run(job["clients"])
 
-            for achievement in job.get("achievements", []):
-                doc.add_paragraph(achievement, style="List Bullet")
+            for label, bullets in normalize_resume.grouped_achievements(job):
+                if label:
+                    label_p = doc.add_paragraph()
+                    label_run = label_p.add_run(f"{label}:")
+                    label_run.bold = True
+                    label_run.italic = True
+                for achievement in bullets:
+                    doc.add_paragraph(achievement, style="List Bullet")
 
             if job.get("career_note"):
                 p = doc.add_paragraph()

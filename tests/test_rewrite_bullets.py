@@ -20,6 +20,8 @@ from rewrite_bullets import (  # noqa: E402
     KnowledgeBase,
     RulesBundle,
     extract_cv_section,
+    best_version,
+    date_anchors,
     filter_claims_by_tags,
     filter_json_entries_by_tags,
     filter_projects_by_employer,
@@ -459,6 +461,107 @@ class TestRulesBundleIncludesRedundancyRules(unittest.TestCase):
         self.assertIn("unneeded_calendar_dates", self.rules.score_rules_block)
 
 
+class TestArchetypeVerbAllowance(unittest.TestCase):
+    # 2026-09-17: the avoid list's global ban on "created"/"developed"
+    # forced Step 3 rewrites to swap a content candidate's own accurate
+    # verbs ("Wrote copy...", "Created campaign calendars...") for
+    # consultant-speak. verb_taxonomy.yaml's archetype_allows now scopes
+    # the ban per tag, and both rewrite tiers must carry it.
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rules = RulesBundle(RULES_DIR, SCORING_DIR)
+
+    def test_archetype_allows_reaches_both_rewrite_tiers(self):
+        for block in (self.rules.rewrite_rules_block, self.rules.rewrite_rules_block_gemma):
+            self.assertIn("archetype_allows", block)
+            self.assertIn("match_tags", block)
+            self.assertIn("Per-bullet exception", block)
+
+    def test_build_rewrite_prompt_shows_the_bullet_tags(self):
+        # The exception is tag-conditional, so the model has to SEE the
+        # bullet's tags to apply it.
+        from rewrite_bullets import build_rewrite_prompt
+
+        prompt = build_rewrite_prompt(
+            bullet="Wrote copy for 30+ projects across print and digital",
+            tags="[content][brand]",
+            weaknesses="None",
+            kb_context="",
+            attempt=1,
+        )
+        self.assertIn("Bullet tags: [content][brand]", prompt)
+
+    def test_build_rewrite_prompt_with_no_tags_still_renders(self):
+        from rewrite_bullets import build_rewrite_prompt
+
+        prompt = build_rewrite_prompt(
+            bullet="Led a team of SDRs",
+            tags="",
+            weaknesses="None",
+            kb_context="",
+            attempt=1,
+        )
+        self.assertIn("Bullet tags: (none)", prompt)
+
+
+class TestBestVersionVoiceConservationMargin(unittest.TestCase):
+    # 2026-09-17: best_version() previously let a rewrite win TIES, which
+    # is how a bank bullet in the candidate's own voice ("Secured a
+    # long-term freelance contract...") degraded into keyword-shaped
+    # filler ("Won a sustained freelance contract after ... commercial
+    # client deployment") for a composite gain of one point. The margin
+    # makes a rewrite BUY its displacement.
+
+    def test_tie_keeps_the_original(self):
+        scores = {
+            "accuracy_score": 80,
+            "believability_score": 80,
+            "clarity_score": 80,
+            "ats_value": 80,
+            "manager_test": "PASS",
+        }
+        original, _ = best_version("Original wording", dict(scores), "Rewritten wording", dict(scores))
+        self.assertEqual(original, "Original wording")
+
+    def test_small_win_keeps_the_original(self):
+        original_scores = {
+            "accuracy_score": 80,
+            "believability_score": 80,
+            "clarity_score": 80,
+            "ats_value": 80,
+            "manager_test": "PASS",
+        }
+        small_win = {
+            "accuracy_score": 82,
+            "believability_score": 80,
+            "clarity_score": 80,
+            "ats_value": 80,
+            "manager_test": "PASS",
+        }
+        original, _ = best_version("Original wording", original_scores, "Rewritten wording", small_win)
+        self.assertEqual(original, "Original wording")
+
+    def test_real_improvement_displaces_the_original(self):
+        original_scores = {
+            "accuracy_score": 60,
+            "believability_score": 60,
+            "clarity_score": 60,
+            "ats_value": 60,
+            "manager_test": "FAIL",
+        }
+        big_win = {
+            "accuracy_score": 90,
+            "believability_score": 90,
+            "clarity_score": 90,
+            "ats_value": 90,
+            "manager_test": "PASS",
+        }
+        chosen, scores = best_version("Original wording", original_scores, "Rewritten wording", big_win)
+        self.assertEqual(chosen, "Rewritten wording")
+        self.assertEqual(scores, big_win)
+
+
 class TestScoreBulletSendsRoleCompanyContext(unittest.TestCase):
     # Regression coverage: score_bullet() used to send only the bullet
     # text and a tag-derived persona -- with no company context at all,
@@ -761,3 +864,82 @@ class TestProcessBulletGemmaHandoff(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDateAnchors(unittest.TestCase):
+    # 2026-09-17: a rewrite that dropped "in the 2020-21 season" scored only
+    # marginally higher than the anchored bank original, so the voice-
+    # conservation margin kept the anchor. Three-layer guard: the rewrite
+    # path rejects anchored rewrites outright, best_version() bypasses its
+    # margin when the rewrite drops an anchor the original carried, and
+    # validate_resume flags any anchor that still reaches the resume.
+
+    def test_matches_school_year_quarter_and_season_anchors(self):
+        for text in (
+            "Raised reply rates by 38% in the 2020-21 school year",
+            "Raised reply rates across 751 contacts in the 2020-2021 season",
+            "Ran the Q3 2021 push campaign",
+            "Hired each fall 2021 cohort ahead of schedule",
+        ):
+            self.assertTrue(date_anchors(text), text)
+
+    def test_does_not_flag_legitimate_numbers(self):
+        for text in (
+            "Responded to COVID-19 with a rapid-response program",
+            "Taught K-12 audiences across 100+ districts",
+            "Grew the list 20-30% year over year",
+            "Managed a $15.1M portfolio of 1,578 schools",
+            "A visual identity still in use 15 years later",
+        ):
+            self.assertEqual(date_anchors(text), [], text)
+
+
+class TestBestVersionDateAnchorBypass(unittest.TestCase):
+
+    def test_dropping_an_anchor_wins_regardless_of_composite(self):
+        original_scores = {
+            "accuracy_score": 90,
+            "believability_score": 90,
+            "clarity_score": 90,
+            "ats_value": 90,
+            "manager_test": "PASS",
+        }
+        # The rewrite scores LOWER -- it still wins, because the margin
+        # exists to protect voice and a date anchor is not voice.
+        weaker_rewrite = {
+            "accuracy_score": 70,
+            "believability_score": 70,
+            "clarity_score": 70,
+            "ats_value": 70,
+            "manager_test": "PASS",
+        }
+        chosen, _ = best_version(
+            "Achieved a 38% reply rate across 751 contacts in the 2020-21 season",
+            original_scores,
+            "Achieved a 38% reply rate across 751 district contacts",
+            weaker_rewrite,
+        )
+        self.assertEqual(chosen, "Achieved a 38% reply rate across 751 district contacts")
+
+    def test_rewrite_that_keeps_an_anchor_loses_to_a_clean_original(self):
+        original_scores = {
+            "accuracy_score": 70,
+            "believability_score": 70,
+            "clarity_score": 70,
+            "ats_value": 70,
+            "manager_test": "PASS",
+        }
+        bigger_rewrite = {
+            "accuracy_score": 95,
+            "believability_score": 95,
+            "clarity_score": 95,
+            "ats_value": 95,
+            "manager_test": "PASS",
+        }
+        chosen, _ = best_version(
+            "Achieved a 38% reply rate across 751 district contacts",
+            original_scores,
+            "Achieved a 38% reply rate across 751 contacts in Q3 2021",
+            bigger_rewrite,
+        )
+        self.assertEqual(chosen, "Achieved a 38% reply rate across 751 district contacts")

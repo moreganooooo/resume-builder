@@ -8,7 +8,7 @@ full dependency chain (pandas, numpy, requests, questionary, subprocess).
 Pure data/response-shape definitions -- no pipeline logic lives here.
 """
 
-from typing import List, Literal
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -476,6 +476,17 @@ class ExperienceEntry(BaseModel):
     )
     achievements: List[str] = Field(
         description="Achievement bullets for this role. Must not be empty."
+    )
+    achievement_group_starts: Dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Optional. Maps a bullet's zero-based index in `achievements` to a short "
+            "craft-area label (e.g. {\"0\": \"Product Messaging & Go-To-Market\", \"3\": "
+            "\"Sales Enablement\"}). The labeled bullet begins a new visually-grouped "
+            "subsection under this role, in the candidate's own grouping style. Use only "
+            "when a role genuinely spans distinct functions; an empty object is the "
+            "normal case."
+        ),
     )
     career_note: str = Field(
         default="",

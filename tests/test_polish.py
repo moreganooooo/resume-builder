@@ -16,6 +16,31 @@ import orchestrator  # noqa: E402
 import polish  # noqa: E402
 
 
+
+import contextlib
+import tempfile
+
+
+@contextlib.contextmanager
+def polish_temp_dir():
+    """Redirects polish's output dirs (and the profile root they derive
+    from) at a throwaway temp dir -- same isolation shape as
+    profile_paths.isolate_for_tests, scoped to what render_existing_json
+    touches. Renderers write into OUTPUT_HTML_DIR/OUTPUT_PDF_DIR computed
+    at import time, so patch the module attributes directly."""
+    import shutil as _shutil
+    tmpdir = tempfile.mkdtemp(prefix="polish_probe_")
+    try:
+        html_dir = os.path.join(tmpdir, "html")
+        pdf_dir = os.path.join(tmpdir, "pdf")
+        with patch.object(polish, "OUTPUT_HTML_DIR", html_dir), patch.object(
+            polish, "OUTPUT_PDF_DIR", pdf_dir
+        ):
+            yield tmpdir
+    finally:
+        _shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 class TestDetectDocType(unittest.TestCase):
 
     def test_resume_suffix(self):
@@ -48,6 +73,64 @@ class TestStemFromJsonPath(unittest.TestCase):
             "coverletter",
         )
         self.assertEqual(stem, "AlexRivera_Title_Company")
+
+
+class TestRenderExistingJson(unittest.TestCase):
+    # 2026-09-17: a deleted PDF had no recovery path -- the JSON survived
+    # but only a two-command shell incantation could rebuild the PDF.
+    # render_existing_json is that recovery path; these pin its contract:
+    # zero Gemini calls, correct --max-pages per doc type, JSON never
+    # rewritten.
+
+    def _write_json(self, tmpdir, name, doc):
+        path = os.path.join(tmpdir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(doc, f)
+        return path
+
+    @patch("polish.render_html")
+    @patch("polish.subprocess.run")
+    def test_resume_targets_two_pages(self, mock_run, mock_render):
+        mock_run.return_value = MagicMock(returncode=0)
+        with polish_temp_dir() as tmpdir:
+            path = self._write_json(
+                tmpdir, "AlexRivera_Strategist_Acme_Resume.json", {"TAGLINE": "X"}
+            )
+            result = polish.render_existing_json(path, "resume")
+        args = mock_run.call_args.args[0]
+        self.assertIn("--max-pages=2", args)
+        self.assertTrue(result["pdf"].endswith(
+            "AlexRivera_Strategist_Acme_Resume.pdf"
+        ))
+        self.assertTrue(result["html"].endswith(".html"))
+
+    @patch("polish.render_coverletter")
+    @patch("polish.subprocess.run")
+    def test_coverletter_keeps_the_single_page_default(self, mock_run, mock_render):
+        mock_run.return_value = MagicMock(returncode=0)
+        with polish_temp_dir() as tmpdir:
+            path = self._write_json(
+                tmpdir, "AlexRivera_Strategist_Acme_CoverLetter.json", {"body_paragraphs": []}
+            )
+            result = polish.render_existing_json(path, "coverletter")
+        args = mock_run.call_args.args[0]
+        self.assertNotIn("--max-pages=2", args)
+        self.assertTrue(result["pdf"].endswith(
+            "AlexRivera_Strategist_Acme_CoverLetter.pdf"
+        ))
+
+    @patch("polish.subprocess.run")
+    def test_pdf_failure_returns_none_but_keeps_html(self, mock_run):
+        # Real render_html on purpose: the point is that the HTML artifact
+        # survives a PDF failure, so it must actually be written.
+        mock_run.return_value = MagicMock(returncode=1, stderr="boom")
+        with polish_temp_dir() as tmpdir:
+            path = self._write_json(
+                tmpdir, "AlexRivera_Strategist_Acme_Resume.json", {"TAGLINE": "X"}
+            )
+            result = polish.render_existing_json(path, "resume")
+            self.assertIsNone(result["pdf"])
+            self.assertTrue(os.path.exists(result["html"]))
 
 
 class TestDiffDocuments(unittest.TestCase):
