@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
@@ -88,7 +89,8 @@ class TestStrategyRadar(unittest.TestCase):
             "Tactical Playbook: High-Volume Staffing Agency Navigation", agency_titles
         )
 
-    def test_analyze_job_strategy_end_to_end(self):
+    @patch("vector_store.GeminiClient.embed", return_value=[0.1] * 768)
+    def test_analyze_job_strategy_end_to_end(self, mock_embed):
         job = {
             "title": "Senior Lifecycle Marketing Manager",
             "company": "Stripe",
