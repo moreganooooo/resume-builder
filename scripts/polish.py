@@ -365,6 +365,23 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
     }
 
 
+def reset_to_backup(json_path: str) -> dict | None:
+    """Restore the previous accepted polish version and regenerate its
+    derived HTML/PDF files. Returns the render result, or None when no
+    rollback backup exists."""
+    backup_path = backup_path_for(json_path)
+    if not os.path.exists(backup_path):
+        return None
+    doc_type = detect_doc_type(json_path)
+    if doc_type is None:
+        return None
+    shutil.copy2(backup_path, json_path)
+    # The restored JSON is now the user's current version; keeping the
+    # rejected version as the next backup would make a later reset confusing.
+    os.remove(backup_path)
+    return render_existing_json(json_path, doc_type)
+
+
 def render_existing_json(json_path: str, doc_type: str) -> dict:
     """Re-renders an existing output/json document to HTML + PDF with ZERO
     Gemini calls -- the recovery path when a PDF was deleted (or a renderer
@@ -536,6 +553,28 @@ def run_polish_session(json_path: str) -> None:
     if not os.path.exists(json_path):
         cli_art.console.print(f"{cli_art.ERROR} File not found: {json_path}")
         return
+
+    backup_path = backup_path_for(json_path)
+    if os.path.exists(backup_path):
+        decision = cli_art.select(
+            "A previous version is available for this document.",
+            choices=[
+                questionary.Choice("Continue polishing the current version", "continue"),
+                questionary.Choice("Reset to the previous version", "reset"),
+                questionary.Choice("Cancel", "cancel"),
+            ],
+        )
+        if decision == "reset":
+            paths = reset_to_backup(json_path)
+            if paths is None:
+                cli_art.console.print(f"{cli_art.ERROR} Could not restore the previous version.")
+                return
+            cli_art.console.print(f"{cli_art.SUCCESS} Restored -> {paths['json']}")
+            if paths["pdf"]:
+                cli_art.console.print(f"{cli_art.SUCCESS} PDF -> {paths['pdf']}")
+            return
+        if decision != "continue":
+            return
 
     with open(json_path, "r", encoding="utf-8") as f:
         doc = json.load(f)

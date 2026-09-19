@@ -409,7 +409,14 @@ def grounded_fallbacks(tools) -> dict:
 
 # Embedding model + dimension (matches orchestrator.py constants)
 EMBED_MODEL = "gemini-embedding-2"
+BACKUP_EMBED_MODEL = "gemini-embedding-001"
 EMBED_DIM = 768  # gemini-embedding-2 native dimension
+
+# Embedding models have separate, independent quotas per model
+EMBEDDING_FALLBACKS = {
+    EMBED_MODEL: BACKUP_EMBED_MODEL,
+    BACKUP_EMBED_MODEL: EMBED_MODEL,
+}
 
 
 # Gemini reports a refusal as a `finishReason` on an otherwise-successful
@@ -1104,35 +1111,171 @@ class GeminiClient:
         return None, {}
 
     @staticmethod
-    def embed(text: str) -> list[float] | None:
+    def embed(text: str, max_retries: int = 3) -> list[float] | None:
+        """Embeds text with full retry loop and automatic fallback to backup model.
+
+        Cycles through all available API keys per model before giving up.
+        If primary model exhausts all keys, automatically tries backup model
+        (gemini-embedding-001) which has independent quota. Returns None on
+        complete failure.
+
+        Used by orchestrator.py's mine_bullet_bank(), vector_store.py's search
+        functions, and validate_coverletter.py's semantic grounding checks.
+        Native output dimension: 768 (both models).
         """
-        Generates an embedding vector for the given text using EMBED_MODEL.
-        Used by orchestrator.py's mine_bullet_bank() for semantic similarity.
-        Native output dimension: 768 (gemini-embedding-2).
-        """
-        url = f"{BASE_URL}/{EMBED_MODEL}:embedContent"
-        payload = {
-            "model": f"models/{EMBED_MODEL}",
-            "content": {"parts": [{"text": text}]},
-            "outputDimensionality": EMBED_DIM,
-        }
-        rate_limiter.acquire(1.0)
-        try:
-            headers = _get_auth_headers(EMBED_MODEL)
-            resp = requests.post(url, json=payload, headers=headers, timeout=30)
-            if resp.status_code == 429 and mark_key_rate_limited(
-                headers["x-goog-api-key"], EMBED_MODEL
-            ):
-                resp = requests.post(
-                    url, json=payload, headers=_get_auth_headers(EMBED_MODEL), timeout=30
-                )
-            resp.raise_for_status()
-            return resp.json().get("embedding", {}).get("values")
-        except Exception as e:
-            cli_art.console.print(
-                f"    {cli_art.WARNING} Embed error: {e}", soft_wrap=True
-            )
+        keys = api_keys()
+        if not keys:
             return None
+
+        model = EMBED_MODEL
+        failure_streak = 0
+        key_switches = 0
+        model_switches = 0
+
+        for attempt in range(max_retries + len(keys) + 2):  # +2 for potential model switches
+            # Key/model switches don't spend retries, but we need enough attempts
+            if attempt - key_switches - model_switches >= max_retries:
+                break
+
+            url = f"{BASE_URL}/{model}:embedContent"
+            payload = {
+                "model": f"models/{model}",
+                "content": {"parts": [{"text": text}]},
+                "outputDimensionality": EMBED_DIM,
+            }
+            rate_limiter.acquire(1.0)
+
+            try:
+                headers = _get_auth_headers(model)
+                resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            except requests.exceptions.RequestException as e:
+                failure_streak += 1
+                if failure_streak >= 2 and model in EMBEDDING_FALLBACKS:
+                    fallback_model = EMBEDDING_FALLBACKS[model]
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} Embed transport failures on {model} — "
+                        f"falling back to {fallback_model}...",
+                        soft_wrap=True,
+                    )
+                    model = fallback_model
+                    model_switches += 1
+                    failure_streak = 0
+                sleep_dur = (
+                    0
+                    if (
+                        os.environ.get("CI") == "true"
+                        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+                    )
+                    else min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
+                    + random.uniform(1, 4)
+                )
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} Embed network error ({30}s timeout): {type(e).__name__}. "
+                    f"Waiting {sleep_dur:.1f}s before retry {attempt+1}/{max_retries}...",
+                    soft_wrap=True,
+                )
+                time.sleep(sleep_dur)
+                continue
+
+            if resp.status_code == 429:
+                if mark_key_rate_limited(
+                    headers["x-goog-api-key"], model, _server_retry_delay_secs(resp)
+                ):
+                    key_switches += 1
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} Embed rate limited on {key_label(headers['x-goog-api-key'])} ({model}) — "
+                        f"switching to {key_label(_get_api_key(model))}.",
+                        soft_wrap=True,
+                    )
+                    continue  # Try immediately with fresh key
+                failure_streak += 1
+                if failure_streak >= 2 and model in EMBEDDING_FALLBACKS:
+                    fallback_model = EMBEDDING_FALLBACKS[model]
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} Embed exhausted keys for {model} (all 429) — "
+                        f"falling back to {fallback_model}...",
+                        soft_wrap=True,
+                    )
+                    model = fallback_model
+                    model_switches += 1
+                    failure_streak = 0
+                server_delay = _server_retry_delay_secs(resp)
+                if (
+                    os.environ.get("CI") == "true"
+                    or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+                ):
+                    sleep_dur = 0
+                elif server_delay is not None:
+                    sleep_dur = server_delay + random.uniform(1, 4)
+                else:
+                    sleep_dur = (
+                        min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
+                        + random.uniform(1, 4)
+                    )
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} Embed HTTP 429. Waiting {sleep_dur:.1f}s"
+                    f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
+                    soft_wrap=True,
+                )
+                time.sleep(sleep_dur)
+                continue
+
+            if resp.status_code in SERVER_ERRORS:
+                failure_streak += 1
+                if failure_streak >= 2 and model in EMBEDDING_FALLBACKS:
+                    fallback_model = EMBEDDING_FALLBACKS[model]
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} Embed server errors on {model} — "
+                        f"falling back to {fallback_model}...",
+                        soft_wrap=True,
+                    )
+                    model = fallback_model
+                    model_switches += 1
+                    failure_streak = 0
+                server_delay = _server_retry_delay_secs(resp)
+                if (
+                    os.environ.get("CI") == "true"
+                    or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+                ):
+                    sleep_dur = 0
+                elif server_delay is not None:
+                    sleep_dur = server_delay + random.uniform(1, 4)
+                else:
+                    sleep_dur = (
+                        min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
+                        + random.uniform(1, 4)
+                    )
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} Embed HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s"
+                    f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
+                    soft_wrap=True,
+                )
+                time.sleep(sleep_dur)
+                continue
+
+            try:
+                resp.raise_for_status()
+            except requests.exceptions.HTTPError as e:
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} Embed HTTP error {resp.status_code}: {e}. Not retrying.",
+                    soft_wrap=True,
+                )
+                return None
+
+            try:
+                return resp.json().get("embedding", {}).get("values")
+            except Exception as e:
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} Embed error reading response: {e}",
+                    soft_wrap=True,
+                )
+                return None
+
+        cli_art.console.print(
+            f"    {cli_art.WARNING} Embed exhausted all retries on both models.",
+            soft_wrap=True,
+        )
+        return None
 
 
 class OllamaClient:
