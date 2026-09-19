@@ -169,3 +169,7 @@ resume-builder-conversations-perplexity/
 # already tracked here (scratch/rewrite.py) is unaffected: gitignore does
 # not apply to tracked files.
 scratch/*
+2026-09-19-154051-local-command-caveatcaveat-the-messages-below.txt
+.gitignore
+backups/relabel-20260916/bullet-bank-keepers.csv
+backups/relabel-20260916/bullet-bank-keepers-audited.csv
