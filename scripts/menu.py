@@ -539,9 +539,7 @@ def _edit_narrative_list_field(label: str, getter, setter) -> None:
             questionary.Choice(title=f"Remove: {item}", value=("remove", i))
             for i, item in enumerate(items)
         ]
-        choices.append(
-            questionary.Choice(title="+ Add new item", value=("add", None))
-        )
+        choices.append(questionary.Choice(title="+ Add new item", value=("add", None)))
         choices.append(questionary.Choice(title="Back", value=("back", None)))
 
         result = cli_art.select(label, choices=choices)
@@ -1908,8 +1906,11 @@ def _handle_rerender() -> bool:
         cli_art.console.print(f"  PDF:  {result['pdf']}")
         try:
             subprocess.run(
-                ["open", result["pdf"]] if sys.platform == "darwin"
-                else ["xdg-open", result["pdf"]],
+                (
+                    ["open", result["pdf"]]
+                    if sys.platform == "darwin"
+                    else ["xdg-open", result["pdf"]]
+                ),
                 capture_output=True,
             )
         except Exception:
@@ -1917,7 +1918,9 @@ def _handle_rerender() -> bool:
     else:
         # save_and_render's convention, same wording: the JSON survived --
         # only this render attempt is missing.
-        cli_art.cli_info("The JSON was untouched -- only this render attempt is missing.")
+        cli_art.cli_info(
+            "The JSON was untouched -- only this render attempt is missing."
+        )
     _pause_and_return()
     return False
 
