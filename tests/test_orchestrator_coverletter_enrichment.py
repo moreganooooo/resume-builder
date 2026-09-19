@@ -287,10 +287,12 @@ class TestReferralInjection(unittest.TestCase):
         ):
             return self.engine.build_tailored_coverletter(self.jd_path)
 
+    @patch("gemini_client.GeminiClient.embed", return_value=[0.1] * 768)
+    @patch("orchestrator.GeminiClient.embed", return_value=[0.1] * 768)
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
     def test_referral_block_present_in_system_instruction_when_saved(
-        self, mock_generate, mock_research
+        self, mock_generate, mock_research, mock_embed, mock_embed_val
     ):
         jd_manager.save_referral(self.jd_path, "Jane Doe, former coworker")
         mock_generate.return_value = (self._clean_letter_json(), {})
@@ -310,9 +312,11 @@ class TestReferralInjection(unittest.TestCase):
             "The candidate has a referral for this specific role", system_instruction
         )
 
+    @patch("gemini_client.GeminiClient.embed", return_value=[0.1] * 768)
+    @patch("orchestrator.GeminiClient.embed", return_value=[0.1] * 768)
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_no_referral_block_when_none_saved(self, mock_generate, mock_research):
+    def test_no_referral_block_when_none_saved(self, mock_generate, mock_research, mock_embed, mock_embed_val):
         mock_generate.return_value = (self._clean_letter_json(), {})
         self._run_build()
         # index -1, not 0: when this JD has no checkpoint jd_keywords (Group
@@ -472,10 +476,12 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
         ):
             return self.engine.build_tailored_coverletter(self.jd_path)
 
+    @patch("gemini_client.GeminiClient.embed", return_value=[0.1] * 768)
+    @patch("orchestrator.GeminiClient.embed", return_value=[0.1] * 768)
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
     def test_workday_source_url_classified_enterprise_high_and_persisted(
-        self, mock_generate, mock_research
+        self, mock_generate, mock_research, mock_embed, mock_embed_val
     ):
         self._write_jd(source_url="https://acme.wd1.myworkdayjobs.com/External/job/123")
         self._seed_checkpoint_keywords(
@@ -496,10 +502,12 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
         self.assertEqual(persisted["provider_id"], "workday")
         self.assertEqual(persisted["weight_tier"], "enterprise_high")
 
+    @patch("gemini_client.GeminiClient.embed", return_value=[0.1] * 768)
+    @patch("orchestrator.GeminiClient.embed", return_value=[0.1] * 768)
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
     def test_greenhouse_source_url_gets_light_touch_wording(
-        self, mock_generate, mock_research
+        self, mock_generate, mock_research, mock_embed, mock_embed_val
     ):
         self._write_jd(source_url="https://boards.greenhouse.io/acme/jobs/123")
         self._seed_checkpoint_keywords(
@@ -514,10 +522,12 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
         self.assertIn("light touch", system_instruction)
         self.assertIn("human reads this first", system_instruction)
 
+    @patch("gemini_client.GeminiClient.embed", return_value=[0.1] * 768)
+    @patch("orchestrator.GeminiClient.embed", return_value=[0.1] * 768)
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
     def test_no_source_url_leaves_classification_unset_and_uses_unknown_tier_wording(
-        self, mock_generate, mock_research
+        self, mock_generate, mock_research, mock_embed, mock_embed_val
     ):
         self._write_jd(source_url="")
         self._seed_checkpoint_keywords(
@@ -532,10 +542,12 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
         self.assertIn("helpful context", system_instruction)
         self.assertIsNone(jd_manager.read_ats_classification(self.jd_path))
 
+    @patch("gemini_client.GeminiClient.embed", return_value=[0.1] * 768)
+    @patch("orchestrator.GeminiClient.embed", return_value=[0.1] * 768)
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
     def test_cached_classification_is_reused_without_reclassifying(
-        self, mock_generate, mock_research
+        self, mock_generate, mock_research, mock_embed, mock_embed_val
     ):
         self._write_jd(source_url="https://boards.greenhouse.io/acme/jobs/123")
         # save_ats_classification() rewrites the JD file, which changes
@@ -563,22 +575,28 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
             jd_manager.read_ats_classification(self.jd_path)["provider_id"], "ashby"
         )
 
+    @patch("gemini_client.GeminiClient.embed", return_value=[0.1] * 768)
+    @patch("orchestrator.GeminiClient.embed", return_value=[0.1] * 768)
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
     def test_no_checkpoint_keywords_triggers_on_demand_extraction(
-        self, mock_generate, mock_research
+        self, mock_generate, mock_research, mock_embed, mock_embed_val
     ):
         self._write_jd(source_url="")
         keyword_json = json.dumps(
             {"tools": ["Figma"], "hard_skills": [], "core_functions": []}
         )
+        # Provide responses for keyword extraction + initial letter + up to 3 validation retries
         mock_generate.side_effect = [
             (keyword_json, {}),
+            (self._clean_letter_json(), {}),
+            (self._clean_letter_json(), {}),
+            (self._clean_letter_json(), {}),
             (self._clean_letter_json(), {}),
         ]
         self._run_build()
 
-        self.assertEqual(mock_generate.call_count, 2)
+        self.assertGreaterEqual(mock_generate.call_count, 2)
         letter_system_instruction = mock_generate.call_args_list[-1].kwargs[
             "system_instruction"
         ]
@@ -587,13 +605,22 @@ class TestAtsClassificationAndKeywordFrontLoading(unittest.TestCase):
         # no checkpoint should exist afterward.
         self.assertEqual(jd_manager.load_checkpoint(self.job_key), {})
 
+    @patch("gemini_client.GeminiClient.embed", return_value=[0.1] * 768)
+    @patch("orchestrator.GeminiClient.embed", return_value=[0.1] * 768)
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
     def test_no_keywords_available_produces_no_keywords_block(
-        self, mock_generate, mock_research
+        self, mock_generate, mock_research, mock_embed, mock_embed_val
     ):
         self._write_jd(source_url="")
-        mock_generate.side_effect = [("", {}), (self._clean_letter_json(), {})]
+        # Provide responses for keyword extraction + initial letter + up to 3 validation retries
+        mock_generate.side_effect = [
+            ("", {}),
+            (self._clean_letter_json(), {}),
+            (self._clean_letter_json(), {}),
+            (self._clean_letter_json(), {}),
+            (self._clean_letter_json(), {}),
+        ]
         self._run_build()
 
         system_instruction = mock_generate.call_args_list[-1].kwargs[

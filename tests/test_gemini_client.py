@@ -680,5 +680,135 @@ class TestInlineFile(unittest.TestCase):
         self.assertEqual(parts, [{"text": "content"}])
 
 
+class TestEmbedWithRetryLoop(unittest.TestCase):
+    """GeminiClient.embed() now cycles through keys and falls back to backup model."""
+
+    def setUp(self):
+        gemini_client._KEY_COOLDOWNS.clear()
+
+    def _embed_success_response(self):
+        """Mock response with valid embedding vector."""
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {"embedding": {"values": [0.1, 0.2, 0.3]}}
+        return resp
+
+    def _embed_429_response(self):
+        """Mock 429 rate limit response."""
+        resp = MagicMock()
+        resp.status_code = 429
+        resp.json.return_value = {"error": {"details": []}}
+        return resp
+
+    @patch("gemini_client.time.sleep")
+    @patch("gemini_client.requests.post")
+    def test_embed_basic_success(self, mock_post, mock_sleep):
+        """Basic success case: single key, single attempt."""
+        mock_post.return_value = self._embed_success_response()
+
+        result = GeminiClient.embed("test")
+
+        self.assertEqual(result, [0.1, 0.2, 0.3])
+        mock_post.assert_called_once()
+
+    @patch("gemini_client.time.sleep")
+    @patch("gemini_client.requests.post")
+    def test_embed_retries_on_429_with_key_switching(self, mock_post, mock_sleep):
+        """First call 429, second call succeeds → returns result."""
+        mock_post.side_effect = [
+            self._embed_429_response(),
+            self._embed_success_response()
+        ]
+
+        with patch("gemini_client.api_keys", return_value=["key-one", "key-two"]):
+            result = GeminiClient.embed("test")
+
+        self.assertEqual(result, [0.1, 0.2, 0.3])
+        self.assertEqual(mock_post.call_count, 2)
+
+    @patch("gemini_client.time.sleep")
+    @patch("gemini_client.requests.post")
+    def test_embed_returns_none_when_primary_exhausted(self, mock_post, mock_sleep):
+        """Primary model exhausts all keys with 429 → return None."""
+        mock_post.return_value = self._embed_429_response()
+
+        with patch("gemini_client.api_keys", return_value=["key-one"]):
+            result = GeminiClient.embed("test", max_retries=1)
+
+        self.assertIsNone(result)
+
+    @patch("gemini_client.time.sleep")
+    @patch("gemini_client.requests.post")
+    def test_embed_falls_back_to_backup_model(self, mock_post, mock_sleep):
+        """Primary model fails repeatedly, backup model succeeds."""
+        models_called = []
+
+        def respond(url, **kw):
+            if "gemini-embedding-2" in url:
+                models_called.append("ge2")
+                return self._embed_429_response()
+            else:
+                models_called.append("ge1")
+                return self._embed_success_response()
+
+        mock_post.side_effect = respond
+
+        with patch("gemini_client.api_keys", return_value=["key-one"]):
+            result = GeminiClient.embed("test", max_retries=2)
+
+        self.assertEqual(result, [0.1, 0.2, 0.3])
+        self.assertIn("ge2", models_called)
+        self.assertIn("ge1", models_called)
+        # ge1 should come after ge2 failed
+        self.assertGreater(models_called.index("ge1"), models_called.index("ge2"))
+
+    @patch("gemini_client.time.sleep")
+    @patch("gemini_client.requests.post")
+    def test_embed_honors_server_retry_info_from_429(self, mock_post, mock_sleep):
+        """Server 429 with RetryInfo delay is honored."""
+        resp_with_delay = MagicMock()
+        resp_with_delay.status_code = 429
+        resp_with_delay.json.return_value = {
+            "error": {
+                "details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "2.5s"}]
+            }
+        }
+        mock_post.side_effect = [resp_with_delay, self._embed_success_response()]
+
+        result = GeminiClient.embed("test")
+
+        self.assertEqual(result, [0.1, 0.2, 0.3])
+        # Verify sleep was called (with server's delay + buffer)
+        self.assertTrue(mock_sleep.called)
+
+    @patch("gemini_client.requests.post")
+    def test_embed_with_no_api_keys_returns_none(self, mock_post):
+        """Empty key pool → return None without calling post."""
+        with patch("gemini_client.api_keys", return_value=[]):
+            result = GeminiClient.embed("test")
+
+        self.assertIsNone(result)
+        mock_post.assert_not_called()
+
+    @patch("gemini_client.requests.post")
+    def test_embed_respects_test_network_guard(self, mock_post):
+        """Test network guard blocks embed() calls."""
+        with patch("gemini_client._blocked_under_test", return_value=True):
+            with self.assertRaises(gemini_client.TestNetworkBlockedError):
+                GeminiClient.embed("test")
+
+        mock_post.assert_not_called()
+
+    @patch("gemini_client.requests.post")
+    def test_embed_returns_valid_vector(self, mock_post):
+        """Successful embed returns vector with correct dimensions."""
+        mock_post.return_value = self._embed_success_response()
+
+        result = GeminiClient.embed("test sentence")
+
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result, [0.1, 0.2, 0.3])
+
+
 if __name__ == "__main__":
     unittest.main()
