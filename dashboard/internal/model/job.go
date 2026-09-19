@@ -16,6 +16,7 @@ type JobRow struct {
 	SourcePlatform string       `json:"source_platform"`
 	SourceURL      string       `json:"source_url"`
 	CompanyWebsite string       `json:"company_website"`
+	AddedManually  bool         `json:"added_manually"`
 	Skills         []JobSkill   `json:"skills"`
 	Research       *Research    `json:"research"`
 	Evaluation     Evaluation   `json:"evaluation"`

@@ -1550,6 +1550,7 @@ def _handle_add_manual_jd() -> bool:
         "company_name": company_name.strip(),
         "source_url": source_url.strip() if source_url else "",
         "source_job_id": str(uuid.uuid4()),
+        "added_manually": True,
         "description": description.strip(),
         "date_added": datetime.datetime.now().isoformat(),
     }

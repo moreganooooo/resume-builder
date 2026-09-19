@@ -365,7 +365,7 @@ func TestLPressDispatchesLivenessAction(t *testing.T) {
 	}
 }
 
-func TestTPressNoOpOnCompletedJob(t *testing.T) {
+func TestTPressDispatchesForCompletedJob(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 	m, _ = m.Update(pressKey("down")) // select the Completed row (Beta)
 	if job, _ := m.CurrentJob(); job.Status != "Completed" {
@@ -374,11 +374,11 @@ func TestTPressNoOpOnCompletedJob(t *testing.T) {
 
 	m, cmd := m.Update(pressKey("t"))
 
-	if m.actionInProgress != "" {
-		t.Fatalf("expected no action dispatched for a Completed job, got %q", m.actionInProgress)
+	if m.actionInProgress != "tailor" {
+		t.Fatalf("expected tailor action for a Completed job, got %q", m.actionInProgress)
 	}
-	if cmd != nil {
-		t.Fatal("expected no command dispatched")
+	if cmd == nil {
+		t.Fatal("expected tailor command dispatched")
 	}
 }
 

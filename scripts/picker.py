@@ -576,6 +576,10 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "company": company,
                     "description": jd_data.get("description", "") or "",
                     "source_platform": jd_data.get("source_platform", "") or "",
+                    "added_manually": bool(
+                        jd_data.get("added_manually")
+                        or jd_data.get("source_platform") in {"manual", "manual-screenshot"}
+                    ),
                     "source_url": jd_data.get("source_url")
                     or jd_data.get("application_url", "")
                     or "",
@@ -617,6 +621,10 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "company": company,
                     "description": jd_data.get("description", "") or "",
                     "source_platform": jd_data.get("source_platform", "") or "",
+                    "added_manually": bool(
+                        jd_data.get("added_manually")
+                        or jd_data.get("source_platform") in {"manual", "manual-screenshot"}
+                    ),
                     "source_url": jd_data.get("source_url")
                     or jd_data.get("application_url", "")
                     or "",
@@ -757,6 +765,10 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
                 "company": record["company"] or data.get("company_name") or "",
                 "description": data.get("description", "") or "",
                 "source_platform": data.get("source_platform", "") or "",
+                "added_manually": bool(
+                    data.get("added_manually")
+                    or data.get("source_platform") in {"manual", "manual-screenshot"}
+                ),
                 "source_url": data.get("source_url")
                 or data.get("application_url", "")
                 or "",

@@ -83,6 +83,11 @@ type JobsModel struct {
 	// narrowing, same reversibility guarantee as roleTrackFilter -- this
 	// was the one Pipeline already had that Jobs itself was missing.
 	experienceBlockerFilter bool
+	// manualFilter narrows to postings added by hand via "Add Job
+	// Description Manually" (model.JobRow.AddedManually), rather than
+	// found by a scanner. Same VIEW-time, reversible narrowing as the
+	// two filters above.
+	manualFilter bool
 	// distanceSort orders by measured distance ascending instead of the
 	// default composite-score ordering.
 	distanceSort bool
@@ -209,7 +214,13 @@ type jobsActionProgressMsg struct {
 // sibling doc comment).
 const totalPipelineSteps = 7.0
 
-var stepLineRe = regexp.MustCompile(`^Step (\d+(?:\.\d+)?): (.+?)\.\.\.?$`)
+// No trailing `$` anchor: orchestrator.py prints these via Rich's
+// console.rule(..., align="left"), which pads the line with trailing
+// "──" fill characters out to the console width -- a full-line anchor
+// never matched, so progress silently never advanced past "Tailoring
+// resume" (looked identical to a hang). Matching just the leading
+// "Step N: label..." prefix is enough; the fill is irrelevant to us.
+var stepLineRe = regexp.MustCompile(`^Step (\d+(?:\.\d+)?): (.+?)\.\.\.`)
 
 // NewJobsModel creates a new jobs screen from the rows loaded via
 // data.LoadJobs. rows should already be sorted best-first (as
@@ -310,6 +321,11 @@ func (m *JobsModel) applyFilter() {
 
 		// Narrow to postings carrying a years_experience/degree blocker.
 		if m.experienceBlockerFilter && len(r.Evaluation.ExperienceBlockers) == 0 {
+			continue
+		}
+
+		// Narrow to manually-added postings only.
+		if m.manualFilter && !r.AddedManually {
 			continue
 		}
 
@@ -502,12 +518,22 @@ func (m JobsModel) matchesPrimaryFilter(r model.JobRow) bool {
 	// are pending but unevaluated never reach m.rows at all; they are
 	// counted separately and shown in the header (see WithBacklog), so no
 	// unscored role can be hidden by this.
-	if m.filter != "low" && r.Evaluation.CompositeScore < ActionableScore {
+	// Completed roles already have a resume built -- the actionable bar
+	// exists to hide roles nobody intends to act on, but a role that was
+	// already acted on is never in that bucket regardless of what its
+	// score now reads. Without this carve-out, a tailored resume for a
+	// role that scored under 3.5 vanished from every stop but "low",
+	// which does not even scope to status -- "roles with a resume
+	// currently disappear from that dashboard" (reported 2026-09-19).
+	if m.filter != "low" && r.Status != "Completed" && r.Evaluation.CompositeScore < ActionableScore {
 		return false
 	}
 
 	switch m.filter {
 	case "pending", "completed":
+		// "completed" IS "has a resume generated" -- a JD only reaches
+		// completed/ after run_pipeline() succeeds (see the carve-out
+		// above for why this stop no longer hides low-scoring rows).
 		return strings.EqualFold(r.Status, m.filter)
 	case "high_fit":
 		return r.Evaluation.CompositeScore >= 4.0
@@ -1287,6 +1313,10 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.experienceBlockerFilter = !m.experienceBlockerFilter
 			m.cursor = 0
 			m.applyFilter()
+		case "n":
+			m.manualFilter = !m.manualFilter
+			m.cursor = 0
+			m.applyFilter()
 		case "d":
 			// Reachable only in the normal state: the actionError branch
 			// above intercepts "d" for its raw-detail toggle and returns
@@ -1350,17 +1380,20 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			}
 		case "t":
 			if job, ok := m.CurrentJob(); ok {
-				if job.Status == "Pending" {
-					m.actionInProgress = "tailor"
-					m.actionStartedAt = time.Now()
-					m.actionChan = make(chan tea.Msg)
-					m.progress = progress.New(progress.WithColors(m.theme.Sky, m.theme.Mauve))
-					m.actionStepLabel = ""
-					ctx, cancel := context.WithCancel(context.Background())
-					m.actionCancel = cancel
-					return m, m.runAction(ctx, m.actionChan, "tailor", job.Path)
-				}
-				m.notice = fmt.Sprintf("Only Pending jobs can be tailored (this one is %s)", job.Status)
+				// Completed jobs are re-tailorable too, not just Pending --
+				// run_pipeline(jd_path=...) processes the given path
+				// directly rather than re-discovering it via
+				// get_pending_jds(), so re-running it against a job
+				// already in completed/ is a normal re-tailor, not an
+				// error state.
+				m.actionInProgress = "tailor"
+				m.actionStartedAt = time.Now()
+				m.actionChan = make(chan tea.Msg)
+				m.progress = progress.New(progress.WithColors(m.theme.Sky, m.theme.Mauve))
+				m.actionStepLabel = ""
+				ctx, cancel := context.WithCancel(context.Background())
+				m.actionCancel = cancel
+				return m, m.runAction(ctx, m.actionChan, "tailor", job.Path)
 			}
 		case "m":
 			if job, ok := m.CurrentJob(); ok {
@@ -1473,7 +1506,7 @@ var jobsHelpCategories = []helpCategory{
 		{"l", "Check posting liveness"},
 		{"m", "Compute Skills Gap Matrix for this job"},
 		{"M", "Compute Skills Gap Matrix for pending jobs missing one (bulk, capped)"},
-		{"t", "Tailor resume for this job (Pending only)"},
+		{"t", "Tailor (or re-tailor) resume for this job"},
 		{"u", "Change application status"},
 		{"a", "Archive this job (removes from all filters)"},
 	}},
@@ -1488,6 +1521,7 @@ var jobsHelpCategories = []helpCategory{
 		{"/", "Search company/title (narrows within active filter)"},
 		{"r", "Toggle manager-track roles only"},
 		{"c", "Toggle experience/degree blocker roles only"},
+		{"n", "Toggle manually-added roles only"},
 	}},
 	{"Quick Reference", []helpBinding{
 		{"v", "View terminology definitions"},
@@ -1755,6 +1789,9 @@ func (m JobsModel) renderHeader() string {
 	}
 	if m.experienceBlockerFilter {
 		info += modeStyle.Render("  " + m.theme.Icons.Filter + " experience blockers")
+	}
+	if m.manualFilter {
+		info += modeStyle.Render("  " + m.theme.Icons.Filter + " manually added")
 	}
 	if m.distanceSort {
 		info += modeStyle.Render("  ↕ nearest")
