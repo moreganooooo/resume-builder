@@ -325,7 +325,14 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
     pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
     try:
         result = subprocess.run(
-            ["node", pdf_script, html_path, pdf_path, "--format=letter", "--max-pages=2"],
+            [
+                "node",
+                pdf_script,
+                html_path,
+                pdf_path,
+                "--format=letter",
+                "--max-pages=2",
+            ],
             capture_output=True,
             text=True,
             timeout=PDF_GENERATION_TIMEOUT_SECONDS,
@@ -559,7 +566,9 @@ def run_polish_session(json_path: str) -> None:
         decision = cli_art.select(
             "A previous version is available for this document.",
             choices=[
-                questionary.Choice("Continue polishing the current version", "continue"),
+                questionary.Choice(
+                    "Continue polishing the current version", "continue"
+                ),
                 questionary.Choice("Reset to the previous version", "reset"),
                 questionary.Choice("Cancel", "cancel"),
             ],
@@ -567,7 +576,9 @@ def run_polish_session(json_path: str) -> None:
         if decision == "reset":
             paths = reset_to_backup(json_path)
             if paths is None:
-                cli_art.console.print(f"{cli_art.ERROR} Could not restore the previous version.")
+                cli_art.console.print(
+                    f"{cli_art.ERROR} Could not restore the previous version."
+                )
                 return
             cli_art.console.print(f"{cli_art.SUCCESS} Restored -> {paths['json']}")
             if paths["pdf"]:

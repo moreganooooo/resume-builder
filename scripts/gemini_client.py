@@ -47,7 +47,7 @@ DEFAULT_KEY_COOLDOWN_SECS = 60.0
 
 
 def _numbered_key_suffix(name: str) -> int:
-    tail = name[len("GEMINI_API_KEY_"):]
+    tail = name[len("GEMINI_API_KEY_") :]
     return int(tail) if tail.isdigit() else 10**6
 
 
@@ -101,9 +101,10 @@ def mark_key_rate_limited(key: str, model: str = "", secs: float | None = None) 
     if not key:
         return False
     _KEY_COOLDOWNS[(key, model)] = time.time() + (secs or DEFAULT_KEY_COOLDOWN_SECS)
-    return _get_api_key(model) != key and _KEY_COOLDOWNS.get(
-        (_get_api_key(model), model), 0
-    ) <= time.time()
+    return (
+        _get_api_key(model) != key
+        and _KEY_COOLDOWNS.get((_get_api_key(model), model), 0) <= time.time()
+    )
 
 
 def rotate_api_key(model: str = "") -> str:
@@ -212,7 +213,13 @@ def generate_grounded(
                 if isinstance(p, dict) and not p.get("thought")
             )
             return (text.strip() or None), (candidate.get("groundingMetadata") or {})
-        if response is not None and response.status_code not in (429, 500, 502, 503, 504):
+        if response is not None and response.status_code not in (
+            429,
+            500,
+            502,
+            503,
+            504,
+        ):
             return None, {}
         if response is not None and response.status_code == 429:
             if mark_key_rate_limited(
@@ -315,6 +322,8 @@ def bench_model(model: str, seconds: float = MODEL_BENCH_SECS) -> None:
 
 def is_benched(model: str) -> bool:
     return time.monotonic() < _benched_until.get(model, 0.0)
+
+
 BASE_BACKOFF_SECS = 8
 MAX_BACKOFF_SECS = 90
 
@@ -348,6 +357,7 @@ def _server_retry_delay_secs(resp) -> float | None:
             except ValueError:
                 return None
     return None
+
 
 # Per-model fallback targets: after failure_streak reaches 2 within one
 # generate() call, switch to the mapped model rather than continuing to
@@ -406,6 +416,7 @@ def grounded_fallbacks(tools) -> dict:
     if len(names) != 1:
         return {}
     return GROUNDED_FALLBACKS.get(names.pop(), {})
+
 
 # Embedding model + dimension (matches orchestrator.py constants)
 EMBED_MODEL = "gemini-embedding-2"
@@ -514,7 +525,10 @@ class GeminiClient:
             "ttl": "1200s",  # 20 minutes
         }
         try:
-            req_headers = {**_get_auth_headers(model), "Content-Type": "application/json"}
+            req_headers = {
+                **_get_auth_headers(model),
+                "Content-Type": "application/json",
+            }
             resp = requests.post(
                 cache_url, json=payload, headers=req_headers, timeout=30
             )
@@ -1132,7 +1146,9 @@ class GeminiClient:
         key_switches = 0
         model_switches = 0
 
-        for attempt in range(max_retries + len(keys) + 2):  # +2 for potential model switches
+        for attempt in range(
+            max_retries + len(keys) + 2
+        ):  # +2 for potential model switches
             # Key/model switches don't spend retries, but we need enough attempts
             if attempt - key_switches - model_switches >= max_retries:
                 break
@@ -1208,10 +1224,9 @@ class GeminiClient:
                 elif server_delay is not None:
                     sleep_dur = server_delay + random.uniform(1, 4)
                 else:
-                    sleep_dur = (
-                        min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
-                        + random.uniform(1, 4)
-                    )
+                    sleep_dur = min(
+                        BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
+                    ) + random.uniform(1, 4)
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed HTTP 429. Waiting {sleep_dur:.1f}s"
                     f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
@@ -1241,10 +1256,9 @@ class GeminiClient:
                 elif server_delay is not None:
                     sleep_dur = server_delay + random.uniform(1, 4)
                 else:
-                    sleep_dur = (
-                        min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
-                        + random.uniform(1, 4)
-                    )
+                    sleep_dur = min(
+                        BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
+                    ) + random.uniform(1, 4)
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s"
                     f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
