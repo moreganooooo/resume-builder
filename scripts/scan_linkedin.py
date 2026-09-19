@@ -15,6 +15,8 @@ import contextlib
 import logging
 import os
 import re
+import signal
+import threading
 import time
 
 import cli_art
@@ -540,11 +542,32 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
         f"Searching LinkedIn for {len(search_terms)} saved "
         f"quer{'y' if len(search_terms) == 1 else 'ies'}: {', '.join(display_terms)}"
     )
-    try:
-        with _muted_scraper_logger():
-            scraper.run(_build_queries(job_limit, search_terms))
-    except Exception as e:
-        cli_art.cli_error(f"LinkedIn scraper run failed: {e}")
+
+    # Run scraper in a thread with a timeout to prevent indefinite hangs
+    # (scraper.run() is blocking Selenium with no overall scan timeout)
+    SCRAPER_TIMEOUT_SECONDS = 600  # 10 minutes per search term, ~1hr for 6 terms
+
+    scraper_exception = None
+    def _run_scraper():
+        nonlocal scraper_exception
+        try:
+            with _muted_scraper_logger():
+                scraper.run(_build_queries(job_limit, search_terms))
+        except Exception as e:
+            scraper_exception = e
+
+    scraper_thread = threading.Thread(target=_run_scraper, daemon=True)
+    scraper_thread.start()
+    scraper_thread.join(timeout=SCRAPER_TIMEOUT_SECONDS)
+
+    if scraper_thread.is_alive():
+        cli_art.cli_error(
+            f"LinkedIn scan exceeded {SCRAPER_TIMEOUT_SECONDS}s timeout and was killed. "
+            f"Returning {len(jobs)} roles found so far."
+        )
+        on_end()
+    elif scraper_exception:
+        cli_art.cli_error(f"LinkedIn scraper run failed: {scraper_exception}")
         on_end()
 
     return jobs
