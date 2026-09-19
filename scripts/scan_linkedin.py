@@ -17,6 +17,7 @@ import os
 import re
 import signal
 import threading
+import traceback
 import time
 
 import cli_art
@@ -563,11 +564,26 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
     if scraper_thread.is_alive():
         cli_art.cli_error(
             f"LinkedIn scan exceeded {SCRAPER_TIMEOUT_SECONDS}s timeout and was killed. "
-            f"Returning {len(jobs)} roles found so far."
+            f"Returning {len(jobs)} roles found so far. This typically indicates a hang in "
+            f"Selenium pagination or a query getting stuck on a slow page load."
+        )
+        logging.error(
+            f"LinkedIn scraper timeout after {SCRAPER_TIMEOUT_SECONDS}s. "
+            f"Search terms: {display_terms}. Jobs found before timeout: {len(jobs)}"
         )
         on_end()
     elif scraper_exception:
-        cli_art.cli_error(f"LinkedIn scraper run failed: {scraper_exception}")
+        error_type = type(scraper_exception).__name__
+        error_msg = str(scraper_exception)
+        cli_art.cli_error(
+            f"LinkedIn scraper failed with {error_type}: {error_msg}\n"
+            f"Search terms being processed: {', '.join(display_terms)}\n"
+            f"Jobs found before error: {len(jobs)}"
+        )
+        logging.error(
+            f"LinkedIn scraper exception ({error_type}): {error_msg}\n"
+            f"Full traceback:\n{traceback.format_exc()}"
+        )
         on_end()
 
     return jobs
