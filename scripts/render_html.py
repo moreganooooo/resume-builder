@@ -15,6 +15,7 @@ from html import escape
 from pathlib import Path
 
 import cli_art
+import normalize_resume
 import theme
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -118,8 +119,23 @@ def build_experience_html(jobs: list[dict]) -> str:
     sep = '<span class="sep">|</span>'
     html = []
     for job in jobs:
+        # Optional craft-area sub-headers (the candidate's own favorites
+        # group a multi-hat role under italic labels like "Creative
+        # Strategy & Brand Voice:"). grouped_achievements splits the entry
+        # on achievement_group_starts (normalize_resume sanitizes the map),
+        # so every renderer shares one grouping code path.
+        # Each segment carries its own <ul> so grouped and ungrouped
+        # entries share one shape; no wrapper here (the old hardcoded
+        # <ul>{bullets_html}</ul> nested ULs inside ULs -- invalid HTML --
+        # the moment a grouped entry landed).
         bullets_html = "".join(
-            f"<li>{escape(b)}</li>" for b in job.get("achievements", [])
+            (
+                f'<div class="job-group-label">{escape(label)}:</div>'
+                f'<ul>{"".join(f"<li>{escape(b)}</li>" for b in bullets)}</ul>'
+                if label
+                else f'<ul>{"".join(f"<li>{escape(b)}</li>" for b in bullets)}</ul>'
+            )
+            for label, bullets in normalize_resume.grouped_achievements(job)
         )
         career_note = (
             f'<div class="career-note"><strong>Career Note:</strong> {escape(job["career_note"])}</div>'
@@ -154,7 +170,7 @@ def build_experience_html(jobs: list[dict]) -> str:
           <div class="job-title">{_preserve_arrow_glyph(escape(job.get("title","")))}</div>
           <div class="job-meta">{meta_line}</div>
           {clients}
-          <ul>{bullets_html}</ul>
+          {bullets_html}
           {career_note}
         </div>""")
     return "\n".join(html)
@@ -175,7 +191,11 @@ def build_certifications_section_html(section_title: str, certs: list) -> str:
     """The whole Training & Certifications section, or "" when there is
     nothing to list -- the template used to print the heading regardless, so
     a profile without certifications got an empty titled section on page 1."""
-    certs = [c for c in (certs or []) if isinstance(c, dict) and (c.get("title") or "").strip()]
+    certs = [
+        c
+        for c in (certs or [])
+        if isinstance(c, dict) and (c.get("title") or "").strip()
+    ]
     if not certs:
         return ""
     return f"""
@@ -266,17 +286,27 @@ def profile_header_links() -> list:
 
 def header_links_row_html(links: list) -> str:
     """A second contact row for extra links, or "" when there are none."""
-    shown = [escape(link_display(link)) for link in (links or []) if str(link or "").strip()]
+    shown = [
+        escape(link_display(link)) for link in (links or []) if str(link or "").strip()
+    ]
     if not shown:
         return ""
     sep = '<span class="separator">|</span>'
-    return '<div class="contact-row">' + sep.join(f"<span>{s}</span>" for s in shown) + "</div>"
+    return (
+        '<div class="contact-row">'
+        + sep.join(f"<span>{s}</span>" for s in shown)
+        + "</div>"
+    )
 
 
 def build_patents_section_html(patents: list, section_title: str = "Patents") -> str:
     """Patents, one line each (Title | Number), styled like certifications;
     "" when the profile has none."""
-    rows = [p for p in (patents or []) if isinstance(p, dict) and (p.get("title") or "").strip()]
+    rows = [
+        p
+        for p in (patents or [])
+        if isinstance(p, dict) and (p.get("title") or "").strip()
+    ]
     if not rows:
         return ""
     items = []
@@ -285,7 +315,9 @@ def build_patents_section_html(patents: list, section_title: str = "Patents") ->
         for key in ("number", "role"):
             value = str(patent.get(key) or "").strip()
             if value:
-                parts.append(f'<span class="cert-sep">|</span><span class="cert-org">{escape(value)}</span>')
+                parts.append(
+                    f'<span class="cert-sep">|</span><span class="cert-org">{escape(value)}</span>'
+                )
         items.append(f'<div class="cert-item patent-item">{"".join(parts)}</div>')
     return f"""
   <div class="section avoid-break">
@@ -395,7 +427,9 @@ def render_html(resume_data: dict, output_path: str) -> str:
         "TAGLINE": _wrap_tagline_pipe(escape(resume_data.get("TAGLINE", ""))),
         "PHONE": escape(resume_data.get("PHONE", "")),
         "EMAIL": escape(resume_data.get("EMAIL", "")),
-        "LINKEDIN_DISPLAY": escape(link_display(resume_data.get("LINKEDIN_DISPLAY", ""))),
+        "LINKEDIN_DISPLAY": escape(
+            link_display(resume_data.get("LINKEDIN_DISPLAY", ""))
+        ),
         "LOCATION": escape(resume_data.get("LOCATION", "")),
         "PAGE_WIDTH": resume_data.get("PAGE_WIDTH", "8.5in"),
         "SUMMARY_TEXT": _sanitize_copy(resume_data.get("SUMMARY_TEXT", "")),
@@ -426,7 +460,8 @@ def render_html(resume_data: dict, output_path: str) -> str:
     html = html.replace(
         "{{PATENTS_SECTION}}",
         build_patents_section_html(
-            resume_data.get("PATENTS", []), resume_data.get("SECTION_PATENTS") or "Patents"
+            resume_data.get("PATENTS", []),
+            resume_data.get("SECTION_PATENTS") or "Patents",
         ),
     )
     header_links = resume_data.get("HEADER_LINKS")

@@ -15,7 +15,10 @@ import contextlib
 import logging
 import os
 import re
+import signal
+import threading
 import time
+import traceback
 
 import cli_art
 import content_settings
@@ -540,11 +543,48 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
         f"Searching LinkedIn for {len(search_terms)} saved "
         f"quer{'y' if len(search_terms) == 1 else 'ies'}: {', '.join(display_terms)}"
     )
-    try:
-        with _muted_scraper_logger():
-            scraper.run(_build_queries(job_limit, search_terms))
-    except Exception as e:
-        cli_art.cli_error(f"LinkedIn scraper run failed: {e}")
+
+    # Run scraper in a thread with a timeout to prevent indefinite hangs
+    # (scraper.run() is blocking Selenium with no overall scan timeout)
+    SCRAPER_TIMEOUT_SECONDS = 600  # 10 minutes per search term, ~1hr for 6 terms
+
+    scraper_exception = None
+
+    def _run_scraper():
+        nonlocal scraper_exception
+        try:
+            with _muted_scraper_logger():
+                scraper.run(_build_queries(job_limit, search_terms))
+        except Exception as e:
+            scraper_exception = e
+
+    scraper_thread = threading.Thread(target=_run_scraper, daemon=True)
+    scraper_thread.start()
+    scraper_thread.join(timeout=SCRAPER_TIMEOUT_SECONDS)
+
+    if scraper_thread.is_alive():
+        cli_art.cli_error(
+            f"LinkedIn scan exceeded {SCRAPER_TIMEOUT_SECONDS}s timeout and was killed. "
+            f"Returning {len(jobs)} roles found so far. This typically indicates a hang in "
+            f"Selenium pagination or a query getting stuck on a slow page load."
+        )
+        logging.error(
+            f"LinkedIn scraper timeout after {SCRAPER_TIMEOUT_SECONDS}s. "
+            f"Search terms: {display_terms}. Jobs found before timeout: {len(jobs)}"
+        )
+        on_end()
+    elif scraper_exception:
+        error_type = type(scraper_exception).__name__
+        error_msg = str(scraper_exception)
+        cli_art.cli_error(
+            f"LinkedIn scraper failed with {error_type}: {error_msg}\n"
+            f"Search terms being processed: {', '.join(display_terms)}\n"
+            f"Jobs found before error: {len(jobs)}"
+        )
+        logging.error(
+            f"LinkedIn scraper exception ({error_type}): {error_msg}\n"
+            f"Full traceback:\n{traceback.format_exc()}"
+        )
         on_end()
 
     return jobs

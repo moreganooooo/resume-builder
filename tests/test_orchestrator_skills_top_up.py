@@ -32,9 +32,19 @@ CV_TEXT = """# CV
 """
 
 LEDGER = [
-    "Python", "SQL", "spaCy", "NLTK", "Mathematica", "Fortran", "Git",
-    "Supervised & unsupervised learning", "AWS Glue", "AWS S3", "AWS RDS",
-    "Matplotlib", "Signal processing",
+    "Python",
+    "SQL",
+    "spaCy",
+    "NLTK",
+    "Mathematica",
+    "Fortran",
+    "Git",
+    "Supervised & unsupervised learning",
+    "AWS Glue",
+    "AWS S3",
+    "AWS RDS",
+    "Matplotlib",
+    "Signal processing",
     "Technical documentation for cross-functional/non-technical stakeholders",
 ]
 
@@ -137,9 +147,11 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
     # --- creating a home for a group that has none ---
 
     def test_creates_a_line_for_a_group_with_no_home_and_brings_its_items_back(self):
-        resume = _resume([
-            "**Visualization & Communication:** Matplotlib, Signal Processing",
-        ])
+        resume = _resume(
+            [
+                "**Visualization & Communication:** Matplotlib, Signal Processing",
+            ]
+        )
         result, added = self._run(resume, {"tools": ["Mathematica"]})
         self.assertEqual(added, ["Mathematica"])
         self.assertEqual(
@@ -168,12 +180,14 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
         self.assertEqual(len(orchestrator._plain_skills_line(line)), 105)
         ledger = LEDGER + ["Numerical Methods", "Finite Element Modeling"]
         cv = CV_TEXT.replace(
-            "signal processing", "signal processing, numerical methods, finite element modeling"
+            "signal processing",
+            "signal processing, numerical methods, finite element modeling",
         )
         _, added = self._run(
             _resume([line]),
             {"tools": ["Mathematica", "Numerical Methods", "Finite Element Modeling"]},
-            cv_text=cv, ledger=ledger,
+            cv_text=cv,
+            ledger=ledger,
         )
         self.assertEqual(len(added), 3)
 
@@ -182,29 +196,51 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
         a = "**Scientific Computing:** " + ", ".join(["Fortran"] * 9) + ", Fo"
         b = "**Languages & Libraries:** " + ", ".join(["Python"] * 11)
         b = b[: len(b) - (len(orchestrator._plain_skills_line(b)) - 105)]
-        ledger = LEDGER + ["Numerical Methods", "Finite Element Modeling",
-                           "Pandas Profiling", "Scikit Learn Pipelines"]
+        ledger = LEDGER + [
+            "Numerical Methods",
+            "Finite Element Modeling",
+            "Pandas Profiling",
+            "Scikit Learn Pipelines",
+        ]
         cv = CV_TEXT.replace(
-            "signal processing", "signal processing, numerical methods, finite element modeling"
-        ).replace("spaCy, NLTK", "spaCy, NLTK, pandas profiling, scikit learn pipelines")
+            "signal processing",
+            "signal processing, numerical methods, finite element modeling",
+        ).replace(
+            "spaCy, NLTK", "spaCy, NLTK, pandas profiling, scikit learn pipelines"
+        )
         result, _ = self._run(
             _resume([a, b]),
-            {"tools": ["Mathematica", "Numerical Methods", "Finite Element Modeling",
-                       "spaCy", "Pandas Profiling", "Scikit Learn Pipelines"]},
-            cv_text=cv, ledger=ledger,
+            {
+                "tools": [
+                    "Mathematica",
+                    "Numerical Methods",
+                    "Finite Element Modeling",
+                    "spaCy",
+                    "Pandas Profiling",
+                    "Scikit Learn Pipelines",
+                ]
+            },
+            cv_text=cv,
+            ledger=ledger,
         )
-        wrapped = [l for l in result["SKILLS"]
-                   if len(orchestrator._plain_skills_line(l)) > 110]
+        wrapped = [
+            l for l in result["SKILLS"] if len(orchestrator._plain_skills_line(l)) > 110
+        ]
         self.assertEqual(len(wrapped), 1)
 
     def test_the_row_holding_the_groups_skills_wins_over_a_shared_label_word(self):
-        resume = _resume([
-            "**Scientific Computing Tools:** Matplotlib",
-            "**Research Stack:** Fortran, Signal Processing",
-        ])
+        resume = _resume(
+            [
+                "**Scientific Computing Tools:** Matplotlib",
+                "**Research Stack:** Fortran, Signal Processing",
+            ]
+        )
         result, added = self._run(resume, {"tools": ["Mathematica"]})
         self.assertEqual(added, ["Mathematica"])
-        self.assertEqual(result["SKILLS"][1], "**Research Stack:** Fortran, Signal Processing, Mathematica")
+        self.assertEqual(
+            result["SKILLS"][1],
+            "**Research Stack:** Fortran, Signal Processing, Mathematica",
+        )
 
     # --- skills cv.md never grouped ---
 
@@ -217,7 +253,11 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
             return {"Pandas": "Languages & Frameworks"}
 
         result, added = orchestrator._top_up_verified_skills(
-            resume, {"tools": ["Pandas"]}, {}, CV_TEXT, LEDGER + ["Pandas"],
+            resume,
+            {"tools": ["Pandas"]},
+            {},
+            CV_TEXT,
+            LEDGER + ["Pandas"],
             assign_groups=assign,
         )
         self.assertEqual(calls, [(["Pandas"], ["Languages & Frameworks"])])
@@ -232,8 +272,12 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
             return {"Pandas": "Invented Row"}
 
         _, added = orchestrator._top_up_verified_skills(
-            resume, {"tools": ["Pandas", "Snowflake"]}, {}, CV_TEXT,
-            LEDGER + ["Pandas"], assign_groups=assign,
+            resume,
+            {"tools": ["Pandas", "Snowflake"]},
+            {},
+            CV_TEXT,
+            LEDGER + ["Pandas"],
+            assign_groups=assign,
         )
         self.assertEqual(seen, ["Pandas"])
         self.assertEqual(added, [])
@@ -242,28 +286,32 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
 
     def test_skips_a_keyword_with_no_evidence_at_all(self):
         resume = _resume(["**Languages & Frameworks:** Python, SQL"])
-        result, added = self._run(
-            resume, {"tools": ["Snowflake"]}, ledger=["Python"]
-        )
+        result, added = self._run(resume, {"tools": ["Snowflake"]}, ledger=["Python"])
         self.assertEqual(added, [])
         self.assertEqual(result, resume)
 
     def test_skips_when_two_lines_match_the_category_equally(self):
-        resume = _resume([
-            "**Languages & Tools:** Python",
-            "**Languages & Frameworks:** SQL",
-        ])
+        resume = _resume(
+            [
+                "**Languages & Tools:** Python",
+                "**Languages & Frameworks:** SQL",
+            ]
+        )
         _, added = self._run(resume, {"tools": ["spaCy"]})
         self.assertEqual(added, [])
 
     def test_the_exact_category_line_wins_over_a_partial_match(self):
-        resume = _resume([
-            "**Languages & Libraries:** Python",
-            "**Languages & Frameworks:** SQL",
-        ])
+        resume = _resume(
+            [
+                "**Languages & Libraries:** Python",
+                "**Languages & Frameworks:** SQL",
+            ]
+        )
         result, added = self._run(resume, {"tools": ["spaCy"]})
         self.assertEqual(added, ["spaCy"])
-        self.assertEqual(result["SKILLS"][0], "**Languages & Libraries:** Python, spaCy")
+        self.assertEqual(
+            result["SKILLS"][0], "**Languages & Libraries:** Python, spaCy"
+        )
 
     def test_measures_the_printed_width_not_the_bold_markup(self):
         # The label's four asterisks are not rendered. Counting them made

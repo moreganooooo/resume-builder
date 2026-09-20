@@ -239,7 +239,10 @@ GROUNDING_THRESHOLD_BACKUP = 0.72
 
 
 def _check_semantic_grounding(
-    cover_letter_data: dict, keeper_bullets: list[str], keeper_embs, keeper_embs_backup=None
+    cover_letter_data: dict,
+    keeper_bullets: list[str],
+    keeper_embs,
+    keeper_embs_backup=None,
 ) -> list[str]:
     """
     Rigorously checks each sentence of the cover letter that makes a professional claim,
@@ -299,7 +302,9 @@ def _check_semantic_grounding(
                     import embed_bullet_bank
 
                     emb = embed_bullet_bank.embed_batch(
-                        [sentence], model=embed_bullet_bank.BACKUP_EMBED_MODEL, max_retries=2
+                        [sentence],
+                        model=embed_bullet_bank.BACKUP_EMBED_MODEL,
+                        max_retries=2,
                     )[0]
                     matrix, threshold = keeper_embs_backup, GROUNDING_THRESHOLD_BACKUP
                 except Exception:
@@ -313,9 +318,7 @@ def _check_semantic_grounding(
                 s_vec = s_vec / s_norm
 
             # Normalize keeper embeddings matrix
-            embs_norm = matrix / (
-                np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-9
-            )
+            embs_norm = matrix / (np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-9)
             sims = embs_norm @ s_vec
             max_sim = float(np.max(sims))
             best_idx = int(np.argmax(sims))

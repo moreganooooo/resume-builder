@@ -16,21 +16,33 @@ import orchestrator  # noqa: E402
 class TestTaglineDescriptors(unittest.TestCase):
     def test_block_lists_each_archetype_descriptor(self):
         block = orchestrator.build_tagline_descriptor_block(
-            {"archetypes": {
-                "a": {"label": "Analyst", "tagline_descriptor": "Reporting & Insight"},
-                "b": {"label": "No descriptor"},
-            }}
+            {
+                "archetypes": {
+                    "a": {
+                        "label": "Analyst",
+                        "tagline_descriptor": "Reporting & Insight",
+                    },
+                    "b": {"label": "No descriptor"},
+                }
+            }
         )
         self.assertIn("=== TAGLINE DESCRIPTORS ===", block)
         self.assertIn('Analyst -> "Reporting & Insight"', block)
         self.assertNotIn("No descriptor", block)
 
     def test_no_descriptors_means_no_block(self):
-        self.assertEqual(orchestrator.build_tagline_descriptor_block({"archetypes": {"a": {"label": "X"}}}), "")
+        self.assertEqual(
+            orchestrator.build_tagline_descriptor_block(
+                {"archetypes": {"a": {"label": "X"}}}
+            ),
+            "",
+        )
         self.assertEqual(orchestrator.build_tagline_descriptor_block(None), "")
 
     def test_prompt_hardcodes_no_field_specific_descriptors(self):
-        with open(os.path.join(ROOT, "resume-engine", "prompts", "tailor_resume.md")) as f:
+        with open(
+            os.path.join(ROOT, "resume-engine", "prompts", "tailor_resume.md")
+        ) as f:
             prompt = f.read()
         with open(os.path.join(ROOT, "resume-engine", "scoring", "role_dna.yaml")) as f:
             shared = yaml.safe_load(f)["archetypes"]

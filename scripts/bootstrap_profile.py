@@ -346,7 +346,9 @@ def collect_identity(dry_run: bool = False) -> dict:
             "These drive job-board searches and scoring, so keep them specific "
             "and few (2-4 is typical).[/dim]"
         )
-        primary_roles = _confirm_roles("Primary target roles:", defaults["primary_roles"])
+        primary_roles = _confirm_roles(
+            "Primary target roles:", defaults["primary_roles"]
+        )
 
         if secondary_defaults is None:
             achievements_text = _achievements_summary_text()
@@ -914,6 +916,13 @@ candidate:
   portfolio_url: "{portfolio_url}"
   extra_link: "{extra_link}"
 
+# Optional, deterministic answers for sensitive application questions. Leave
+# these blank to require the candidate to answer work-authorization questions
+# manually rather than guessing.
+application_answers:
+  work_authorization: null
+  requires_sponsorship: null
+
 target_roles:
   primary:
 {primary_roles_yaml}
@@ -1120,7 +1129,11 @@ _TITLE_FILTER_RE = re.compile(
 
 
 def _render_title_filter_block(positive: list) -> str:
-    return "title_filter:\n  positive:\n" + _yaml_string_list(positive) + "\n  negative: []\n"
+    return (
+        "title_filter:\n  positive:\n"
+        + _yaml_string_list(positive)
+        + "\n  negative: []\n"
+    )
 
 
 def seed_scan_filters_from_target_roles(identity: dict) -> bool:

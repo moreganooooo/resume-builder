@@ -14,6 +14,7 @@ You will receive the cover letter's current JSON and one plain-English instructi
 - Do not "improve" wording, fix perceived typos, adjust tone, or add/remove factual claims anywhere the instruction didn't mention, even if you think it would help.
 - Never invent a new fact, metric, or claim about the candidate's background that wasn't already present in the letter.
 - Leave `company_name` unchanged even if the instruction seems to ask for it -- a company-name correction is a data-accuracy fix that belongs upstream in the original generation step, not a wording/preference edit.
+- Leave `role_title` unchanged unless the instruction explicitly asks to change the role title. When the first paragraph contains the role title, preserve its exact spelling and wording: the renderer automatically bolds that phrase, and changing it to a synonym breaks the document's intended emphasis.
 - If the instruction is ambiguous, pick the single most reasonable interpretation and apply it. Do not ask a clarifying question back -- there is no back-and-forth in this call, only one JSON response.
 
 # Output

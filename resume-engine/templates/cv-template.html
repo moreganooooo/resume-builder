@@ -296,6 +296,24 @@
     margin-top: 3px;
   }
 
+  /* Optional craft-area sub-headers: a multi-hat role's bullets grouped
+     under short italic labels ("Creative Strategy & Brand Voice:"),
+     rendered only for entries whose builder output carries
+     achievement_group_starts (see normalize_resume's sanitizer). */
+  .job-group-label {
+    font-size: 9.75pt;
+    font-style: italic;
+    font-weight: 600;
+    color: #000000;
+    margin-top: 5px;
+    margin-bottom: 1px;
+    line-height: 1.15;
+  }
+
+  .job-group-label + ul {
+    margin-top: 1px;
+  }
+
   .job li {
     font-size: 9.75pt;
     line-height: 1.15;

@@ -120,9 +120,10 @@ class TestTerminateAll(unittest.TestCase):
     def test_signum_restores_default_disposition_and_resignals(self):
         # Verifies the re-signal path without actually taking the process
         # down: patch os.kill/signal.signal to observe the calls instead.
-        with patch("interactive_subprocess.signal.signal") as mock_signal, patch(
-            "interactive_subprocess.os.kill"
-        ) as mock_kill:
+        with (
+            patch("interactive_subprocess.signal.signal") as mock_signal,
+            patch("interactive_subprocess.os.kill") as mock_kill,
+        ):
             interactive_subprocess._terminate_all(signum=15)
         mock_signal.assert_called_once()
         args, _ = mock_signal.call_args
@@ -130,9 +131,10 @@ class TestTerminateAll(unittest.TestCase):
         mock_kill.assert_called_once()
 
     def test_no_signum_does_not_resignal(self):
-        with patch("interactive_subprocess.signal.signal") as mock_signal, patch(
-            "interactive_subprocess.os.kill"
-        ) as mock_kill:
+        with (
+            patch("interactive_subprocess.signal.signal") as mock_signal,
+            patch("interactive_subprocess.os.kill") as mock_kill,
+        ):
             interactive_subprocess._terminate_all()
         mock_signal.assert_not_called()
         mock_kill.assert_not_called()
@@ -142,7 +144,9 @@ class TestModuleRegistration(unittest.TestCase):
     def test_sigterm_and_sighup_have_handlers_installed(self):
         import signal
 
-        self.assertIs(signal.getsignal(signal.SIGTERM), interactive_subprocess._terminate_all)
+        self.assertIs(
+            signal.getsignal(signal.SIGTERM), interactive_subprocess._terminate_all
+        )
         if hasattr(signal, "SIGHUP"):
             self.assertIs(
                 signal.getsignal(signal.SIGHUP), interactive_subprocess._terminate_all

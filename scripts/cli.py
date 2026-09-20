@@ -840,8 +840,7 @@ def recruiter_cmd(resume_run):
     result = build_recruiter_resume.build_recruiter_resume(fresh=not resume_run)
     if result["resume"]:
         cli_art.display_success(
-            f"Recruiter resume built:\n"
-            f"  {result['resume']['_output_paths']['pdf']}"
+            f"Recruiter resume built:\n" f"  {result['resume']['_output_paths']['pdf']}"
         )
     else:
         cli_art.display_error(

@@ -23,7 +23,9 @@ class TestRoleDnaOverride(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.kb, True)
         self.addCleanup(shutil.rmtree, self.shared, True)
         with open(os.path.join(self.shared, "role_dna.yaml"), "w") as f:
-            yaml.safe_dump({"archetypes": {"shared_marketing_archetype": {"label": "M"}}}, f)
+            yaml.safe_dump(
+                {"archetypes": {"shared_marketing_archetype": {"label": "M"}}}, f
+            )
         self.engine = orchestrator.ResumeEngine.__new__(orchestrator.ResumeEngine)
         self.engine.kb_dir = self.kb
         self.engine.scoring_dir = self.shared
@@ -40,7 +42,9 @@ class TestRoleDnaOverride(unittest.TestCase):
 
     def test_profile_library_replaces_the_shared_one(self):
         with open(os.path.join(self.kb, "role_dna.yaml"), "w") as f:
-            yaml.safe_dump({"archetypes": {"data_scientist_modeling": {"label": "DS"}}}, f)
+            yaml.safe_dump(
+                {"archetypes": {"data_scientist_modeling": {"label": "DS"}}}, f
+            )
         context = self._context()
         self.assertIn("data_scientist_modeling", context)
         self.assertNotIn("shared_marketing_archetype", context)

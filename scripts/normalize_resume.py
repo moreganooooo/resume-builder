@@ -41,7 +41,7 @@ _STINT_SUFFIX_SEPARATORS = ("—", "–", "-")
 
 
 def _strip_stint_annotation(company: str, title: str) -> str:
-    """"mIQroTech Inc. — Lead Data Scientist" + title "Lead Data Scientist"
+    """ "mIQroTech Inc. — Lead Data Scientist" + title "Lead Data Scientist"
     -> "mIQroTech Inc.". Returns company unchanged when the suffix is not
     the title, or when stripping would leave nothing."""
     if not company or not title:
@@ -60,15 +60,24 @@ def _strip_stint_annotation(company: str, title: str) -> str:
 # "Mixed date formats". The rule is already in the prompt, so this is a
 # deterministic cleanup rather than more prompt text.
 _MONTHS = {
-    "jan": "01", "feb": "02", "mar": "03", "apr": "04",
-    "may": "05", "jun": "06", "jul": "07", "aug": "08",
-    "sep": "09", "oct": "10", "nov": "11", "dec": "12",
+    "jan": "01",
+    "feb": "02",
+    "mar": "03",
+    "apr": "04",
+    "may": "05",
+    "jun": "06",
+    "jul": "07",
+    "aug": "08",
+    "sep": "09",
+    "oct": "10",
+    "nov": "11",
+    "dec": "12",
 }
 _SPELLED_MONTH_YEAR = re.compile(r"\b([A-Za-z]{3,9})\.?\s+(\d{4})\b")
 
 
 def _numeric_period(period: str) -> str:
-    """"05/2021 – May 2022" -> "05/2021 – 05/2022". Leaves anything it does
+    """ "05/2021 – May 2022" -> "05/2021 – 05/2022". Leaves anything it does
     not recognize (notably "Present") untouched."""
     if not period:
         return period
@@ -82,6 +91,54 @@ def _numeric_period(period: str) -> str:
 
 def _and_to_ampersand(text: str) -> str:
     return re.sub(r"\band\b", "&", text, flags=re.IGNORECASE)
+
+
+def _sanitize_group_starts(raw, bullet_count: int) -> dict:
+    """Normalizes one entry's achievement_group_starts to a clean
+    {str(index) -> label} map. The model supplies zero-based string indices
+    into `achievements`; anything out of range, non-numeric, empty-labeled,
+    or duplicate-indexed is dropped rather than trusted -- renderers walk
+    achievements in order and would otherwise mislabel or crash. An absent
+    or empty map (the normal case) stays {}."""
+    if not isinstance(raw, dict) or bullet_count <= 0:
+        return {}
+    cleaned: dict = {}
+    for key, label in raw.items():
+        try:
+            index = int(str(key).strip())
+        except (TypeError, ValueError):
+            continue
+        if not 0 <= index < bullet_count:
+            continue
+        label = str(label or "").strip()
+        if not label or str(index) in cleaned:
+            continue
+        cleaned[str(index)] = label
+    # A group start at index 0 is meaningless (the first bullet already
+    # begins the entry); drop it so renderers never print a dangling label.
+    cleaned.pop("0", None)
+    return cleaned
+
+
+def grouped_achievements(job: dict) -> list:
+    """Splits one EXPERIENCE entry's bullets into labeled segments:
+    [(label_or_None, [bullets...]), ...], in document order. Renderers use
+    this to honor achievement_group_starts (craft-area sub-headers); an
+    entry with no group starts comes back as [(None, all_bullets)] so every
+    caller keeps a single code path. Expects the map AFTER
+    _sanitize_group_starts -- indices are trusted here."""
+    achievements = job.get("achievements") or []
+    group_starts = job.get("achievement_group_starts") or {}
+    if not group_starts:
+        return [(None, list(achievements))]
+    starts = sorted(int(k) for k in group_starts)
+    segments = []
+    if starts[0] > 0:
+        segments.append((None, achievements[: starts[0]]))
+    for i, start in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else len(achievements)
+        segments.append((group_starts[str(start)], achievements[start:end]))
+    return [(label, bullets) for label, bullets in segments if bullets]
 
 
 def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
@@ -110,7 +167,9 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
         if include_design_credentials or not cert.get("design_only")
     ]
     # Fixed like certifications: a profile's patents never vary per JD.
-    result["PATENTS"] = [dict(p) for p in (getattr(fixed_content, "PATENTS", None) or [])]
+    result["PATENTS"] = [
+        dict(p) for p in (getattr(fixed_content, "PATENTS", None) or [])
+    ]
     # EDU_ACHIEVEMENT_KEY_<n> fields are numbered by profile_paths.
     # education_achievement_slots()'s order (see orchestrator.py's
     # build_education_achievement_schema_fields(), which built the schema
@@ -138,6 +197,10 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
 
         for job in result["EXPERIENCE"]:
             job = dict(job)
+            job["achievement_group_starts"] = _sanitize_group_starts(
+                job.get("achievement_group_starts"),
+                len(job.get("achievements") or []),
+            )
             company = _RENAME_SUFFIX_PATTERN.sub("", job.get("company", ""))
             # Before the fixed_content lookups below, so they key off the real
             # company name rather than a roster stint key that would match

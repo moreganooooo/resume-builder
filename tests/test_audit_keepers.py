@@ -967,10 +967,18 @@ class TestSituationalRoleBulletsAreNeverRewritten(unittest.TestCase):
     def _df_keepers(self):
         return pd.DataFrame(
             [
-                {"Bullet Point": "Stocked shelves.", "Role / Company": "Corner Shop",
-                 "audit_status": "MANUAL", "source_cluster_id": 1},
-                {"Bullet Point": "Built a model.", "Role / Company": "Acme Corp",
-                 "audit_status": "MANUAL", "source_cluster_id": 2},
+                {
+                    "Bullet Point": "Stocked shelves.",
+                    "Role / Company": "Corner Shop",
+                    "audit_status": "MANUAL",
+                    "source_cluster_id": 1,
+                },
+                {
+                    "Bullet Point": "Built a model.",
+                    "Role / Company": "Acme Corp",
+                    "audit_status": "MANUAL",
+                    "source_cluster_id": 2,
+                },
             ]
         )
 

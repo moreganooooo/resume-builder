@@ -201,3 +201,62 @@ class TestWhySectionDropsCleanly(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAchievementGroupSubheaders(unittest.TestCase):
+    # 2026-09-17: EXPERIENCE entries may carry achievement_group_starts
+    # (bullet index -> craft-area label), the sub-header pattern from the
+    # candidate's own favorite resumes. Rendered as italic .job-group-label
+    # divs between bullet lists; entries without the map render unchanged.
+
+    def setUp(self):
+        self.out_path = os.path.join(os.path.dirname(__file__), "_tmp_groups.html")
+
+    def tearDown(self):
+        if os.path.exists(self.out_path):
+            os.remove(self.out_path)
+
+    def test_schema_has_the_optional_field(self):
+        fields = orchestrator.ExperienceEntry.model_fields
+        self.assertIn("achievement_group_starts", fields)
+
+    def test_grouped_bullets_render_labels_and_no_nested_lists(self):
+        # The job template used to hardcode a <ul> around the bullet HTML,
+        # which nested <ul><ul> the moment a grouped entry landed.
+        data = _minimal_resume_data(
+            EXPERIENCE=[
+                {
+                    "title": "Lead",
+                    "company": "Acme",
+                    "period": "01/2020 - 01/2024",
+                    "achievements": ["a1", "a2", "a3", "a4"],
+                    "achievement_group_starts": {"2": "Creative Strategy"},
+                }
+            ],
+        )
+        render_html(data, self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn('<div class="job-group-label">Creative Strategy:</div>', html)
+        self.assertNotIn("<ul><ul>", html.replace(" ", ""))
+        self.assertIn("<li>a1</li>", html)
+        self.assertIn("<li>a4</li>", html)
+
+    def test_ungrouped_entry_renders_a_single_list_unchanged(self):
+        data = _minimal_resume_data(
+            EXPERIENCE=[
+                {
+                    "title": "Lead",
+                    "company": "Acme",
+                    "period": "01/2020 - 01/2024",
+                    "achievements": ["a1", "a2"],
+                }
+            ],
+        )
+        render_html(data, self.out_path)
+        with open(self.out_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        # The class name also lives in the <style> block; only the
+        # rendered <div> proves a label was emitted.
+        self.assertNotIn('<div class="job-group-label">', html)
+        self.assertIn("<li>a1</li><li>a2</li>", html)

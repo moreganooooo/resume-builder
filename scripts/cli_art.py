@@ -1315,7 +1315,10 @@ HELP_SECTIONS = [
                 "resume evaluate jds/x.txt",
                 "score one JD's fit (go/no-go) without building a resume",
             ),
-            ("resume compare A B", "side-by-side comparison of two jobs (IDs or file paths)"),
+            (
+                "resume compare A B",
+                "side-by-side comparison of two jobs (IDs or file paths)",
+            ),
             ("resume strategy", "application strategy coaching (--jd for one job)"),
         ],
     ),
@@ -1336,15 +1339,21 @@ HELP_SECTIONS = [
                 "package several pending JDs (--force: build even if scored Skip)",
             ),
             (
-                "resume package --referral \"Name, relation\"",
+                'resume package --referral "Name, relation"',
                 "name a referral contact in the cover letter (also works on coverletter)",
             ),
-            ("resume coverletter jds/x.txt", "generate + render a cover letter for one JD"),
+            (
+                "resume coverletter jds/x.txt",
+                "generate + render a cover letter for one JD",
+            ),
             (
                 "resume coverletter --pick",
                 "interactively select which pending JD(s) to generate a cover letter for",
             ),
-            ("resume polish", "interactively polish an already-generated resume/cover letter"),
+            (
+                "resume polish",
+                "interactively polish an already-generated resume/cover letter",
+            ),
             (
                 "resume sample",
                 "QA smoke test: build a sample resume + cover letter from the fixture JD",
@@ -1367,10 +1376,22 @@ HELP_SECTIONS = [
                 "pipeline insights (--platform, --companies, --scatter, --heatmap, --radar, --funnel)",
             ),
             ("resume funnel-drilldown", "where applications stall between stages"),
-            ("resume timeline JOB", "one application's full history (job ID or search text)"),
-            ("resume agency-view", "staffing agencies you've dealt with and their ghost rates"),
-            ("resume rag \"query\"", "search your bullet bank, stories, and knowledge docs by meaning"),
-            ("resume evidence list", "show all interview stories and negotiation points"),
+            (
+                "resume timeline JOB",
+                "one application's full history (job ID or search text)",
+            ),
+            (
+                "resume agency-view",
+                "staffing agencies you've dealt with and their ghost rates",
+            ),
+            (
+                'resume rag "query"',
+                "search your bullet bank, stories, and knowledge docs by meaning",
+            ),
+            (
+                "resume evidence list",
+                "show all interview stories and negotiation points",
+            ),
             (
                 "resume evidence stories",
                 "browse interview (STAR) stories (--archetype, --tag, -q)",
@@ -1384,9 +1405,18 @@ HELP_SECTIONS = [
     (
         "Maintenance",
         [
-            ("resume doctor", "check dependencies/assets/config, then run the test suite"),
-            ("resume doctor --skip-tests", "same, but skip the (slower) test-suite run"),
-            ("resume verify-sync", "check Syncthing folders, ignore rules, and database state"),
+            (
+                "resume doctor",
+                "check dependencies/assets/config, then run the test suite",
+            ),
+            (
+                "resume doctor --skip-tests",
+                "same, but skip the (slower) test-suite run",
+            ),
+            (
+                "resume verify-sync",
+                "check Syncthing folders, ignore rules, and database state",
+            ),
             ("resume test", "run the full test suite (compact: dots + summary)"),
             ("resume test -v", "same, but lists every test by name"),
             ("resume test -vv", "same, but shows the app's own logging too"),

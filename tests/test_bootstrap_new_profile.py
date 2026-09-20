@@ -66,7 +66,10 @@ class TestCreateNewProfile(unittest.TestCase):
                 {
                     "fixed_credentials": {
                         "education": [
-                            {"credential": "B.S., Biology", "institution": "Example State"},
+                            {
+                                "credential": "B.S., Biology",
+                                "institution": "Example State",
+                            },
                             {
                                 "credential": "Coursework, Design",
                                 "institution": "Example College",
@@ -81,7 +84,10 @@ class TestCreateNewProfile(unittest.TestCase):
         education = fixed_content.build_education({})
         self.assertEqual(
             [(e["degree"], e["institution"]) for e in education],
-            [("B.S., Biology", "Example State"), ("Coursework, Design", "Example College")],
+            [
+                ("B.S., Biology", "Example State"),
+                ("Coursework, Design", "Example College"),
+            ],
         )
         self.assertTrue(education[1]["design_only"])
         self.assertNotIn("design_only", education[0])

@@ -22,7 +22,10 @@ RESUME = {
 
 
 def rendered(resume, layout="compact"):
-    with tempfile.TemporaryDirectory() as tmp, patch.object(render_html, "_profile_layout", return_value=layout):
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        patch.object(render_html, "_profile_layout", return_value=layout),
+    ):
         path = os.path.join(tmp, "out.html")
         render_html.render_html(resume, path)
         with open(path, encoding="utf-8") as f:
@@ -31,12 +34,24 @@ def rendered(resume, layout="compact"):
 
 class TestCertificationsSection(unittest.TestCase):
     def test_no_certifications_means_no_heading(self):
-        self.assertNotIn("Training &amp; Certifications", rendered(dict(RESUME, CERTIFICATIONS=[])))
-        self.assertNotIn("Training & Certifications", rendered(dict(RESUME, CERTIFICATIONS=[{"title": " "}])))
+        self.assertNotIn(
+            "Training &amp; Certifications", rendered(dict(RESUME, CERTIFICATIONS=[]))
+        )
+        self.assertNotIn(
+            "Training & Certifications",
+            rendered(dict(RESUME, CERTIFICATIONS=[{"title": " "}])),
+        )
         self.assertNotIn("{{", rendered(RESUME))
 
     def test_certifications_render_under_their_heading(self):
-        html = rendered(dict(RESUME, CERTIFICATIONS=[{"title": "AWS ML Specialty", "org": "AWS", "year": "2024"}]))
+        html = rendered(
+            dict(
+                RESUME,
+                CERTIFICATIONS=[
+                    {"title": "AWS ML Specialty", "org": "AWS", "year": "2024"}
+                ],
+            )
+        )
         self.assertIn("Training &amp; Certifications", html)
         self.assertIn("AWS ML Specialty", html)
 

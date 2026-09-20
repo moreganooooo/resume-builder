@@ -22,8 +22,14 @@ def _flag(resume_data):
 class TestSkillsLineRefactor(unittest.TestCase):
     def _run(self, rewrite):
         with (
-            patch.object(orchestrator.GeminiClient, "generate", return_value=(rewrite, None)),
-            patch.object(orchestrator.validate_resume, "_check_hallucinated_tools", side_effect=_flag),
+            patch.object(
+                orchestrator.GeminiClient, "generate", return_value=(rewrite, None)
+            ),
+            patch.object(
+                orchestrator.validate_resume,
+                "_check_hallucinated_tools",
+                side_effect=_flag,
+            ),
         ):
             return orchestrator._micro_refactor_skills_line(LINE, {})
 

@@ -112,6 +112,6 @@ structural_flags:
   contains_parentheses: true      # no parentheses in bullets or summary
   prose_dash: true                # no em/en dashes in body prose (date ranges excepted)
   bold_inside_bullet: true        # no <strong> tags inside bullet content
-  pronoun_outside_why: true       # no I/my/me/we/our outside Why section
+  pronoun_outside_why: true       # no pronouns outside Why by default; a profile may opt into first-person Summary text (voice_preferences.summary_first_person)
   metric_repeated: true           # same number must not appear twice in the CV
   tool_mentions_exceed_3: true    # 3+ tool mentions in one bullet reads as a list

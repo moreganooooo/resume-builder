@@ -333,7 +333,9 @@ class TestStintAnnotationStripping(unittest.TestCase):
             normalize_resume._strip_stint_annotation("Ben & Jerry", ""), "Ben & Jerry"
         )
         self.assertEqual(
-            normalize_resume._strip_stint_annotation("mIQroTech Inc.", "Lead Data Scientist"),
+            normalize_resume._strip_stint_annotation(
+                "mIQroTech Inc.", "Lead Data Scientist"
+            ),
             "mIQroTech Inc.",
         )
 
@@ -349,7 +351,8 @@ class TestNumericPeriod(unittest.TestCase):
             normalize_resume._numeric_period("05/2021 – May 2022"), "05/2021 – 05/2022"
         )
         self.assertEqual(
-            normalize_resume._numeric_period("Sept 2019 – Mar 2020"), "09/2019 – 03/2020"
+            normalize_resume._numeric_period("Sept 2019 – Mar 2020"),
+            "09/2019 – 03/2020",
         )
 
     def test_leaves_present_and_already_numeric_dates_alone(self):
@@ -369,3 +372,115 @@ class TestNumericPeriod(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAchievementGroupStarts(unittest.TestCase):
+    # 2026-09-17: EXPERIENCE entries gained an optional
+    # achievement_group_starts map (bullet index -> craft-area label, the
+    # sub-header pattern from the candidate's own favorite resumes). The
+    # map comes from an LLM, so normalize must sanitize it: indices are
+    # trusted by every renderer.
+
+    def setUp(self):
+        # Isolate from real profile -- normalize() calls profile_paths.fixed_content_module()
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
+        self.base = {
+            "TAGLINE": "X",
+            "SUMMARY_TEXT": "<strong>S.</strong>",
+            "SKILLS": [],
+            "EXPERIENCE": [],
+        }
+
+    def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
+
+    def test_valid_map_passes_through(self):
+        doc = dict(self.base)
+        doc["EXPERIENCE"] = [
+            {
+                "title": "T",
+                "company": "Acme",
+                "period": "01/2020 - 01/2024",
+                "achievements": ["a", "b", "c", "d"],
+                "achievement_group_starts": {"2": "Enablement"},
+            }
+        ]
+        out = normalize_resume.normalize(doc)["EXPERIENCE"][0]
+        self.assertEqual(out["achievement_group_starts"], {"2": "Enablement"})
+
+    def test_out_of_range_and_bad_keys_dropped(self):
+        doc = dict(self.base)
+        doc["EXPERIENCE"] = [
+            {
+                "title": "T",
+                "company": "Acme",
+                "period": "01/2020 - 01/2024",
+                "achievements": ["a", "b"],
+                "achievement_group_starts": {
+                    "1": "Keep",
+                    "5": "Too high",
+                    "-1": "Negative",
+                    "x": "Not a number",
+                    "0": "Meaningless (first bullet)",
+                },
+            }
+        ]
+        out = normalize_resume.normalize(doc)["EXPERIENCE"][0]
+        self.assertEqual(out["achievement_group_starts"], {"1": "Keep"})
+
+    def test_empty_labels_and_duplicates_dropped(self):
+        doc = dict(self.base)
+        doc["EXPERIENCE"] = [
+            {
+                "title": "T",
+                "company": "Acme",
+                "period": "01/2020 - 01/2024",
+                "achievements": ["a", "b", "c"],
+                "achievement_group_starts": {"1": "", "  ": "blank", "2": "Keep"},
+            }
+        ]
+        out = normalize_resume.normalize(doc)["EXPERIENCE"][0]
+        self.assertEqual(out["achievement_group_starts"], {"2": "Keep"})
+
+    def test_absent_map_normalized_to_empty(self):
+        doc = dict(self.base)
+        doc["EXPERIENCE"] = [
+            {
+                "title": "T",
+                "company": "Acme",
+                "period": "01/2020 - 01/2024",
+                "achievements": ["a"],
+            }
+        ]
+        out = normalize_resume.normalize(doc)["EXPERIENCE"][0]
+        self.assertEqual(out["achievement_group_starts"], {})
+
+
+class TestGroupedAchievements(unittest.TestCase):
+
+    def test_no_groups_returns_single_unlabeled_segment(self):
+        job = {"achievements": ["a", "b"]}
+        self.assertEqual(
+            normalize_resume.grouped_achievements(job), [(None, ["a", "b"])]
+        )
+
+    def test_groups_split_in_order(self):
+        job = {
+            "achievements": ["a", "b", "c", "d"],
+            "achievement_group_starts": {"2": "Enablement"},
+        }
+        self.assertEqual(
+            normalize_resume.grouped_achievements(job),
+            [(None, ["a", "b"]), ("Enablement", ["c", "d"])],
+        )
+
+    def test_two_groups_with_leading_unlabeled_run(self):
+        job = {
+            "achievements": ["a", "b", "c", "d", "e"],
+            "achievement_group_starts": {"1": "First", "3": "Second"},
+        }
+        self.assertEqual(
+            normalize_resume.grouped_achievements(job),
+            [(None, ["a"]), ("First", ["b", "c"]), ("Second", ["d", "e"])],
+        )

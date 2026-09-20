@@ -145,7 +145,6 @@ class TestSelect(unittest.TestCase):
         values = [opt["value"] for opt in spec["options"]]
         self.assertEqual(values, ["a", "b"])
 
-
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
     @patch("charm_prompt.interactive_subprocess.run")
     def test_headings_are_sent_as_non_selectable_section_titles(

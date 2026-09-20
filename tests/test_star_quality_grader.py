@@ -176,8 +176,8 @@ class TestStarQualityGrader(unittest.TestCase):
                     "title": "Upskilling & Caregiver",
                     "period": "08/2024 – 08/2025",
                     "achievements": [
-                        "Completed comprehensive certifications in Google Data Analytics and HubSpot Lifecycle Marketing Software.",
-                        "Developed personal data pipelines and campaign flow automation projects applying Python and SQL.",
+                        "Completed comprehensive certifications in Google Data Analytics and HubSpot Lifecycle Marketing Software",
+                        "Developed personal data pipelines and campaign flow automation projects applying Python and SQL",
                     ],
                 }
             ],

@@ -114,7 +114,11 @@ class TestInternational(unittest.TestCase):
     def test_regions_cities_and_embedded_countries_detected(self):
         # All three passed a 5-mile radius as "unresolvable, kept for review"
         # on a real scan (2026-09-13).
-        for value in ("Europe", "Roppongi, Tokyo; TOKHQ - Roppongi", "Bangalore; Amtech India"):
+        for value in (
+            "Europe",
+            "Roppongi, Tokyo; TOKHQ - Roppongi",
+            "Bangalore; Amtech India",
+        ):
             with self.subTest(value=value):
                 self.assertTrue(lf.looks_international(value))
 
@@ -122,8 +126,13 @@ class TestInternational(unittest.TestCase):
         # "Georgia" was on the country list, so "Atlanta, Georgia" was
         # rejected outright; US towns named for foreign places must survive.
         for value in (
-            "Atlanta, Georgia", "Hamburg, NY", "Warsaw, NY", "Poland, NY",
-            "Melbourne, FL", "Albuquerque, New Mexico", "Remote - US; Europe",
+            "Atlanta, Georgia",
+            "Hamburg, NY",
+            "Warsaw, NY",
+            "Poland, NY",
+            "Melbourne, FL",
+            "Albuquerque, New Mexico",
+            "Remote - US; Europe",
         ):
             with self.subTest(value=value):
                 self.assertFalse(lf.looks_international(value))

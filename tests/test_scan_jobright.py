@@ -19,8 +19,11 @@ class TestJobrightCompensation(unittest.TestCase):
         import compensation
 
         comp = scan_jobright._jobright_compensation(
-            {"minSalary": 114000.0, "maxSalary": 200000.0,
-             "salaryDesc": "$114K/yr - $200K/yr"}
+            {
+                "minSalary": 114000.0,
+                "maxSalary": 200000.0,
+                "salaryDesc": "$114K/yr - $200K/yr",
+            }
         )
         parsed = compensation.normalize_structured(comp)
         self.assertEqual(parsed["period"], "annual")

@@ -138,6 +138,8 @@ def is_usable_company_site(url: str) -> bool:
     if not host:
         return False
     return not any(host == d or host.endswith("." + d) for d in _REJECTED_DOMAINS)
+
+
 # Gemma, not Gemini 3: Google Search grounding quota is per model FAMILY on
 # the free tier, and it is ZERO for every Gemini 3 model (so these calls
 # 429'd every time on gemini-3.1-flash-lite) while the Gemma 4 models sit in
@@ -280,8 +282,18 @@ def fetch_company_pages(company_website: str) -> str:
 
 
 _LEGAL_WORDS = {
-    "inc", "llc", "ltd", "limited", "co", "corp", "corporation", "company",
-    "the", "plc", "lp", "llp",
+    "inc",
+    "llc",
+    "ltd",
+    "limited",
+    "co",
+    "corp",
+    "corporation",
+    "company",
+    "the",
+    "plc",
+    "lp",
+    "llp",
 }
 
 
@@ -290,7 +302,9 @@ def _normalized_words(text: str) -> str:
 
 
 def _compact_name(company_name: str) -> str:
-    return "".join(w for w in _normalized_words(company_name).split() if w not in _LEGAL_WORDS)
+    return "".join(
+        w for w in _normalized_words(company_name).split() if w not in _LEGAL_WORDS
+    )
 
 
 # Second-level labels under a country code ("acme.co.uk"), so the site root
@@ -298,8 +312,24 @@ def _compact_name(company_name: str) -> str:
 _SECOND_LEVEL = {"co", "com", "org", "net", "gov", "ac", "edu"}
 # Words a company commonly wraps around its own name in its domain.
 _HOST_AFFIXES = (
-    "the", "get", "try", "join", "my", "go", "hq", "app", "use", "hello",
-    "team", "usa", "us", "inc", "group", "careers", "jobs", "s",
+    "the",
+    "get",
+    "try",
+    "join",
+    "my",
+    "go",
+    "hq",
+    "app",
+    "use",
+    "hello",
+    "team",
+    "usa",
+    "us",
+    "inc",
+    "group",
+    "careers",
+    "jobs",
+    "s",
 )
 
 
@@ -376,7 +406,9 @@ def _find_website_via_search_engine(company_name: str) -> str | None:
     company's site root (see _site_root), or None."""
     import websearch_ddg
 
-    for result in websearch_ddg.search(f'"{company_name}" official website', max_results=8):
+    for result in websearch_ddg.search(
+        f'"{company_name}" official website', max_results=8
+    ):
         if _looks_like_the_company(result, company_name):
             return _site_root(result["url"])
     return None

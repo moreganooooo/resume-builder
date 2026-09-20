@@ -27,7 +27,9 @@ LIMITS = {
 }
 
 
-def kinds(text, settings=LIMITS):
+def kinds(text, settings=None):
+    if settings is None:
+        settings = LIMITS
     return {(f["kind"], f["severity"]) for f in work_constraints.detect(text, settings)}
 
 
@@ -37,42 +39,69 @@ class TestDetect(unittest.TestCase):
         self.assertFalse(work_constraints.is_enabled(None))
 
     def test_prolonged_standing_is_a_blocker(self):
-        self.assertIn(("standing", "blocker"), kinds("Ability to stand for long periods of time."))
-        self.assertIn(("standing", "blocker"), kinds("You will be on your feet for the entire shift."))
+        self.assertIn(
+            ("standing", "blocker"), kinds("Ability to stand for long periods of time.")
+        )
+        self.assertIn(
+            ("standing", "blocker"),
+            kinds("You will be on your feet for the entire shift."),
+        )
 
     def test_desk_sit_or_stand_is_not_standing(self):
         text = "Ability to sit and/or stand at a desk and work with a computer for extended periods of time."
         self.assertEqual(kinds(text), set())
 
     def test_any_sitting_option_voids_standing(self):
-        self.assertEqual(kinds("Employee will bend, walk, stand and may sit for long periods of time."), set())
+        self.assertEqual(
+            kinds(
+                "Employee will bend, walk, stand and may sit for long periods of time."
+            ),
+            set(),
+        )
 
     def test_regular_lifting_is_not_softened_by_a_later_clause(self):
         text = "Regular lifting of up to 30 pounds; occasional heavier lifting with assistance."
         self.assertIn(("lifting", "blocker"), kinds(text))
 
     def test_event_only_standing_is_not_a_blocker(self):
-        self.assertEqual(kinds("Must stand for an extended period of time during special events."), set())
+        self.assertEqual(
+            kinds("Must stand for an extended period of time during special events."),
+            set(),
+        )
 
     def test_think_on_your_feet_is_not_standing(self):
         self.assertEqual(kinds("You think on your feet and love a challenge."), set())
 
     def test_lifting_thresholds(self):
         self.assertEqual(kinds("Occasionally lift and carry up to 20 pounds."), set())
-        self.assertIn(("lifting", "blocker"), kinds("Must be able to lift up to 50 lbs."))
-        self.assertIn(("lifting", "blocker"), kinds("Frequently lift boxes up to 30 pounds."))
-        self.assertIn(("lifting", "penalty"), kinds("The employee must occasionally lift and/or move up to 35 pounds."))
+        self.assertIn(
+            ("lifting", "blocker"), kinds("Must be able to lift up to 50 lbs.")
+        )
+        self.assertIn(
+            ("lifting", "blocker"), kinds("Frequently lift boxes up to 30 pounds.")
+        )
+        self.assertIn(
+            ("lifting", "penalty"),
+            kinds("The employee must occasionally lift and/or move up to 35 pounds."),
+        )
 
     def test_negated_lifting_is_ignored(self):
         self.assertEqual(kinds("No lifting over 50 lbs is required."), set())
 
     def test_truck_unloading_is_manual_labor(self):
-        self.assertIn(("manual_labor", "blocker"), kinds("Complete truck unloading and merchandise duties."))
+        self.assertIn(
+            ("manual_labor", "blocker"),
+            kinds("Complete truck unloading and merchandise duties."),
+        )
 
     def test_phone_heavy_is_a_penalty_routine_phones_are_not(self):
-        self.assertIn(("phone_heavy", "penalty"), kinds("Handle a high volume of inbound calls."))
+        self.assertIn(
+            ("phone_heavy", "penalty"), kinds("Handle a high volume of inbound calls.")
+        )
         self.assertEqual(kinds("Answer phones and greet visitors."), set())
-        self.assertEqual(kinds("Questions? Contact our Global Call Center (GCC)."), set())
+        self.assertEqual(
+            kinds("Questions? Contact our Global Call Center (GCC)."), set()
+        )
 
     def test_escaped_newlines_bound_sentences(self):
         text = "Great team.\\nMust lift 50 lbs.\\nWe offer PTO."
@@ -87,16 +116,28 @@ def _fours(*keys):
 # Mid-range subscores, so a penalty's effect is never hidden by the 0-5 clamp.
 BASE_EVAL = {
     "fit_subscores": _fours(
-        "functional_alignment", "north_star_alignment", "level_plausibility",
-        "work_style_sustainability", "tools_process_overlap",
+        "functional_alignment",
+        "north_star_alignment",
+        "level_plausibility",
+        "work_style_sustainability",
+        "tools_process_overlap",
     ),
     "interview_odds_subscores": _fours(
-        "title_continuity", "evidence_match", "domain_credibility",
-        "recruiter_legibility", "narrative_burden", "funnel_friction",
+        "title_continuity",
+        "evidence_match",
+        "domain_credibility",
+        "recruiter_legibility",
+        "narrative_burden",
+        "funnel_friction",
     ),
     "practical_pursue_subscores": _fours(
-        "remote_quality", "compensation_viability", "growth_value", "time_to_offer",
-        "company_reputation", "cultural_signals", "posting_legitimacy_score",
+        "remote_quality",
+        "compensation_viability",
+        "growth_value",
+        "time_to_offer",
+        "company_reputation",
+        "cultural_signals",
+        "posting_legitimacy_score",
     ),
     "recommendation": "Selective pursue",
     "why": "",
@@ -117,15 +158,22 @@ def rescore(blockers=(), description=None, **kwargs):
 
 class TestRescore(unittest.TestCase):
     def test_physical_blocker_forces_skip(self):
-        ev = rescore(description="Must lift up to 50 pounds.", work_constraints_settings=LIMITS)
+        ev = rescore(
+            description="Must lift up to 50 pounds.", work_constraints_settings=LIMITS
+        )
         self.assertEqual(ev["recommendation"], "Skip")
         self.assertEqual(ev["hard_blockers"][0]["category"], "physical_demands")
 
     def test_rescoring_twice_does_not_duplicate_the_blocker(self):
-        once = rescore(description="Must lift up to 50 pounds.", work_constraints_settings=LIMITS)
+        once = rescore(
+            description="Must lift up to 50 pounds.", work_constraints_settings=LIMITS
+        )
         twice = orchestrator.rescore_evaluation_with_location(
-            once, radius_miles=5.0, posting_age_days=0,
-            description="Must lift up to 50 pounds.", work_constraints_settings=LIMITS,
+            once,
+            radius_miles=5.0,
+            posting_age_days=0,
+            description="Must lift up to 50 pounds.",
+            work_constraints_settings=LIMITS,
         )
         self.assertEqual(len(twice["hard_blockers"]), 1)
 
@@ -136,33 +184,62 @@ class TestRescore(unittest.TestCase):
     def test_phone_penalty_lowers_the_composite(self):
         text = "Handle a high volume of inbound calls."
         plain = rescore(description=text)["composite_score"]
-        limited = rescore(description=text, work_constraints_settings=LIMITS)["composite_score"]
+        limited = rescore(description=text, work_constraints_settings=LIMITS)[
+            "composite_score"
+        ]
         self.assertAlmostEqual(plain - limited, 0.75, places=2)
 
     def test_onsite_stress_counts_double(self):
         text = "Join our fast-paced environment and meet or exceed quotas."
-        remote = rescore(description=text, work_constraints_settings=LIMITS, posting_workplace="remote")
-        onsite = rescore(description=text, work_constraints_settings=LIMITS, posting_workplace="onsite")
-        self.assertAlmostEqual(remote["composite_score"] - onsite["composite_score"], 0.5, places=2)
+        remote = rescore(
+            description=text,
+            work_constraints_settings=LIMITS,
+            posting_workplace="remote",
+        )
+        onsite = rescore(
+            description=text,
+            work_constraints_settings=LIMITS,
+            posting_workplace="onsite",
+        )
+        self.assertAlmostEqual(
+            remote["composite_score"] - onsite["composite_score"], 0.5, places=2
+        )
 
     def test_title_as_blocker_is_dropped(self):
-        ev = rescore([{"text": "Retail Sales Associate", "category": "other"}], job_title="Retail  sales associate")
+        ev = rescore(
+            [{"text": "Retail Sales Associate", "category": "other"}],
+            job_title="Retail  sales associate",
+        )
         self.assertNotEqual(ev["recommendation"], "Skip")
         self.assertEqual(ev["hard_blockers"], [])
 
     def test_over_qualified_in_any_category_is_dropped(self):
-        ev = rescore([{"text": "Store associate", "category": "other", "direction": "over_qualified"}])
+        ev = rescore(
+            [
+                {
+                    "text": "Store associate",
+                    "category": "other",
+                    "direction": "over_qualified",
+                }
+            ]
+        )
         self.assertNotEqual(ev["recommendation"], "Skip")
 
     def test_real_other_blocker_still_skips(self):
-        ev = rescore([{"text": "This position is unpaid", "category": "other"}], job_title="Intern")
+        ev = rescore(
+            [{"text": "This position is unpaid", "category": "other"}],
+            job_title="Intern",
+        )
         self.assertEqual(ev["recommendation"], "Skip")
 
 
 ROLES = {
     "situational_min_bullets": 2,
     "roles": {
-        "Front Office Temp Work": {"bank_tag": "Temp", "trigger_keywords": ["receptionist", "office assistant"]},
+        "Front Office Temp Work": {
+            "bank_tag": "Temp",
+            "trigger_keywords": ["receptionist", "office assistant"],
+        },
     },
 }
 
@@ -175,11 +252,18 @@ class TestSituationalTrackContext(unittest.TestCase):
         self.assertIn("Front Office Temp Work", block)
 
     def test_body_only_match_does_not(self):
-        jd = json.dumps({"job_title": "Marketing Manager", "description": "Work with our receptionist."})
+        jd = json.dumps(
+            {
+                "job_title": "Marketing Manager",
+                "description": "Work with our receptionist.",
+            }
+        )
         self.assertEqual(orchestrator.build_situational_track_context(jd, ROLES), "")
 
     def test_plain_text_jd_does_not(self):
-        self.assertEqual(orchestrator.build_situational_track_context("Receptionist", ROLES), "")
+        self.assertEqual(
+            orchestrator.build_situational_track_context("Receptionist", ROLES), ""
+        )
 
 
 class TestSettingsReader(unittest.TestCase):
@@ -187,7 +271,9 @@ class TestSettingsReader(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "scan_filters.yml")
             with open(path, "w") as f:
-                yaml.safe_dump({"work_constraints": {"max_lift_lbs": 25, "bogus": 1}}, f)
+                yaml.safe_dump(
+                    {"work_constraints": {"max_lift_lbs": 25, "bogus": 1}}, f
+                )
             settings = content_settings.read_work_constraints(path)
         self.assertEqual(settings["max_lift_lbs"], 25)
         self.assertNotIn("bogus", settings)
@@ -198,7 +284,11 @@ class TestSettingsReader(unittest.TestCase):
             path = os.path.join(tmp, "scan_filters.yml")
             with open(path, "w") as f:
                 yaml.safe_dump({"languages": ["en"]}, f)
-            self.assertFalse(work_constraints.is_enabled(content_settings.read_work_constraints(path)))
+            self.assertFalse(
+                work_constraints.is_enabled(
+                    content_settings.read_work_constraints(path)
+                )
+            )
 
 
 if __name__ == "__main__":

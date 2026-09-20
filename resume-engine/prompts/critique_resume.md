@@ -211,11 +211,16 @@ TOP 3 RECOMMENDATIONS
 Use this candidate's `voice_calibration_example` (in profile.yml, provided
 in your knowledge base context) as the calibration anchor for judging
 whether a section reads as distinctive/flat, and how much personality is
-appropriate per section. `voice-anchors.md`, also in your knowledge base
-context, has more of these -- its `>` blockquoted lines are real verbatim
-quotes from this candidate and are a richer source of the same signal.
-Contrast either against these two illustrative extremes to judge where a
-given section falls:
+appropriate per section. When `voice-favorites.md` is present in the
+knowledge base context, it is the richer anchor: verbatim summaries from
+resumes this candidate wrote, sent, and liked -- the standard for how this
+candidate sounds at their best (first person, warm, rhythm over symmetry,
+personality welcome). When it is absent, judge by the general "human,
+reflective, quietly compelling" register and the candidate's own
+`voice_calibration_example`. `voice-anchors.md`, also in your knowledge
+base context, has more verbatim quotes from real past answers. Contrast
+these against these two illustrative extremes to judge where a given
+section falls:
 
 **Contrast examples (same underlying idea, different execution):**
 - Generic/Professional: "I'm writing to express my interest in the role."
@@ -228,12 +233,16 @@ given section falls:
 
 **Sparkle calibration by section (dial personality up or down, don't
 apply one flat level everywhere):**
-- Resume Summary: keep sparkle low, structure high -- one standout phrase
-  is the ceiling, not a target to exceed.
+- Resume Summary: when voice-favorites.md is present, this candidate's own
+  favorites are warm, first-person, and personality-forward -- judge the
+  Summary against THOSE, not against generic formality. A summary flatter
+  than their real voice is a flat_sections finding, not a safe default.
+  Without that file, one standout phrase is the ceiling.
 - Cover letter: warmer and more room for story-driven phrasing than a
   resume summary.
-- Corporate/formal-toned JDs: subtle sparkle only -- one voice-y line is
-  enough; match the JD's own register first.
+- Corporate/formal-toned JDs: keep the candidate's voice but let the JD's
+  own register set the jargon level; voice lives in rhythm and concrete
+  detail, not in borrowed buzzwords.
 
 ---
 

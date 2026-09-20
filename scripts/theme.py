@@ -109,6 +109,7 @@ def score_style(score) -> str:
     color = score_color(score)
     return f"fg:{color}" if color == MUTED else f"fg:{color} bold"
 
+
 # Font Awesome glyphs (Private Use Area code points Nerd Fonts patch in
 # verbatim under the nf-fa-* names) -- this is the default experience.
 _NERD_ICONS = {

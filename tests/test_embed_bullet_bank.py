@@ -59,8 +59,12 @@ class TestBackupEmbeddingModel(unittest.TestCase):
         mock_post.return_value = MagicMock(
             status_code=200, json=lambda: {"embeddings": [{"values": [0.0]}]}
         )
-        embed_bullet_bank.embed_batch(["one"], model=embed_bullet_bank.BACKUP_EMBED_MODEL)
-        self.assertIn("gemini-embedding-001:batchEmbedContents", mock_post.call_args.args[0])
+        embed_bullet_bank.embed_batch(
+            ["one"], model=embed_bullet_bank.BACKUP_EMBED_MODEL
+        )
+        self.assertIn(
+            "gemini-embedding-001:batchEmbedContents", mock_post.call_args.args[0]
+        )
         self.assertEqual(
             mock_post.call_args.kwargs["json"]["requests"][0]["model"],
             "models/gemini-embedding-001",
@@ -76,7 +80,9 @@ class TestBackupEmbeddingModel(unittest.TestCase):
 
     def test_each_model_keeps_its_own_index_files(self):
         primary = embed_bullet_bank.index_paths("/kb")
-        backup = embed_bullet_bank.index_paths("/kb", embed_bullet_bank.BACKUP_EMBED_MODEL)
+        backup = embed_bullet_bank.index_paths(
+            "/kb", embed_bullet_bank.BACKUP_EMBED_MODEL
+        )
         self.assertEqual(os.path.basename(primary[0]), "bullet_vectors_ge2_d768.npy")
         self.assertEqual(os.path.basename(backup[0]), "bullet_vectors_ge1_d768.npy")
         self.assertEqual(len(set(primary) & set(backup)), 0)
@@ -95,7 +101,8 @@ class TestCliBuildsBothIndexes(unittest.TestCase):
         code, models = self._run([])
         self.assertEqual(code, 0)
         self.assertEqual(
-            models, [embed_bullet_bank.EMBED_MODEL, embed_bullet_bank.BACKUP_EMBED_MODEL]
+            models,
+            [embed_bullet_bank.EMBED_MODEL, embed_bullet_bank.BACKUP_EMBED_MODEL],
         )
 
     def test_primary_only_skips_the_backup(self):
