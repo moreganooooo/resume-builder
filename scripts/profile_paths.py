@@ -395,6 +395,8 @@ def fixed_content_module(profile: str | None = None):
             "(or `resume bootstrap`) to set this profile up."
         )
     spec = importlib.util.spec_from_file_location(f"fixed_content_{name}", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load spec for {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     _fill_contact_info_from_profile_yaml(module, name)

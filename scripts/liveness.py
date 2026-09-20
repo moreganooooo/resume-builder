@@ -579,6 +579,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                 }
                 with _resolve_activity(activity) as resolved_activity:
                     resolved_activity.start_source(len(candidates), label="Checking")
+                    assert proc.stderr is not None
                     for line in proc.stderr:
                         stripped = line.rstrip()
                         event = None

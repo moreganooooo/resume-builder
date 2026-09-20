@@ -515,9 +515,9 @@ def _body_text(message: email.message.Message, max_chars: int = 4000) -> str:
             continue
         charset = part.get_content_charset() or "utf-8"
         try:
-            text = payload.decode(charset, errors="replace")
+            text = payload.decode(charset, errors="replace")  # type: ignore[union-attr]
         except (LookupError, UnicodeDecodeError):
-            text = payload.decode("utf-8", errors="replace")
+            text = payload.decode("utf-8", errors="replace")  # type: ignore[union-attr]
 
         if part.get_content_type() == "text/plain":
             parts.append(text)
