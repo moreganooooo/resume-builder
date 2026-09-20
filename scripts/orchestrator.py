@@ -1465,7 +1465,7 @@ def auto_fix_duplicate_opening_verbs(
 
 
 def auto_fix_experience_order(
-    resume_data: dict, role_roster: list[str] = None
+    resume_data: dict, role_roster: list[str] | None = None
 ) -> tuple[dict, bool]:
     """Deterministically restores EXPERIENCE reverse-chronological order from role_roster."""
     if not role_roster:
@@ -1716,7 +1716,9 @@ def _label_tokens(label: str) -> set:
 _LEDGER_FORM_MAX_CHARS = 45
 
 
-def _resolve_verified_skill(keyword: str, ledger_names: list, cv_groups: dict) -> tuple:
+def _resolve_verified_skill(
+    keyword: str, ledger_names: list, cv_groups: dict
+) -> tuple | None:
     """Returns (render_forms, cv_label) for a keyword the candidate can be
     shown to already have, else None.
 
@@ -1813,7 +1815,7 @@ def _place_verified_skill(
     cv_groups: dict,
     max_chars: int,
     wrap_min: int,
-) -> list:
+) -> list | None:
     """Returns a new SKILLS list with `form` placed under `label`, or None
     when it cannot be placed legally."""
     new_lines = list(lines)
@@ -2399,10 +2401,10 @@ def repair_violations_surgically(
     resume_data: dict,
     violations: list[str],
     style_rules: dict,
-    role_roster: list[str] = None,
-    role_bullet_minimums: dict[str, int] = None,
-    bullet_tuples: list[tuple[str, str, str]] = None,
-    role_bullet_maximums: dict[str, int] = None,
+    role_roster: list[str] | None = None,
+    role_bullet_minimums: dict[str, int] | None = None,
+    bullet_tuples: list[tuple[str, str, str]] | None = None,
+    role_bullet_maximums: dict[str, int] | None = None,
     role_metadata: dict | None = None,
 ) -> tuple[dict, list[str]]:
     """Mutates only the specific violating fields in-place, avoiding full-document resynthesis."""
@@ -4282,7 +4284,7 @@ def rescore_evaluation_with_location(
             location_filter.ONSITE,
             location_filter.HYBRID,
         ):
-            for key, default in (
+            for key, default in (  # type: ignore[assignment]
                 (
                     "stress_signal_penalty_per_category",
                     STRESS_SIGNAL_PENALTY_PER_CATEGORY,
@@ -5641,7 +5643,7 @@ class ResumeEngine:
         self,
         bullet_tuples: List[Tuple[str, str, str]],
         static_prefix: str,
-        resume_from: List[str] = None,
+        resume_from: List[str] | None = None,
         on_bullet_complete=None,
         vocabulary_substitutions: list | None = None,
         order_out: list | None = None,

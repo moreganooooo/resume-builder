@@ -104,6 +104,8 @@ def _unwrap_image_pdf(file_bytes: bytes) -> tuple[bytes, str] | None:
         if len(images) != 1:
             return None
         buf = io.BytesIO()
+        if images[0].image is None:
+            return None
         images[0].image.convert("RGB").save(buf, format="PNG")
         return buf.getvalue(), "image/png"
     except Exception:

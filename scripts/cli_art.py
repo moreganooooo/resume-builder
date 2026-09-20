@@ -2680,8 +2680,8 @@ def render_sparkle_celebration(
 
 
 def render_analytics_report(
-    platform_stats: list[dict] = None,
-    company_stats: list[dict] = None,
+    platform_stats: list[dict] | None = None,
+    company_stats: list[dict] | None = None,
     scatter_stats: dict | None = None,
     heatmap_stats: dict | None = None,
 ) -> None:

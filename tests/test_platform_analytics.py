@@ -57,7 +57,7 @@ class TestPlatformAnalyticsIsolatedBase(unittest.TestCase):
     ):
         import db
 
-        metadata = {}
+        metadata: dict[str, str | dict[str, float | int] | list] = {}
         if platform is not None:
             metadata["source_platform"] = platform
         if coverage_score is not None:

@@ -365,7 +365,7 @@ def _generate_from_upload(path: str, system_prompt: str, response_schema) -> str
             uploaded = client.files.upload(file=path)
             response = client.models.generate_content(
                 model=UPLOAD_MODEL,
-                contents=[uploaded, "Extract the requested information."],
+                contents=[uploaded, "Extract the requested information."],  # type: ignore[arg-type]
                 config=config,
             )
         except genai_errors.APIError as e:
@@ -513,6 +513,7 @@ def classify_document_type(
         return "other"
 
     if text is None:
+        assert upload_path is not None
         raw = _generate_from_upload(
             upload_path, _CLASSIFY_PROMPT, DocumentClassification
         )
@@ -1094,23 +1095,23 @@ def extract_ledger_entries_chunked(
     for chunk in chunks:
         result = extract_ledger_entries(chunk)
         for m in result.metrics:
-            key = (
+            metric_key = (
                 m.label.strip().lower(),
                 m.value.strip().lower(),
                 m.employer.strip().lower(),
             )
-            if key not in seen_metrics:
-                seen_metrics.add(key)
+            if metric_key not in seen_metrics:
+                seen_metrics.add(metric_key)
                 metrics.append(m)
         for t in result.tools:
-            key = (t.name.strip().lower(), t.employer.strip().lower())
-            if key not in seen_tools:
-                seen_tools.add(key)
+            tool_key = (t.name.strip().lower(), t.employer.strip().lower())
+            if tool_key not in seen_tools:
+                seen_tools.add(tool_key)
                 tools.append(t)
         for p in result.projects:
-            key = (p.name.strip().lower(), p.employer.strip().lower())
-            if key not in seen_projects:
-                seen_projects.add(key)
+            project_key = (p.name.strip().lower(), p.employer.strip().lower())
+            if project_key not in seen_projects:
+                seen_projects.add(project_key)
                 projects.append(p)
 
     return LedgerExtraction(metrics=metrics, tools=tools, projects=projects)
