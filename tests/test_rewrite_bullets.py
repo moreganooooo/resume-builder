@@ -261,9 +261,6 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
         cls.addClassCleanup(cls._persona_sandbox.__exit__, None, None, None)
 
         cls.kb = KnowledgeBase()
-        if not cls.kb.static_prefix:
-            cls.kb.static_prefix = "STATIC PREFIX " * 20
-            cls.kb.gemma_static_prefix = "GEMMA PREFIX"
         # Always install the fixture, never "only if the real KB is empty".
         # These tests assert employer SCOPING -- which projects reach which
         # bullet -- so they have to control the project list outright. The
@@ -272,6 +269,7 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
         # verified_projects.json happened to be missing an "Inside Sales
         # Team" entry. Repopulating the ledger broke them, which is the
         # coupling itself, not a regression in the scoping logic.
+        cls.kb.static_prefix = "STATIC PREFIX " * 100
         cls.kb.projects_entries = [
             {
                 "employer": "Treering Yearbooks",
@@ -295,7 +293,7 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
             {"employer": "Element 8 / Strategy LLC", "name": "VexbinPlatform"},
         ]
         cls.kb.facts_entries = [
-            {"label": f"Fact {i}", "claim": f"claim {i}", "confidence": "High"}
+            {"label": f"F{i}", "claim": f"c{i}", "confidence": "High"}
             for i in range(MAX_GEMMA_FILTER_ROWS + 3)
         ]
         cls.kb.voice_anchors = ""
