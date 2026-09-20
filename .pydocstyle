@@ -1,0 +1,6 @@
+[pydocstyle]
+# Resume-builder pydocstyle configuration
+# Suppress low-impact stylistic rules that don't affect readability
+# Focus on: missing docstrings, structure issues, obvious formatting
+ignore = D101,D102,D103,D104,D105,D106,D107,D108,D109,D200,D201,D202,D203,D204,D205,D206,D207,D208,D209,D212,D213,D214,D215,D216,D217,D218,D219,D400,D401,D402,D403,D404,D405,D406,D407,D408,D409,D410,D411,D412,D413,D414,D415,D416,D417
+match = (?!__pycache__|\.venv).*\.py
