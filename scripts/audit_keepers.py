@@ -1208,7 +1208,7 @@ def stage4_auto_rewrite(
         # keeper audit were always recorded with cluster_id="", so Stage
         # 3's manual-attempt exclusion could never match them and they
         # kept re-queuing every run).
-        source_cluster_id = ""
+        source_cluster_id: int | str = ""
         raw_cluster_id = row.get("cluster_id")
         if raw_cluster_id is None or pd.isna(raw_cluster_id):
             raw_cluster_id = row.get("source_cluster_id")

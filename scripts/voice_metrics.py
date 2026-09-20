@@ -218,7 +218,7 @@ def analyze_voice_metrics(
     # 3. Consecutive sentence opener repetition
     opener_issues = detect_consecutive_opener_repetitions(
         all_sentences,
-        max_consecutive=thresholds["max_consecutive_same_opener"],
+        max_consecutive=int(thresholds["max_consecutive_same_opener"]),
     )
     for issue in opener_issues:
         violations.append(
