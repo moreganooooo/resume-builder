@@ -218,7 +218,7 @@ def extract_jd_from_image(path: str, engine=None) -> dict:
     return job
 
 
-def ingest_one(path: str, profile: str = None, engine=None) -> str | None:
+def ingest_one(path: str, profile: str | None = None, engine=None) -> str | None:
     """Converts one image/PDF into a JSON JD file in the given (or
     active) profile's jds/ directory, deletes the source file, and
     returns the new JD's path -- or None on failure, leaving the source

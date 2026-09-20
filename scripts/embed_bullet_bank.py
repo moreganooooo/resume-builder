@@ -90,7 +90,7 @@ CHECKPOINT_PATH = os.path.join(
 )
 
 
-def index_paths(kb_dir: str, model: str = None) -> tuple:
+def index_paths(kb_dir: str, model: str | None = None) -> tuple:
     """(npy, meta, checkpoint) paths for `model`'s bullet-bank index.
 
     Vectors from different embedding models live in different spaces, so
@@ -102,7 +102,9 @@ def index_paths(kb_dir: str, model: str = None) -> tuple:
     return f"{base}.npy", f"{base}.meta", f"{base}.checkpoint.npz"
 
 
-def backup_index_for(kb_dir: str, bullets_sha_value: str = None, n_rows: int = None):
+def backup_index_for(
+    kb_dir: str, bullets_sha_value: str | None = None, n_rows: int | None = None
+):
     """The backup model's bullet-bank matrix, or None when it is missing or
     was built from a different bank (content hash / row count). A query
     embedded with BACKUP_EMBED_MODEL may only ever be compared against this."""
@@ -137,7 +139,9 @@ def index_is_current(npy_path: str, meta_path: str, sha: str, n_rows: int) -> bo
     return meta.get("bullets_sha") == sha and meta.get("rows") == n_rows
 
 
-def embed_batch(texts: list, model: str = None, max_retries: int = None) -> list:
+def embed_batch(
+    texts: list, model: str | None = None, max_retries: int | None = None
+) -> list:
     """Call batchEmbedContents for a list of strings. Returns list of float lists.
 
     `model` defaults to EMBED_MODEL; BACKUP_EMBED_MODEL has its own quota and
@@ -248,7 +252,7 @@ def save_checkpoint(vectors: list, next_index: int, bullets_sha_value: str):
     )
 
 
-def main(model: str = None):
+def main(model: str | None = None):
     # A backup-model build writes its own ge1 index (and checkpoint), never
     # the primary ge2 files -- see index_paths().
     global NPY_PATH, META_PATH, CHECKPOINT_PATH
@@ -359,7 +363,7 @@ def main(model: str = None):
     )
 
 
-def cli(argv: list = None) -> int:
+def cli(argv: list | None = None) -> int:
     """Command-line entry point -- what the Bullet Bank menu's "Embed" stage
     and bootstrap_bullet_bank's pipeline both run. By default it builds the
     primary index and then the backup model's index, so the backup never

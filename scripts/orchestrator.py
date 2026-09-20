@@ -561,9 +561,9 @@ def build_rewrite_prompt(
     weaknesses: str,
     kb_context: str,
     minimal_schema: bool = False,
-    vocabulary_substitutions: list = None,
-    already_written_bullets: list = None,
-    other_cv_bullets: list = None,
+    vocabulary_substitutions: list | None = None,
+    already_written_bullets: list | None = None,
+    other_cv_bullets: list | None = None,
 ) -> str:
     persona = persona_context(tags)
     weakness_text = (
@@ -1013,7 +1013,7 @@ def semantic_skill_matches(jd_skill_names) -> list:
 
 
 def build_verified_skills_context(
-    jd_text: str = "", jd_skill_names: list = None
+    jd_text: str = "", jd_skill_names: list | None = None
 ) -> str:
     """The candidate's own confirmed tools/skills for evaluate_fit()'s user
     content, or "" when there is nothing to say.
@@ -2403,7 +2403,7 @@ def repair_violations_surgically(
     role_bullet_minimums: dict[str, int] = None,
     bullet_tuples: list[tuple[str, str, str]] = None,
     role_bullet_maximums: dict[str, int] = None,
-    role_metadata: dict = None,
+    role_metadata: dict | None = None,
 ) -> tuple[dict, list[str]]:
     """Mutates only the specific violating fields in-place, avoiding full-document resynthesis."""
     current_data = copy.deepcopy(resume_data)
@@ -3193,7 +3193,7 @@ def find_unverified_jd_skill_gaps(
 
 
 def confirm_jd_skill_gaps_interactively(
-    jd_keywords: dict, checkpoint: dict = None, job_key: str = None
+    jd_keywords: dict, checkpoint: dict | None = None, job_key: str | None = None
 ) -> list[str]:
     """
     Prompts the user interactively (JobRight-style) to verify candidate tools/skills
@@ -3660,9 +3660,9 @@ LEGITIMACY_SUSPICIOUS_PENALTY = 1.50
 
 
 def legitimacy_penalty(
-    posting_legitimacy: str = None,
-    caution_penalty: float = None,
-    suspicious_penalty: float = None,
+    posting_legitimacy: str | None = None,
+    caution_penalty: float | None = None,
+    suspicious_penalty: float | None = None,
 ) -> float:
     """Composite points a posting_legitimacy verdict costs. None or "High
     Confidence" costs nothing."""
@@ -3701,7 +3701,7 @@ def compute_practical_pursue_score(practical_pursue_subscores: dict) -> float:
 
 
 def calibrate_commute_quality(
-    distance_miles: float = None, radius_miles: float = 5.0
+    distance_miles: float | None = None, radius_miles: float = 5.0
 ) -> float:
     """Scores commute convenience on a 1-5 scale for local jobs within radius:
     0.0 - 1.0 mi -> 5.0 (walking/ultra-local)
@@ -3716,19 +3716,19 @@ def fit_composite_score(
     fit_score: float,
     interview_odds_score: float,
     practical_pursue_score: float,
-    posting_age_days: int = None,
-    distance_miles: float = None,
-    radius_miles: float = None,
-    stress_signal_count: int = None,
-    capability_gap_count: int = None,
-    stress_signal_penalty_per_category: float = None,
-    stress_signal_max_penalty: float = None,
-    low_stress_bonus: float = None,
-    stretch_gap_penalty_per_item: float = None,
-    stretch_gap_max_penalty: float = None,
-    posting_legitimacy: str = None,
-    legitimacy_caution_penalty: float = None,
-    legitimacy_suspicious_penalty: float = None,
+    posting_age_days: int | None = None,
+    distance_miles: float | None = None,
+    radius_miles: float | None = None,
+    stress_signal_count: int | None = None,
+    capability_gap_count: int | None = None,
+    stress_signal_penalty_per_category: float | None = None,
+    stress_signal_max_penalty: float | None = None,
+    low_stress_bonus: float | None = None,
+    stretch_gap_penalty_per_item: float | None = None,
+    stretch_gap_max_penalty: float | None = None,
+    posting_legitimacy: str | None = None,
+    legitimacy_caution_penalty: float | None = None,
+    legitimacy_suspicious_penalty: float | None = None,
     constraint_penalty: float = 0.0,
 ) -> float:
     """Weighted 1-5 blend of the three independent layer scores, per
@@ -3943,7 +3943,9 @@ def is_spurious_commute_blocker(blocker) -> bool:
     return False
 
 
-def build_situational_track_context(jd_text: str, roles_data: dict = None) -> str:
+def build_situational_track_context(
+    jd_text: str, roles_data: dict | None = None
+) -> str:
     """Tells the evaluator a posting belongs to one of the candidate's
     situational tracks (situational_roles.yaml) -- matched on the TITLE,
     since those triggers ("administrative support", "data entry") appear in
@@ -4062,17 +4064,17 @@ def city_level_distance(location, loc_settings: dict) -> float | None:
 
 def rescore_evaluation_with_location(
     evaluation: dict,
-    distance_miles: float = None,
+    distance_miles: float | None = None,
     radius_miles: float = 5.0,
     workplace_mode: str = "any",
     remote_required: bool = False,
-    posting_age_days: int = None,
-    description: str = None,
-    scoring_weights: dict = None,
-    role_track_settings: dict = None,
-    work_constraints_settings: dict = None,
-    posting_workplace: str = None,
-    job_title: str = None,
+    posting_age_days: int | None = None,
+    description: str | None = None,
+    scoring_weights: dict | None = None,
+    role_track_settings: dict | None = None,
+    work_constraints_settings: dict | None = None,
+    posting_workplace: str | None = None,
+    job_title: str | None = None,
 ) -> dict:
     """Recalculates an evaluation dict incorporating local commute distance:
     1. Calibrates practical_pursue_subscores['remote_quality'] (closer = higher).
@@ -5641,8 +5643,8 @@ class ResumeEngine:
         static_prefix: str,
         resume_from: List[str] = None,
         on_bullet_complete=None,
-        vocabulary_substitutions: list = None,
-        order_out: list = None,
+        vocabulary_substitutions: list | None = None,
+        order_out: list | None = None,
     ) -> List[str]:
         """
         Skeptical Editor audit loop.
@@ -5884,7 +5886,7 @@ class ResumeEngine:
                 level=cli_art.NORMAL,
             )
 
-        def _record(refined_bullet: str, critique_data: dict = None) -> None:
+        def _record(refined_bullet: str, critique_data: dict | None = None) -> None:
             refined_bullets.append(refined_bullet)
             bullet_critique_list.append(critique_data)
             if on_bullet_complete:
@@ -6191,7 +6193,7 @@ class ResumeEngine:
         self,
         jd_text: str,
         master_resume: dict,
-        extra_company_minimums: dict = None,
+        extra_company_minimums: dict | None = None,
     ) -> List[Tuple[str, str, str]]:
         """
         Semantic + gem-aware retrieval from bullet-bank-keepers-audited.csv, with
@@ -6579,7 +6581,7 @@ class ResumeEngine:
         return self.kb_dir if os.path.exists(own) else self.scoring_dir
 
     def build_fit_evaluation_context(
-        self, jd_text: str, jd_skill_names: list = None, commute_block: str = ""
+        self, jd_text: str, jd_skill_names: list | None = None, commute_block: str = ""
     ) -> str:
         """
         Builds evaluate_fit()'s user-content block: the candidate first, then
@@ -7450,8 +7452,8 @@ class ResumeEngine:
         self,
         jd_path: str,
         master_resume: dict,
-        output_filename: str = None,
-        job_key: str = None,
+        output_filename: str | None = None,
+        job_key: str | None = None,
         interactive: bool = False,
         *,
         skip_company_research: bool = False,
@@ -9312,9 +9314,9 @@ class ResumeEngine:
     def build_application_package(
         self,
         jd_path: str,
-        master_resume: dict = None,
-        output_filename: str = None,
-        referral: str = None,
+        master_resume: dict | None = None,
+        output_filename: str | None = None,
+        referral: str | None = None,
         force: bool = False,
         skip_liveness: bool = False,
         skip_fit: bool = False,

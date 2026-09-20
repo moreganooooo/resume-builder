@@ -695,7 +695,7 @@ def set_voice_calibration_example(value: str) -> None:
 # every one of profile.yml's hand-written comments).
 
 
-def _get_profile_scalar(field: str, parent: str = None) -> str:
+def _get_profile_scalar(field: str, parent: str | None = None) -> str:
     if not os.path.exists(PROFILE_YML_PATH):
         return ""
     with open(PROFILE_YML_PATH, "r", encoding="utf-8") as f:
@@ -1023,9 +1023,9 @@ def write_profile_yml(
     identity: dict,
     recommendations: list,
     taxonomy,
-    linkedin_search_queries: list = None,
+    linkedin_search_queries: list | None = None,
     voice_calibration_example: str = "",
-    deal_breakers: list = None,
+    deal_breakers: list | None = None,
 ) -> bool:
     """Writes profile.yml. Unlike write_cv_md()/write_background_guide()/
     write_voice_anchors(), this has no accept/regenerate/skip preview loop
@@ -1484,7 +1484,7 @@ def _polish_bullet(
     rewrite_system_gemma: str,
     score_system: str,
     dry_run: bool = False,
-    checkpoint: dict = None,
+    checkpoint: dict | None = None,
 ) -> dict:
     """Returns {"final_bullet": ..., "rewrite_status": "KEEP"|"MANUAL"}.
     Reuses a prior run's result from checkpoint (keyed by company+bullet
@@ -1848,7 +1848,7 @@ def _collect_secret_now_or_later(
     prompt_label: str,
     instructions: str,
     env_file: str,
-    shell_default: str = None,
+    shell_default: str | None = None,
 ) -> bool:
     """Walks the user through one .env var: shows instructions, offers to
     enter it right now (written straight to this profile's own .env via
@@ -2395,7 +2395,7 @@ ALL_PROFILE_TARGETS = (
 )
 
 
-def run_profile_setup(dry_run: bool = False, targets: set = None) -> dict:
+def run_profile_setup(dry_run: bool = False, targets: set | None = None) -> dict:
     """Runs the identity/profile collection steps and writes whichever of
     profile.yml, cv.md, and the background/voice guide are in `targets`
     (default: all three, i.e. the original monolithic behavior). Identity

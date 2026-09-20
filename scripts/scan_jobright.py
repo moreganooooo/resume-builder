@@ -73,7 +73,7 @@ def _jobright_compensation(job_result: dict) -> dict | None:
     return {"min": low, "max": high, "interval": interval}
 
 
-def fetch_jobright_jobs(max_position: int = None, activity=None) -> list:
+def fetch_jobright_jobs(max_position: int | None = None, activity=None) -> list:
     """Fetches jobs from the JobRight API with pagination, filters out
     anything scoring below MIN_MATCH_SCORE, and returns a list of job dicts
     (same shape as job_automater's, which is already what jd_manager.py

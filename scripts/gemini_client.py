@@ -164,7 +164,7 @@ def generate_grounded(
     model: str,
     prompt: str,
     tools: list,
-    tool_config: dict = None,
+    tool_config: dict | None = None,
     max_retries: int = 3,
 ) -> tuple[str | None, dict]:
     """One grounded call, returning (text, groundingMetadata).
@@ -737,16 +737,16 @@ class GeminiClient:
         system_instruction: str,
         contents: str,
         response_schema=None,
-        extra_schema_properties: dict = None,
-        extra_required: list = None,
+        extra_schema_properties: dict | None = None,
+        extra_required: list | None = None,
         temperature: float = 0.0,
         max_retries: int = 6,
-        max_output_tokens: int = None,
+        max_output_tokens: int | None = None,
         service_tier: str = "standard",
         model_fallback: bool = True,
-        tools: list = None,
+        tools: list | None = None,
         inline_file: tuple[bytes, str] = None,
-        fallbacks: dict = None,
+        fallbacks: dict | None = None,
     ) -> tuple[str | None, dict]:
         # fallbacks overrides MODEL_FALLBACKS for an ungrounded call -- e.g.
         # SCORING_FALLBACKS, which keeps a scoring call off 3.5-flash-lite.

@@ -175,7 +175,7 @@ def _archive_copies_of(archive_fn) -> None:
 
 
 def evaluate_all_pending(
-    pending_paths: list = None,
+    pending_paths: list | None = None,
     skip_evaluated: bool = True,
     evaluated_before: str | None = None,
 ) -> list:

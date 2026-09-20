@@ -354,7 +354,7 @@ def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
     return job
 
 
-def fetch_ats_jobs(sources: list = None, activity=None) -> list:
+def fetch_ats_jobs(sources: list | None = None, activity=None) -> list:
     """Runs every enabled tracked_companies.yml entry through its
     resolved provider, plus every enabled search_queries.yml sweep query
     through websearch.mjs. `sources` is accepted for SOURCE_FETCHERS

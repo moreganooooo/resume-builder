@@ -34,7 +34,7 @@ def cosine_similarity_matrix(query_vec: np.ndarray, matrix: np.ndarray) -> np.nd
     return dot_products / (m_norms * q_norm)
 
 
-def needs_reembed(profile: str = None) -> tuple[bool, str]:
+def needs_reembed(profile: str | None = None) -> tuple[bool, str]:
     """Inspects the vector store without blocking or mutating state.
 
     Returns (is_stale: bool, reason: str).
@@ -79,7 +79,7 @@ def needs_reembed(profile: str = None) -> tuple[bool, str]:
     return False, "Embeddings are up to date"
 
 
-def reembed(blocking: bool = True, profile: str = None):
+def reembed(blocking: bool = True, profile: str | None = None):
     """Triggers bullet bank re-embedding.
 
     When blocking=True, executes synchronously.
@@ -143,7 +143,7 @@ def _ensure_embeddings_fresh(
 
 
 def search_bullet_bank(
-    jd_text: str, top_k: int = 20, profile: str = None
+    jd_text: str, top_k: int = 20, profile: str | None = None
 ) -> list[tuple[str, str, str, float]]:
     """
     RAG search over bullet bank using gemini-embedding-2.
@@ -231,7 +231,7 @@ def search_bullet_bank(
 
 
 def search_evidence_guide(
-    query: str, top_k: int = 5, profile: str = None
+    query: str, top_k: int = 5, profile: str | None = None
 ) -> list[dict]:
     """
     RAG search over evidence-guide.csv thematic career-proof clusters.
@@ -302,7 +302,7 @@ def search_evidence_guide(
 
 
 def search_behavioral_stories(
-    query: str, top_k: int = 3, profile: str = None
+    query: str, top_k: int = 3, profile: str | None = None
 ) -> list[dict]:
     """RAG search across STAR/CAR behavioral stories."""
     import evidence_bank
@@ -313,7 +313,7 @@ def search_behavioral_stories(
 
 
 def search_negotiation_levers(
-    query: str, top_k: int = 3, profile: str = None
+    query: str, top_k: int = 3, profile: str | None = None
 ) -> list[dict]:
     """RAG search across negotiation levers."""
     import evidence_bank
@@ -362,7 +362,7 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 75) -> list[str]
     return chunks
 
 
-def index_knowledge_documents(profile: str = None) -> int:
+def index_knowledge_documents(profile: str | None = None) -> int:
     """Chunks and embeds markdown/text knowledge base documents in the active profile."""
     kb_dir = profile_paths.kb_dir(profile)
     chunks_meta_path = os.path.join(kb_dir, "doc_chunks_ge2.json")
@@ -414,7 +414,7 @@ def index_knowledge_documents(profile: str = None) -> int:
 
 
 def search_document_chunks(
-    query: str, top_k: int = 5, profile: str = None
+    query: str, top_k: int = 5, profile: str | None = None
 ) -> list[dict]:
     """Semantic vector RAG search across indexed knowledge base document chunks."""
     kb_dir = profile_paths.kb_dir(profile)
@@ -477,7 +477,7 @@ def query_rag(
     top_k_stories: int = 3,
     top_k_negotiation: int = 3,
     top_k_chunks: int = 5,
-    profile: str = None,
+    profile: str | None = None,
 ) -> dict:
     """
     Unified RAG retrieval query across Bullet Bank, Evidence Guide, STAR Stories, Negotiation Levers, and Document Chunks.

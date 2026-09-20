@@ -400,7 +400,7 @@ def _build_queries(job_limit: int, search_terms: list) -> list:
     return [_query(entry) for entry in search_terms]
 
 
-def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
+def fetch_linkedin_jobs(limit: int | None = None, activity=None) -> list:
     """Runs this profile's saved LinkedIn searches and returns a list of
     job dicts (same shape as job_automater's/JobRight's).
 

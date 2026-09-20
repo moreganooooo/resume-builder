@@ -845,7 +845,7 @@ def _check_role_order(resume_data: dict, role_roster: list[str]) -> list[str]:
 def _check_bullet_counts(
     resume_data: dict,
     role_bullet_minimums: dict,
-    role_bullet_maximums: dict = None,
+    role_bullet_maximums: dict | None = None,
 ) -> list[str]:
     """Each EXPERIENCE entry must meet its role's min_bullets floor, and --
     for roles that declare one -- stay at or under its max_bullets ceiling,
@@ -2478,9 +2478,9 @@ def validate(
     resume_data: dict,
     style_rules: dict,
     role_roster: list[str] = None,
-    role_bullet_minimums: dict = None,
+    role_bullet_minimums: dict | None = None,
     enforce_star: bool = False,
-    role_bullet_maximums: dict = None,
+    role_bullet_maximums: dict | None = None,
     bullet_tuples: list[tuple[str, str, str]] = None,
 ) -> list[str]:
     """role_roster and role_bullet_minimums/role_bullet_maximums/bullet_tuples

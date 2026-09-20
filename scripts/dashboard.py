@@ -61,7 +61,7 @@ def _export_jobs_to(path: str) -> None:
         json.dump(rows, f)
 
 
-def _write_jobs_export(profile: str = None) -> str:
+def _write_jobs_export(profile: str | None = None) -> str:
     """Writes picker.list_all_evaluated_jds() to a fresh temp JSON file
     and returns its path, for the Go dashboard's -jobs-path flag. Always
     a fresh snapshot, never cached -- evaluation/liveness/application
@@ -115,7 +115,7 @@ def compile_dashboard_if_needed() -> str:
         return None
 
 
-def run(profile: str = None, view: str = "", job: str = "") -> tuple[bool, str]:
+def run(profile: str | None = None, view: str = "", job: str = "") -> tuple[bool, str]:
     """Launches the dashboard TUI against `profile`'s applications.md,
     full-screen and interactive -- inherits this process's stdio (unlike
     every other subprocess call in this codebase, which captures output)

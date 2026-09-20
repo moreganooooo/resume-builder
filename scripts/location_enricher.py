@@ -440,7 +440,7 @@ def lookup_google_maps_backup(
     company: str,
     city: str,
     state: str,
-    client: Any = None,
+    client: Any | None = None,
     company_site: str = "",
 ) -> Optional[Dict[str, Any]]:
     """Step 3: a Google-Maps-grounded lookup of the employer's office in or
@@ -594,7 +594,7 @@ def _negative_cache_expired(entry: Dict[str, Any]) -> bool:
     return age_days >= _NEGATIVE_CACHE_COOLDOWN_DAYS
 
 
-def load_locations_cache(profile: str = None) -> Dict[str, Any]:
+def load_locations_cache(profile: str | None = None) -> Dict[str, Any]:
     """Loads cached company locations from profiles/<profile>/company_locations.json."""
     path = profile_paths.company_locations_cache_path(profile)
     if os.path.exists(path):
@@ -606,7 +606,7 @@ def load_locations_cache(profile: str = None) -> Dict[str, Any]:
     return {}
 
 
-def save_locations_cache(cache: Dict[str, Any], profile: str = None) -> None:
+def save_locations_cache(cache: Dict[str, Any], profile: str | None = None) -> None:
     """Saves company locations cache to profiles/<profile>/company_locations.json."""
     path = profile_paths.company_locations_cache_path(profile)
     try:
@@ -619,11 +619,11 @@ def save_locations_cache(cache: Dict[str, Any], profile: str = None) -> None:
 
 def enrich_job_location(
     job_data: Dict[str, Any],
-    profile: str = None,
+    profile: str | None = None,
     settings: Optional[Dict[str, Any]] = None,
     allow_search_backup: bool = False,
     cache: Optional[Dict[str, Any]] = None,
-    gemini_client: Any = None,
+    gemini_client: Any | None = None,
 ) -> Dict[str, Any]:
     """Main enrichment orchestrator for a single job posting.
 
@@ -824,7 +824,7 @@ def enrich_job_location(
 
 
 def enrich_profile_locations(
-    profile: str = None,
+    profile: str | None = None,
     statuses: Optional[List[str]] = None,
     allow_search_backup: bool = False,
     max_search_calls: int = 10,

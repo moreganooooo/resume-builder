@@ -354,15 +354,15 @@ def clear_active_profile() -> None:
                 pass
 
 
-def profile_root(profile: str = None) -> str:
+def profile_root(profile: str | None = None) -> str:
     return os.path.join(PROFILES_DIR, profile or active_profile())
 
 
-def kb_dir(profile: str = None) -> str:
+def kb_dir(profile: str | None = None) -> str:
     return os.path.join(profile_root(profile), "knowledge_base")
 
 
-def board_scanner_dir(profile: str = None) -> str:
+def board_scanner_dir(profile: str | None = None) -> str:
     """profiles/<name>/board_scanner/ -- tracked_companies.yml,
     search_queries.yml, and scan_filters.yml (scan_boards.py/scan_ats.py's
     config). 100% profile-specific data (Morgan's own curated target
@@ -373,16 +373,16 @@ def board_scanner_dir(profile: str = None) -> str:
     return os.path.join(profile_root(profile), "board_scanner")
 
 
-def situational_roles_path(profile: str = None) -> str:
+def situational_roles_path(profile: str | None = None) -> str:
     return os.path.join(profile_root(profile), "situational_roles.yaml")
 
 
-def company_locations_cache_path(profile: str = None) -> str:
+def company_locations_cache_path(profile: str | None = None) -> str:
     """profiles/<name>/company_locations.json -- cached geocoded employer points."""
     return os.path.join(profile_root(profile), "company_locations.json")
 
 
-def fixed_content_module(profile: str = None):
+def fixed_content_module(profile: str | None = None):
     """Dynamically imports profiles/<profile>/fixed_content.py and returns
     the loaded module object -- the per-profile replacement for a static
     `import fixed_content`."""
@@ -439,7 +439,7 @@ def _fill_contact_info_from_profile_yaml(module, profile: str) -> None:
     module.CONTACT_INFO = contact
 
 
-def profile_yaml(profile: str = None) -> dict:
+def profile_yaml(profile: str | None = None) -> dict:
     """Loads and returns profiles/<profile>/knowledge_base/profile.yml as a
     dict -- shared by any caller that just needs one or two top-level
     fields (e.g. candidate.full_name) without pulling in orchestrator.py's
@@ -452,12 +452,12 @@ def profile_yaml(profile: str = None) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def full_name(profile: str = None) -> str:
+def full_name(profile: str | None = None) -> str:
     """Reads candidate.full_name from profile.yml (e.g. "Alex Mercer")."""
     return (profile_yaml(profile).get("candidate") or {}).get("full_name", "")
 
 
-def education_achievement_slots(profile: str = None) -> list:
+def education_achievement_slots(profile: str | None = None) -> list:
     """Returns [(institution, achievement_options_dict), ...] in
     profile.yml's fixed_credentials.education order, for every entry that
     offers a pre-approved achievement-bullet choice (achievement_options:
@@ -479,7 +479,7 @@ def education_achievement_slots(profile: str = None) -> list:
     ]
 
 
-def has_design_only_credentials(profile: str = None) -> bool:
+def has_design_only_credentials(profile: str | None = None) -> bool:
     """True if profile.yml's fixed_credentials (certifications or
     education) has at least one entry marked design_only: true -- those
     are gated behind INCLUDE_DESIGN_CREDENTIALS (see tailor_resume.md)
@@ -495,7 +495,7 @@ def has_design_only_credentials(profile: str = None) -> bool:
     return any(entry.get("design_only") for entry in entries)
 
 
-def tags(profile: str = None) -> list:
+def tags(profile: str | None = None) -> list:
     """Returns profile.yml's tags: list -- each a dict with name/
     persona_description/keywords, generated once during bootstrap
     (bootstrap_extractors.generate_tag_taxonomy()) from this profile's own
@@ -511,7 +511,7 @@ def tags(profile: str = None) -> list:
     return profile_yaml(profile).get("tags") or []
 
 
-def env_path(profile: str = None) -> str:
+def env_path(profile: str | None = None) -> str:
     """Path to this profile's own .env (GEMINI_API_KEY, JOBRIGHT_COOKIE_STRING,
     etc.) -- every script's load_dotenv() call points here instead of a
     single project-root .env, so two profiles sharing one checkout can
@@ -525,7 +525,7 @@ def env_path(profile: str = None) -> str:
 SIGNATURE_EXTENSIONS = (".png", ".jpg", ".jpeg")
 
 
-def signature_path(profile: str = None) -> str | None:
+def signature_path(profile: str | None = None) -> str | None:
     """Path to this profile's own optional handwritten-style signature
     image (profiles/<name>/signature.{png,jpg,jpeg}), or None if the
     profile hasn't dropped one in -- render_coverletter() treats None as
@@ -540,19 +540,19 @@ def signature_path(profile: str = None) -> str | None:
     return None
 
 
-def jds_dir(profile: str = None) -> str:
+def jds_dir(profile: str | None = None) -> str:
     return os.path.join(JDS_ROOT, profile or active_profile())
 
 
-def output_dir(profile: str = None) -> str:
+def output_dir(profile: str | None = None) -> str:
     return os.path.join(OUTPUT_ROOT, profile or active_profile())
 
 
-def checkpoints_dir(profile: str = None) -> str:
+def checkpoints_dir(profile: str | None = None) -> str:
     return os.path.join(output_dir(profile), "checkpoints")
 
 
-def logs_dir(profile: str = None) -> str:
+def logs_dir(profile: str | None = None) -> str:
     """Per-run pipeline logs (pipeline_run_<timestamp>.log).
 
     Their own subfolder because they accumulate one file per build and
@@ -565,19 +565,19 @@ def logs_dir(profile: str = None) -> str:
     return os.path.join(output_dir(profile), "logs")
 
 
-def data_dir(profile: str = None) -> str:
+def data_dir(profile: str | None = None) -> str:
     return os.path.join(DATA_ROOT, profile or active_profile())
 
 
-def applications_md_path(profile: str = None) -> str:
+def applications_md_path(profile: str | None = None) -> str:
     return os.path.join(data_dir(profile), "applications.md")
 
 
-def tracker_csv_path(profile: str = None) -> str:
+def tracker_csv_path(profile: str | None = None) -> str:
     return os.path.join(jds_dir(profile), "jd_tracker_log.csv")
 
 
-def sync_roots(profile: str = None) -> list:
+def sync_roots(profile: str | None = None) -> list:
     """Returns [(label, path), ...] for the profile-scoped directories a
     multi-computer sync tool (Syncthing) should be pointed at -- see
     CLAUDE.md's "Multi-computer sync" section for the full design. Kept
@@ -608,7 +608,7 @@ _SYNC_STIGNORE_CONTENT = (
 )
 
 
-def write_sync_ignore_files(profile: str = None) -> None:
+def write_sync_ignore_files(profile: str | None = None) -> None:
     """Ensures every directory sync_roots() names exists and carries a
     .stignore, so a profile is ready for Syncthing to point at without
     the user hand-authoring config per profile. Called once from
@@ -623,7 +623,7 @@ def write_sync_ignore_files(profile: str = None) -> None:
                 f.write(_SYNC_STIGNORE_CONTENT)
 
 
-def kb_snapshot_dir(profile: str = None) -> str:
+def kb_snapshot_dir(profile: str | None = None) -> str:
     """profiles/<name>/knowledge_base/ has no backup or recovery path of
     its own (see B13 -- it's fully gitignored on purpose, and Syncthing
     propagates corruption rather than guarding against it), so
@@ -635,7 +635,7 @@ def kb_snapshot_dir(profile: str = None) -> str:
     return os.path.join(data_dir(profile), "kb_snapshots")
 
 
-def maintenance_log_path(profile: str = None) -> str:
+def maintenance_log_path(profile: str | None = None) -> str:
     """Where the Maintenance submenu persists "when did this task last
     run" per background/administrative task (doctor script, etc.) --
     already covered by .gitignore's existing `*_log.json` pattern, no
@@ -643,7 +643,7 @@ def maintenance_log_path(profile: str = None) -> str:
     return os.path.join(profile_root(profile), "maintenance_log.json")
 
 
-def ui_config_path(profile: str = None) -> str:
+def ui_config_path(profile: str | None = None) -> str:
     """Where per-profile terminal-UI preferences persist -- today just the
     Nerd Font vs. Unicode icon-set choice from the first-launch prompt
     (B33), so it's asked once per profile and never again. Already covered

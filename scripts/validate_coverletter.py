@@ -347,7 +347,7 @@ def validate(
     kb_corpus: str = "",
     keeper_bullets: list[str] = None,
     keeper_embs=None,
-    voice_rules: dict = None,
+    voice_rules: dict | None = None,
     keeper_embs_backup=None,
     role_title: str = "",
 ) -> list[str]:

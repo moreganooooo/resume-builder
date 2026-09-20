@@ -75,7 +75,7 @@ def _keyword_tag_counts(keywords_by_tag: dict) -> dict:
     return counts
 
 
-def score_bullet(text: str, keywords_by_tag: dict = None) -> dict:
+def score_bullet(text: str, keywords_by_tag: dict | None = None) -> dict:
     """Returns {tag: weighted_score} for every tag with at least one hit."""
     keywords_by_tag = keywords_by_tag if keywords_by_tag is not None else tag_keywords()
     keyword_tag_counts = _keyword_tag_counts(keywords_by_tag)

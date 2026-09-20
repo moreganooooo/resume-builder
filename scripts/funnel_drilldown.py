@@ -22,7 +22,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 
-def compute_funnel_metrics(profile: str = None) -> dict[str, Any]:
+def compute_funnel_metrics(profile: str | None = None) -> dict[str, Any]:
     """Computes comprehensive recruitment funnel conversion rates and bottleneck diagnostics."""
     name = profile or profile_paths.active_profile()
     conn = db.get_db(name)
@@ -125,7 +125,9 @@ def compute_funnel_metrics(profile: str = None) -> dict[str, Any]:
         conn.close()
 
 
-def render_funnel_drilldown(metrics: dict[str, Any], console: Console = None) -> None:
+def render_funnel_drilldown(
+    metrics: dict[str, Any], console: Console | None = None
+) -> None:
     """Renders visual Rich table and diagnostic analysis of the recruitment funnel."""
     c = console or cli_art.console
     stages = metrics["stages"]

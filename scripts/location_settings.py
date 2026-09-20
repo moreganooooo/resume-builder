@@ -52,13 +52,13 @@ _BLOCK_RE = re.compile(
 )
 
 
-def scan_filters_path(profile: str = None) -> str:
+def scan_filters_path(profile: str | None = None) -> str:
     """The active profile's scan_filters.yml."""
     root = profile_paths.profile_root(profile or profile_paths.active_profile())
     return os.path.join(root, "board_scanner", "scan_filters.yml")
 
 
-def read_settings(path: str = None) -> dict:
+def read_settings(path: str | None = None) -> dict:
     """Returns the `location:` block, or {} when unconfigured."""
     path = path or scan_filters_path()
     try:
@@ -96,7 +96,7 @@ def render_block(settings: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_settings(settings: dict, path: str = None) -> None:
+def write_settings(settings: dict, path: str | None = None) -> None:
     """Replaces (or inserts) the `location:` block, preserving comments."""
     path = path or scan_filters_path()
     with open(path, "r", encoding="utf-8") as handle:
@@ -118,7 +118,7 @@ def write_settings(settings: dict, path: str = None) -> None:
         handle.write(updated)
 
 
-def clear_settings(path: str = None) -> None:
+def clear_settings(path: str | None = None) -> None:
     """Removes the block entirely, returning to keyword-only filtering."""
     path = path or scan_filters_path()
     with open(path, "r", encoding="utf-8") as handle:

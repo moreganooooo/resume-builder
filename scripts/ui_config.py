@@ -18,7 +18,7 @@ DEFAULT_VIEWS = ("pipeline", "jobs", "progress")
 THEME_MODES = ("resume-builder", "catppuccin-mocha", "catppuccin-latte")
 
 
-def get_full_ui_config(profile: str = None) -> dict:
+def get_full_ui_config(profile: str | None = None) -> dict:
     """Returns the parsed ui_config.json dictionary or an empty dict if missing/invalid."""
     path = profile_paths.ui_config_path(profile)
     if not os.path.exists(path):
@@ -31,7 +31,7 @@ def get_full_ui_config(profile: str = None) -> dict:
         return {}
 
 
-def get_icon_set(profile: str = None) -> str | None:
+def get_icon_set(profile: str | None = None) -> str | None:
     """Returns "nerd"/"unicode" if this profile has already answered the
     first-launch prompt, or None if it hasn't (or the config is missing/
     unreadable -- treated the same as "never answered")."""
@@ -40,7 +40,7 @@ def get_icon_set(profile: str = None) -> str | None:
     return value if value in ICON_SETS else None
 
 
-def get_motion_preference(profile: str = None) -> str:
+def get_motion_preference(profile: str | None = None) -> str:
     """Returns 'full' or 'reduced' (defaulting to 'full' or RESUME_BUILDER_MOTION env)."""
     env_motion = os.environ.get("RESUME_BUILDER_MOTION", "").lower()
     if env_motion in MOTION_PREFERENCES:
@@ -50,7 +50,7 @@ def get_motion_preference(profile: str = None) -> str:
     return val if val in MOTION_PREFERENCES else "full"
 
 
-def get_celebrations_enabled(profile: str = None) -> bool:
+def get_celebrations_enabled(profile: str | None = None) -> bool:
     """Returns True if particle/confetti celebrations are enabled."""
     if get_motion_preference(profile) == "reduced":
         return False
@@ -58,21 +58,21 @@ def get_celebrations_enabled(profile: str = None) -> bool:
     return config.get("celebrations_enabled", True)
 
 
-def get_default_view(profile: str = None) -> str:
+def get_default_view(profile: str | None = None) -> str:
     """Returns the default landing view ('pipeline', 'jobs', 'progress')."""
     config = get_full_ui_config(profile)
     val = config.get("default_view")
     return val if val in DEFAULT_VIEWS else "pipeline"
 
 
-def get_theme_mode(profile: str = None) -> str:
+def get_theme_mode(profile: str | None = None) -> str:
     """Returns the theme mode name."""
     config = get_full_ui_config(profile)
     val = config.get("theme_mode")
     return val if val in THEME_MODES else "resume-builder"
 
 
-def save_ui_preference(key: str, value, profile: str = None) -> None:
+def save_ui_preference(key: str, value, profile: str | None = None) -> None:
     """Saves an individual UI preference to ui_config.json atomically."""
     path = profile_paths.ui_config_path(profile)
     try:
@@ -85,7 +85,7 @@ def save_ui_preference(key: str, value, profile: str = None) -> None:
         pass
 
 
-def save_icon_set(icon_set: str, profile: str = None) -> None:
+def save_icon_set(icon_set: str, profile: str | None = None) -> None:
     """Persists the first-launch icon-set choice. Never raises -- a
     failure to persist just means the prompt asks again next launch,
     which is annoying, not broken."""
