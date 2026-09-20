@@ -351,7 +351,7 @@ def file_picker(
     if start_dir:
         spec["current_directory"] = start_dir
     if allowed_extensions:
-        spec["allowed_types"] = allowed_extensions
+        spec["allowed_types"] = allowed_extensions  # type: ignore[assignment]
     try:
         data = _run_prompt(spec)
     except RuntimeError as e:

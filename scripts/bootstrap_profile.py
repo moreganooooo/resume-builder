@@ -402,10 +402,10 @@ def collect_identity(dry_run: bool = False) -> dict:
         cli_art.cli_info(f"Portfolio URL:   {result['portfolio_url'] or '(blank)'}")
         cli_art.cli_info(f"Other link:      {result['extra_link'] or '(blank)'}")
         cli_art.cli_info(
-            f"Primary roles:   {', '.join(result['primary_roles']) or '(none)'}"
+            f"Primary roles:   {', '.join(result['primary_roles']) or '(none)'}"  # type: ignore[arg-type]
         )
         cli_art.cli_info(
-            f"Secondary roles: {', '.join(result['secondary_roles']) or '(none)'}"
+            f"Secondary roles: {', '.join(result['secondary_roles']) or '(none)'}"  # type: ignore[arg-type]
         )
         cli_art.cli_info(
             f"Remote-only:     {'Yes' if result['remote_preference'] else 'No'}"
@@ -2186,6 +2186,8 @@ def _retag_bullet_bank_companies(excluded: list) -> None:
             reader = csv.DictReader(f)
             fieldnames = reader.fieldnames
             rows = list(reader)
+        if not fieldnames:
+            continue
         changed = False
         for row in rows:
             if row.get("Role / Company") in excluded_set:
