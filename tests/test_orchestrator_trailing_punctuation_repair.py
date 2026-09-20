@@ -25,6 +25,7 @@ sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
 import validate_resume  # noqa: E402
+
 from tests import persona  # noqa: E402
 
 
