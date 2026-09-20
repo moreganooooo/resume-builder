@@ -2321,7 +2321,7 @@ _RENAME_SUFFIX_PATTERN = re.compile(r"\s*\(Now [^)]+\)$")
 
 
 def _parse_cv_role_metadata(cv_text: str) -> dict[str, dict]:
-    """Parses cv.md's '### Title\\n**Company** · Location · Period' blocks into
+    r"""Parses cv.md's '### Title\n**Company** · Location · Period' blocks into
     a normalized-company -> {title, period, location} lookup.
 
     Exists so a missing EXPERIENCE entry (a 'Role roster' violation the LLM

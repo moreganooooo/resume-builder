@@ -529,7 +529,7 @@ def research_company_via_search(
 
 
 def _is_word_char(char: str) -> bool:
-    """Matches regex \\w: alphanumerics plus underscore."""
+    r"""Matches regex \w: alphanumerics plus underscore."""
     return char.isalnum() or char == "_"
 
 

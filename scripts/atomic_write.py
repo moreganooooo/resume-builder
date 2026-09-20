@@ -1,11 +1,11 @@
-"""atomic_write.py -- one context manager so a knowledge-base/profile/
+r"""atomic_write.py -- one context manager so a knowledge-base/profile/
 checkpoint write survives a crash, Ctrl-C, or laptop sleep mid-write.
 
 B13: `open(path, "w")` truncates the target to 0 bytes at open, before a
 single byte of the new content is written -- every KB/profile/checkpoint
 writer that reopened its target file in place shared that destructive
 window, and there was no atomic-write helper anywhere in this codebase
-(`grep -rn "os.replace\\|os.rename\\|tempfile\\|NamedTemporary" scripts/*.py`
+(`grep -rn "os.replace\|os.rename\|tempfile\|NamedTemporary" scripts/*.py`
 returned nothing).
 
 atomic_write() closes that window: write to a sibling temp file in the

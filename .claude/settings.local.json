@@ -138,7 +138,12 @@
       "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs?per_page=10')",
       "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs/35520809175/jobs')",
       "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs/35520809175')",
-      "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs/35520809175/attempts/1/logs')"
+      "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs/35520809175/attempts/1/logs')",
+      "Bash(gh run *)",
+      "Bash(curl -s -H \"Accept: application/vnd.github.v3+json\" https://api.github.com/repos/moreganooooo/resume-builder/actions/runs?per_page=1)",
+      "Bash(chmod +x /tmp/check_workflow.sh)",
+      "Bash(/tmp/check_workflow.sh)",
+      "Bash(codespell --version)"
     ]
   },
   "enableAllProjectMcpServers": true,

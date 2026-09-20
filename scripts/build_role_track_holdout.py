@@ -136,12 +136,12 @@ def _description_of(stored: str) -> str:
 
 
 def _strip_html(text: str) -> str:
-    """Tags out, block boundaries kept as spaces.
+    r"""Tags out, block boundaries kept as spaces.
 
     Most descriptions are stored as HTML. Dropping tags without
     substituting a space would weld the last word of one list item to the
     first of the next ("direct reportsManage"), which breaks the very
-    \\b-anchored phrase matching the strata depend on.
+    \b-anchored phrase matching the strata depend on.
     """
     text = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", text)
     text = re.sub(r"<[^>]+>", " ", text)

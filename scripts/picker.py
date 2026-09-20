@@ -29,7 +29,7 @@ _RECOMMENDATION_STYLES = theme.RECOMMENDATION_STYLES
 
 
 def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> bool:
-    """Standalone copy of cli._should_proceed's exact logic -- duplicated
+    r"""Standalone copy of cli._should_proceed's exact logic -- duplicated
     rather than imported, since cli.py will import menu.py (for the bare-
     invocation menu launch) which imports this module; cli.py importing
     picker.py directly too is fine, but picker.py must not import cli.py
@@ -44,7 +44,7 @@ def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> 
 
     Uses cli_art.confirm() (the huh/Bubbletea prompt), not a raw
     questionary.confirm() -- menu.py's _run_with_chain() sets a DECSTBM
-    scroll region (`\\x1b[5;{rows-1}r`) around every leaf action's banner
+    scroll region (`\x1b[5;{rows-1}r`) around every leaf action's banner
     before calling into a handler like _handle_evaluate_all() that lands
     here. prompt_toolkit (questionary's renderer) computes its own cursor
     geometry assuming it owns the full scroll region; clamped into a
