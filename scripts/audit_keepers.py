@@ -1133,7 +1133,7 @@ def stage4_auto_rewrite(
     rewrite_system_gemma: str,
     score_system: str,
     df_keepers: pd.DataFrame,
-    limit: int = None,
+    limit: int | None = None,
     dry_run: bool = False,
 ) -> pd.DataFrame:
     """

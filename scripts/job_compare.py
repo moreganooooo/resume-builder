@@ -26,7 +26,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 
-def load_job_target(target: str, profile: str = None) -> dict[str, Any] | None:
+def load_job_target(target: str, profile: str | None = None) -> dict[str, Any] | None:
     """Loads job dictionary from file path, DB job_id, or fuzzy name search."""
     if os.path.exists(target):
         try:
@@ -91,7 +91,7 @@ def load_job_target(target: str, profile: str = None) -> dict[str, Any] | None:
 
 
 def compare_jobs(
-    job_a: dict[str, Any], job_b: dict[str, Any], profile: str = None
+    job_a: dict[str, Any], job_b: dict[str, Any], profile: str | None = None
 ) -> dict[str, Any]:
     """Computes side-by-side comparison metrics between two job postings."""
     skills_a = set(s.lower() for s in (job_a.get("hard_skills") or []))
@@ -143,7 +143,7 @@ def compare_jobs(
     }
 
 
-def render_job_comparison(comp: dict[str, Any], console: Console = None) -> None:
+def render_job_comparison(comp: dict[str, Any], console: Console | None = None) -> None:
     """Renders side-by-side comparison table to terminal."""
     c = console or cli_art.console
     a = comp["job_a"]

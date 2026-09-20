@@ -993,7 +993,7 @@ TRACKER_FIELDNAMES = [
 class JDTracker:
     """Thin CSV-backed completion log, keyed by job_key."""
 
-    def __init__(self, csv_path: str = None, profile: str | None = None):
+    def __init__(self, csv_path: str | None = None, profile: str | None = None):
         # Resolved per instance, NOT from the module-level TRACKER_CSV
         # constant. That constant is computed once at import, so it keeps
         # pointing at whichever profile was active then -- it survived a
@@ -1153,9 +1153,9 @@ def append_application_row(
     job_title: str,
     has_pdf: bool,
     source_url: str = "",
-    path: str = None,
-    evaluation: dict = None,
-    jd_data: dict = None,
+    path: str | None = None,
+    evaluation: dict | None = None,
+    jd_data: dict | None = None,
     notes: str = "",
 ) -> None:
     """Appends one row to data/applications.md, in career-ops's markdown-table
@@ -1291,9 +1291,9 @@ def build_known_jobs_index() -> dict:
 def add_to_known_jobs_index(
     index: dict,
     job_key: str,
-    source_url: str = None,
-    company_name: str = None,
-    job_title: str = None,
+    source_url: str | None = None,
+    company_name: str | None = None,
+    job_title: str | None = None,
 ) -> None:
     """Updates an index from build_known_jobs_index() in place with a job
     just written during the same run_scan() pass, so later candidates in
@@ -1311,11 +1311,11 @@ def add_to_known_jobs_index(
 
 def job_key_known(
     job_key: str,
-    tracker: "JDTracker" = None,
-    source_url: str = None,
-    company_name: str = None,
-    job_title: str = None,
-    index: dict = None,
+    tracker: "JDTracker" | None = None,
+    source_url: str | None = None,
+    company_name: str | None = None,
+    job_title: str | None = None,
+    index: dict | None = None,
 ) -> bool:
     """True if job_key is already completed in the tracker, or a JD file
     for it already exists in jds/, jds/completed/, jds/archived/, or

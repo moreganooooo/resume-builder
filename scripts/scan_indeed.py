@@ -265,7 +265,7 @@ def _admit_indeed_job(job: dict) -> bool:
     return True
 
 
-def fetch_indeed_jobs(search_term: str = None, activity=None) -> list:
+def fetch_indeed_jobs(search_term: str | None = None, activity=None) -> list:
     """Scrapes Indeed for the active profile's configured location.
 
     An explicit search_term (e.g. fetch_indeed_tesla_jobs's "Tesla") runs

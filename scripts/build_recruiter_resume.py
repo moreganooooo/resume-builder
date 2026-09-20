@@ -184,7 +184,7 @@ def _resolve_interactive(interactive: bool | None) -> bool:
         return False
 
 
-def build_recruiter_resume(interactive: bool = None, fresh: bool = True) -> dict:
+def build_recruiter_resume(interactive: bool | None = None, fresh: bool = True) -> dict:
     """Builds one role-agnostic resume. Returns {"resume": {...}} -- the
     build_tailored_resume() return dict ({} on failure, or the real data
     plus an _output_paths key on success). No cover letter: there is no

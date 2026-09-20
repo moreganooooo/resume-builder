@@ -24,7 +24,7 @@ import profile_paths
 KEEP = 5
 
 
-def snapshot_kb(profile: str = None, keep: int = KEEP) -> str | None:
+def snapshot_kb(profile: str | None = None, keep: int = KEEP) -> str | None:
     """Copies every top-level file in profiles/<profile>/knowledge_base/
     into a new timestamped subdirectory of profile_paths.kb_snapshot_dir(),
     then deletes the oldest snapshots past `keep`. Returns the new

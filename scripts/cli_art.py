@@ -94,43 +94,6 @@ def display_success(message: str) -> None:
     )
 
 
-def print_literal(message: str = "") -> None:
-    """Print a literal string without Rich markup parsing (shortcut used by
-    callers that previously relied on `console.print(..., markup=False)`.
-    Keeps `soft_wrap=True` to match previous call sites."""
-    console.print(message, markup=False, soft_wrap=True)
-
-
-# Raw block-letter lines, no markup -- color now comes from the diagonal
-# gradient applied per-character in display_main_banner(), not a blanket
-# style wrapper.
-MAIN_BANNER_LINES = [
-    "██████╗ ███████╗███████╗██╗   ██╗███╗   ███╗███████╗",
-    "██╔══██╗██╔════╝██╔════╝██║   ██║████╗ ████║██╔════╝",
-    "██████╔╝█████╗  ███████╗██║   ██║██╔████╔██║█████╗  ",
-    "██╔══██╗██╔══╝  ╚════██║██║   ██║██║╚██╔╝██║██╔══╝  ",
-    "██║  ██║███████╗███████║╚██████╔╝██║ ╚═╝ ██║███████╗",
-    "╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝",
-    "",
-    "██████╗ ██╗   ██╗██╗██╗     ██████╗ ███████╗██████╗ ",
-    "██╔══██╗██║   ██║██║██║     ██╔══██╗██╔════╝██╔══██╗",
-    "██████╔╝██║   ██║██║██║     ██║  ██║█████╗  ██████╔╝",
-    "██╔══██╗██║   ██║██║██║     ██║  ██║██╔══╝  ██╔══██╗",
-    "██████╔╝╚██████╔╝██║███████╗██████╔╝███████╗██║  ██║",
-    "╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝",
-]
-
-SUBTITLE = "Custom Resumes & Cover Letters, Powered by Gemini\n"
-
-# Glyphs for the banner's decorative sparkle field -- weighted toward the
-# plain small dot so stars stay an accent, not the majority. Plain symbol
-# glyphs only (not emoji-presentation ones like an outlined star with
-# VS16) -- those commonly render double-width and would throw off a row's
-# alignment relative to the others.
-_SPARKLE_GLYPHS = ["·", "·", "·", "⋆", "⋆", "✦", "✧"]
-_SPARKLE_DENSITY = 0.08
-
-
 def _sparkle_field(rows: int, width: int) -> list:
     """A fresh random scatter (not a fixed pattern) every call -- fills
     the banner's right side out to the panel's actual inner width (see
@@ -183,7 +146,7 @@ def _gradient_grid(lines: list, start_hex: str, end_hex: str) -> list:
     return grid
 
 
-def _render_grid(lines: list, grid: list, threshold: int = None) -> Text:
+def _render_grid(lines: list, grid: list, threshold: int | None = None) -> Text:
     """Builds one multi-line Rich Text from lines/grid. threshold is the
     max (row + col) diagonal index to reveal; None reveals everything."""
     text = Text()
@@ -2708,8 +2671,8 @@ def render_sparkle_celebration(
 def render_analytics_report(
     platform_stats: list[dict] = None,
     company_stats: list[dict] = None,
-    scatter_stats: dict = None,
-    heatmap_stats: dict = None,
+    scatter_stats: dict | None = None,
+    heatmap_stats: dict | None = None,
 ) -> None:
     """Renders comprehensive pipeline analytics covering source platforms,
 

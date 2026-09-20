@@ -174,7 +174,7 @@ def _check_coverletter_keyword_coverage_pdf(
 
 
 def validate_pdf_text(
-    pdf_path: str, resume_data: dict, jd_keywords: dict = None
+    pdf_path: str, resume_data: dict, jd_keywords: dict | None = None
 ) -> tuple[list[str], list[str]]:
     """
     Extracts text from the rendered PDF and checks that the tagline, summary,
@@ -247,7 +247,7 @@ def validate_pdf_text(
 
 
 def validate_coverletter_pdf_text(
-    pdf_path: str, letter_data: dict, jd_keywords: dict = None
+    pdf_path: str, letter_data: dict, jd_keywords: dict | None = None
 ) -> list[str]:
     """
     Same check, cover-letter shaped: body paragraphs and the greeting instead

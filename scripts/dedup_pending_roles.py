@@ -42,7 +42,7 @@ def get_job_url(meta: dict) -> str:
     return u.rstrip("/")
 
 
-def archive_copies_of(meta: dict, exclude_ids=(), profile: str = None) -> int:
+def archive_copies_of(meta: dict, exclude_ids=(), profile: str | None = None) -> int:
     """Archives every PENDING data.db row that is another copy of the posting
     `meta` describes, by the same rules run_deduplication() clusters on --
     same dedup_hash, or same normalized company + title (which subsumes its
@@ -93,7 +93,7 @@ def archive_copies_of(meta: dict, exclude_ids=(), profile: str = None) -> int:
     return archived
 
 
-def archive_copies_of_file(jd_path: str, profile: str = None) -> int:
+def archive_copies_of_file(jd_path: str, profile: str | None = None) -> int:
     """archive_copies_of() for a JD file, skipping the file's own row."""
     try:
         with open(jd_path, "r", encoding="utf-8") as f:
@@ -110,7 +110,7 @@ def archive_copies_of_file(jd_path: str, profile: str = None) -> int:
     return archive_copies_of(meta, exclude_ids={own_id}, profile=profile)
 
 
-def archive_copies_of_id(job_id: str, profile: str = None) -> int:
+def archive_copies_of_id(job_id: str, profile: str | None = None) -> int:
     """archive_copies_of() for a database-only job, skipping the job itself."""
     conn = db.get_db(profile)
     conn.row_factory = sqlite3.Row
@@ -130,7 +130,7 @@ def archive_copies_of_id(job_id: str, profile: str = None) -> int:
     return archive_copies_of(meta, exclude_ids={job_id}, profile=profile)
 
 
-def run_deduplication(profile: str = None, dry_run: bool = True) -> dict:
+def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
     conn = db.get_db(profile)
     conn.row_factory = sqlite3.Row
 

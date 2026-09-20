@@ -277,7 +277,7 @@ def find_ats_board(name: str) -> dict | None:
     return None
 
 
-def tracked_companies_path(profile: str = None) -> str:
+def tracked_companies_path(profile: str | None = None) -> str:
     return os.path.join(
         profile_paths.board_scanner_dir(profile or profile_paths.active_profile()),
         "tracked_companies.yml",
@@ -298,7 +298,7 @@ def existing_company_keys(path: str) -> set:
     return keys
 
 
-def gather_local_employers(limit: int = 60, search_term: str = None) -> list:
+def gather_local_employers(limit: int = 60, search_term: str | None = None) -> list:
     """Employer names from local postings, best source first.
 
     Indeed carries by far the most local employers, so it leads; the
@@ -347,7 +347,9 @@ def gather_local_employers(limit: int = 60, search_term: str = None) -> list:
     return names[:limit]
 
 
-def discover(limit: int = 60, search_term: str = None, profile: str = None) -> list:
+def discover(
+    limit: int = 60, search_term: str | None = None, profile: str | None = None
+) -> list:
     """Local employers that have a public ATS board and are not tracked."""
     path = tracked_companies_path(profile)
     known = existing_company_keys(path)

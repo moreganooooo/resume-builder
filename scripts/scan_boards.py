@@ -598,7 +598,7 @@ def _fetch_posting_text(url: str, provider_id: str = "") -> str:
 
 
 def fetch_board_jobs(
-    sources: list = None, search_term: str = None, activity=None
+    sources: list | None = None, search_term: str | None = None, activity=None
 ) -> list:
     """Runs each requested board provider (default: all of BOARD_PROVIDERS)
     concurrently, applies the title/location prefilter, fetches each surviving posting's

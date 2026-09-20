@@ -322,7 +322,7 @@ def _yaml_to_str(data: dict) -> str:
 
 
 class RulesBundle:
-    def __init__(self, rules_dir: str, scoring_dir: str = None):
+    def __init__(self, rules_dir: str, scoring_dir: str | None = None):
         cli_art.console.print(
             f"\n{theme.colorize_icon('hint')} Loading rules bundle...", soft_wrap=True
         )
@@ -1585,7 +1585,7 @@ def build_rewrite_prompt(
     weaknesses: str,
     kb_context: str,
     attempt: int,
-    prev_scores: dict = None,
+    prev_scores: dict | None = None,
     minimal_schema: bool = False,
 ) -> str:
     persona = persona_context(tags)
@@ -2000,7 +2000,7 @@ def process_bullet(
     rewrite_system_gemma: str,
     score_system: str,
     dry_run: bool,
-    start_model: str = None,
+    start_model: str | None = None,
 ) -> dict:
     """start_model overrides which model the first attempt targets --
     defaults to REWRITE_MODEL (Gemma), matching every existing caller's

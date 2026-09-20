@@ -98,7 +98,7 @@ def _make_fallback_situational_roles() -> dict:
     }
 
 
-def load_situational_roles(profile: str = None) -> dict:
+def load_situational_roles(profile: str | None = None) -> dict:
     """Reads profiles/<profile>/situational_roles.yaml. Returns
     {"situational_min_bullets": int, "roles": {display_name: config_dict}}
     -- an empty {"situational_min_bullets": 2, "roles": {}} if the file
@@ -123,7 +123,7 @@ def _any_match(patterns: list, text_lower: str) -> bool:
     return any(re.search(pattern, text_lower) for pattern in patterns)
 
 
-def detect_situational_candidates(jd_text: str, roles_data: dict = None) -> list:
+def detect_situational_candidates(jd_text: str, roles_data: dict | None = None) -> list:
     """Returns the list of situational-role display names whose keyword
     gate matched jd_text; [] if none did."""
     if roles_data is None:
@@ -145,7 +145,7 @@ def detect_situational_candidates(jd_text: str, roles_data: dict = None) -> list
     return candidates
 
 
-def bank_minimums_for(candidates: list, roles_data: dict = None) -> dict:
+def bank_minimums_for(candidates: list, roles_data: dict | None = None) -> dict:
     """Maps each candidate's bank_tag to the situational minimum, for
     mine_bullet_bank()'s extra_company_minimums parameter."""
     if roles_data is None:

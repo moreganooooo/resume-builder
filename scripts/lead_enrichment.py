@@ -45,7 +45,7 @@ def create_lead_placeholder(
     company: str,
     role_type: str = "Recruiter",
     name: str = "Pending Discovery",
-    conn: Any = None,
+    conn: Any | None = None,
 ) -> str:
     """Creates a CRM contact lead placeholder in data.db."""
     dorks = generate_outreach_dorks(company, "Software Engineer")

@@ -1108,7 +1108,7 @@ def strategy_cmd(jd_file):
 
 @cli.command(name="verify-sync")
 @click.option("--profile", default=None, help="Profile to verify sync environment for.")
-def verify_sync_cmd(profile: str = None):
+def verify_sync_cmd(profile: str | None = None):
     """Verifies Syncthing directories, .stignore rules, and SQLite WAL status."""
     import verify_syncthing
 
@@ -1137,7 +1137,10 @@ def evidence_group():
 @click.option("--query", "-q", default=None, help="Lexical search query.")
 @click.option("--profile", default=None, help="Profile name.")
 def evidence_stories_cmd(
-    archetype: str = None, tag: str = None, query: str = None, profile: str = None
+    archetype: str | None = None,
+    tag: str | None = None,
+    query: str | None = None,
+    profile: str | None = None,
 ):
     """Browses and searches STAR/CAR behavioral stories."""
     import evidence_bank
@@ -1158,7 +1161,7 @@ def evidence_stories_cmd(
 @click.option("--query", "-q", default=None, help="Lexical search query.")
 @click.option("--profile", default=None, help="Profile name.")
 def evidence_negotiate_cmd(
-    category: str = None, query: str = None, profile: str = None
+    category: str | None = None, query: str | None = None, profile: str | None = None
 ):
     """Browses and searches negotiation levers and talking points."""
     import evidence_bank
@@ -1172,7 +1175,7 @@ def evidence_negotiate_cmd(
 
 @evidence_group.command(name="list")
 @click.option("--profile", default=None, help="Profile name.")
-def evidence_list_cmd(profile: str = None):
+def evidence_list_cmd(profile: str | None = None):
     """Displays all behavioral stories and negotiation levers in the evidence bank."""
     import evidence_bank
 
@@ -1185,7 +1188,7 @@ def evidence_list_cmd(profile: str = None):
 @cli.command(name="timeline")
 @click.argument("job_id_or_query")
 @click.option("--profile", default=None, help="Profile name.")
-def timeline_cmd(job_id_or_query: str, profile: str = None):
+def timeline_cmd(job_id_or_query: str, profile: str | None = None):
     """Displays full lifecycle milestone timeline for a specific job application."""
     import application_timeline
 
@@ -1201,7 +1204,7 @@ def timeline_cmd(job_id_or_query: str, profile: str = None):
     "--filter", "agency_filter", default=None, help="Filter by staffing agency name."
 )
 @click.option("--profile", default=None, help="Profile name.")
-def agency_view_cmd(agency_filter: str = None, profile: str = None):
+def agency_view_cmd(agency_filter: str | None = None, profile: str | None = None):
     """Aggregates multi-role agency relationships and ghost rates."""
     import application_timeline
 
@@ -1221,7 +1224,7 @@ def scan_stream_cmd():
 
 @cli.command(name="funnel-drilldown")
 @click.option("--profile", default=None, help="Profile to compute funnel metrics for.")
-def funnel_drilldown_cmd(profile: str = None):
+def funnel_drilldown_cmd(profile: str | None = None):
     """Recruitment funnel conversion drill-down and bottleneck diagnostics."""
     import funnel_drilldown
 
@@ -1233,7 +1236,7 @@ def funnel_drilldown_cmd(profile: str = None):
 @click.argument("target_a", required=True)
 @click.argument("target_b", required=True)
 @click.option("--profile", default=None, help="Profile name.")
-def compare_cmd(target_a: str, target_b: str, profile: str = None):
+def compare_cmd(target_a: str, target_b: str, profile: str | None = None):
     """Side-by-side comparison of two job postings / packages."""
     import job_compare
 

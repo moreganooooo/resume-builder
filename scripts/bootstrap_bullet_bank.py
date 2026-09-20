@@ -77,7 +77,7 @@ BACKGROUND_IDENTITY = ""
 BACKGROUND_TAGS = {}
 
 
-def build_education(achievement_keys: dict = None) -> list:
+def build_education(achievement_keys: dict | None = None) -> list:
     """Default Education section: one entry per profile.yml
     fixed_credentials.education item, in order. Replace this with a
     hand-written list for per-school locations, extra bullets, or
