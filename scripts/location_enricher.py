@@ -677,7 +677,11 @@ def enrich_job_location(
             # Google Maps terms: a Maps address older than 30 days is
             # re-fetched, never served from cache.
             cached_entry = None
-        cached_failure = bool(cached_entry) and cached_entry.get("failed") is True
+        cached_failure = (
+            bool(cached_entry)
+            and cached_entry is not None
+            and cached_entry.get("failed") is True
+        )
         if cached_entry and not cached_failure:
             discovery_result = dict(cached_entry)
         elif cached_failure and not _negative_cache_expired(cached_entry):

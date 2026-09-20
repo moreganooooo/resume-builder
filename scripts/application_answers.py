@@ -118,7 +118,7 @@ def build_context(job: str) -> AnswerContext:
         roster = [
             str(role.get("company") or role)
             for role in (profile.get("roles") or [])
-            if isinstance(role, (dict, str))
+            if isinstance(role, dict)
         ]
         evaluation_summary = _trim(
             json.dumps(
