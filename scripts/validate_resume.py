@@ -1101,7 +1101,10 @@ def _check_vague_magnitudes(
                 company = entry.get("company", "")
                 for achievement in entry.get("achievements", []):
                     for m in _COUNT_STANDIN_RE.finditer(achievement):
-                        figures = source_nouns.get(_fold_noun(m.group(2)), set())
+                        group_2 = m.group(2)
+                        if group_2 is None:
+                            continue
+                        figures = source_nouns.get(_fold_noun(group_2), set())
                         missing = [
                             f for f in figures if f.rstrip("+") not in achievement
                         ]
@@ -2477,11 +2480,11 @@ def _check_cross_section_redundancy(
 def validate(
     resume_data: dict,
     style_rules: dict,
-    role_roster: list[str] = None,
+    role_roster: list[str] | None = None,
     role_bullet_minimums: dict | None = None,
     enforce_star: bool = False,
     role_bullet_maximums: dict | None = None,
-    bullet_tuples: list[tuple[str, str, str]] = None,
+    bullet_tuples: list[tuple[str, str, str]] | None = None,
 ) -> list[str]:
     """role_roster and role_bullet_minimums/role_bullet_maximums/bullet_tuples
     are optional so callers that legitimately validate a partial document

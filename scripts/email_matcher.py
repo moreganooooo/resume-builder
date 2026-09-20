@@ -352,6 +352,7 @@ def plan_updates(
         )
 
         candidates = by_company.get(_company_key(email.get("company", "")), [])
+        job: dict[str, Any] | None
         job, score, reasons = best_match(enriched, candidates)
         if job is None:
             continue
