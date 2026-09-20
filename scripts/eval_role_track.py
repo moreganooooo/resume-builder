@@ -92,7 +92,8 @@ def _confusion_matrix(rows: list[dict]) -> None:
     for r in rows:
         grid[r["predicted"]][r["label"]] += 1
 
-    print(f"\n{'predicted \\ label':<18} " + " ".join(f"{l:>8}" for l in label_values))
+    header = "predicted \\ label"
+    print(f"\n{header:<18} " + " ".join(f"{l:>8}" for l in label_values))
     for p in predicted_values:
         cells = " ".join(f"{grid[p][l]:>8}" for l in label_values)
         print(f"{p:<18} {cells}")
