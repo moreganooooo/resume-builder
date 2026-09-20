@@ -770,7 +770,9 @@ class TestEmbedWithRetryLoop(unittest.TestCase):
     @patch("gemini_client.api_keys", return_value=["key-one"])
     @patch("gemini_client.time.sleep")
     @patch("gemini_client.requests.post")
-    def test_embed_honors_server_retry_info_from_429(self, mock_post, mock_sleep, mock_keys):
+    def test_embed_honors_server_retry_info_from_429(
+        self, mock_post, mock_sleep, mock_keys
+    ):
         """Server 429 with RetryInfo delay is honored."""
         resp_with_delay = MagicMock()
         resp_with_delay.status_code = 429
