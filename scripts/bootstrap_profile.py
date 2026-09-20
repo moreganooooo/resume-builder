@@ -1405,7 +1405,7 @@ def _build_cv_draft_rows() -> list:
     with open(bootstrap_bullet_bank.DRAFT_CSV_PATH, encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
-    by_company = {}
+    by_company: dict[str, list[str]] = {}
     for row in rows:
         by_company.setdefault(row["Role / Company"], []).append(row["Bullet Point"])
 
@@ -2043,7 +2043,7 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
     cli_art.cli_info(
         'Enter one search term per line (e.g. "Email OR Campaign"). Leave blank when done.'
     )
-    queries = []
+    queries: list[str] = []
     while True:
         q = cli_art.text(f"Search term {len(queries) + 1} (blank to finish):")
         if not q or not q.strip():

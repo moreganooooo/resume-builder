@@ -306,8 +306,8 @@ def single_linkage_cluster(sim_matrix: np.ndarray, threshold: float) -> list[int
     # this numbering is purely positional, driven by each cluster's lowest
     # row index in this run's sim_matrix, so it silently reshuffles if
     # bullet-bank-clean.csv's row order ever changes between runs.
-    root_to_id = {}
-    result = []
+    root_to_id: dict[int, int] = {}
+    result: list = []
     for i in range(n):
         root = find(i)
         if root not in root_to_id:

@@ -1,24 +1,29 @@
 # Linting Issues Audit & Remediation Plan
 
 **Date:** 2026-09-20  
-**Status:** Phase 2 (MyPy) Active - 244 errors remaining (50% reduction)
+**Status:** Phase 2 (MyPy) Active - 221 errors remaining (54% reduction)
 
-**Session 2 Achievements:**
-- Fixed implicit Optional parameters: 8 errors
-- Fixed all union-attr errors (safety-critical): 7 errors
-- Fixed arg-type, return-value, assignment errors: 24 errors
-- Fixed var-annotated errors: 2 errors
-- **Total reduction this session:** 483 → 244 (50% reduction, 239 fixes)
-- **Files affected:** 70 files (down from original broader list)
+**Session 3 Achievements (Current):**
+- Fixed all remaining var-annotated errors: 6 errors
+  - orchestrator.py line 1617 (groups dict)
+  - orchestrator.py line 2082 (by_row dict)
+  - orchestrator.py line 7627 (audit_order list)
+  - orchestrator.py line 8744 (page1_condense violations)
+  - orchestrator.py line 8747 (why_backfill violations)
+  - validate_pdf_text.py line 113 (bullets list)
+- **Total reduction this session:** 246 → 221 (25 fixes including cascades)
+- **Running total:** 483 → 221 (54% reduction, 262 total fixes)
 
-**Error Breakdown (244 remaining):**
-- no-any-return: 141 (YAML/JSON loading - requires cast/review)
-- var-annotated: 31 (type inference - requires annotations)
-- arg-type: 24 (type mismatches - needs fixes)
-- assignment: 22 (type conflicts - requires annotations)
+**Error Breakdown (221 remaining):**
+- no-any-return: 137 (YAML/JSON loading - requires cast/review)
+- arg-type: 27 (type mismatches - needs fixes)
+- assignment: 23 (type conflicts - requires annotations)
 - return-value: 13 (wrong return types - needs adjustments)
+- name-defined: 9 (missing imports/undefined variables)
 - dict-item: 5 (dict value type conflicts)
-- Others: 8 (return, operator, index, attr-defined, misc)
+- return: 2 (return type mismatches)
+- index: 2 (index type mismatches)
+- operator: 1, no-redef: 1, misc: 1
 
 ## Executive Summary
 
@@ -245,6 +250,86 @@ The resume-builder codebase has accumulated linting issues across multiple categ
 3. **index + return-value (13 issues)** - Logic errors
    - Index/type errors in loops or returns
    - Could cause unexpected behavior
+
+## Severity-Based Triage: Session 3 Roadmap
+
+**Priority 1: Critical Safety Issues (11 errors) — FIX IMMEDIATELY**
+- **name-defined (9):** Undefined names/missing imports - can cause runtime crashes
+  - sync_jd_to_applications_enhanced.py:82 (`Any` not imported)
+  - validate_resume.py:1337 (`Any` not imported)
+  - Others with undefined variables
+- **no-redef (1):** Name redefinition issues
+- **operator (1):** Invalid operator usage
+
+**Action:** Each of these 11 needs a dedicated fix to prevent crashes
+
+**Priority 2: Medium Severity (60 errors) — FIX NEXT PHASE**
+- **arg-type (27):** Parameter type mismatches
+  - Risk: Silent type coercion or passing wrong types
+  - Examples: passing `str | None` to `str` parameter
+  - Strategy: Add None checks or widen parameter types
+  
+- **assignment (23):** Variable assignment type conflicts  
+  - Risk: Variables assigned wrong types
+  - Examples: `x: int = some_string_value()`
+  - Strategy: Correct variable type hints or adjust assignments
+  
+- **return-value (13):** Functions returning wrong types
+  - Risk: Downstream code gets unexpected types
+  - Examples: function declared `-> str` returns `Any`
+  - Strategy: Adjust return type or cast result
+  
+- **dict-item (5):** Dictionary value type conflicts
+  - Risk: Unpacking/accessing dict values as wrong type
+  - Strategy: Verify dict value types or use `Any`
+  
+- **index (2):** Index type errors
+  - Risk: Invalid indexing operations
+  - Strategy: Correct index types or data structures
+
+**Action:** Systematic fixes in order (arg-type, then assignment, then return-value)
+
+**Priority 3: Low/Accepted Severity (137 errors) — DOCUMENT ONLY**
+- **no-any-return (137):** Functions returning `Any` (YAML/JSON loading)
+  - Assessment: Acceptable because these are IO operations (file/network)
+  - Examples: `yaml.safe_load()`, `json.load()`, JSON API responses
+  - Impact: No risk; these are known to return Any
+  - Strategy: Use `cast()` at call sites when type is known, or accept Any
+  - **RECOMMENDATION:** Accept as-is for now; use cast() only where critical
+
+**Action:** No changes needed; document as accepted patterns
+
+---
+
+## Radon Complexity Roadmap (14 F-Grade Functions)
+
+**Critical Refactoring Needed (Complexity > 50):**
+
+| Function | CC | File | Strategy |
+|----------|----|----|----------|
+| build_tailored_resume | 228 | orchestrator.py | Extract 5-6 step functions (Research, Audit, Bullet Selection, Building, etc.) |
+| repair_violations_surgically | 167 | orchestrator.py | Split into validation check + fix strategy functions |
+| mine_bullet_bank | 81 | orchestrator.py | Extract bullet selection/scoring logic |
+| _verify_candidates | 452 | liveness.py | Refactor verdict classification into separate functions |
+| rescore_evaluation_with_location | 67 | orchestrator.py | Extract location/stress/gap scoring logic |
+| run_deduplication | 72 | dedup_pending_roles.py | Split matching logic into helper functions |
+| enrich_profile_locations | 79 | location_enricher.py | Extract enrichment strategies |
+| enrich_job_location | 62 | location_enricher.py | Extract location resolution logic |
+| _top_up_verified_skills | 62 | orchestrator.py | Split skill matching into separate stage |
+| run_content_settings | 60 | content_settings.py | Break into settings editor modules |
+
+**Quick Win Functions (CC 40-50, lower priority):**
+- generate_typst_markup: 51 (render_typst.py)
+- apply_operation: 41 (patch_engine.py)
+- get_single_application_timeline: 44 (application_timeline.py)
+- _check_hallucinated_tools: 42 (validate_resume.py)
+
+**Note:** Complexity refactoring is long-term maintenance work. Prioritize when:
+1. Adding new features to these functions
+2. Reviewing for bugs
+3. Writing tests
+
+Never refactor just for score reduction; only when there's real maintenance value.
 
 ### Acceptable for Now (Phase 3)
 

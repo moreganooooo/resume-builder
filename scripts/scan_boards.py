@@ -154,7 +154,7 @@ def _child_env() -> dict:
 # profile switch (profile_paths.set_active_profile(), e.g. the
 # interactive menu's --profile gate) instead of picking up the new
 # profile's own scan_filters.yml.
-_filters_cache = {}
+_filters_cache: dict[str, Any] = {}
 
 
 def _load_filters() -> dict:

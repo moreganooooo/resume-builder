@@ -138,7 +138,7 @@ def _extract_grounding_claims(text: str) -> list[str]:
     or skill with no attached number slips past this particular check --
     but it catches exactly the markers the proven B14 injection payload
     carried ("10 years", "92%", "(2019-2024)")."""
-    claims = []
+    claims: list[str] = []
     for pattern in (_METRIC_PATTERN, _YEARS_EXPERIENCE_PATTERN, _YEAR_RANGE_PATTERN):
         claims.extend(m.group(0) for m in pattern.finditer(text))
     return claims

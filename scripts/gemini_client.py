@@ -469,7 +469,7 @@ class _ConsecutiveFailuresDescriptor:
 
 class GeminiClient:
 
-    _cache_map = {}
+    _cache_map: dict[str, Any] = {}
     # Models where a cache-creation call has already come back with a
     # permanent "this API key's tier allows zero cache storage" error
     # (TotalCachedContentStorageTokensPerModelFreeTier limit=0) -- as
@@ -478,7 +478,7 @@ class GeminiClient:
     # this process. Without this, every call with a >=15k-char system
     # instruction re-attempts cache creation, eating a 30s timeout and
     # printing a warning, even though the outcome is already known.
-    _cache_unavailable_models = set()
+    _cache_unavailable_models: set[str] = set()
 
     @classmethod
     def _get_or_create_cache(cls, model: str, system_instruction: str) -> str | None:

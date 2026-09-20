@@ -246,7 +246,7 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
             parent[ri] = rj
 
     # 1. Union by dedup_hash
-    by_hash = {}
+    by_hash: dict[str, list[str]] = {}
     for i, it in items.items():
         h = it["dedup_hash"]
         if h:
@@ -269,7 +269,7 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
     # URL. Different titles are different openings until proven otherwise;
     # a missed reworded duplicate costs one evaluation, a lost role costs
     # an application.
-    by_url = {}
+    by_url: dict[tuple[str, str, str], list[str]] = {}
     for i, it in items.items():
         u = it["url"]
         c_norm, t_norm = it["norm_tc"]
@@ -280,7 +280,7 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
             union(ids[0], o)
 
     # 3. Union by exact normalized company + title
-    by_tc = {}
+    by_tc: dict[tuple[str, str], list[str]] = {}
     for i, it in items.items():
         c, t = it["norm_tc"]
         if c and t:
@@ -290,7 +290,7 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
             union(ids[0], o)
 
     # Group into clusters
-    clusters = {}
+    clusters: dict[str, list[str]] = {}
     for i in items:
         root = find(i)
         clusters.setdefault(root, []).append(i)

@@ -79,7 +79,7 @@ def parse_existing_md(md_path: Path) -> dict:
     This is used to preserve manual notes when the JSON does not provide
     a replacement.
     """
-    existing = {}
+    existing: dict[str, Any] = {}
     if not md_path.is_file():
         return existing
     with md_path.open("r", encoding="utf-8") as f:

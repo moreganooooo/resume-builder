@@ -88,7 +88,8 @@ def _is_uncheckable(url: str) -> bool:
 
 def _split_uncheckable(candidates: list) -> tuple:
     """Partitions candidates into (checkable, uncheckable)."""
-    checkable, uncheckable = [], []
+    checkable: list[dict[str, Any]] = []
+    uncheckable: list[dict[str, Any]] = []
     for c in candidates:
         (uncheckable if _is_uncheckable(c.get("url")) else checkable).append(c)
     return checkable, uncheckable
@@ -735,12 +736,12 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                 }
             )
 
-    counts = {}
+    counts: dict[str, int] = {}
     moved = 0
     os.makedirs(jd_manager.EXPIRED_DIR, exist_ok=True)
 
     # Group results by outcome for better visual organization
-    results_by_status = {
+    results_by_status: dict[str, list[dict[str, Any]]] = {
         "active": [],
         "likely_active": [],
         "expired": [],
