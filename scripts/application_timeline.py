@@ -272,12 +272,12 @@ def get_agency_relationships(
     finally:
         conn.close()
 
-    contacts_by_company = {}
+    contacts_by_company: dict[str, list[dict[str, Any]]] = {}
     for c in contacts:
         comp_key = (c["company"] or "").lower().strip()
         contacts_by_company.setdefault(comp_key, []).append(c)
 
-    apps_by_company = {}
+    apps_by_company: dict[str, list[dict[str, Any]]] = {}
     for a in apps:
         comp_key = (a["company"] or "").lower().strip()
         apps_by_company.setdefault(comp_key, []).append(a)

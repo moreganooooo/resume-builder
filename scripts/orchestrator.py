@@ -1259,7 +1259,7 @@ def _page1_overflow_trim(resume_data: dict, profile_data: dict):
     if not trim_role:
         return None
     key = validate_resume._normalize_company(trim_role)
-    role_cfg = next(
+    role_cfg: dict[str, Any] = next(
         (
             r
             for r in profile_data.get("roles") or []
@@ -1614,7 +1614,7 @@ def _parse_cv_skill_groups(cv_text: str) -> dict:
     the large majority of entries (58 of 71 on the profile this was built
     for), so routing on it would silently place almost everything nowhere --
     or, worse, anywhere."""
-    groups = {}
+    groups: dict[str, str] = {}
     in_block = False
     parent = None
     for raw in (cv_text or "").splitlines():
@@ -2079,7 +2079,7 @@ def _top_up_verified_skills(
     # MAX_SKILLS_ROWS_NEWLY_WRAPPED rows may grow this way, so a keyword-heavy
     # posting cannot turn every row into two.
     wrapped = 0
-    by_row = {}
+    by_row: dict[int, list[tuple[str, str]]] = {}
     for index, keyword, form in deferred:
         by_row.setdefault(index, []).append((keyword, form))
     for index, items in sorted(by_row.items(), key=lambda kv: -len(kv[1])):
@@ -7624,7 +7624,7 @@ class ResumeEngine:
             checkpoint["refined_bullets"] = partial_bullets
             jd_manager.save_checkpoint(job_key, checkpoint)
 
-        audit_order = []
+        audit_order: list[int] = []
         refined_tuples = self.audit_and_refine_bullets(
             bullet_tuples,
             static_prefix,
@@ -8741,10 +8741,10 @@ class ResumeEngine:
         dropped_optional_clients = False
         dropped_why = False
         page1_condense_attempt = 0
-        page1_condense_last_violations = []
+        page1_condense_last_violations: list[str] = []
         MAX_PAGE1_CONDENSE_ATTEMPTS = 5
         why_backfill_attempt = 0
-        why_backfill_last_violations = []
+        why_backfill_last_violations: list[str] = []
         MAX_WHY_BACKFILL_ATTEMPTS = 3
 
         while True:

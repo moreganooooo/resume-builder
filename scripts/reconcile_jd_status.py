@@ -94,8 +94,8 @@ def reconcile(db_path: str, jds_dir: str, apply_changes: bool) -> dict:
     conn.row_factory = sqlite3.Row
     rows = conn.execute("SELECT id, status FROM jobs").fetchall()
 
-    updates = []
-    transitions = Counter()
+    updates: list = []
+    transitions: Counter[str] = Counter()
     no_file = 0
 
     for row in rows:

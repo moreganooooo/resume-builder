@@ -3540,7 +3540,7 @@ def run_interactive_menu() -> None:
         _prompt_for_update()
         cli_art.display_tip()
 
-        session_stats = {}
+        session_stats: dict[str, Any] = {}
         first_loop = True
 
         while True:

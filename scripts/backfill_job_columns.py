@@ -117,8 +117,8 @@ def backfill(db_path: str, apply_changes: bool) -> dict:
     ).fetchall()
 
     stats = {"scanned": len(rows), "repaired": 0, "unrecoverable": 0}
-    per_column = {}
-    updates = []
+    per_column: dict[str, int] = {}
+    updates: list = []
 
     for row in rows:
         fixes = derive_fixes(row)

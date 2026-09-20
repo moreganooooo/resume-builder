@@ -332,7 +332,7 @@ def uniqueness_keys(bullet: str) -> tuple[set[str], str | None]:
 
 def _check_unique_opening_verbs(resume_data: dict) -> list[str]:
     violations = []
-    seen = {}
+    seen: dict[str, int] = {}
     for bullet in _all_bullets(resume_data):
         first_word = opening_verb(bullet)
         if first_word is None:
@@ -1334,7 +1334,7 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
             allowed_terms.add(fallback_tool.lower())
 
     # 2. Load profile.yml
-    pdata = {}
+    pdata: dict[str, Any] = {}
     if os.path.exists(profile_yml_path):
         try:
             with open(profile_yml_path, "r", encoding="utf-8") as f:

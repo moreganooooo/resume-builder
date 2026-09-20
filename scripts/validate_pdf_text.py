@@ -110,7 +110,7 @@ def _check_ligatures(extracted_raw: str) -> list[str]:
 
 
 def _all_bullets(resume_data: dict) -> list[str]:
-    bullets = []
+    bullets: list[str] = []
     for job in resume_data.get("EXPERIENCE", []):
         bullets.extend(job.get("achievements", []) or [])
     return bullets
