@@ -58,9 +58,10 @@ function decodeEntities(text) {
  * @returns {Array<{id: string, url: string, title: string}>}
  */
 export function parseSearchPage(html, origin) {
-  const host = new URL(origin).host.replace(/\./g, '\\.');
+  const host = new URL(origin).host;
+  const escapedHost = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const anchorRe = new RegExp(
-    `<a\\b[^>]*href="https://${host}(/jobs/(\\d+)/[^"?]*/job)[^"]*"[^>]*>`,
+    `<a\\b[^>]*href="https://${escapedHost}(/jobs/(\\d+)/[^"?]*/job)[^"]*"[^>]*>`,
     'gi',
   );
   const seen = new Set();
