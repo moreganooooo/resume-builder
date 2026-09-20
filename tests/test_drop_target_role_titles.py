@@ -6,7 +6,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 import orchestrator  # noqa: E402
 
-PROFILE = {"target_roles": {"primary": ["Widget Analyst"], "secondary": ["Gadget Writer"]}}
+PROFILE = {
+    "target_roles": {"primary": ["Widget Analyst"], "secondary": ["Gadget Writer"]}
+}
 
 
 class TestDropTargetRoleTitles(unittest.TestCase):

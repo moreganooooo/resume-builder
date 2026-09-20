@@ -118,12 +118,12 @@ def run(cmd: list, **kwargs) -> subprocess.CompletedProcess:
     _active_processes.add(proc)
     try:
         stdout_data, stderr_data = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         proc.kill()
         stdout_data, stderr_data = proc.communicate()
         raise subprocess.TimeoutExpired(
             cmd, timeout, output=stdout_data, stderr=stderr_data
-        )
+        ) from exc
     except BaseException:
         # Covers KeyboardInterrupt (Ctrl-C while blocked here) and any
         # other exception -- same principle as subprocess.run()'s own

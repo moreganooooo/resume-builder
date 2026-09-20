@@ -41,7 +41,10 @@ class TestDedupClustering(unittest.TestCase):
         for target, kwargs in (
             ("dedup_pending_roles.db.get_db", {"side_effect": self._connect}),
             ("dedup_pending_roles.db.checkpoint", {}),
-            ("dedup_pending_roles.jd_manager.get_pending_jds", {"side_effect": lambda: list(self.files)}),
+            (
+                "dedup_pending_roles.jd_manager.get_pending_jds",
+                {"side_effect": lambda: list(self.files)},
+            ),
         ):
             p = patch(target, **kwargs)
             p.start()
@@ -74,7 +77,9 @@ class TestDedupClustering(unittest.TestCase):
         # jd_manager._sync_jd_to_db keys a file's own row by its source_job_id
         # (NOT its filename -- the first version of this fix assumed that,
         # and so did this test, which is how it passed while broken).
-        self._add_file("2026-09-01_Acme_Writer.json", "Acme", "Writer", "h1", source_job_id="src-1")
+        self._add_file(
+            "2026-09-01_Acme_Writer.json", "Acme", "Writer", "h1", source_job_id="src-1"
+        )
         self._add_row("src-1", "Acme", "Writer", "h1")
         result = dedup_pending_roles.run_deduplication(dry_run=True)
         self.assertEqual(result["total_clusters"], 0)
@@ -97,15 +102,21 @@ class TestDedupClustering(unittest.TestCase):
         # Live: "Data Scientist, Level 2" was archived as a duplicate of
         # "Level 1" at the same employer because both carried one listing URL.
         url = "https://careers.example.com/search?team=data"
-        self._add_file("a.json", "STI Federal", "Data Scientist, Level 1", "h1", source_url=url)
-        self._add_file("b.json", "STI Federal", "Data Scientist, Level 2", "h2", source_url=url)
+        self._add_file(
+            "a.json", "STI Federal", "Data Scientist, Level 1", "h1", source_url=url
+        )
+        self._add_file(
+            "b.json", "STI Federal", "Data Scientist, Level 2", "h2", source_url=url
+        )
         result = dedup_pending_roles.run_deduplication(dry_run=True)
         self.assertEqual(result["total_clusters"], 0)
 
     def test_same_title_sharing_a_listing_url_still_clusters(self):
         url = "https://careers.example.com/jobs/123"
         self._add_file("a.json", "STI Federal", "Data Scientist", "h1", source_url=url)
-        self._add_file("b.json", "STI  Federal!", "Data  Scientist.", "h2", source_url=url)
+        self._add_file(
+            "b.json", "STI  Federal!", "Data  Scientist.", "h2", source_url=url
+        )
         result = dedup_pending_roles.run_deduplication(dry_run=True)
         self.assertEqual(result["total_clusters"], 1)
 
@@ -128,7 +139,9 @@ if __name__ == "__main__":
         # Matching ids alone made the file a duplicate of its own mirror
         # row, and an --apply run would have archived that row and churned
         # it straight back (6 of a profile's roles, 2026-09-15).
-        self._add_file("2026-09-01_MTB_Data_Engineer.json", "M&T Bank", "Data Engineer", "h9")
+        self._add_file(
+            "2026-09-01_MTB_Data_Engineer.json", "M&T Bank", "Data Engineer", "h9"
+        )
         self._add_row("a8bba43919", "M&T Bank", "Data Engineer", "h9")
         result = dedup_pending_roles.run_deduplication(dry_run=True)
         self.assertEqual(result["total_clusters"], 0)

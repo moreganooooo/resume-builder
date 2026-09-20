@@ -88,14 +88,21 @@ class TestMoveJdTo(unittest.TestCase):
             src = os.path.join(d, "job.json")
             with open(src, "w", encoding="utf-8") as f:
                 json.dump(
-                    {"source_job_id": "arch-1", "title": "Role", "company": "Co",
-                     "status": "Pending", "description": "x"},
+                    {
+                        "source_job_id": "arch-1",
+                        "title": "Role",
+                        "company": "Co",
+                        "status": "Pending",
+                        "description": "x",
+                    },
                     f,
                 )
             with patch("jd_manager.ARCHIVED_DIR", os.path.join(d, "archived")):
                 jd_manager.archive_jd(src)
         self.assertIn("arch-1", [r["id"] for r in db.get_jobs_by_status("archived")])
-        still_pending = db.get_jobs_by_status("Pending") + db.get_jobs_by_status("pending")
+        still_pending = db.get_jobs_by_status("Pending") + db.get_jobs_by_status(
+            "pending"
+        )
         self.assertNotIn("arch-1", [r["id"] for r in still_pending])
 
     def test_repeated_collisions_keep_suffixing(self):

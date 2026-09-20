@@ -156,6 +156,7 @@ def _starting_rewrite_model() -> str:
         return REWRITE_FALLBACK_MODEL
     return REWRITE_MODEL
 
+
 # Matches rewrite_bullets.py's REWRITE_MAX_OUTPUT_TOKENS exactly -- bounds
 # wasted cost/latency on a real failure mode (2026-07-16) where a model
 # produces a valid answer up front, then degenerates into repeating a
@@ -411,9 +412,12 @@ MAX_BACKOFF_SECS = 90
 # GEMINI CLIENT  (raw REST)
 # ---------------------------------------------------------------------------
 
-from gemini_client import SCORING_FALLBACKS, GeminiClient  # replaces the inline class
-from gemini_client import SustainedFailureError
 import gemini_client
+from gemini_client import (  # replaces the inline class
+    SCORING_FALLBACKS,
+    GeminiClient,
+    SustainedFailureError,
+)
 
 # ---------------------------------------------------------------------------
 # TIER 2 SEGMENT HELPERS  (ported verbatim from rewrite_bullets.py)
@@ -976,9 +980,8 @@ def semantic_skill_matches(jd_skill_names) -> list:
     if not jd_skill_names:
         return []
     try:
-        import numpy as np
-
         import embed_verified_skills as evs
+        import numpy as np
         from embed_bullet_bank import BATCH_SIZE, embed_batch
 
         names = evs.load_verified_skill_names()
@@ -1009,7 +1012,9 @@ def semantic_skill_matches(jd_skill_names) -> list:
         return []
 
 
-def build_verified_skills_context(jd_text: str = "", jd_skill_names: list = None) -> str:
+def build_verified_skills_context(
+    jd_text: str = "", jd_skill_names: list = None
+) -> str:
     """The candidate's own confirmed tools/skills for evaluate_fit()'s user
     content, or "" when there is nothing to say.
 
@@ -1076,7 +1081,8 @@ def build_verified_skills_context(jd_text: str = "", jd_skill_names: list = None
         )
 
     matched = sorted(
-        set(relevant_skill_names(names, jd_text)) | set(semantic_skill_matches(jd_skill_names)),
+        set(relevant_skill_names(names, jd_text))
+        | set(semantic_skill_matches(jd_skill_names)),
         key=str.lower,
     )
     # No "N of M" count: v1's "65 of the candidate's 1,387" framing was the
@@ -1088,7 +1094,11 @@ def build_verified_skills_context(jd_text: str = "", jd_skill_names: list = None
         + "These are the candidate's confirmed skills that match this posting, by name or "
         "close meaning. A requirement not listed here may still be covered under another "
         "name -- weigh the narrative and background before listing it as a gap.\n"
-        + (", ".join(matched) if matched else "(none of the confirmed skills are named in this posting)")
+        + (
+            ", ".join(matched)
+            if matched
+            else "(none of the confirmed skills are named in this posting)"
+        )
     )
 
 
@@ -1250,8 +1260,11 @@ def _page1_overflow_trim(resume_data: dict, profile_data: dict):
         return None
     key = validate_resume._normalize_company(trim_role)
     role_cfg = next(
-        (r for r in profile_data.get("roles") or []
-         if validate_resume._normalize_company(str(r.get("name", ""))) == key),
+        (
+            r
+            for r in profile_data.get("roles") or []
+            if validate_resume._normalize_company(str(r.get("name", ""))) == key
+        ),
         {},
     )
     minimum = int(role_cfg.get("min_bullets") or 0)
@@ -1267,14 +1280,19 @@ def _page1_overflow_trim(resume_data: dict, profile_data: dict):
         if len(bullets) <= minimum:
             return None
         candidates = [
-            b for b in bullets
-            if not any(p and p in validate_resume._normalize_company(b) for p in protected)
+            b
+            for b in bullets
+            if not any(
+                p and p in validate_resume._normalize_company(b) for p in protected
+            )
         ]
         if not candidates:
             return None
         victim = min(candidates, key=lambda b: (bool(re.search(r"\d", b)), -len(b)))
         trimmed = copy.deepcopy(resume_data)
-        trimmed["EXPERIENCE"][j_index]["achievements"] = [b for b in bullets if b is not victim]
+        trimmed["EXPERIENCE"][j_index]["achievements"] = [
+            b for b in bullets if b is not victim
+        ]
         return trimmed, victim
     return None
 
@@ -1617,7 +1635,7 @@ def _parse_cv_skill_groups(cv_text: str) -> dict:
         nested = re.match(r"^[*-]\s+", line)
         if not nested:
             parent = None
-        match = _SKILLS_LINE_LABEL.match(line[nested.end():] if nested else line)
+        match = _SKILLS_LINE_LABEL.match(line[nested.end() :] if nested else line)
         if not match:
             continue
         label = parent if (nested and parent) else match.group("label").strip()
@@ -1674,7 +1692,7 @@ def _skills_line_legal(line: str, max_chars: int, wrap_min: int) -> bool:
 
 
 def _title_case_skill(name: str) -> str:
-    """"supervised & unsupervised learning" -> "Supervised & Unsupervised
+    """ "supervised & unsupervised learning" -> "Supervised & Unsupervised
     Learning", but "spaCy" and "NLTK" are left exactly as the ledger spells
     them. Skills lines are Title Case by style rule, and the validator
     reports lowercase words on them as a violation -- so appending a
@@ -1682,7 +1700,8 @@ def _title_case_skill(name: str) -> str:
     one. A token carrying any uppercase of its own is already spelled the
     way its owner spells it; only all-lowercase words are touched."""
     return " ".join(
-        word.capitalize() if word.islower() else word for word in (name or "").split(" ")
+        word.capitalize() if word.islower() else word
+        for word in (name or "").split(" ")
     )
 
 
@@ -1765,8 +1784,10 @@ def _assign_skill_groups_with_model(keywords: list, labels: list) -> dict:
         "Place each skill on the resume skills row it most naturally belongs to. "
         "Use ONLY the row labels given, spelled exactly. If no row clearly fits a "
         "skill, leave that skill out rather than forcing it.\n\n"
-        "ROWS:\n" + "\n".join(f"- {l}" for l in labels)
-        + "\n\nSKILLS:\n" + "\n".join(f"- {k}" for k in keywords)
+        "ROWS:\n"
+        + "\n".join(f"- {l}" for l in labels)
+        + "\n\nSKILLS:\n"
+        + "\n".join(f"- {k}" for k in keywords)
         + '\n\nReturn JSON: {"placements": [{"skill": "...", "row": "..."}]}'
     )
     text, _usage = GeminiClient.generate(
@@ -1785,8 +1806,13 @@ def _assign_skill_groups_with_model(keywords: list, labels: list) -> dict:
 
 
 def _place_verified_skill(
-    lines: list, form: str, label: str, targets: list, cv_groups: dict,
-    max_chars: int, wrap_min: int,
+    lines: list,
+    form: str,
+    label: str,
+    targets: list,
+    cv_groups: dict,
+    max_chars: int,
+    wrap_min: int,
 ) -> list:
     """Returns a new SKILLS list with `form` placed under `label`, or None
     when it cannot be placed legally."""
@@ -1845,9 +1871,12 @@ def _keyword_now_credited(
     trial = dict(resume_data)
     trial["SKILLS"] = new_lines
     try:
-        still = validate_resume.check_keyword_coverage(
-            trial, jd_keywords, {}
-        ).get("missing") or []
+        still = (
+            validate_resume.check_keyword_coverage(trial, jd_keywords, {}).get(
+                "missing"
+            )
+            or []
+        )
     except Exception:
         return False
     target = str(keyword).strip().casefold()
@@ -1876,7 +1905,8 @@ def _drop_target_role_titles(jd_keywords, profile_data: dict):
     for key in ("tools", "hard_skills", "core_functions"):
         if isinstance(cleaned.get(key), list):
             cleaned[key] = [
-                k for k in cleaned[key]
+                k
+                for k in cleaned[key]
                 if not (isinstance(k, str) and k.strip().casefold() in titles)
             ]
     return cleaned
@@ -1900,8 +1930,12 @@ def verified_jd_skills(jd_keywords, verified_names: list) -> list:
 
 
 def _top_up_verified_skills(
-    resume_data: dict, jd_keywords: dict, style_rules: dict, cv_text: str,
-    verified_names: list, assign_groups=None,
+    resume_data: dict,
+    jd_keywords: dict,
+    style_rules: dict,
+    cv_text: str,
+    verified_names: list,
+    assign_groups=None,
 ) -> tuple:
     """Appends JD keywords the candidate is ALREADY verified for, but which
     the finished resume happens not to say, onto the matching SKILLS line.
@@ -1931,9 +1965,12 @@ def _top_up_verified_skills(
     if not skills or not jd_keywords:
         return resume_data, []
     try:
-        missing = validate_resume.check_keyword_coverage(
-            resume_data, jd_keywords, {}
-        ).get("missing") or []
+        missing = (
+            validate_resume.check_keyword_coverage(resume_data, jd_keywords, {}).get(
+                "missing"
+            )
+            or []
+        )
     except Exception:
         return resume_data, []
     if not missing:
@@ -1953,13 +1990,13 @@ def _top_up_verified_skills(
     # and the coverage check still has to credit the edit.
     if assign_groups:
         ungrouped = [
-            k for k in missing
+            k
+            for k in missing
             if _ledger_verifies(k, ledger)
             and not _resolve_verified_skill(k, ledger, cv_groups)
         ]
         labels = [
-            _skill_line_items(line)[0] for line in lines
-            if _skill_line_items(line)[0]
+            _skill_line_items(line)[0] for line in lines if _skill_line_items(line)[0]
         ]
         if ungrouped and labels:
             try:
@@ -1985,7 +2022,8 @@ def _top_up_verified_skills(
         # word like "Marketing" would otherwise point at the wrong row.
         kin = {
             i: sum(
-                1 for item in _skill_line_items(line)[1]
+                1
+                for item in _skill_line_items(line)[1]
                 if cv_groups.get(item.casefold()) == label
             )
             for i, line in enumerate(lines)
@@ -1996,7 +2034,8 @@ def _top_up_verified_skills(
             targets = [i for i in kin if kin[i] == best_kin]
         else:
             targets = [
-                i for i, line in enumerate(lines)
+                i
+                for i, line in enumerate(lines)
                 if wanted & _label_tokens(_skill_line_items(line)[0])
             ]
         # A shared word ("Marketing" in both "Email & Lifecycle Marketing" and
@@ -2387,7 +2426,10 @@ def repair_violations_surgically(
         v for v in violations if v.startswith("Bullet ends with trailing punctuation")
     ]
     if punct_violations:
-        for container_key, list_key in (("EXPERIENCE", "achievements"), ("EDUCATION", "bullets")):
+        for container_key, list_key in (
+            ("EXPERIENCE", "achievements"),
+            ("EDUCATION", "bullets"),
+        ):
             for entry in current_data.get(container_key, []):
                 texts = entry.get(list_key, [])
                 for idx, bullet in enumerate(texts):
@@ -2395,11 +2437,9 @@ def repair_violations_surgically(
                     if validate_resume._TRAILING_PUNCTUATION_RE.search(stripped):
                         new_text = stripped.rstrip()
                         while validate_resume._TRAILING_PUNCTUATION_RE.search(new_text):
-                            new_text = (
-                                validate_resume._TRAILING_PUNCTUATION_RE.sub(
-                                    "", new_text
-                                ).rstrip()
-                            )
+                            new_text = validate_resume._TRAILING_PUNCTUATION_RE.sub(
+                                "", new_text
+                            ).rstrip()
                         if new_text and new_text != bullet:
                             entry[list_key][idx] = new_text
                             punct_modified = True
@@ -2423,7 +2463,9 @@ def repair_violations_surgically(
             match = validate_resume._SKILLS_LINE_RE.match(line.strip())
             if not match:
                 continue
-            items = [p.strip() for p in re.split(r"[,;|]", match.group("items")) if p.strip()]
+            items = [
+                p.strip() for p in re.split(r"[,;|]", match.group("items")) if p.strip()
+            ]
             kept = [
                 p
                 for p in items
@@ -3046,7 +3088,8 @@ def compute_skill_coverage_matrix(skill_names: list) -> list:
     # since there is somewhere else to go: the full ~150s wait on every
     # rate-limited evaluation is what stalled a 374-role re-score for hours.
     candidates = [
-        (model, index_paths(kb_dir, model)[0]) for model in (EMBED_MODEL, BACKUP_EMBED_MODEL)
+        (model, index_paths(kb_dir, model)[0])
+        for model in (EMBED_MODEL, BACKUP_EMBED_MODEL)
     ]
     candidates = [(model, npy) for model, npy in candidates if os.path.exists(npy)]
     if not candidates:
@@ -3624,9 +3667,15 @@ def legitimacy_penalty(
     """Composite points a posting_legitimacy verdict costs. None or "High
     Confidence" costs nothing."""
     if posting_legitimacy == "Suspicious":
-        return LEGITIMACY_SUSPICIOUS_PENALTY if suspicious_penalty is None else suspicious_penalty
+        return (
+            LEGITIMACY_SUSPICIOUS_PENALTY
+            if suspicious_penalty is None
+            else suspicious_penalty
+        )
     if posting_legitimacy == "Proceed with Caution":
-        return LEGITIMACY_CAUTION_PENALTY if caution_penalty is None else caution_penalty
+        return (
+            LEGITIMACY_CAUTION_PENALTY if caution_penalty is None else caution_penalty
+        )
     return 0.0
 
 
@@ -3951,13 +4000,19 @@ def build_tagline_descriptor_block(role_dna: dict | None) -> str:
     return "=== TAGLINE DESCRIPTORS ===\n" + "\n".join(lines)
 
 
-def build_commute_context(distance_miles, radius_miles, workplace, location=None) -> str:
+def build_commute_context(
+    distance_miles, radius_miles, workplace, location=None
+) -> str:
     """One computed fact for the evaluator: how far a non-remote posting's
     office is from home, against the configured radius. Without it the model
     judged the candidate's commute deal-breaker blind and called offices
     3 miles away "incompatible" (2026-09-14). Empty when remote, or when the
     distance or radius is unknown -- unknown is never stated as near or far."""
-    if workplace == location_filter.REMOTE or distance_miles is None or not radius_miles:
+    if (
+        workplace == location_filter.REMOTE
+        or distance_miles is None
+        or not radius_miles
+    ):
         return ""
     where = f" ({location})" if location else ""
     if distance_miles <= radius_miles:
@@ -4108,14 +4163,22 @@ def rescore_evaluation_with_location(
     if work_constraints_settings and description:
         import work_constraints
 
-        seen = {(b.get("category"), _blocker_text(b)) for b in blockers if isinstance(b, dict)}
+        seen = {
+            (b.get("category"), _blocker_text(b))
+            for b in blockers
+            if isinstance(b, dict)
+        }
         for finding in work_constraints.detect(description, work_constraints_settings):
             if finding["severity"] == work_constraints.BLOCKER:
                 key = ("physical_demands", finding["text"])
                 if key not in seen:
                     seen.add(key)
                     blockers.append(
-                        {"text": finding["text"], "category": "physical_demands", "direction": "n/a"}
+                        {
+                            "text": finding["text"],
+                            "category": "physical_demands",
+                            "direction": "n/a",
+                        }
                     )
             else:
                 constraint_penalty += finding["penalty"]
@@ -4218,11 +4281,16 @@ def rescore_evaluation_with_location(
             location_filter.HYBRID,
         ):
             for key, default in (
-                ("stress_signal_penalty_per_category", STRESS_SIGNAL_PENALTY_PER_CATEGORY),
+                (
+                    "stress_signal_penalty_per_category",
+                    STRESS_SIGNAL_PENALTY_PER_CATEGORY,
+                ),
                 ("stress_signal_max_penalty", STRESS_SIGNAL_MAX_PENALTY),
             ):
                 base_value = weights.get(key)
-                weights[key] = (default if base_value is None else base_value) * multiplier
+                weights[key] = (
+                    default if base_value is None else base_value
+                ) * multiplier
         comp = fit_composite_score(
             fit_score,
             interview_odds_score,
@@ -4384,7 +4452,9 @@ def _resolve_company_location(research: dict | None, jd_data: dict) -> str:
 _SMALL_TITLE_WORDS = {"and", "of", "for", "the", "to", "in", "on", "at", "a", "an"}
 
 
-_WORD_COUNT_VIOLATION = re.compile(r"Expected (\d+)-(\d+) words across body paragraphs, got (\d+)")
+_WORD_COUNT_VIOLATION = re.compile(
+    r"Expected (\d+)-(\d+) words across body paragraphs, got (\d+)"
+)
 
 
 def _word_count_fix_guidance(violations) -> str:
@@ -4574,9 +4644,13 @@ def build_recommendations_block(recommendations) -> str:
             continue
         attribution = name + (f", {rec['title']}" if rec.get("title") else "")
         detail = ", ".join(
-            str(x) for x in (rec.get("relationship"), str(rec.get("date") or "")[:4]) if x
+            str(x)
+            for x in (rec.get("relationship"), str(rec.get("date") or "")[:4])
+            if x
         )
-        lines.append(f'- "{quote}" -- {attribution}' + (f" ({detail})" if detail else ""))
+        lines.append(
+            f'- "{quote}" -- {attribution}' + (f" ({detail})" if detail else "")
+        )
     if not lines:
         return ""
     return (
@@ -4586,9 +4660,7 @@ def build_recommendations_block(recommendations) -> str:
         "by name and title, woven into a first-person sentence (the letter stays in the "
         "candidate's voice). Keep it under 30 words; you may shorten it with an ellipsis, but "
         "never change, combine or paraphrase the words, and never attribute anything not "
-        "listed here. If none fits naturally, use none.\n"
-        + "\n".join(lines)
-        + "\n"
+        "listed here. If none fits naturally, use none.\n" + "\n".join(lines) + "\n"
     )
 
 
@@ -4699,8 +4771,13 @@ class ResumeEngine:
                         # full tools ledger alone pushed this prompt past the
                         # free tier's 250k tokens/minute, so every retry 429'd.
                         loaded = json.loads(content)
-                        content = (compact_tools_text(loaded.get("tools", [])) if filename == "verified_tools.json"
-                                   else json.dumps(loaded, ensure_ascii=False, separators=(",", ":")))
+                        content = (
+                            compact_tools_text(loaded.get("tools", []))
+                            if filename == "verified_tools.json"
+                            else json.dumps(
+                                loaded, ensure_ascii=False, separators=(",", ":")
+                            )
+                        )
                     master_context += f"--- START OF {filename} ---\n{content}\n--- END OF {filename} ---\n\n"
                 except Exception as e:
                     cli_art.console.print(
@@ -4796,12 +4873,13 @@ class ResumeEngine:
                 bullet_count = ed.get("bullet_count", 1)
                 # Same defense for institution/credential: a partial entry
                 # renders what it has rather than aborting the build.
-                label = " -- ".join(
-                    p for p in (ed.get("institution"), ed.get("credential")) if p
-                ) or "Unnamed education entry"
-                lines.append(
-                    f"{i}. {label}: exactly {bullet_count} bullet(s)"
+                label = (
+                    " -- ".join(
+                        p for p in (ed.get("institution"), ed.get("credential")) if p
+                    )
+                    or "Unnamed education entry"
                 )
+                lines.append(f"{i}. {label}: exactly {bullet_count} bullet(s)")
 
             edu_slots = profile_paths.education_achievement_slots()
             if edu_slots:
@@ -4856,14 +4934,12 @@ class ResumeEngine:
         # property of THIS candidate's documented register, and only emitted
         # when the profile opts in -- a profile without the key gets no line
         # and tailor_resume.md's default (pronoun-free Summary) applies.
-        if (profile_data.get("voice_preferences") or {}).get(
-            "summary_first_person"
-        ):
+        if (profile_data.get("voice_preferences") or {}).get("summary_first_person"):
             lines.append(
                 "\nSummary Voice: first person (\"I've owned...\") is this candidate's real "
-                "register -- their own favorite summaries all speak as \"I\" (see the "
+                'register -- their own favorite summaries all speak as "I" (see the '
                 "=== VOICE FAVORITES === context block when present). Write the Summary in "
-                "first person; never third person (\"She leads...\", \"[Name] is a...\"). "
+                'first person; never third person ("She leads...", "[Name] is a..."). '
                 "Bullets, Skills, and Education stay pronoun-free regardless."
             )
 
@@ -6227,7 +6303,11 @@ class ResumeEngine:
             # this exact bank (same content hash) -- otherwise fall through to
             # the unranked fallback below, as before.
             try:
-                from embed_bullet_bank import BACKUP_EMBED_MODEL, embed_batch, index_paths
+                from embed_bullet_bank import (
+                    BACKUP_EMBED_MODEL,
+                    embed_batch,
+                    index_paths,
+                )
 
                 b_npy, b_meta, _ = index_paths(self.kb_dir, BACKUP_EMBED_MODEL)
                 if os.path.exists(b_npy) and os.path.exists(b_meta):
@@ -6367,7 +6447,9 @@ class ResumeEngine:
         if roster_names and "Role / Company" in df.columns:
             allowed = roster_names | set(extra_company_minimums or {})
             excluded_companies |= {
-                c for c in set(df["Role / Company"].fillna("")) if c and c not in allowed
+                c
+                for c in set(df["Role / Company"].fillna(""))
+                if c and c not in allowed
             }
         excluded_values = (
             df["Role / Company"].fillna("").values
@@ -6376,7 +6458,10 @@ class ResumeEngine:
         )
 
         def _excluded(idx: int) -> bool:
-            return excluded_values is not None and excluded_values[idx] in excluded_companies
+            return (
+                excluded_values is not None
+                and excluded_values[idx] in excluded_companies
+            )
 
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
@@ -7177,9 +7262,7 @@ class ResumeEngine:
 
         coverletter_prompt = self.load_prompt("tailor_coverletter.md")
         background_context = self.build_audit_static_prefix(include_evidence_guide=True)
-        role_block = (
-            f"\n\n=== ROLE TITLE ===\n{role_title}\n" if role_title else ""
-        )
+        role_block = f"\n\n=== ROLE TITLE ===\n{role_title}\n" if role_title else ""
         system_instruction = f"{coverletter_prompt}\n\n{background_context}{research_block}{referral_block}{keyword_block}{recommendations_block}{role_block}"
 
         letter_text, _ = GeminiClient.generate(
@@ -7231,7 +7314,8 @@ class ResumeEngine:
             style_rules,
             kb_corpus=background_context,
             keeper_bullets=keeper_bullets,
-            keeper_embs=keeper_embs, keeper_embs_backup=keeper_embs_backup,
+            keeper_embs=keeper_embs,
+            keeper_embs_backup=keeper_embs_backup,
             voice_rules=self.voice_rules,
             role_title=role_title,
         )
@@ -7248,11 +7332,10 @@ class ResumeEngine:
                     f"    - {cli_art._escape_markup(_condensed_violation(str(v)))}",
                     level=cli_art.NORMAL,
                 )
-            fix_contents = (
-                f"=== ORIGINAL COVER LETTER JSON ===\n{json.dumps(letter_data, indent=2)}\n\n"
-                f"=== ISSUES TO FIX (change nothing else) ===\n"
-                + "\n".join(f"- {v}" for v in violations)
-                + _word_count_fix_guidance(violations)
+            fix_contents = f"=== ORIGINAL COVER LETTER JSON ===\n{json.dumps(letter_data, indent=2)}\n\n" f"=== ISSUES TO FIX (change nothing else) ===\n" + "\n".join(
+                f"- {v}" for v in violations
+            ) + _word_count_fix_guidance(
+                violations
             )
             fix_temperature = round(0.2 * (attempt - 1), 2)
             fix_text, _ = GeminiClient.generate(
@@ -7270,7 +7353,8 @@ class ResumeEngine:
                     style_rules,
                     kb_corpus=background_context,
                     keeper_bullets=keeper_bullets,
-                    keeper_embs=keeper_embs, keeper_embs_backup=keeper_embs_backup,
+                    keeper_embs=keeper_embs,
+                    keeper_embs_backup=keeper_embs_backup,
                     voice_rules=self.voice_rules,
                     role_title=role_title,
                 )
@@ -7727,23 +7811,28 @@ class ResumeEngine:
                     jd_keywords,
                     [
                         (t.get("name") or "").strip()
-                        for t in (skills_menu._load_verified_tools() or {}).get("tools", [])
+                        for t in (skills_menu._load_verified_tools() or {}).get(
+                            "tools", []
+                        )
                     ],
                 )
             except Exception:
                 _priority_skills = []
             _priority_block = (
-                "=== VERIFIED SKILLS THIS JD ASKS FOR ===\n"
-                "The candidate is verified for every skill below AND the job asks for it. "
-                "Give each a place in SKILLS before any generic item the JD never names "
-                "(e.g. drop \"Dashboards\" to make room for \"Report & Dashboard Building\"). "
-                "Keep line-length rules; shorten or cut non-JD items rather than skipping these.\n"
-                + "\n".join(f"- {k}" for k in _priority_skills)
-                + "\n\n"
-            ) if _priority_skills else ""
+                (
+                    "=== VERIFIED SKILLS THIS JD ASKS FOR ===\n"
+                    "The candidate is verified for every skill below AND the job asks for it. "
+                    "Give each a place in SKILLS before any generic item the JD never names "
+                    '(e.g. drop "Dashboards" to make room for "Report & Dashboard Building"). '
+                    "Keep line-length rules; shorten or cut non-JD items rather than skipping these.\n"
+                    + "\n".join(f"- {k}" for k in _priority_skills)
+                    + "\n\n"
+                )
+                if _priority_skills
+                else ""
+            )
             combined_contents = (
-                _priority_block
-                + f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
+                _priority_block + f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
                 f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
                 f"=== MASTER RESUME ===\n{json.dumps(master_resume, indent=2)}\n\n"
                 f"=== REFINED BULLETS ===\n{bullets_block}"
@@ -8081,7 +8170,9 @@ class ResumeEngine:
             # sample failed twice on 2026-09-14 with only such violations left
             # (Snowflake/Redshift/Docker, then Spark/Snowflake/Prototyping) --
             # the retry loop kept re-adding them and the build returned {}.
-            if violations and any("Hallucinated skill or tool" in v for v in violations):
+            if violations and any(
+                "Hallucinated skill or tool" in v for v in violations
+            ):
                 resume_data, violations = repair_violations_surgically(
                     resume_data,
                     violations,
@@ -8655,7 +8746,14 @@ class ResumeEngine:
         while True:
             try:
                 pdf_result = subprocess.run(
-                    ["node", pdf_script, html_out, pdf_out, "--format=letter", "--max-pages=2"],
+                    [
+                        "node",
+                        pdf_script,
+                        html_out,
+                        pdf_out,
+                        "--format=letter",
+                        "--max-pages=2",
+                    ],
                     capture_output=True,
                     text=True,
                     timeout=PDF_GENERATION_TIMEOUT_SECONDS,
@@ -8778,20 +8876,28 @@ class ResumeEngine:
                         b for _, _, b in _page1_condense_targets(resume_data, _p_yaml)
                     }
                     condensed_resume_data = _merge_condensed_bullets(
-                        resume_data, normalize_resume.normalize(condensed), condense_targets
+                        resume_data,
+                        normalize_resume.normalize(condensed),
+                        condense_targets,
                     )
                     _validate_kwargs = dict(
                         role_bullet_maximums=role_bullet_maximums,
                         bullet_tuples=bullet_tuples,
                     )
                     baseline_violations = validate_resume.validate(
-                        resume_data, style_rules_for_validation, role_roster,
-                        role_bullet_minimums, **_validate_kwargs,
+                        resume_data,
+                        style_rules_for_validation,
+                        role_roster,
+                        role_bullet_minimums,
+                        **_validate_kwargs,
                     )
                     condense_violations = _newly_introduced(
                         validate_resume.validate(
-                            condensed_resume_data, style_rules_for_validation,
-                            role_roster, role_bullet_minimums, **_validate_kwargs,
+                            condensed_resume_data,
+                            style_rules_for_validation,
+                            role_roster,
+                            role_bullet_minimums,
+                            **_validate_kwargs,
                         ),
                         baseline_violations,
                     )
@@ -8805,11 +8911,15 @@ class ResumeEngine:
                         # build was discarded. Keep each edit that is clean
                         # on its own.
                         partial = _keep_clean_bullet_edits(
-                            resume_data, condensed_resume_data,
+                            resume_data,
+                            condensed_resume_data,
                             lambda data: _newly_introduced(
                                 validate_resume.validate(
-                                    data, style_rules_for_validation, role_roster,
-                                    role_bullet_minimums, **_validate_kwargs,
+                                    data,
+                                    style_rules_for_validation,
+                                    role_roster,
+                                    role_bullet_minimums,
+                                    **_validate_kwargs,
                                 ),
                                 baseline_violations,
                             ),

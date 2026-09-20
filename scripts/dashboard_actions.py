@@ -147,7 +147,9 @@ def _archive_copies(archive_fn) -> None:
     try:
         n = archive_fn()
         if n:
-            print(f"Also archived {n} duplicate cop{'y' if n == 1 else 'ies'} of this posting.")
+            print(
+                f"Also archived {n} duplicate cop{'y' if n == 1 else 'ies'} of this posting."
+            )
     except Exception as exc:
         print(f"note: could not archive duplicate copies: {exc}", file=sys.stderr)
 
@@ -166,7 +168,9 @@ def _archive(jd_path: str, jobs_path: str) -> int:
 
         archived_path = jd_manager.archive_jd(jd_path)
         print(f"Archived to: {archived_path}")
-        _archive_copies(lambda: dedup_pending_roles.archive_copies_of_file(archived_path))
+        _archive_copies(
+            lambda: dedup_pending_roles.archive_copies_of_file(archived_path)
+        )
     except Exception as exc:
         print(f"archive failed for {jd_path}: {exc}", file=sys.stderr)
         _user_error(

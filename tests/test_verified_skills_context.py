@@ -69,7 +69,10 @@ class TestSkillsFilteredToThePosting(unittest.TestCase):
         return {"tools": filler + [{"name": n} for n in extra]}
 
     def test_semantic_matches_join_the_block_under_a_neutral_header(self):
-        with patch("orchestrator.semantic_skill_matches", return_value=["Customer Journey Mapping"]):
+        with patch(
+            "orchestrator.semantic_skill_matches",
+            return_value=["Customer Journey Mapping"],
+        ):
             with (
                 patch(
                     "skills_menu._load_verified_tools",
@@ -111,8 +114,12 @@ class TestSkillsFilteredToThePosting(unittest.TestCase):
 
     def test_large_ledger_keeps_only_what_the_posting_names(self):
         block = self._block(
-            ["Salesforce CRM", "Customer relationship management (CRM) systems",
-             "Outreach.io", "Figma"],
+            [
+                "Salesforce CRM",
+                "Customer relationship management (CRM) systems",
+                "Outreach.io",
+                "Figma",
+            ],
             "You'll own our Salesforce instance and Outreach.io sequences. CRM experience a plus.",
         )
         self.assertIn("relevant to this posting", block)
@@ -140,9 +147,8 @@ class TestSemanticSkillMatches(unittest.TestCase):
         import json
         import tempfile
 
-        import numpy as np
-
         import embed_verified_skills as evs
+        import numpy as np
 
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(__import__("shutil").rmtree, self.tmp, True)
@@ -163,13 +169,19 @@ class TestSemanticSkillMatches(unittest.TestCase):
     def test_close_meaning_matches_and_distant_ones_do_not(self):
         with patch("embed_bullet_bank.embed_batch", return_value=[[1.0, 0.0]]):
             # Salesforce: 1.0 (kept); Lifecycle Marketing: 0.71 (below 0.82)
-            self.assertEqual(orchestrator.semantic_skill_matches(["CRM platform"]), ["Salesforce"])
+            self.assertEqual(
+                orchestrator.semantic_skill_matches(["CRM platform"]), ["Salesforce"]
+            )
 
     def test_vectors_built_from_another_ledger_are_never_used(self):
         import embed_verified_skills as evs
 
         with (
-            patch.object(evs, "load_verified_skill_names", lambda: ["Salesforce", "Something New"]),
+            patch.object(
+                evs,
+                "load_verified_skill_names",
+                lambda: ["Salesforce", "Something New"],
+            ),
             patch("embed_bullet_bank.embed_batch") as mock_embed,
         ):
             self.assertEqual(orchestrator.semantic_skill_matches(["CRM platform"]), [])
@@ -420,9 +432,8 @@ class TestComputeSkillCoverageMatrix(unittest.TestCase):
         self.assertIn("coverage", result[0])
 
     def test_rate_limited_primary_falls_back_to_backup_model(self):
-        import numpy as np
-
         import embed_bullet_bank
+        import numpy as np
 
         def fake_embed(batch, model=None, max_retries=None):
             if model == embed_bullet_bank.EMBED_MODEL:
@@ -432,15 +443,22 @@ class TestComputeSkillCoverageMatrix(unittest.TestCase):
         with (
             patch("os.path.exists", return_value=True),
             patch("numpy.load", return_value=np.ones((2, 768), dtype=np.float32)),
-            patch("embed_bullet_bank.embed_batch", side_effect=fake_embed) as mock_embed,
+            patch(
+                "embed_bullet_bank.embed_batch", side_effect=fake_embed
+            ) as mock_embed,
         ):
             result = orchestrator.compute_skill_coverage_matrix(["Python"])
 
         self.assertEqual([r["skill"] for r in result], ["Python"])
         models = [c.kwargs.get("model") for c in mock_embed.call_args_list]
-        self.assertEqual(models, [embed_bullet_bank.EMBED_MODEL, embed_bullet_bank.BACKUP_EMBED_MODEL])
+        self.assertEqual(
+            models,
+            [embed_bullet_bank.EMBED_MODEL, embed_bullet_bank.BACKUP_EMBED_MODEL],
+        )
         # Short ladder: the backup exists, so the primary never waits ~150s.
-        self.assertTrue(all(c.kwargs.get("max_retries") == 2 for c in mock_embed.call_args_list))
+        self.assertTrue(
+            all(c.kwargs.get("max_retries") == 2 for c in mock_embed.call_args_list)
+        )
 
 
 class TestEvaluateFitPopulatesSkillMatrix(unittest.TestCase):

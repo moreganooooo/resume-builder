@@ -481,8 +481,8 @@ class ExperienceEntry(BaseModel):
         default_factory=dict,
         description=(
             "Optional. Maps a bullet's zero-based index in `achievements` to a short "
-            "craft-area label (e.g. {\"0\": \"Product Messaging & Go-To-Market\", \"3\": "
-            "\"Sales Enablement\"}). The labeled bullet begins a new visually-grouped "
+            'craft-area label (e.g. {"0": "Product Messaging & Go-To-Market", "3": '
+            '"Sales Enablement"}). The labeled bullet begins a new visually-grouped '
             "subsection under this role, in the candidate's own grouping style. Use only "
             "when a role genuinely spans distinct functions; an empty object is the "
             "normal case."
@@ -663,10 +663,13 @@ class ScreenshotJdExtractionSchema(BaseModel):
     Node board-scanner providers already produce, so the output slots
     into the existing JD pipeline unchanged."""
 
-    job_title: str = Field(default="", description="The role's title, verbatim from the image")
+    job_title: str = Field(
+        default="", description="The role's title, verbatim from the image"
+    )
     company_name: str = Field(default="", description="The hiring company's name")
     location: str = Field(
-        default="", description="The posting's stated location, verbatim (city/state, 'Remote', etc.)"
+        default="",
+        description="The posting's stated location, verbatim (city/state, 'Remote', etc.)",
     )
     source_url: str = Field(
         default="",

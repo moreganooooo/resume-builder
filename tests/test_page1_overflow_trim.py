@@ -22,21 +22,27 @@ def _resume(bullets):
 
 class TestPage1OverflowTrim(unittest.TestCase):
     def test_drops_a_metric_free_bullet_before_a_longer_metric_one(self):
-        resume = _resume([
-            "Grew event attendance 40% across twelve months of author readings and signings",
-            "Reorganized the stockroom",
-            "Wrote staff picks shelf cards for new releases",
-        ])
+        resume = _resume(
+            [
+                "Grew event attendance 40% across twelve months of author readings and signings",
+                "Reorganized the stockroom",
+                "Wrote staff picks shelf cards for new releases",
+            ]
+        )
         new, removed = orchestrator._page1_overflow_trim(resume, PROFILE)
         self.assertEqual(removed, "Wrote staff picks shelf cards for new releases")
         self.assertEqual(len(new["EXPERIENCE"][0]["achievements"]), 2)
         self.assertEqual(len(resume["EXPERIENCE"][0]["achievements"]), 3)
 
     def test_never_goes_below_min_bullets(self):
-        self.assertIsNone(orchestrator._page1_overflow_trim(_resume(["a", "b"]), PROFILE))
+        self.assertIsNone(
+            orchestrator._page1_overflow_trim(_resume(["a", "b"]), PROFILE)
+        )
 
     def test_never_drops_a_protected_bullet(self):
-        resume = _resume(["Founded the reading club for teens", "Sold 30 books", "Ran 12 events"])
+        resume = _resume(
+            ["Founded the reading club for teens", "Sold 30 books", "Ran 12 events"]
+        )
         _, removed = orchestrator._page1_overflow_trim(resume, PROFILE)
         self.assertNotIn("reading club", removed)
 

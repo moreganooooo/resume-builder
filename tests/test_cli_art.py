@@ -687,8 +687,8 @@ class TestDisplayHelp(unittest.TestCase):
             self.assertIn(section, output)
 
     def test_every_cli_command_has_a_help_line(self):
-        import click
         import cli
+        import click
 
         documented = " ".join(command for command, _ in cli_art.HELP_ENTRIES)
         missing = []

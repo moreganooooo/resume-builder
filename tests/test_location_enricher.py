@@ -182,13 +182,39 @@ class TestLocationEnricher(unittest.TestCase):
         site = "\n* **Website:** https://acmecorp.com/"
         for grounding in (
             {},
-            {"groundingChunks": [{"maps": {"title": "Other Bakery - Google Maps",
-                                            "text": "* **Address:** 1 A St, Springfield, IL 62702" + site}}]},
-            {"groundingChunks": [{"maps": {"title": "Acme Corp - Google Maps",
-                                            "text": "* **Address:** 140 Otter St, Winnipeg, MB R3T 0M8, Canada" + site}}]},
-            {"groundingChunks": [{"maps": {"title": "Acme Corp Suites - Google Maps",
-                                            "text": "* **Address:** 1 A St, Springfield, IL 62702\n"
-                                                    "* **Website:** http://www.acmesuites-phones.com/"}}]},
+            {
+                "groundingChunks": [
+                    {
+                        "maps": {
+                            "title": "Other Bakery - Google Maps",
+                            "text": "* **Address:** 1 A St, Springfield, IL 62702"
+                            + site,
+                        }
+                    }
+                ]
+            },
+            {
+                "groundingChunks": [
+                    {
+                        "maps": {
+                            "title": "Acme Corp - Google Maps",
+                            "text": "* **Address:** 140 Otter St, Winnipeg, MB R3T 0M8, Canada"
+                            + site,
+                        }
+                    }
+                ]
+            },
+            {
+                "groundingChunks": [
+                    {
+                        "maps": {
+                            "title": "Acme Corp Suites - Google Maps",
+                            "text": "* **Address:** 1 A St, Springfield, IL 62702\n"
+                            "* **Website:** http://www.acmesuites-phones.com/",
+                        }
+                    }
+                ]
+            },
         ):
             with self.subTest(grounding=grounding):
                 self.assertIsNone(
@@ -209,7 +235,9 @@ class TestLocationEnricher(unittest.TestCase):
             patch("gemini_client.generate_grounded") as mock_call,
         ):
             self.assertIsNone(
-                location_enricher.lookup_google_maps_backup("Acme Corp", "Springfield", "IL")
+                location_enricher.lookup_google_maps_backup(
+                    "Acme Corp", "Springfield", "IL"
+                )
             )
         mock_call.assert_not_called()
 
@@ -231,14 +259,21 @@ class TestLocationEnricher(unittest.TestCase):
             grounding, "Acme Corp", "https://acmecorp.com"
         )
         self.assertTrue(
-            res["maps_uri"].startswith("https://www.google.com/maps/search/?api=1&query=")
+            res["maps_uri"].startswith(
+                "https://www.google.com/maps/search/?api=1&query="
+            )
         )
         self.assertIn("300+Tech+Dr", res["maps_uri"])
 
     def _step3_run(self, cache_entry):
         import datetime
 
-        settings = {"city": "Springfield", "state": "IL", "zip": "62701", "radius_miles": 25}
+        settings = {
+            "city": "Springfield",
+            "state": "IL",
+            "zip": "62701",
+            "radius_miles": 25,
+        }
         job = {
             "company": "Acme Corp",
             "location": "Springfield, IL",
@@ -258,7 +293,9 @@ class TestLocationEnricher(unittest.TestCase):
             patch("location_enricher.save_locations_cache"),
             patch("location_enricher.lookup_osm_nominatim", return_value=None),
             patch("location_enricher.lookup_website_via_search", return_value=None),
-            patch("location_enricher.lookup_google_maps_backup", return_value=found) as mock_maps,
+            patch(
+                "location_enricher.lookup_google_maps_backup", return_value=found
+            ) as mock_maps,
         ):
             res = location_enricher.enrich_job_location(
                 job, settings=settings, allow_search_backup=True, cache=cache
@@ -271,7 +308,12 @@ class TestLocationEnricher(unittest.TestCase):
 
         now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         res, mock_maps = self._step3_run(
-            {"failed": True, "checked_at": now, "gemini_failed": True, "gemini_checked_at": now}
+            {
+                "failed": True,
+                "checked_at": now,
+                "gemini_failed": True,
+                "gemini_checked_at": now,
+            }
         )
         mock_maps.assert_called_once()
         self.assertEqual(res["status"], "resolved")
@@ -281,7 +323,12 @@ class TestLocationEnricher(unittest.TestCase):
 
         now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         _res, mock_maps = self._step3_run(
-            {"failed": True, "checked_at": now, "maps_failed": True, "maps_checked_at": now}
+            {
+                "failed": True,
+                "checked_at": now,
+                "maps_failed": True,
+                "maps_checked_at": now,
+            }
         )
         mock_maps.assert_not_called()
 
@@ -291,14 +338,20 @@ class TestLocationEnricher(unittest.TestCase):
         fresh = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         old = "2020-01-01T00:00:00Z"
         self.assertTrue(
-            location_enricher.maps_data_expired({"source": "google_maps", "fetched_at": old})
+            location_enricher.maps_data_expired(
+                {"source": "google_maps", "fetched_at": old}
+            )
         )
         self.assertFalse(
-            location_enricher.maps_data_expired({"source": "google_maps", "fetched_at": fresh})
+            location_enricher.maps_data_expired(
+                {"source": "google_maps", "fetched_at": fresh}
+            )
         )
         # Only Maps data is bound by the 30-day rule.
         self.assertFalse(
-            location_enricher.maps_data_expired({"source": "osm_nominatim", "fetched_at": old})
+            location_enricher.maps_data_expired(
+                {"source": "osm_nominatim", "fetched_at": old}
+            )
         )
 
     def test_unresolved_graceful_fallback(self):
@@ -544,7 +597,9 @@ class TestLocationEnricher(unittest.TestCase):
                         "location_enricher.lookup_website_via_search",
                         return_value="https://example.com",
                     ),
-                    patch("location_enricher.scrape_company_locations", return_value=[]),
+                    patch(
+                        "location_enricher.scrape_company_locations", return_value=[]
+                    ),
                     patch("location_enricher.load_locations_cache", return_value={}),
                     patch("location_enricher.save_locations_cache"),
                     patch("gemini_client.GeminiClient", return_value=mock_client),
@@ -568,9 +623,7 @@ class TestLocationEnricher(unittest.TestCase):
                         max_search_calls=10,
                     )
                     self.assertEqual(summary["search_calls_used"], 10)
-                    self.assertEqual(
-                        mock_grounded.call_count, 10
-                    )
+                    self.assertEqual(mock_grounded.call_count, 10)
 
     def test_gemini_quota_cap_counts_failed_attempts(self):
         # Simulates batch execution where Gemini fails/returns found=false; attempts MUST still count against quota
@@ -608,7 +661,9 @@ class TestLocationEnricher(unittest.TestCase):
                         "location_enricher.lookup_website_via_search",
                         return_value="https://example.com",
                     ),
-                    patch("location_enricher.scrape_company_locations", return_value=[]),
+                    patch(
+                        "location_enricher.scrape_company_locations", return_value=[]
+                    ),
                     patch("location_enricher.load_locations_cache", return_value={}),
                     patch("location_enricher.save_locations_cache"),
                     patch("gemini_client.GeminiClient", return_value=mock_client),
@@ -632,9 +687,7 @@ class TestLocationEnricher(unittest.TestCase):
                         max_search_calls=10,
                     )
                     self.assertEqual(summary["search_calls_used"], 10)
-                    self.assertEqual(
-                        mock_grounded.call_count, 10
-                    )
+                    self.assertEqual(mock_grounded.call_count, 10)
                     self.assertEqual(summary["resolved"], 0)
 
     def test_file_based_jd_enrichment_persistence(self):

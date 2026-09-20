@@ -409,6 +409,7 @@ if __name__ == "__main__":
 class TestHyphenLineBreak(unittest.TestCase):
     def test_a_line_break_after_a_hyphen_is_not_a_dropped_bullet(self):
         import validate_pdf_text
+
         self.assertEqual(
             validate_pdf_text._normalize("a 16- sequence rebuild"),
             validate_pdf_text._normalize("a 16-sequence rebuild"),

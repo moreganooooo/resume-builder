@@ -2030,7 +2030,9 @@ class TestWriteVoiceAnchors(BootstrapProfileTestCase):
                 "cover_letter.txt": {
                     "status": "done",
                     "doc_type": "other",
-                    "achievements": [{"raw_text": "A real first-person writing sample."}],
+                    "achievements": [
+                        {"raw_text": "A real first-person writing sample."}
+                    ],
                 }
             }
         )
@@ -2080,9 +2082,7 @@ class TestWriteVoiceAnchors(BootstrapProfileTestCase):
             "essay.txt": {
                 "status": "done",
                 "doc_type": "other",
-                "achievements": [
-                    {"raw_text": "A real first-person writing sample."}
-                ],
+                "achievements": [{"raw_text": "A real first-person writing sample."}],
             }
         }
 

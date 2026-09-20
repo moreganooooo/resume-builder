@@ -430,9 +430,7 @@ def _situational_bank_tags() -> set:
             e, "reading situational_roles.yaml", "queuing situational bullets normally"
         )
         return set()
-    return {
-        str(cfg.get("bank_tag") or name).strip() for name, cfg in roles.items()
-    }
+    return {str(cfg.get("bank_tag") or name).strip() for name, cfg in roles.items()}
 
 
 def _record_manual_attempt(

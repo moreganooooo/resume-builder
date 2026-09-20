@@ -20,7 +20,9 @@ class TestAnswerQuestions(unittest.TestCase):
                 self.assertEqual(classify_question(question), expected)
 
     def test_sensitive_response_is_deterministic(self):
-        self.assertIn("answer this question yourself", sensitive_response(QuestionKind.EEO, {}))
+        self.assertIn(
+            "answer this question yourself", sensitive_response(QuestionKind.EEO, {})
+        )
         self.assertEqual(
             sensitive_response(
                 QuestionKind.LEGAL,
@@ -30,7 +32,9 @@ class TestAnswerQuestions(unittest.TestCase):
         )
 
     def test_unknown_is_general(self):
-        self.assertEqual(classify_question("What is your favorite project?"), QuestionKind.GENERAL)
+        self.assertEqual(
+            classify_question("What is your favorite project?"), QuestionKind.GENERAL
+        )
 
 
 if __name__ == "__main__":

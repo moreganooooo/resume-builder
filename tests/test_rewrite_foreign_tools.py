@@ -28,8 +28,10 @@ class TestForeignTools(unittest.TestCase):
 
     def test_rejects_a_tool_only_another_employer_used(self):
         stray = foreign_tools(
-            "Built a Salesforce-synced menu tracker", "Wrote menu copy",
-            "Corner Bakery", self.index,
+            "Built a Salesforce-synced menu tracker",
+            "Wrote menu copy",
+            "Corner Bakery",
+            self.index,
         )
         self.assertEqual(stray, {"Salesforce"})
 
@@ -42,15 +44,19 @@ class TestForeignTools(unittest.TestCase):
     def test_allows_a_tool_already_in_the_original(self):
         self.assertEqual(
             foreign_tools(
-                "Synced Salesforce leads", "Logged leads in Salesforce",
-                "Corner Bakery", self.index,
+                "Synced Salesforce leads",
+                "Logged leads in Salesforce",
+                "Corner Bakery",
+                self.index,
             ),
             set(),
         )
 
     def test_matches_employer_name_variants(self):
         self.assertEqual(
-            foreign_tools("Designed Canva flyers", "", "Corner Bakery / Cafe", self.index),
+            foreign_tools(
+                "Designed Canva flyers", "", "Corner Bakery / Cafe", self.index
+            ),
             set(),
         )
 

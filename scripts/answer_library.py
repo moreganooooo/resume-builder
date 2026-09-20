@@ -8,7 +8,6 @@ import os
 from scripts import profile_paths
 from scripts.atomic_write import atomic_write
 
-
 HEADERS = [
     "Filename",
     "Prompt / Topic",
@@ -31,7 +30,10 @@ def add_to_library(
         with open(path, newline="", encoding="utf-8") as handle:
             rows = list(csv.DictReader(handle))
     filename = f"app-chat:{company}::{job_title}"
-    if any(row.get("Filename") == filename and row.get("Prompt / Topic") == question for row in rows):
+    if any(
+        row.get("Filename") == filename and row.get("Prompt / Topic") == question
+        for row in rows
+    ):
         return False
     rows.append(
         {

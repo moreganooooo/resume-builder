@@ -32,8 +32,12 @@ class TestCityLevelDistance(unittest.TestCase):
 
     def test_commute_blocker_clears_once_the_distance_is_known(self):
         ev = {
-            "fit_subscores": {}, "interview_odds_subscores": {}, "practical_pursue_subscores": {},
-            "hard_blockers": [{"category": "onsite_commute", "text": "Fully Onsite in Buffalo, NY."}],
+            "fit_subscores": {},
+            "interview_odds_subscores": {},
+            "practical_pursue_subscores": {},
+            "hard_blockers": [
+                {"category": "onsite_commute", "text": "Fully Onsite in Buffalo, NY."}
+            ],
             "recommendation": "Skip",
         }
         miles = orchestrator.city_level_distance("Buffalo, NY, US", HOME)

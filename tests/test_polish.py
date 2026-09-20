@@ -12,13 +12,11 @@ sys.path.insert(0, SCRIPTS_DIR)
 # tests/ itself, so `import persona` works when run standalone.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import orchestrator  # noqa: E402
-import polish  # noqa: E402
-
-
-
 import contextlib
 import tempfile
+
+import orchestrator  # noqa: E402
+import polish  # noqa: E402
 
 
 @contextlib.contextmanager
@@ -29,12 +27,14 @@ def polish_temp_dir():
     touches. Renderers write into OUTPUT_HTML_DIR/OUTPUT_PDF_DIR computed
     at import time, so patch the module attributes directly."""
     import shutil as _shutil
+
     tmpdir = tempfile.mkdtemp(prefix="polish_probe_")
     try:
         html_dir = os.path.join(tmpdir, "html")
         pdf_dir = os.path.join(tmpdir, "pdf")
-        with patch.object(polish, "OUTPUT_HTML_DIR", html_dir), patch.object(
-            polish, "OUTPUT_PDF_DIR", pdf_dir
+        with (
+            patch.object(polish, "OUTPUT_HTML_DIR", html_dir),
+            patch.object(polish, "OUTPUT_PDF_DIR", pdf_dir),
         ):
             yield tmpdir
     finally:
@@ -99,9 +99,7 @@ class TestRenderExistingJson(unittest.TestCase):
             result = polish.render_existing_json(path, "resume")
         args = mock_run.call_args.args[0]
         self.assertIn("--max-pages=2", args)
-        self.assertTrue(result["pdf"].endswith(
-            "AlexRivera_Strategist_Acme_Resume.pdf"
-        ))
+        self.assertTrue(result["pdf"].endswith("AlexRivera_Strategist_Acme_Resume.pdf"))
         self.assertTrue(result["html"].endswith(".html"))
 
     @patch("polish.render_coverletter")
@@ -110,14 +108,16 @@ class TestRenderExistingJson(unittest.TestCase):
         mock_run.return_value = MagicMock(returncode=0)
         with polish_temp_dir() as tmpdir:
             path = self._write_json(
-                tmpdir, "AlexRivera_Strategist_Acme_CoverLetter.json", {"body_paragraphs": []}
+                tmpdir,
+                "AlexRivera_Strategist_Acme_CoverLetter.json",
+                {"body_paragraphs": []},
             )
             result = polish.render_existing_json(path, "coverletter")
         args = mock_run.call_args.args[0]
         self.assertNotIn("--max-pages=2", args)
-        self.assertTrue(result["pdf"].endswith(
-            "AlexRivera_Strategist_Acme_CoverLetter.pdf"
-        ))
+        self.assertTrue(
+            result["pdf"].endswith("AlexRivera_Strategist_Acme_CoverLetter.pdf")
+        )
 
     @patch("polish.subprocess.run")
     def test_pdf_failure_returns_none_but_keeps_html(self, mock_run):

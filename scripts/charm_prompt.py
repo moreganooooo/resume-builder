@@ -214,7 +214,11 @@ def _warn_and_degrade(e: Exception) -> None:
     # propagated as an unhandled RuntimeError straight out of every menu.py
     # call site. Degrading to questionary (rather than crashing) keeps the
     # menu usable; the warning still surfaces that something's wrong.
-    cli_art.cli_warning(f"Charm prompt failed, falling back to plain prompt: {e}")
+    # Keep it on stderr so shell wrappers and command-substitution callers
+    # don't accidentally treat a warning string as a user-selected value.
+    import sys
+
+    print(f"Charm prompt failed, falling back to plain prompt: {e}", file=sys.stderr)
 
 
 def confirm(message: str, default: bool = True) -> bool | None:

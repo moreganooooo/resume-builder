@@ -165,13 +165,16 @@ class TestRenderedFallback(unittest.TestCase):
         return_value={"https://acme.com/about": "Acme builds widgets. " * 20},
     )
     @patch("company_research.requests.get")
-    def test_thin_but_reachable_site_falls_back_to_rendering(self, mock_get, mock_render):
+    def test_thin_but_reachable_site_falls_back_to_rendering(
+        self, mock_get, mock_render
+    ):
         # An empty JS shell answers 200 with no visible text.
         mock_get.return_value = _response(status_code=200, text="<div id='root'></div>")
         text = company_research.fetch_company_pages("acme.com")
         self.assertGreaterEqual(len(text), company_research.MIN_USEFUL_CHARS)
         self.assertEqual(
-            mock_render.call_args.args[0], ["https://acme.com/about", "https://acme.com"]
+            mock_render.call_args.args[0],
+            ["https://acme.com/about", "https://acme.com"],
         )
 
     @patch("company_research.fetch_rendered_text")
@@ -272,7 +275,9 @@ class TestSearchEngineWebsiteLookup(unittest.TestCase):
 
     def test_company_name_in_the_host_is_accepted(self):
         self.assertEqual(
-            self._find("Acorns", [{"url": "https://www.acorns.com/about", "title": "Invest"}]),
+            self._find(
+                "Acorns", [{"url": "https://www.acorns.com/about", "title": "Invest"}]
+            ),
             "https://www.acorns.com",
         )
 
@@ -281,7 +286,12 @@ class TestSearchEngineWebsiteLookup(unittest.TestCase):
         self.assertEqual(
             self._find(
                 "American Arbitration Association",
-                [{"url": "https://www.adr.org/", "title": "American Arbitration Association | ADR"}],
+                [
+                    {
+                        "url": "https://www.adr.org/",
+                        "title": "American Arbitration Association | ADR",
+                    }
+                ],
             ),
             "https://www.adr.org",
         )
@@ -292,10 +302,14 @@ class TestSearchEngineWebsiteLookup(unittest.TestCase):
             self._find(
                 "A Full Renovation LLC",
                 [
-                    {"url": "https://www.bizapedia.com/fl/a-full-renovation-llc.html",
-                     "title": "A Full Renovation LLC in Tampa, FL"},
-                    {"url": "https://www.somedirectory.com/company/a-full-renovation",
-                     "title": "A Full Renovation LLC - Company Profile"},
+                    {
+                        "url": "https://www.bizapedia.com/fl/a-full-renovation-llc.html",
+                        "title": "A Full Renovation LLC in Tampa, FL",
+                    },
+                    {
+                        "url": "https://www.somedirectory.com/company/a-full-renovation",
+                        "title": "A Full Renovation LLC - Company Profile",
+                    },
                 ],
             )
         )
@@ -314,7 +328,11 @@ class TestSearchEngineWebsiteLookup(unittest.TestCase):
         # Live false positives: a raw startswith let "Skill" match
         # "Skillsoft", and a lone generic word matched another company.
         for name, url, title in (
-            ("Skill", "https://www.skillsoft.com/", "Skillsoft | Transform Your Workforce"),
+            (
+                "Skill",
+                "https://www.skillsoft.com/",
+                "Skillsoft | Transform Your Workforce",
+            ),
             ("Sona", "https://sonagrouptours.com/", "Sona Group Tours"),
         ):
             with self.subTest(name=name):
@@ -329,14 +347,18 @@ class TestSearchEngineWebsiteLookup(unittest.TestCase):
 
     def test_common_affix_around_the_name_is_accepted(self):
         self.assertEqual(
-            self._find("Ladders", [{"url": "https://www.theladders.com/jobs", "title": "Jobs"}]),
+            self._find(
+                "Ladders", [{"url": "https://www.theladders.com/jobs", "title": "Jobs"}]
+            ),
             "https://www.theladders.com",
         )
 
     def test_subdomain_is_trimmed_to_the_main_site(self):
         # ui.elevenlabs.io (a design system) was matched live.
         self.assertEqual(
-            self._find("ElevenLabs", [{"url": "https://ui.elevenlabs.io/docs", "title": "UI"}]),
+            self._find(
+                "ElevenLabs", [{"url": "https://ui.elevenlabs.io/docs", "title": "UI"}]
+            ),
             "https://elevenlabs.io",
         )
 
@@ -345,7 +367,10 @@ class TestSearchEngineWebsiteLookup(unittest.TestCase):
             self._find(
                 "Alignerr",
                 [
-                    {"url": "https://seamless.ai/b/alignerr-123", "title": "Alignerr | Seamless.AI"},
+                    {
+                        "url": "https://seamless.ai/b/alignerr-123",
+                        "title": "Alignerr | Seamless.AI",
+                    },
                     {"url": "https://alignerr.com/", "title": "Alignerr"},
                 ],
             ),

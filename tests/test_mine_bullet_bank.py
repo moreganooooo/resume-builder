@@ -142,7 +142,9 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         "orchestrator.GeminiClient.embed", return_value=[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     )
     @patch("orchestrator.TOP_K_BULLETS", 6)
-    def test_situational_role_left_out_unless_its_keyword_gate_cleared(self, mock_embed):
+    def test_situational_role_left_out_unless_its_keyword_gate_cleared(
+        self, mock_embed
+    ):
         # A situational role's bullets only belong in the pool when the JD
         # cleared its keyword gate (the caller passes its bank_tag in
         # extra_company_minimums). Otherwise the roster drops that company
@@ -171,7 +173,9 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         # With a roster defined, a bank company on neither the roster nor the
         # JD's situational candidates can't land in EXPERIENCE, so it must not
         # take a pool slot either -- even when there's room for every row.
-        _write_profile_roles(self.tmp_dir, [{"name": "Treering Yearbooks", "min_bullets": 1}])
+        _write_profile_roles(
+            self.tmp_dir, [{"name": "Treering Yearbooks", "min_bullets": 1}]
+        )
         results = self.engine.mine_bullet_bank("some JD text", {})
         companies = [c for (_, c, _) in results]
         self.assertNotIn("Mercor", companies)
@@ -189,15 +193,20 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         _write_profile_roles(self.tmp_dir, [])
         for src, dst in zip(
             embed_bullet_bank.index_paths(self.tmp_dir)[:2],
-            embed_bullet_bank.index_paths(self.tmp_dir, embed_bullet_bank.BACKUP_EMBED_MODEL)[:2],
+            embed_bullet_bank.index_paths(
+                self.tmp_dir, embed_bullet_bank.BACKUP_EMBED_MODEL
+            )[:2],
         ):
             shutil.copy(src, dst)
         with patch(
-            "embed_bullet_bank.embed_batch", return_value=[[0.0, 1.0, 0.0, 0.0, 0.0, 0.0]]
+            "embed_bullet_bank.embed_batch",
+            return_value=[[0.0, 1.0, 0.0, 0.0, 0.0, 0.0]],
         ) as mock_backup:
             results = self.engine.mine_bullet_bank("some JD text", {})
         self.assertEqual([c for (_, c, _) in results], ["Mercor"])
-        self.assertEqual(mock_backup.call_args.kwargs["model"], embed_bullet_bank.BACKUP_EMBED_MODEL)
+        self.assertEqual(
+            mock_backup.call_args.kwargs["model"], embed_bullet_bank.BACKUP_EMBED_MODEL
+        )
 
     @patch("orchestrator.GeminiClient.embed", return_value=None)
     @patch("orchestrator.TOP_K_BULLETS", 1)
@@ -205,7 +214,9 @@ class TestMineBulletBankCompanyFloor(unittest.TestCase):
         import embed_bullet_bank
 
         _write_profile_roles(self.tmp_dir, [])
-        npy, meta, _ = embed_bullet_bank.index_paths(self.tmp_dir, embed_bullet_bank.BACKUP_EMBED_MODEL)
+        npy, meta, _ = embed_bullet_bank.index_paths(
+            self.tmp_dir, embed_bullet_bank.BACKUP_EMBED_MODEL
+        )
         shutil.copy(embed_bullet_bank.index_paths(self.tmp_dir)[0], npy)
         with open(meta, "w") as f:
             json.dump({"bullets_sha": "some-older-bank"}, f)

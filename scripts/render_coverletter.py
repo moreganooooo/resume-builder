@@ -155,7 +155,9 @@ def render_coverletter(cover_letter_data: dict, output_path: str) -> str:
     )
     from render_html import header_links_row_html, profile_header_links
 
-    html = html.replace("{{EXTRA_LINKS_ROW}}", header_links_row_html(profile_header_links()))
+    html = html.replace(
+        "{{EXTRA_LINKS_ROW}}", header_links_row_html(profile_header_links())
+    )
     html = html.replace("{{SIGNATURE_BLOCK}}", build_signature_block_html())
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

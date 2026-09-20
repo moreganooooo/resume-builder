@@ -79,6 +79,9 @@ _resume_ensure_profile() {
     default="$(printf '%s\n' "$names" | head -1)"
   fi
   local choice=""
+  if [ ! -t 0 ]; then
+    choice="$default"
+  fi
   local prompt_bin="$_RESUME_BUILDER_DIR/dashboard/bin/prompt"
 
   # 1. Prefer Go Charm prompt binary if available / compilable
@@ -86,7 +89,7 @@ _resume_ensure_profile() {
     (cd "$_RESUME_BUILDER_DIR/dashboard" && go build -o bin/prompt ./cmd/prompt >/dev/null 2>&1)
   fi
 
-  if [ -x "$prompt_bin" ]; then
+  if [ -z "$choice" ] && [ -x "$prompt_bin" ]; then
     local opts=""
     local first=1
     while IFS= read -r n; do
@@ -146,6 +149,24 @@ except Exception:
   fi
 
   choice="${choice:-$default}"
+  if [ -n "$choice" ]; then
+    local valid_choice=""
+    while IFS= read -r name; do
+      [ -n "$name" ] || continue
+      if [ "$choice" = "$name" ]; then
+        valid_choice="$name"
+        break
+      fi
+    done <<< "$names"
+    if [ -n "$valid_choice" ]; then
+      choice="$valid_choice"
+    else
+      choice="$default"
+    fi
+  else
+    choice="$default"
+  fi
+
   [ -n "$choice" ] || return 0
   export RESUME_PROFILE="$choice"
   printf "  ${_RB_SUCCESS}✓ Active profile:${_RB_RESET} ${_RB_BOLD}${_RB_ACCENT}%s${_RB_RESET} ${_RB_MUTED}(session only)${_RB_RESET}\n\n" "$RESUME_PROFILE"

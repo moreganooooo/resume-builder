@@ -513,7 +513,9 @@ def classify_document_type(
         return "other"
 
     if text is None:
-        raw = _generate_from_upload(upload_path, _CLASSIFY_PROMPT, DocumentClassification)
+        raw = _generate_from_upload(
+            upload_path, _CLASSIFY_PROMPT, DocumentClassification
+        )
     else:
         sample = text[:2000]
         raw, _ = GeminiClient.generate(
@@ -565,8 +567,14 @@ def extract_achievements(
         seen_raw_text: set = set()
         try:
             for chunk_path in chunk_paths:
-                raw = _generate_from_upload(chunk_path, system_prompt, RawAchievementList)
-                data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
+                raw = _generate_from_upload(
+                    chunk_path, system_prompt, RawAchievementList
+                )
+                data = (
+                    GeminiClient.parse_json(raw)
+                    if isinstance(raw, str)
+                    else (raw or {})
+                )
                 for a in data.get("achievements", []):
                     item = RawAchievement(**a)
                     key = item.raw_text.strip().lower()

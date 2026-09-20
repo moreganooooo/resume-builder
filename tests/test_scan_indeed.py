@@ -40,7 +40,11 @@ class TestIndeedAdmission(unittest.TestCase):
     """Indeed results now pass the excluded-title and location gates the
     other sources apply."""
 
-    JOB = {"job_title": "Marketing Manager", "location": "Buffalo, NY", "is_remote": False}
+    JOB = {
+        "job_title": "Marketing Manager",
+        "location": "Buffalo, NY",
+        "is_remote": False,
+    }
 
     def _admit(self, job, excluded=False, location_ok=True):
         with (
@@ -53,7 +57,11 @@ class TestIndeedAdmission(unittest.TestCase):
         self.assertTrue(self._admit(self.JOB))
 
     def test_excluded_title_is_dropped(self):
-        self.assertFalse(self._admit(dict(self.JOB, job_title="Marketing Manager - Clinical"), excluded=True))
+        self.assertFalse(
+            self._admit(
+                dict(self.JOB, job_title="Marketing Manager - Clinical"), excluded=True
+            )
+        )
 
     def test_listing_outside_the_radius_is_dropped(self):
         self.assertFalse(self._admit(self.JOB, location_ok=False))
@@ -159,13 +167,20 @@ class TestDefaultSearchTerm(unittest.TestCase):
         with open(self._scan_filters_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(
                 {
-                    "indeed_search_terms": ["communications", None, "content", "copywriter", "x"],
+                    "indeed_search_terms": [
+                        "communications",
+                        None,
+                        "content",
+                        "copywriter",
+                        "x",
+                    ],
                     "title_filter": {"positive": ["Data Scientist"]},
                 },
                 f,
             )
         self.assertEqual(
-            scan_indeed._default_search_terms(), ["communications", "content", "copywriter"]
+            scan_indeed._default_search_terms(),
+            ["communications", "content", "copywriter"],
         )
 
     def test_falls_back_when_scan_filters_missing(self):
@@ -234,7 +249,10 @@ class TestMultiTermDedup(unittest.TestCase):
 
     @patch("location_settings.read_settings", return_value=SETTINGS)
     def test_url_less_listings_are_not_false_duplicates(self, _):
-        batches = [[{"source_url": "", "job_title": "A"}], [{"source_url": "", "job_title": "B"}]]
+        batches = [
+            [{"source_url": "", "job_title": "A"}],
+            [{"source_url": "", "job_title": "B"}],
+        ]
         with patch.object(scan_indeed, "_scrape_one_term", side_effect=batches):
             jobs = scan_indeed.fetch_indeed_jobs()
         self.assertEqual([j["job_title"] for j in jobs], ["A", "B"])
@@ -308,8 +326,10 @@ class TestFetchIndeedJobs(unittest.TestCase):
         # Scraping is fragile by nature -- a block or a layout change
         # must not abort the whole scan run.
         fake = MagicMock(side_effect=RuntimeError("blocked"))
-        with patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}), \
-                self.assertLogs(level="ERROR"):
+        with (
+            patch.dict("sys.modules", {"jobspy": MagicMock(scrape_jobs=fake)}),
+            self.assertLogs(level="ERROR"),
+        ):
             self.assertEqual(scan_indeed.fetch_indeed_jobs(), [])
 
     @patch("location_settings.read_settings", return_value=SETTINGS)
@@ -387,7 +407,9 @@ class TestIndeedWatchlist(unittest.TestCase):
         ]
     }
 
-    def _run(self, rows, filters=FILTERS):
+    def _run(self, rows, filters=None):
+        if filters is None:
+            filters = self.FILTERS
         fake = MagicMock(return_value=frame_of(rows))
         with (
             patch("scan_boards._load_filters", return_value=filters),
@@ -398,7 +420,9 @@ class TestIndeedWatchlist(unittest.TestCase):
 
     def test_keeps_only_the_watched_employer_and_flags_it(self):
         rows = [
-            dict(ROW, company="Sentient Science Corp.", job_url="https://indeed.test/1"),
+            dict(
+                ROW, company="Sentient Science Corp.", job_url="https://indeed.test/1"
+            ),
             dict(ROW, company="Other Co", job_url="https://indeed.test/2"),
             dict(ROW, company="Viridi", job_url="https://indeed.test/3"),
         ]
@@ -412,7 +436,10 @@ class TestIndeedWatchlist(unittest.TestCase):
         # the company it matches, once, and "Other Co" never.
         self.assertEqual(
             [(j["company_name"], j["watchlist_company"]) for j in jobs],
-            [("Sentient Science Corp.", "Sentient Science"), ("Viridi", "Viridi Parente")],
+            [
+                ("Sentient Science Corp.", "Sentient Science"),
+                ("Viridi", "Viridi Parente"),
+            ],
         )
 
     def test_no_watchlist_never_scrapes(self):

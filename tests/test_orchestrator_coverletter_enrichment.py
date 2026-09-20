@@ -316,7 +316,9 @@ class TestReferralInjection(unittest.TestCase):
     @patch("orchestrator.GeminiClient.embed", return_value=[0.1] * 768)
     @patch.object(orchestrator.ResumeEngine, "research_company", return_value=None)
     @patch("orchestrator.GeminiClient.generate")
-    def test_no_referral_block_when_none_saved(self, mock_generate, mock_research, mock_embed, mock_embed_val):
+    def test_no_referral_block_when_none_saved(
+        self, mock_generate, mock_research, mock_embed, mock_embed_val
+    ):
         mock_generate.return_value = (self._clean_letter_json(), {})
         self._run_build()
         # index -1, not 0: when this JD has no checkpoint jd_keywords (Group

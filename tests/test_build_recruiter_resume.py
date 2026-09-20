@@ -144,13 +144,15 @@ class TestBuildGuards(unittest.TestCase):
         """Without a range to write across, the result would be a generic
         resume dressed up as a deliberate one -- and a full build is a lot
         of API spend to discover that."""
-        with patch.object(
-            build_recruiter_resume,
-            "_load_profile_inputs",
-            return_value=({"candidate": {"full_name": "Ada"}}, ""),
-        ), patch.object(build_recruiter_resume, "write_brief") as mock_write, patch(
-            "build_recruiter_resume.orchestrator.ResumeEngine"
-        ) as mock_engine:
+        with (
+            patch.object(
+                build_recruiter_resume,
+                "_load_profile_inputs",
+                return_value=({"candidate": {"full_name": "Ada"}}, ""),
+            ),
+            patch.object(build_recruiter_resume, "write_brief") as mock_write,
+            patch("build_recruiter_resume.orchestrator.ResumeEngine") as mock_engine,
+        ):
             result = build_recruiter_resume.build_recruiter_resume()
         self.assertEqual(result, {"resume": {}})
         mock_write.assert_not_called()

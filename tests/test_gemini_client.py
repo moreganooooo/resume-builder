@@ -286,7 +286,9 @@ class TestModelFallbackOptOut(unittest.TestCase):
         self.assertTrue(any("gemma-4-31b-it" in url for url in targets))
         self.assertFalse(any("gemini-3.5-flash-lite" in url for url in targets))
         self.assertNotIn("gemini-3.5-flash-lite", gemini_client.SCORING_FALLBACKS)
-        self.assertNotIn("gemini-3.5-flash-lite", gemini_client.SCORING_FALLBACKS.values())
+        self.assertNotIn(
+            "gemini-3.5-flash-lite", gemini_client.SCORING_FALLBACKS.values()
+        )
 
     @patch("gemini_client.time.sleep", lambda *a, **kw: None)
     @patch("gemini_client.requests.post")
@@ -339,7 +341,9 @@ class TestModelFallbackOptOut(unittest.TestCase):
     def test_unknown_or_mixed_tools_get_no_fallback(self):
         self.assertEqual(gemini_client.grounded_fallbacks([{"code_execution": {}}]), {})
         self.assertEqual(
-            gemini_client.grounded_fallbacks([{"google_search": {}}, {"google_maps": {}}]),
+            gemini_client.grounded_fallbacks(
+                [{"google_search": {}}, {"google_maps": {}}]
+            ),
             {},
         )
 
@@ -717,7 +721,7 @@ class TestEmbedWithRetryLoop(unittest.TestCase):
         """First call 429, second call succeeds → returns result."""
         mock_post.side_effect = [
             self._embed_429_response(),
-            self._embed_success_response()
+            self._embed_success_response(),
         ]
 
         with patch("gemini_client.api_keys", return_value=["key-one", "key-two"]):
@@ -770,7 +774,12 @@ class TestEmbedWithRetryLoop(unittest.TestCase):
         resp_with_delay.status_code = 429
         resp_with_delay.json.return_value = {
             "error": {
-                "details": [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "2.5s"}]
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                        "retryDelay": "2.5s",
+                    }
+                ]
             }
         }
         mock_post.side_effect = [resp_with_delay, self._embed_success_response()]

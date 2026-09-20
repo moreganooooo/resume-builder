@@ -1,9 +1,14 @@
 import unittest
 from unittest.mock import patch
 
-from scripts.application_answers import AnswerContext, AnswerResult, Evidence, render_prompt
 from scripts.answer_grounding import check_answer
 from scripts.answer_questions import QuestionKind
+from scripts.application_answers import (
+    AnswerContext,
+    AnswerResult,
+    Evidence,
+    render_prompt,
+)
 
 
 class TestApplicationAnswersEngine(unittest.TestCase):
@@ -29,12 +34,17 @@ class TestApplicationAnswersEngine(unittest.TestCase):
 
     def test_answer_retries_hard_grounding_violation(self):
         context = AnswerContext("id", "Role", "Acme", "The team grew 12 people.")
-        with patch("scripts.application_answers.build_context", return_value=context), patch(
-            "scripts.application_answers.evidence_for", return_value=Evidence("12 people")
-        ), patch(
-            "scripts.application_answers._generate",
-            side_effect=["I improved results by 40%.", "I built a 12-person team."],
-        ) as generate:
+        with (
+            patch("scripts.application_answers.build_context", return_value=context),
+            patch(
+                "scripts.application_answers.evidence_for",
+                return_value=Evidence("12 people"),
+            ),
+            patch(
+                "scripts.application_answers._generate",
+                side_effect=["I improved results by 40%.", "I built a 12-person team."],
+            ) as generate,
+        ):
             from scripts.application_answers import answer
 
             result = answer("id", "Describe your impact.")

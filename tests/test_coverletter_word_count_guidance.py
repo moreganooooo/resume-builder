@@ -22,7 +22,9 @@ class TestWordCountFixGuidance(unittest.TestCase):
         self.assertIn("remove roughly 120", g)
 
     def test_other_violations_add_nothing(self):
-        self.assertEqual(orchestrator._word_count_fix_guidance(["Forbidden phrase"]), "")
+        self.assertEqual(
+            orchestrator._word_count_fix_guidance(["Forbidden phrase"]), ""
+        )
 
 
 if __name__ == "__main__":

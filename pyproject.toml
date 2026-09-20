@@ -74,7 +74,7 @@ exclude = ["dashboard"]
 typeCheckingMode = "off"
 reportMissingImports = "none"
 extraPaths = ["scripts"]
-exclude = ["dashboard", ".venv", "node_modules"]
+exclude = ["dashboard", ".venv", "node_modules", "**/__pycache__", "**/.*"]
 
 [tool.pydocstyle]
 match_dir = "scripts"

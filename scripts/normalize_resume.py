@@ -41,7 +41,7 @@ _STINT_SUFFIX_SEPARATORS = ("—", "–", "-")
 
 
 def _strip_stint_annotation(company: str, title: str) -> str:
-    """"mIQroTech Inc. — Lead Data Scientist" + title "Lead Data Scientist"
+    """ "mIQroTech Inc. — Lead Data Scientist" + title "Lead Data Scientist"
     -> "mIQroTech Inc.". Returns company unchanged when the suffix is not
     the title, or when stripping would leave nothing."""
     if not company or not title:
@@ -60,15 +60,24 @@ def _strip_stint_annotation(company: str, title: str) -> str:
 # "Mixed date formats". The rule is already in the prompt, so this is a
 # deterministic cleanup rather than more prompt text.
 _MONTHS = {
-    "jan": "01", "feb": "02", "mar": "03", "apr": "04",
-    "may": "05", "jun": "06", "jul": "07", "aug": "08",
-    "sep": "09", "oct": "10", "nov": "11", "dec": "12",
+    "jan": "01",
+    "feb": "02",
+    "mar": "03",
+    "apr": "04",
+    "may": "05",
+    "jun": "06",
+    "jul": "07",
+    "aug": "08",
+    "sep": "09",
+    "oct": "10",
+    "nov": "11",
+    "dec": "12",
 }
 _SPELLED_MONTH_YEAR = re.compile(r"\b([A-Za-z]{3,9})\.?\s+(\d{4})\b")
 
 
 def _numeric_period(period: str) -> str:
-    """"05/2021 – May 2022" -> "05/2021 – 05/2022". Leaves anything it does
+    """ "05/2021 – May 2022" -> "05/2021 – 05/2022". Leaves anything it does
     not recognize (notably "Present") untouched."""
     if not period:
         return period
@@ -158,7 +167,9 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
         if include_design_credentials or not cert.get("design_only")
     ]
     # Fixed like certifications: a profile's patents never vary per JD.
-    result["PATENTS"] = [dict(p) for p in (getattr(fixed_content, "PATENTS", None) or [])]
+    result["PATENTS"] = [
+        dict(p) for p in (getattr(fixed_content, "PATENTS", None) or [])
+    ]
     # EDU_ACHIEVEMENT_KEY_<n> fields are numbered by profile_paths.
     # education_achievement_slots()'s order (see orchestrator.py's
     # build_education_achievement_schema_fields(), which built the schema
