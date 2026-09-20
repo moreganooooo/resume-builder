@@ -382,12 +382,18 @@ class TestAchievementGroupStarts(unittest.TestCase):
     # trusted by every renderer.
 
     def setUp(self):
+        # Isolate from real profile -- normalize() calls profile_paths.fixed_content_module()
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
         self.base = {
             "TAGLINE": "X",
             "SUMMARY_TEXT": "<strong>S.</strong>",
             "SKILLS": [],
             "EXPERIENCE": [],
         }
+
+    def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
 
     def test_valid_map_passes_through(self):
         doc = dict(self.base)
