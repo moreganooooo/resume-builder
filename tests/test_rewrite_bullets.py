@@ -321,8 +321,8 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
     def test_gemma_static_prefix_caps_verified_facts(self):
         # 8 facts_entries fixture, MAX_GEMMA_FILTER_ROWS (5) cap -- the 3
         # beyond the cap must not appear.
-        self.assertIn("Fact 0", self.kb.gemma_static_prefix)
-        self.assertNotIn("Fact 7", self.kb.gemma_static_prefix)
+        self.assertIn("F0", self.kb.gemma_static_prefix)
+        self.assertNotIn("F7", self.kb.gemma_static_prefix)
 
     def test_gemma_static_prefix_smaller_than_full(self):
         self.assertLess(len(self.kb.gemma_static_prefix), len(self.kb.static_prefix))
