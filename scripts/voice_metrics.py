@@ -125,7 +125,7 @@ def detect_consecutive_opener_repetitions(
     sentences: List[str], max_consecutive: int = 2
 ) -> List[str]:
     """Detects 3+ consecutive sentences starting with identical 1-2 word openers."""
-    violations = []
+    violations: list[str] = []
     if len(sentences) < 3:
         return violations
 

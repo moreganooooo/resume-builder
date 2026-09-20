@@ -68,7 +68,7 @@ def _keyword_tag_counts(keywords_by_tag: dict) -> dict:
     each keyword by 1 / (number of tags it appears in) so unique words
     count full strength and shared words get diluted instead of
     manufacturing false ties."""
-    counts = {}
+    counts: dict[str, int] = {}
     for kws in keywords_by_tag.values():
         for kw in kws:
             counts[kw] = counts.get(kw, 0) + 1
