@@ -131,7 +131,14 @@
       "Bash(RESUME_PROFILE=dominick bash -c 'source .venv/bin/activate && python scripts/profile_paths.py && python -m unittest discover -s tests -v 2>&1 | head -100')",
       "Bash(RESUME_PROFILE=dominick bash -c 'source .venv/bin/activate && python scripts/resume-cli.sh resume doctor 2>&1')",
       "Bash(killall python *)",
-      "Bash(kill -9 31758)"
+      "Bash(kill -9 31758)",
+      "Bash(gh --version)",
+      "Bash(curl -s https://api.github.com/repos/moreganooooo/resume-builder/actions/runs?per_page=5)",
+      "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs?per_page=3')",
+      "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs?per_page=10')",
+      "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs/35520809175/jobs')",
+      "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs/35520809175')",
+      "Bash(curl -s 'https://api.github.com/repos/moreganooooo/resume-builder/actions/runs/35520809175/attempts/1/logs')"
     ]
   },
   "enableAllProjectMcpServers": true,

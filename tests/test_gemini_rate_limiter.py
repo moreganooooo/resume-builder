@@ -125,9 +125,10 @@ class TestGeminiClientRateLimiting(unittest.TestCase):
         self.assertEqual(res, "response text")
         mock_acquire.assert_called()
 
+    @patch("gemini_client.api_keys", return_value=["key-one"])
     @patch("gemini_client.rate_limiter.acquire")
     @patch("gemini_client.requests.post")
-    def test_embed_invokes_rate_limiter(self, mock_post, mock_acquire):
+    def test_embed_invokes_rate_limiter(self, mock_post, mock_acquire, mock_keys):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"embedding": {"values": [0.1, 0.2, 0.3]}}

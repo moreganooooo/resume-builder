@@ -704,9 +704,10 @@ class TestEmbedWithRetryLoop(unittest.TestCase):
         resp.json.return_value = {"error": {"details": []}}
         return resp
 
+    @patch("gemini_client.api_keys", return_value=["key-one"])
     @patch("gemini_client.time.sleep")
     @patch("gemini_client.requests.post")
-    def test_embed_basic_success(self, mock_post, mock_sleep):
+    def test_embed_basic_success(self, mock_post, mock_sleep, mock_keys):
         """Basic success case: single key, single attempt."""
         mock_post.return_value = self._embed_success_response()
 
@@ -766,9 +767,10 @@ class TestEmbedWithRetryLoop(unittest.TestCase):
         # ge1 should come after ge2 failed
         self.assertGreater(models_called.index("ge1"), models_called.index("ge2"))
 
+    @patch("gemini_client.api_keys", return_value=["key-one"])
     @patch("gemini_client.time.sleep")
     @patch("gemini_client.requests.post")
-    def test_embed_honors_server_retry_info_from_429(self, mock_post, mock_sleep):
+    def test_embed_honors_server_retry_info_from_429(self, mock_post, mock_sleep, mock_keys):
         """Server 429 with RetryInfo delay is honored."""
         resp_with_delay = MagicMock()
         resp_with_delay.status_code = 429
@@ -802,14 +804,16 @@ class TestEmbedWithRetryLoop(unittest.TestCase):
     @patch("gemini_client.requests.post")
     def test_embed_respects_test_network_guard(self, mock_post):
         """Test network guard blocks embed() calls."""
-        with patch("gemini_client._blocked_under_test", return_value=True):
-            with self.assertRaises(gemini_client.TestNetworkBlockedError):
-                GeminiClient.embed("test")
+        with patch("gemini_client.api_keys", return_value=["key-one"]):
+            with patch("gemini_client._blocked_under_test", return_value=True):
+                with self.assertRaises(gemini_client.TestNetworkBlockedError):
+                    GeminiClient.embed("test")
 
         mock_post.assert_not_called()
 
+    @patch("gemini_client.api_keys", return_value=["key-one"])
     @patch("gemini_client.requests.post")
-    def test_embed_returns_valid_vector(self, mock_post):
+    def test_embed_returns_valid_vector(self, mock_post, mock_keys):
         """Successful embed returns vector with correct dimensions."""
         mock_post.return_value = self._embed_success_response()
 
