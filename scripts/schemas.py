@@ -536,7 +536,7 @@ class TemplateSchema(BaseModel):
         default="",
         description=(
             "'Why [Real Company Name]?' -- include by default whenever company "
-            "research is available. Do not leave this blank pre-emptively over "
+            "research is available. Do not leave this blank preemptively over "
             "a page-count guess: a separate automated pass measures the real "
             "rendered PDF afterward and removes this section first if the "
             "resume genuinely doesn't fit in 2 pages, and backfills it "

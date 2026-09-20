@@ -48,6 +48,13 @@ import maintenance
 import orchestrator
 import picker
 import polish as polish_module
+
+# profile_paths is imported a second time here on purpose. The first
+# import runs preflight_profile() ABOVE, before these heavy
+# profile-scoped imports, so an unresolvable RESUME_PROFILE reports a
+# fixable error instead of a module-level traceback (see CLAUDE.md).
+# Grouping the two imports together would undo that ordering.
+# pylint: disable-next=ungrouped-imports
 import profile_paths
 import questionary
 import scan as scan_module

@@ -54,30 +54,25 @@ repos:
     rev: v1.35.1
     hooks:
       - id: yamllint
-        # "trailing-spaces" is yamllint's actual rule name --
-        # "trailing-whitespace" is not a rule, and yamllint exits 255 with
-        # "invalid config: no such rule" rather than linting anything.
-        # Long URLs and prompt rules in YAML naturally exceed 120 chars.
-        args: ["-d", "{rules: {line-length: disable, trailing-spaces: disable}}"]
+        # No args on purpose: the rules live in .yamllint, which yamllint
+        # picks up on its own. This hook used to pass an inline `-d
+        # {rules: ...}` override instead, so the hook and a bare
+        # `yamllint .` disagreed -- by 456 findings. One config, one
+        # answer. (For the record: "trailing-spaces" is the real rule
+        # name; "trailing-whitespace" is not, and yamllint exits 255 with
+        # "invalid config: no such rule" rather than linting anything.)
 
   # Spell checking
   - repo: https://github.com/codespell-project/codespell
     rev: v2.2.6
     hooks:
       - id: codespell
-        # "unparseable" is this codebase's own spelling (liveness.py's
-        # failure message, quoted in CLAUDE.md); "ist" is German, from
-        # liveness-core.mjs's expired-posting patterns; "ehr" is Electronic
-        # Health Records in domain research; "bu" is Business Unit; "hims"
-        # is the company Hims & Hers Health. "countr" is a regex stem
-        # (eligible countr\w+); "alllocations" is lever.mjs's allLocations.
-        # "hsa" is the US Health Savings Account, in compensation.py's
-        # list of benefit words that must NOT be read as salary.
-        args:
-          [
-            "--skip=*.json,*.csv,*.db,*.pyc,*.rtf,*.html",
-            "--ignore-words-list=unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations,ment,hsa",
-          ]
+        # No args on purpose -- skip/ignore-words-list live in
+        # pyproject.toml's [tool.codespell], which codespell reads on its
+        # own. This hook used to carry its own copy that had drifted out
+        # of step with pyproject's, so a bare `codespell scripts tests`
+        # reported 35 findings the hook silently did not. Every ignored
+        # word is documented, one reason per group, in pyproject.toml.
 
   # General linting
   - repo: https://github.com/pre-commit/pre-commit-hooks

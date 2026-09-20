@@ -60,7 +60,10 @@ def purge(db_path: str, jds_dir: str, apply_changes: bool) -> dict:
     conn = sqlite3.connect(db_path)
     # `placeholders` is a run of "?" characters sized to a module
     # constant -- it carries no data, and the statuses themselves are
-    # bound as parameters. The three # nosec B608 markers below say so.
+    # bound as parameters. The three B608 suppression markers below say
+    # so. (Written without the leading "#" + keyword here on purpose:
+    # bandit scans every comment for that token and tried to read the
+    # rest of this sentence, "markers below say so", as test IDs.)
     placeholders = ",".join("?" * len(TERMINAL_STATUSES))
     rows = conn.execute(
         f"SELECT COUNT(*) FROM jobs WHERE status IN ({placeholders})",  # nosec B608

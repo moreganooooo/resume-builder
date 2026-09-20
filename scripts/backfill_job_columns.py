@@ -145,7 +145,11 @@ def backfill(db_path: str, apply_changes: bool) -> dict:
         with conn:
             for job_id, fixes in updates:
                 assignments = ", ".join(f"{col} = ?" for col in fixes)
-                # nosec B608 -- `assignments` interpolates COLUMN NAMES
+                # B608 is suppressed on the statement below. Written
+                # without the leading "#" + keyword here on purpose:
+                # bandit scans every comment for that token and tried
+                # to read this sentence's words as test IDs.
+                # `assignments` interpolates COLUMN NAMES
                 # only, and every one is a hardcoded literal set above
                 # ("title", "company", "location", and the three score
                 # columns). No caller-supplied text reaches the SQL

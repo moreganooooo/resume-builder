@@ -445,11 +445,8 @@ class TestCapabilityGapsArePersisted(unittest.TestCase):
         writer = _read(
             os.path.join(os.path.dirname(__file__), "..", "scripts", "jd_manager.py")
         )
-        for (
-            field
-        ) in (
-            schemas.CapabilityEvaluationSchema.model_fields
-        ):  # pylint: disable=not-an-iterable
+        field_names = schemas.CapabilityEvaluationSchema.model_fields
+        for field in field_names:  # pylint: disable=not-an-iterable
             self.assertIn(f'"{field}"', writer, field)
 
 

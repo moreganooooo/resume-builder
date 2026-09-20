@@ -1269,7 +1269,7 @@ def _page1_overflow_trim(resume_data: dict, profile_data: dict):
     )
     minimum = int(role_cfg.get("min_bullets") or 0)
     protected = [
-        validate_resume._normalize_company(str(p).split(":")[0])
+        validate_resume._normalize_company(str(p).split(":", maxsplit=1)[0])
         for p in profile_data.get("protected_bullets") or []
     ]
     for j_index, job in enumerate(resume_data.get("EXPERIENCE") or []):
@@ -3490,9 +3490,12 @@ def _page1_overflow_roles(pdf_path: str, profile_data: dict) -> list[str]:
     if not required:
         return []
     try:
-        page1_text = validate_resume._normalize_company(
-            PdfReader(pdf_path).pages[0].extract_text() or ""
-        )
+        # pypdf's page container is built dynamically, so pylint cannot
+        # see extract_text on it. Hoisted to a local so the pragma sits on
+        # the offending line and stays there through reformatting.
+        first_page = PdfReader(pdf_path).pages[0]
+        raw_page1 = first_page.extract_text() or ""  # pylint: disable=no-member
+        page1_text = validate_resume._normalize_company(raw_page1)
     except Exception:
         return []
     return [
@@ -7355,7 +7358,7 @@ class ResumeEngine:
                 pass
 
         # kb_corpus=background_context: the same grounding corpus the model
-        # was given in system_instruction, re-used here so validate() can
+        # was given in system_instruction, reused here so validate() can
         # check that specific factual claims (metrics, years-of-experience,
         # date ranges) in the letter actually trace back to it -- see B14.
         violations = validate_coverletter.validate(
@@ -8929,10 +8932,10 @@ class ResumeEngine:
                         normalize_resume.normalize(condensed),
                         condense_targets,
                     )
-                    _validate_kwargs = dict(
-                        role_bullet_maximums=role_bullet_maximums,
-                        bullet_tuples=bullet_tuples,
-                    )
+                    _validate_kwargs = {
+                        "role_bullet_maximums": role_bullet_maximums,
+                        "bullet_tuples": bullet_tuples,
+                    }
                     baseline_violations = validate_resume.validate(
                         resume_data,
                         style_rules_for_validation,

@@ -1,0 +1,51 @@
+# Single source of truth for yamllint. .pre-commit-config.yaml used to
+# pass its own inline `-d {rules: {line-length: disable, ...}}` override,
+# so a bare `yamllint .` reported 456 errors the hook never saw. The hook
+# now passes no rules and reads this file.
+extends: default
+
+ignore: |
+  .venv/
+  node_modules/
+  dashboard/vendor/
+  resume-engine/archive/
+  # Profile-scoped DATA, not source: generated per profile and synced
+  # between machines by Syncthing (see CLAUDE.md). Linting it reports on
+  # the user's own content rather than on this repo's code.
+  profiles/
+  jds/
+  output/
+  data/
+
+rules:
+  # The scoring YAML under resume-engine/ holds PROSE -- rubric text,
+  # prompt rules and long URLs. Wrapping it at 80 columns would break the
+  # sentences the model is given, so length is not a defect here. 433 of
+  # the 456 findings this file silences were this one rule.
+  line-length: disable
+  trailing-spaces: disable
+  # A single-document YAML file does not need an explicit "---" marker,
+  # and none of this repo's ~60 YAML files are multi-document.
+  document-start: disable
+  # Comment formatting is a style preference; these files are hand-edited
+  # by the user (board_scanner filters, scan_filters) as much as by code.
+  comments:
+    require-starting-space: true
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  # "yes"/"no"/"on"/"off" are quoted as strings where they appear.
+  truthy:
+    check-keys: false
+  # professional_identity_score.yaml column-aligns its archetype -> section
+  # mapping so the two columns can be read down. That alignment is the
+  # point of the block; enforcing one space after the colon would destroy
+  # it for no gain.
+  colons:
+    max-spaces-after: -1
+  # GitHub Actions' own documented style leaves `steps:` sequences
+  # unindented under their key, and every workflow in .github/ follows it.
+  # yamllint's default demands the indented form; "consistent" accepts
+  # either as long as one file does not mix both.
+  indentation:
+    spaces: consistent
+    indent-sequences: consistent

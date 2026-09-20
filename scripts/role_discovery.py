@@ -116,11 +116,11 @@ def match_role_family(
         aliases = [a.lower() for a in family.get("aliases") or []]
 
         # 1. Exact canonical or alias match
-        if raw_lower == canonical or normalized == canonical:
+        if canonical in (raw_lower, normalized):
             return family_id, family, 1.0
 
         for alias in aliases:
-            if raw_lower == alias or normalized == alias:
+            if alias in (raw_lower, normalized):
                 return family_id, family, 1.0
 
         # 2. Substring match
