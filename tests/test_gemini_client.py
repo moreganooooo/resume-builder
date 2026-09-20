@@ -238,7 +238,7 @@ class TestModelFallbackOptOut(unittest.TestCase):
     # stale name let one test's exhausted retries push the next test over
     # the SustainedFailureError threshold, but only in a full-suite run.
     def _reset_client_state(self):
-        for cls in {GeminiClient, gemini_client.GeminiClient}:
+        for cls in [GeminiClient, gemini_client.GeminiClient]:
             cls._consecutive_full_failures = 0
             cls._last_gemma_call_ts = 0.0
 

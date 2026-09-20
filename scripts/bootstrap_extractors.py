@@ -577,7 +577,7 @@ def extract_achievements(
                 )
                 for a in data.get("achievements", []):
                     item = RawAchievement(**a)
-                    key = item.raw_text.strip().lower()
+                    key = item.raw_text.strip().lower()  # pylint: disable=no-member
                     if key in seen_raw_text:
                         continue
                     seen_raw_text.add(key)
