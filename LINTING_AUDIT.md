@@ -101,13 +101,17 @@ The resume-builder codebase has accumulated linting issues across multiple categ
 **Actual effort:** ~1 hour  
 **Actual reduction:** ~9,865 issues eliminated (pydocstyle 100%, bandit 100%)
 
-### Phase 2: Type Safety (High Impact)
-- [ ] Fix implicit Optional parameters (most common mypy error, ~300 locations)
-- [ ] Add None checks to union-attr violations (~30 locations)
-- [ ] Use `cast()` for Any-return mismatches (~50 locations)
+### Phase 2: Type Safety (High Impact) ⏳ IN PROGRESS
+- [x] Fixed implicit Optional parameters (189/~300 done via automatic script)
+  - Pattern: `param: Type = None` → `param: Type | None = None`
+  - 35 files modified in single automated pass
+- [ ] Fix remaining no-any-return violations (~81 issues)
+  - Requires `cast()` or return type adjustments
+  - Most common in: orchestrator.py (16), charm_prompt.py (14), scan_boards.py (7)
+- [ ] Review other type mismatches (~40 remaining issues)
 
-**Estimated effort:** 4-6 hours  
-**Expected reduction:** ~400+ mypy errors
+**Progress:** 189/483 errors fixed (39%)  
+**Remaining:** 294 errors (mostly no-any-return + other type issues)
 
 ### Phase 3: Complexity Reduction (Ongoing)
 - [ ] Refactor liveness._verify_candidates (F rating)
@@ -162,9 +166,9 @@ The resume-builder codebase has accumulated linting issues across multiple categ
 |------|--------|-------|--------|--------|
 | PyDocStyle | ~9,858 | 0 | Config + fixes | ✅ Complete |
 | Bandit | 133 | 0 | Config suppression | ✅ Complete |
-| MyPy | 483 | TBD | Phase 2 | ⏳ Pending |
+| MyPy | 483 | 294 | Implicit Optional fix | ⏳ 39% done |
 | Radon | 79 | TBD | Phase 3 | ⏳ Pending |
-| **Total** | **~10,574** | **0** | Phase 1 done | ✅ In progress |
+| **Total** | **~10,574** | **294** | In progress | ⏳ Phase 2 active |
 
 ## Summary
 
