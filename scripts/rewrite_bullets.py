@@ -119,10 +119,15 @@ KB_DIR = profile_paths.kb_dir()
 RULES_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
 SCORING_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
 
+import gemini_client  # noqa: E402
+
 # orchestrator.py lives in the same scripts/ directory as this file.
 # Import GeminiClient only — orchestrator.py has no module-level client object.
-from gemini_client import SCORING_FALLBACKS, GeminiClient, SustainedFailureError  # noqa: E402
-import gemini_client  # noqa: E402
+from gemini_client import (  # noqa: E402
+    SCORING_FALLBACKS,
+    GeminiClient,
+    SustainedFailureError,
+)
 
 CLUSTER_MAP_IN = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 CLUSTER_MAP_OUT = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv")
@@ -863,7 +868,9 @@ def build_tool_employer_index(tool_names, bank_rows) -> dict:
     return index
 
 
-def foreign_tools(rewritten: str, allowed_text: str, role_company: str, tool_index: dict) -> set:
+def foreign_tools(
+    rewritten: str, allowed_text: str, role_company: str, tool_index: dict
+) -> set:
     """Tool names a rewrite introduced that the bank ties only to OTHER
     employers. The numbers check (foreign_numbers) could not see this: a
     2026-09-16 audit found Treering's Salesforce work rewritten under Callahan
@@ -931,6 +938,7 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
         if any(kw in rc_lower for kw in keywords):
             matched_heading = heading
             break
+
     # A section's header is its heading line plus the line after it: in a
     # "### Title\n**Company** · Location · Period" block the company sits on
     # line 2, so neither a fixed 60-character window (a long title pushes the
@@ -1267,9 +1275,9 @@ class KnowledgeBase:
         # FULL (all 58 entries on this profile) in the Gemma STATIC
         # prefix, uncapped, on every single call -- see
         # _build_gemma_static_prefix()'s docstring.
-        filtered_tools = filter_projects_by_employer(
-            self.tools_entries, role_company
-        )[:MAX_GEMMA_FILTER_ROWS]
+        filtered_tools = filter_projects_by_employer(self.tools_entries, role_company)[
+            :MAX_GEMMA_FILTER_ROWS
+        ]
         if filtered_tools:
             sections.append(
                 f"=== VERIFIED TOOLS ({role_company} only, HF002 guard) ===\n"
@@ -1456,7 +1464,7 @@ class KnowledgeBase:
         rewrite's numbers must come from; see foreign_numbers()."""
         full = self.context_block_for_bullet(role_company, tags)
         if full.startswith(self.static_prefix):
-            return full[len(self.static_prefix):]
+            return full[len(self.static_prefix) :]
         return full
 
     def recruiter_context_block(self) -> str:

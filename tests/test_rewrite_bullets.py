@@ -19,9 +19,9 @@ from rewrite_bullets import (  # noqa: E402
     SCORING_DIR,
     KnowledgeBase,
     RulesBundle,
-    extract_cv_section,
     best_version,
     date_anchors,
+    extract_cv_section,
     filter_claims_by_tags,
     filter_json_entries_by_tags,
     filter_projects_by_employer,
@@ -230,10 +230,14 @@ class TestExtractCvSection(unittest.TestCase):
             "### Other Role\n**Elsewhere Inc** · 2011\n\n- Other work.\n"
         )
         module = self._empty_keywords_module()
-        with patch("rewrite_bullets.profile_paths.fixed_content_module", return_value=module):
+        with patch(
+            "rewrite_bullets.profile_paths.fixed_content_module", return_value=module
+        ):
             self.assertIn("Entered forms", extract_cv_section(cv, "Quorvex Staffing"))
         module.CV_SECTION_KEYWORDS = [(["quorvex"], "Quorvex Staffing")]
-        with patch("rewrite_bullets.profile_paths.fixed_content_module", return_value=module):
+        with patch(
+            "rewrite_bullets.profile_paths.fixed_content_module", return_value=module
+        ):
             section = extract_cv_section(cv, "Quorvex Staffing")
         self.assertIn("Entered forms", section)
         self.assertNotIn("Other work", section)
@@ -473,7 +477,10 @@ class TestArchetypeVerbAllowance(unittest.TestCase):
         cls.rules = RulesBundle(RULES_DIR, SCORING_DIR)
 
     def test_archetype_allows_reaches_both_rewrite_tiers(self):
-        for block in (self.rules.rewrite_rules_block, self.rules.rewrite_rules_block_gemma):
+        for block in (
+            self.rules.rewrite_rules_block,
+            self.rules.rewrite_rules_block_gemma,
+        ):
             self.assertIn("archetype_allows", block)
             self.assertIn("match_tags", block)
             self.assertIn("Per-bullet exception", block)
@@ -521,7 +528,9 @@ class TestBestVersionVoiceConservationMargin(unittest.TestCase):
             "ats_value": 80,
             "manager_test": "PASS",
         }
-        original, _ = best_version("Original wording", dict(scores), "Rewritten wording", dict(scores))
+        original, _ = best_version(
+            "Original wording", dict(scores), "Rewritten wording", dict(scores)
+        )
         self.assertEqual(original, "Original wording")
 
     def test_small_win_keeps_the_original(self):
@@ -539,7 +548,9 @@ class TestBestVersionVoiceConservationMargin(unittest.TestCase):
             "ats_value": 80,
             "manager_test": "PASS",
         }
-        original, _ = best_version("Original wording", original_scores, "Rewritten wording", small_win)
+        original, _ = best_version(
+            "Original wording", original_scores, "Rewritten wording", small_win
+        )
         self.assertEqual(original, "Original wording")
 
     def test_real_improvement_displaces_the_original(self):
@@ -557,7 +568,9 @@ class TestBestVersionVoiceConservationMargin(unittest.TestCase):
             "ats_value": 90,
             "manager_test": "PASS",
         }
-        chosen, scores = best_version("Original wording", original_scores, "Rewritten wording", big_win)
+        chosen, scores = best_version(
+            "Original wording", original_scores, "Rewritten wording", big_win
+        )
         self.assertEqual(chosen, "Rewritten wording")
         self.assertEqual(scores, big_win)
 
@@ -655,15 +668,19 @@ class TestForeignNumbers(unittest.TestCase):
         from rewrite_bullets import foreign_numbers
 
         self.assertEqual(
-            foreign_numbers("Lifted reply rate to 54% across 2933 accounts",
-                            "54% reply rate; 2,933 accounts"),
+            foreign_numbers(
+                "Lifted reply rate to 54% across 2933 accounts",
+                "54% reply rate; 2,933 accounts",
+            ),
             set(),
         )
 
     def test_single_digits_are_ignored(self):
         from rewrite_bullets import foreign_numbers
 
-        self.assertEqual(foreign_numbers("Ran B2B 1:1 coaching in 3 markets", ""), set())
+        self.assertEqual(
+            foreign_numbers("Ran B2B 1:1 coaching in 3 markets", ""), set()
+        )
 
 
 class TestRewriteEvidenceGuard(unittest.TestCase):
@@ -692,8 +709,13 @@ class TestRewriteEvidenceGuard(unittest.TestCase):
     def test_segment_bundles_never_fall_back_to_the_whole_cv(self):
         # extract_cv_section() returns the whole cv.md when it can't find the
         # company; that must not reach a rewrite as context for this bullet.
-        self.kb.cv_full = "### Some Other Job\n**Other Employer** CV-MARKER 1,578 schools"
-        for build in (self.kb._build_segment_bundle, self.kb._build_gemma_segment_bundle):
+        self.kb.cv_full = (
+            "### Some Other Job\n**Other Employer** CV-MARKER 1,578 schools"
+        )
+        for build in (
+            self.kb._build_segment_bundle,
+            self.kb._build_gemma_segment_bundle,
+        ):
             self.assertNotIn("CV-MARKER", build("Nowhere Incorporated", "[content]"))
 
     @patch("rewrite_bullets.time.sleep", lambda *a, **kw: None)
@@ -707,20 +729,39 @@ class TestRewriteEvidenceGuard(unittest.TestCase):
         self.kb.static_prefix = "PREFIX "
         self.kb.context_block_for_bullet = lambda *a: "PREFIX Acme evidence: 40 reviews"
         mock_generate.side_effect = [
-            ('{"rewritten_bullet": "Audited 1,578 schools for accuracy.", "reasoning": "", "context_gaps": ""}', {}),
-            ('{"rewritten_bullet": "Evaluated 40 AI-generated sales reviews for accuracy.", "reasoning": "", "context_gaps": ""}', {}),
+            (
+                '{"rewritten_bullet": "Audited 1,578 schools for accuracy.", "reasoning": "", "context_gaps": ""}',
+                {},
+            ),
+            (
+                '{"rewritten_bullet": "Evaluated 40 AI-generated sales reviews for accuracy.", "reasoning": "", "context_gaps": ""}',
+                {},
+            ),
         ]
         mock_score.return_value = {
-            "accuracy_score": 95, "believability_score": 95, "clarity_score": 95,
-            "ats_value": 90, "manager_test": "PASS", "weaknesses": "",
+            "accuracy_score": 95,
+            "believability_score": 95,
+            "clarity_score": 95,
+            "ats_value": 90,
+            "manager_test": "PASS",
+            "weaknesses": "",
         }
         result = process_bullet(
-            self.row, self.kb, rewrite_system="sys", rewrite_system_gemma="sys-g",
-            score_system="score-sys", dry_run=False,
+            self.row,
+            self.kb,
+            rewrite_system="sys",
+            rewrite_system_gemma="sys-g",
+            score_system="score-sys",
+            dry_run=False,
             start_model=rewrite_bullets.REWRITE_FALLBACK_MODEL,
         )
-        self.assertEqual(result["final_bullet"], "Evaluated 40 AI-generated sales reviews for accuracy.")
-        self.assertEqual(mock_score.call_count, 1)  # the borrowed version is never scored
+        self.assertEqual(
+            result["final_bullet"],
+            "Evaluated 40 AI-generated sales reviews for accuracy.",
+        )
+        self.assertEqual(
+            mock_score.call_count, 1
+        )  # the borrowed version is never scored
         self.assertIn("1578", mock_generate.call_args_list[1].kwargs["contents"])
 
 
@@ -919,7 +960,9 @@ class TestBestVersionDateAnchorBypass(unittest.TestCase):
             "Achieved a 38% reply rate across 751 district contacts",
             weaker_rewrite,
         )
-        self.assertEqual(chosen, "Achieved a 38% reply rate across 751 district contacts")
+        self.assertEqual(
+            chosen, "Achieved a 38% reply rate across 751 district contacts"
+        )
 
     def test_rewrite_that_keeps_an_anchor_loses_to_a_clean_original(self):
         original_scores = {
@@ -942,4 +985,6 @@ class TestBestVersionDateAnchorBypass(unittest.TestCase):
             "Achieved a 38% reply rate across 751 contacts in Q3 2021",
             bigger_rewrite,
         )
-        self.assertEqual(chosen, "Achieved a 38% reply rate across 751 district contacts")
+        self.assertEqual(
+            chosen, "Achieved a 38% reply rate across 751 district contacts"
+        )

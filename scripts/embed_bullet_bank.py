@@ -370,7 +370,9 @@ def cli(argv: list = None) -> int:
     it; `--model` builds exactly one index."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Embed the active profile's bullet bank.")
+    parser = argparse.ArgumentParser(
+        description="Embed the active profile's bullet bank."
+    )
     parser.add_argument(
         "--model",
         choices=[EMBED_MODEL, BACKUP_EMBED_MODEL],

@@ -26,17 +26,25 @@ class TestVagueMagnitudes(unittest.TestCase):
         self.assertIn("'significant'", v[0])
 
     def test_bullet_vague_adverb_is_flagged(self):
-        self.assertEqual(len(flags(bullets=["Reduced processing time substantially"])), 1)
+        self.assertEqual(
+            len(flags(bullets=["Reduced processing time substantially"])), 1
+        )
 
     def test_statistical_significance_is_not_flagged(self):
-        self.assertEqual(flags(bullets=["Ran A/B tests to statistically significant results"]), [])
+        self.assertEqual(
+            flags(bullets=["Ran A/B tests to statistically significant results"]), []
+        )
         self.assertEqual(flags(bullets=["Tested significance of 12 features"]), [])
 
     def test_specific_figures_pass(self):
-        self.assertEqual(flags("Improved accuracy by 15%.", ["Cut processing time 40%"]), [])
+        self.assertEqual(
+            flags("Improved accuracy by 15%.", ["Cut processing time 40%"]), []
+        )
 
     def test_it_is_a_soft_warning(self):
-        fatal, soft = orchestrator.partition_violations(flags("Delivered greatly improved results."))
+        fatal, soft = orchestrator.partition_violations(
+            flags("Delivered greatly improved results.")
+        )
         self.assertEqual(fatal, [])
         self.assertEqual(len(soft), 1)
 

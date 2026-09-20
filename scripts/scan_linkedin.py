@@ -17,8 +17,8 @@ import os
 import re
 import signal
 import threading
-import traceback
 import time
+import traceback
 
 import cli_art
 import content_settings
@@ -549,6 +549,7 @@ def fetch_linkedin_jobs(limit: int = None, activity=None) -> list:
     SCRAPER_TIMEOUT_SECONDS = 600  # 10 minutes per search term, ~1hr for 6 terms
 
     scraper_exception = None
+
     def _run_scraper():
         nonlocal scraper_exception
         try:

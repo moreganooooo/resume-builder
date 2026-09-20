@@ -536,9 +536,7 @@ def run_content_settings() -> None:
                 questionary.Choice(
                     "Set the languages I can work in", value="languages"
                 ),
-                questionary.Choice(
-                    "Set my maximum travel percentage", value="travel"
-                ),
+                questionary.Choice("Set my maximum travel percentage", value="travel"),
                 questionary.Choice(
                     "Set the employment types I'll accept", value="employment"
                 ),
@@ -689,9 +687,7 @@ def run_content_settings() -> None:
 
         elif action == "toggle_role_track":
             role_track = dict(current.get("role_track") or {})
-            role_track["exclude_manager"] = not role_track.get(
-                "exclude_manager", False
-            )
+            role_track["exclude_manager"] = not role_track.get("exclude_manager", False)
             current["role_track"] = role_track
 
         elif action == "clear_pay":

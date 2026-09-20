@@ -102,7 +102,11 @@ def archive_copies_of_file(jd_path: str, profile: str = None) -> int:
         return 0
     if not isinstance(meta, dict):
         return 0
-    own_id = meta.get("source_job_id") or meta.get("id") or jd_manager.compute_job_key(jd_path)
+    own_id = (
+        meta.get("source_job_id")
+        or meta.get("id")
+        or jd_manager.compute_job_key(jd_path)
+    )
     return archive_copies_of(meta, exclude_ids={own_id}, profile=profile)
 
 

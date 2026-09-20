@@ -247,7 +247,11 @@ class TestFetchBoardJobs(unittest.TestCase):
         mock_run.return_value = [
             "not a dict",
             None,
-            {"title": "Marketing Coordinator", "url": "https://x.com/1", "location": "Remote"},
+            {
+                "title": "Marketing Coordinator",
+                "url": "https://x.com/1",
+                "location": "Remote",
+            },
         ]
         jobs = scan_boards.fetch_board_jobs(sources=["remoteok"])
         self.assertEqual([j["source_url"] for j in jobs], ["https://x.com/1"])
@@ -256,7 +260,10 @@ class TestFetchBoardJobs(unittest.TestCase):
     @patch("scan_boards.requests.get")
     @patch(
         "scan_boards._load_filters",
-        return_value={"enabled_boards": [], "custom_feeds": [{"name": "F", "url": "u"}]},
+        return_value={
+            "enabled_boards": [],
+            "custom_feeds": [{"name": "F", "url": "u"}],
+        },
     )
     def test_custom_feed_items_go_through_content_filters(
         self, _filters, mock_get, _content
@@ -590,5 +597,3 @@ class TestProviderOriginEntry(unittest.TestCase):
         mock_filters.return_value = {"location": {"zip": "62701", "radius_miles": 25}}
         scan_boards.fetch_board_jobs(sources=["jooble"])
         self.assertNotIn("location", mock_run.call_args[0][1])
-
-

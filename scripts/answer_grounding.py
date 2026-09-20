@@ -22,7 +22,10 @@ _VAGUE = re.compile(
 
 
 def _numbers(text: str) -> set[str]:
-    return {re.sub(r"[,$]", "", m.group(0)).lower().rstrip("%") for m in _NUMBER.finditer(text or "")}
+    return {
+        re.sub(r"[,$]", "", m.group(0)).lower().rstrip("%")
+        for m in _NUMBER.finditer(text or "")
+    }
 
 
 def _tool_names(ledger: dict | None) -> set[str]:
@@ -59,7 +62,9 @@ def check_answer(
     answer_numbers = _numbers(text)
     allowed_numbers = _numbers(allowed)
     violations = [
-        Violation("foreign_number", f"Number {number!r} is not present in the job evidence.")
+        Violation(
+            "foreign_number", f"Number {number!r} is not present in the job evidence."
+        )
         for number in sorted(answer_numbers - allowed_numbers)
         if len(re.sub(r"\D", "", number)) >= 2
     ]
@@ -70,11 +75,32 @@ def check_answer(
             name = match.group(0).lower()
             if name in {"I", "The", "This", "That", "With", "For", "And"}:
                 continue
-            if name not in tools and name in {"salesforce", "hubspot", "tableau", "sap", "jira", "asana"}:
-                violations.append(Violation("unknown_tool", f"Tool {match.group(0)!r} is not verified."))
+            if name not in tools and name in {
+                "salesforce",
+                "hubspot",
+                "tableau",
+                "sap",
+                "jira",
+                "asana",
+            }:
+                violations.append(
+                    Violation(
+                        "unknown_tool", f"Tool {match.group(0)!r} is not verified."
+                    )
+                )
     company = (getattr(context, "company", "") or "").strip()
     if _VAGUE.search(text or ""):
-        violations.append(Violation("vague_magnitude", "Use a concrete, checkable result where possible.", soft=True))
+        violations.append(
+            Violation(
+                "vague_magnitude",
+                "Use a concrete, checkable result where possible.",
+                soft=True,
+            )
+        )
     if char_limit is not None and len(text or "") > char_limit:
-        violations.append(Violation("too_long", f"Answer is {len(text)} characters; limit is {char_limit}."))
+        violations.append(
+            Violation(
+                "too_long", f"Answer is {len(text)} characters; limit is {char_limit}."
+            )
+        )
     return violations

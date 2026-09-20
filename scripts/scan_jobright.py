@@ -56,9 +56,18 @@ def _jobright_compensation(job_result: dict) -> dict | None:
         return None
     desc = (job_result.get("salaryDesc") or "").lower()
     interval = next(
-        (name for cue, name in (("/hr", "hour"), ("hour", "hour"), ("/mo", "month"),
-                                ("/wk", "week"), ("/yr", "year"), ("year", "year"))
-         if cue in desc),
+        (
+            name
+            for cue, name in (
+                ("/hr", "hour"),
+                ("hour", "hour"),
+                ("/mo", "month"),
+                ("/wk", "week"),
+                ("/yr", "year"),
+                ("year", "year"),
+            )
+            if cue in desc
+        ),
         "",
     )
     return {"min": low, "max": high, "interval": interval}

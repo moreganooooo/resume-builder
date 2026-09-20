@@ -591,12 +591,20 @@ class TestWebsearchFullText(unittest.TestCase):
     """A websearch hit carries only its search snippet; the posting page is
     fetched when the snippet is thin, and kept only if it has more text."""
 
-    RAW = {"title": "Field Application Engineer", "url": "https://example.com/career/fae/", "description": "Short snippet."}
+    RAW = {
+        "title": "Field Application Engineer",
+        "url": "https://example.com/career/fae/",
+        "description": "Short snippet.",
+    }
 
     def _normalize(self, page_text, raw=None):
         gates = [
-            "_passes_title_filter", "_passes_location_filter", "_passes_employment_filter",
-            "_passes_content_filters", "_passes_compensation_filter", "_passes_hours_filter",
+            "_passes_title_filter",
+            "_passes_location_filter",
+            "_passes_employment_filter",
+            "_passes_content_filters",
+            "_passes_compensation_filter",
+            "_passes_hours_filter",
             "_passes_hybrid_preference_filter",
         ]
         patchers = [patch(f"scan_boards.{g}", return_value=True) for g in gates]
@@ -604,7 +612,9 @@ class TestWebsearchFullText(unittest.TestCase):
             p.start()
         self.addCleanup(lambda: [p.stop() for p in patchers])
         with patch("scan_boards._fetch_posting_text", return_value=page_text) as fetch:
-            job = scan_ats._normalize_raw_job(raw or self.RAW, "websearch", "PostProcess")
+            job = scan_ats._normalize_raw_job(
+                raw or self.RAW, "websearch", "PostProcess"
+            )
         return job, fetch
 
     def test_thin_snippet_is_replaced_by_the_page_text(self):
@@ -617,5 +627,7 @@ class TestWebsearchFullText(unittest.TestCase):
         self.assertEqual(job["description"], "Short snippet.")
 
     def test_teaser_is_not_refetched(self):
-        _, fetch = self._normalize("x" * 2000, raw=dict(self.RAW, description_is_teaser=True))
+        _, fetch = self._normalize(
+            "x" * 2000, raw=dict(self.RAW, description_is_teaser=True)
+        )
         fetch.assert_not_called()

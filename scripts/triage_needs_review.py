@@ -287,7 +287,10 @@ def main():
     # Rewrite needs-review.csv with only unrouted rows
     if leftover:
         fieldnames = list(all_rows[0].keys()) if all_rows else QUEUE_FIELDS
-        if any(r.get("triage_note") for r in leftover) and "triage_note" not in fieldnames:
+        if (
+            any(r.get("triage_note") for r in leftover)
+            and "triage_note" not in fieldnames
+        ):
             fieldnames.append("triage_note")
         with atomic_write(NEEDS_REVIEW, newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")

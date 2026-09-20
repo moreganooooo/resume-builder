@@ -49,7 +49,11 @@ class TestThirdPersonCheckIgnoresQuotedRecommendations(unittest.TestCase):
             return_value={"candidate": {"full_name": "Jordan Example"}},
         ):
             return validate_coverletter._check_third_person_slip(
-                {"greeting": "Dear Hiring Team,", "body_paragraphs": [paragraph], "sign_off": ""}
+                {
+                    "greeting": "Dear Hiring Team,",
+                    "body_paragraphs": [paragraph],
+                    "sign_off": "",
+                }
             )
 
     def test_quoted_reference_naming_the_candidate_passes(self):
@@ -59,7 +63,9 @@ class TestThirdPersonCheckIgnoresQuotedRecommendations(unittest.TestCase):
         self.assertEqual(self._violations(curly), [])
 
     def test_unquoted_self_reference_is_still_flagged(self):
-        self.assertTrue(self._violations("Jordan brings eight years of lifecycle work."))
+        self.assertTrue(
+            self._violations("Jordan brings eight years of lifecycle work.")
+        )
 
 
 if __name__ == "__main__":

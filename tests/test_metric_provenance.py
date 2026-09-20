@@ -105,7 +105,11 @@ class TestMetricProvenanceCheck(unittest.TestCase):
         # lookup found no allowed metrics and flagged every real figure.
         resume_data = self._resume("Architected a content library spanning 100+ assets")
         bullet_tuples = [
-            ("Architected a library spanning 100+ assets.", "Widgetco Creative, LLC", "content"),
+            (
+                "Architected a library spanning 100+ assets.",
+                "Widgetco Creative, LLC",
+                "content",
+            ),
         ]
         self.assertEqual(
             validate_resume._check_metric_provenance(resume_data, bullet_tuples), []
@@ -114,7 +118,11 @@ class TestMetricProvenanceCheck(unittest.TestCase):
     def test_plus_marker_does_not_make_a_new_figure(self):
         resume_data = self._resume("Managed a $20M+ portfolio across the region")
         bullet_tuples = [
-            ("Managed a $20M portfolio across the region.", "Widgetco Creative", "sales"),
+            (
+                "Managed a $20M portfolio across the region.",
+                "Widgetco Creative",
+                "sales",
+            ),
         ]
         self.assertEqual(
             validate_resume._check_metric_provenance(resume_data, bullet_tuples), []

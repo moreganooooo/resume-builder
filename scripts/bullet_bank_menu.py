@@ -20,8 +20,8 @@ import os
 import subprocess
 import sys
 
-import cli_art
 import charm_prompt
+import cli_art
 import questionary
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -56,6 +56,7 @@ def _removed():
     """removed-bullets.csv, read fresh -- a bullet removed on purpose is
     settled work for every stage, never pending (see bullet_bank_state)."""
     return bullet_bank_state.load_removed(REMOVED_CSV)
+
 
 # Statuses that mark a rewrite-stage row as done -- mirrors
 # rewrite_bullets.py's own DONE_STATUSES, duplicated here rather than
@@ -240,13 +241,19 @@ def _embed_index_current():
         reader = csv.DictReader(f)
         # Same column choice and empty-cell handling as embed_bullet_bank.main().
         col = next(
-            (c for c in ("Bullet Point", "bullet", "achievement") if c in (reader.fieldnames or [])),
+            (
+                c
+                for c in ("Bullet Point", "bullet", "achievement")
+                if c in (reader.fieldnames or [])
+            ),
             None,
         )
         if col is None:
             return None
         texts = [row.get(col) or "" for row in reader]
-    return meta.get("bullets_sha") == bullets_sha(texts) and meta.get("rows") == len(texts)
+    return meta.get("bullets_sha") == bullets_sha(texts) and meta.get("rows") == len(
+        texts
+    )
 
 
 def _embed_progress():

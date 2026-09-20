@@ -509,7 +509,9 @@ class TestValidateResume(unittest.TestCase):
             "I'm passionate about communication that meets people where they are."
         )
         violations = validate_resume.validate(resume, opted_in)
-        self.assertTrue(any(v.startswith("Advisory word 'passionate'") for v in violations))
+        self.assertTrue(
+            any(v.startswith("Advisory word 'passionate'") for v in violations)
+        )
         self.assertFalse(
             any(v.startswith("Forbidden phrase 'passionate'") for v in violations)
         )
@@ -521,7 +523,9 @@ class TestValidateResume(unittest.TestCase):
             "I'm passionate about communication that meets people where they are."
         )
         violations = validate_resume.validate(resume, STYLE_RULES)
-        self.assertTrue(any(v.startswith("Forbidden phrase 'passionate'") for v in violations))
+        self.assertTrue(
+            any(v.startswith("Forbidden phrase 'passionate'") for v in violations)
+        )
 
     def test_advisory_word_stays_hard_in_bullets_and_multiword_phrases(self):
         # The downgrade covers single words in Summary/Why ONLY: bullets
@@ -539,7 +543,9 @@ class TestValidateResume(unittest.TestCase):
             "<strong>Results-driven professional with 8 years in CRM strategy.</strong>"
         )
         violations = validate_resume.validate(resume, opted_in)
-        self.assertTrue(any(v.startswith("Forbidden phrase 'passionate'") for v in violations))
+        self.assertTrue(
+            any(v.startswith("Forbidden phrase 'passionate'") for v in violations)
+        )
         # "results-driven professional" trips several entries of the list
         # ("results-driven", "results-driven professional", "driven
         # professional"); any hard hit proves the multi-word cliché was

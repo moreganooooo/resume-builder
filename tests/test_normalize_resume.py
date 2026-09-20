@@ -333,7 +333,9 @@ class TestStintAnnotationStripping(unittest.TestCase):
             normalize_resume._strip_stint_annotation("Ben & Jerry", ""), "Ben & Jerry"
         )
         self.assertEqual(
-            normalize_resume._strip_stint_annotation("mIQroTech Inc.", "Lead Data Scientist"),
+            normalize_resume._strip_stint_annotation(
+                "mIQroTech Inc.", "Lead Data Scientist"
+            ),
             "mIQroTech Inc.",
         )
 
@@ -349,7 +351,8 @@ class TestNumericPeriod(unittest.TestCase):
             normalize_resume._numeric_period("05/2021 – May 2022"), "05/2021 – 05/2022"
         )
         self.assertEqual(
-            normalize_resume._numeric_period("Sept 2019 – Mar 2020"), "09/2019 – 03/2020"
+            normalize_resume._numeric_period("Sept 2019 – Mar 2020"),
+            "09/2019 – 03/2020",
         )
 
     def test_leaves_present_and_already_numeric_dates_alone(self):

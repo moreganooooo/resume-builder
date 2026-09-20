@@ -18,7 +18,6 @@ import jd_manager
 import profile_paths
 from answer_grounding import Violation, check_answer
 
-
 MAX_PROMPT_CHARS = 60_000
 MODEL = "gemini-3.5-flash-lite"
 
@@ -57,7 +56,7 @@ def _trim(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     head = limit // 2
-    return text[:head] + "\n...[trimmed]...\n" + text[-(limit - head - 19):]
+    return text[:head] + "\n...[trimmed]...\n" + text[-(limit - head - 19) :]
 
 
 def _payload(path: str) -> dict:
@@ -71,7 +70,9 @@ def _payload(path: str) -> dict:
 
 def context_cache_path(job_id: str, jd_text: str = "") -> str:
     digest = hashlib.sha256(jd_text.encode("utf-8")).hexdigest()[:16]
-    return os.path.join(tempfile.gettempdir(), f"resume-answer-context-{job_id}-{digest}.json")
+    return os.path.join(
+        tempfile.gettempdir(), f"resume-answer-context-{job_id}-{digest}.json"
+    )
 
 
 def build_context(job: str) -> AnswerContext:
@@ -150,7 +151,9 @@ def build_context(job: str) -> AnswerContext:
         )
 
 
-def evidence_for(context: AnswerContext, question: str, kind: answer_questions.QuestionKind) -> Evidence:
+def evidence_for(
+    context: AnswerContext, question: str, kind: answer_questions.QuestionKind
+) -> Evidence:
     try:
         from vector_store import search_bullet_bank
 
@@ -166,7 +169,11 @@ def render_prompt(context, evidence, history, question, kind, char_limit=None) -
     conversation = "\n".join(
         f"{turn.get('role', 'user').upper()}: {turn.get('text', '')}" for turn in turns
     )
-    limit_rule = f"Maximum length: {char_limit} characters." if char_limit else "No character limit was supplied."
+    limit_rule = (
+        f"Maximum length: {char_limit} characters."
+        if char_limit
+        else "No character limit was supplied."
+    )
     prompt = f"""You are the candidate, writing a truthful application answer with a hiring recruiter's eye.
 
 === JOB DESCRIPTION ===
@@ -217,8 +224,7 @@ def answer(job: str, question: str, history=(), char_limit=None) -> AnswerResult
     hard = [warning for warning in warnings if not warning.soft]
     if hard:
         retry_prompt = (
-            prompt
-            + "\nRETRY REQUIREMENT: Correct these deterministic issues without "
+            prompt + "\nRETRY REQUIREMENT: Correct these deterministic issues without "
             "inventing replacement facts:\n"
             + "\n".join(f"- {warning.detail}" for warning in hard)
         )
@@ -317,7 +323,9 @@ def _finalize(job: str, item_index: int, library: bool = False) -> None:
         if item_index < 0 or item_index >= len(items):
             raise IndexError(f"answer item {item_index} does not exist")
         item = items[item_index]
-        answers = [turn for turn in item.get("history", []) if turn.get("role") == "assistant"]
+        answers = [
+            turn for turn in item.get("history", []) if turn.get("role") == "assistant"
+        ]
         if not answers:
             raise ValueError("cannot finalize an item without an assistant answer")
         item["final"] = answers[-1].get("text") or ""

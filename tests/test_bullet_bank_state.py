@@ -22,7 +22,12 @@ import bullet_bank_state  # noqa: E402
 import remove_bullets  # noqa: E402
 import triage_needs_review  # noqa: E402
 
-KEEPER_FIELDS = ["Bullet Point", "Role / Company", "original_bullet", "source_cluster_id"]
+KEEPER_FIELDS = [
+    "Bullet Point",
+    "Role / Company",
+    "original_bullet",
+    "source_cluster_id",
+]
 
 
 def _write(path, rows, fieldnames):
@@ -63,8 +68,12 @@ class TestRemovedList(TmpDirCase):
 
     def test_record_is_append_only_and_skips_repeats(self):
         row = {"Bullet Point": "Cut costs 12%", "original_bullet": "raw cost bullet"}
-        self.assertEqual(bullet_bank_state.record_removed(self.removed_path, [row], "dup"), 1)
-        self.assertEqual(bullet_bank_state.record_removed(self.removed_path, [row], "dup"), 0)
+        self.assertEqual(
+            bullet_bank_state.record_removed(self.removed_path, [row], "dup"), 1
+        )
+        self.assertEqual(
+            bullet_bank_state.record_removed(self.removed_path, [row], "dup"), 0
+        )
         removed = bullet_bank_state.load_removed(self.removed_path)
         self.assertEqual(len(removed), 1)
         self.assertTrue(removed.blocks("cut costs 12%"))
@@ -86,7 +95,9 @@ class TestRemovedList(TmpDirCase):
             )
         )
         self.assertIsNone(
-            bullet_bank_state.near_duplicate_of("Hired and trained 6 staff", "Acme", cands)
+            bullet_bank_state.near_duplicate_of(
+                "Hired and trained 6 staff", "Acme", cands
+            )
         )
 
 
@@ -96,7 +107,9 @@ class TestMergeRespectsRemovals(unittest.TestCase):
 
     def test_removed_bullet_is_not_merged_back(self):
         audited = self._df([["Kept", "Acme", "raw1", "c1"]])
-        keepers_in = self._df([["Kept", "Acme", "raw1", "c1"], ["Gone", "Acme", "raw2", "c2"]])
+        keepers_in = self._df(
+            [["Kept", "Acme", "raw1", "c1"], ["Gone", "Acme", "raw2", "c2"]]
+        )
         removed = bullet_bank_state.Removed([{"Bullet Point": "Gone"}])
         merged, n_new = audit_keepers.merge_new_rows_from_keepers_in(
             audited, keepers_in, removed
@@ -122,7 +135,9 @@ class TestMergeRespectsRemovals(unittest.TestCase):
         audited = self._df([["Kept", "Acme", "raw1", "c1"]])
         keepers_in = self._df([["Brand new", "Acme", "raw9", "c9"]])
         removed = bullet_bank_state.Removed([{"Bullet Point": "Something else"}])
-        _, n_new = audit_keepers.merge_new_rows_from_keepers_in(audited, keepers_in, removed)
+        _, n_new = audit_keepers.merge_new_rows_from_keepers_in(
+            audited, keepers_in, removed
+        )
         self.assertEqual(n_new, 1)
 
 
@@ -153,7 +168,9 @@ class TestTriageRespectsRemovalsAndNearDuplicates(TmpDirCase):
         }
 
     def test_removed_bullet_is_dropped_not_kept(self):
-        bullet_bank_state.record_removed(self.removed_path, [{"Bullet Point": "Gone"}], "x")
+        bullet_bank_state.record_removed(
+            self.removed_path, [{"Bullet Point": "Gone"}], "x"
+        )
         _write(self.needs_review, [self._row("Gone")], list(self._row("").keys()))
         triage_needs_review.main()
         self.assertEqual(_read(self.keepers), [])
@@ -162,8 +179,12 @@ class TestTriageRespectsRemovalsAndNearDuplicates(TmpDirCase):
     def test_near_duplicate_of_audited_keeper_is_left_for_review(self):
         _write(
             self.audited,
-            [{"Bullet Point": "Grew email revenue $4,000 per month through segmentation",
-              "Role / Company": "Acme"}],
+            [
+                {
+                    "Bullet Point": "Grew email revenue $4,000 per month through segmentation",
+                    "Role / Company": "Acme",
+                }
+            ],
             ["Bullet Point", "Role / Company"],
         )
         _write(
@@ -195,39 +216,63 @@ class TestMenuCountsRemovalsAsDone(TmpDirCase):
             p = patch.object(bullet_bank_menu, name, value)
             p.start()
             self.addCleanup(p.stop)
-        _write(self.raw, [{"Bullet Point": t} for t in ("a", "b", "c")], ["Bullet Point"])
+        _write(
+            self.raw, [{"Bullet Point": t} for t in ("a", "b", "c")], ["Bullet Point"]
+        )
 
     def test_audit_progress(self):
         _write(self.audited, [{"Bullet Point": "a"}], ["Bullet Point"])
         self.assertEqual(bullet_bank_menu._audit_progress(), (1, 3))
         bullet_bank_state.record_removed(
-            self.removed_path, [{"Bullet Point": "final b", "original_bullet": "b"}], "x"
+            self.removed_path,
+            [{"Bullet Point": "final b", "original_bullet": "b"}],
+            "x",
         )
         self.assertEqual(bullet_bank_menu._audit_progress(), (2, 3))
 
     def test_cluster_progress_is_by_content_not_mtime(self):
-        _write(self.cluster_map, [{"Bullet Point": "- A"}, {"Bullet Point": "b"}], ["Bullet Point"])
+        _write(
+            self.cluster_map,
+            [{"Bullet Point": "- A"}, {"Bullet Point": "b"}],
+            ["Bullet Point"],
+        )
         self.assertEqual(bullet_bank_menu._cluster_progress(), (2, 3))
-        bullet_bank_state.record_removed(self.removed_path, [{"Bullet Point": "c"}], "x")
+        bullet_bank_state.record_removed(
+            self.removed_path, [{"Bullet Point": "c"}], "x"
+        )
         self.assertEqual(bullet_bank_menu._cluster_progress(), (3, 3))
 
     def test_rewrite_progress(self):
         _write(
             self.cluster_map,
-            [{"Bullet Point": "a", "is_representative": "True", "next_action": "REWRITE"}],
+            [
+                {
+                    "Bullet Point": "a",
+                    "is_representative": "True",
+                    "next_action": "REWRITE",
+                }
+            ],
             ["Bullet Point", "is_representative", "next_action"],
         )
         self.assertEqual(bullet_bank_menu._rewrite_progress(), (0, 1))
         bullet_bank_state.record_removed(
-            self.removed_path, [{"Bullet Point": "final a", "original_bullet": "a"}], "x"
+            self.removed_path,
+            [{"Bullet Point": "final a", "original_bullet": "a"}],
+            "x",
         )
         self.assertEqual(bullet_bank_menu._rewrite_progress(), (1, 1))
 
     def test_remove_entry_status(self):
         entry = {"key": "remove", "watched_file": self.removed_path}
-        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "none removed yet")
-        bullet_bank_state.record_removed(self.removed_path, [{"Bullet Point": "a"}], "x")
-        self.assertEqual(bullet_bank_menu._maintenance_status(entry), "1 removed so far")
+        self.assertEqual(
+            bullet_bank_menu._maintenance_status(entry), "none removed yet"
+        )
+        bullet_bank_state.record_removed(
+            self.removed_path, [{"Bullet Point": "a"}], "x"
+        )
+        self.assertEqual(
+            bullet_bank_menu._maintenance_status(entry), "1 removed so far"
+        )
 
 
 class TestRemovedBulletNeverReturns(TmpDirCase):
@@ -248,23 +293,40 @@ class TestRemovedBulletNeverReturns(TmpDirCase):
             p.start()
             self.addCleanup(p.stop)
         rows = [
-            {"Bullet Point": "Hit 96% accuracy", "Role / Company": "Acme",
-             "original_bullet": "raw accuracy", "source_cluster_id": "c1"},
-            {"Bullet Point": "Hit 96% accuracy on audits", "Role / Company": "Acme",
-             "original_bullet": "raw accuracy", "source_cluster_id": "c1"},
-            {"Bullet Point": "Trained 12 staff", "Role / Company": "Acme",
-             "original_bullet": "raw training", "source_cluster_id": "c2"},
+            {
+                "Bullet Point": "Hit 96% accuracy",
+                "Role / Company": "Acme",
+                "original_bullet": "raw accuracy",
+                "source_cluster_id": "c1",
+            },
+            {
+                "Bullet Point": "Hit 96% accuracy on audits",
+                "Role / Company": "Acme",
+                "original_bullet": "raw accuracy",
+                "source_cluster_id": "c1",
+            },
+            {
+                "Bullet Point": "Trained 12 staff",
+                "Role / Company": "Acme",
+                "original_bullet": "raw training",
+                "source_cluster_id": "c2",
+            },
         ]
         _write(self.keepers, rows, KEEPER_FIELDS)
         _write(self.audited, rows, KEEPER_FIELDS)
 
     def test_remove_then_rerun(self):
         self.assertEqual(
-            remove_bullets.main(["--text", "Hit 96% accuracy", "--reason", "dup", "--yes"]), 0
+            remove_bullets.main(
+                ["--text", "Hit 96% accuracy", "--reason", "dup", "--yes"]
+            ),
+            0,
         )
         audited = [r["Bullet Point"] for r in _read(self.audited)]
         self.assertEqual(audited, ["Hit 96% accuracy on audits", "Trained 12 staff"])
-        self.assertNotIn("Hit 96% accuracy", [r["Bullet Point"] for r in _read(self.keepers)])
+        self.assertNotIn(
+            "Hit 96% accuracy", [r["Bullet Point"] for r in _read(self.keepers)]
+        )
         self.assertTrue(os.listdir(os.path.join(self.tmp, "backups")))
 
         removed = bullet_bank_state.load_removed(self.removed_path)
@@ -292,8 +354,10 @@ class TestRemovedBulletNeverReturns(TmpDirCase):
         review = self.path("review.csv")
         _write(
             review,
-            [{"Bullet Point": "Hit 96% accuracy", "decision": "keep"},
-             {"Bullet Point": "Hit 96% accuracy on audits", "decision": "Remove"}],
+            [
+                {"Bullet Point": "Hit 96% accuracy", "decision": "keep"},
+                {"Bullet Point": "Hit 96% accuracy on audits", "decision": "Remove"},
+            ],
             ["Bullet Point", "decision"],
         )
         remove_bullets.main(["--from-review", review, "--yes"])
@@ -307,11 +371,14 @@ class TestRemovedBulletNeverReturns(TmpDirCase):
         old = os.path.join(self.tmp, "old", "bullet-bank-keepers-audited.csv")
         _write(
             old,
-            _read(self.audited) + [{"Bullet Point": "Deleted by hand", "Role / Company": "Acme"}],
+            _read(self.audited)
+            + [{"Bullet Point": "Deleted by hand", "Role / Company": "Acme"}],
             KEEPER_FIELDS,
         )
         remove_bullets.main(["--since-backup", old, "--yes"])
-        self.assertTrue(bullet_bank_state.load_removed(self.removed_path).blocks("Deleted by hand"))
+        self.assertTrue(
+            bullet_bank_state.load_removed(self.removed_path).blocks("Deleted by hand")
+        )
         self.assertEqual(len(_read(self.audited)), 3)
 
 

@@ -251,9 +251,7 @@ def _check_forbidden_phrases(resume_data: dict, style_rules: dict) -> list[str]:
                         f"the same thing, prefer the detail: {text!r}"
                     )
                 else:
-                    violations.append(
-                        f"Forbidden phrase '{phrase}' found in: {text!r}"
-                    )
+                    violations.append(f"Forbidden phrase '{phrase}' found in: {text!r}")
     return violations
 
 
@@ -1187,7 +1185,9 @@ def _check_why_filler(resume_data: dict) -> list[str]:
     return [
         f"Generic filler line in Why section: {sentence!r} -- replace it with a specific "
         f"fact tied to this company, or cut it."
-        for sentence in filler_phrases.filler_sentences(resume_data.get("WHY_TEXT") or "")
+        for sentence in filler_phrases.filler_sentences(
+            resume_data.get("WHY_TEXT") or ""
+        )
     ]
 
 

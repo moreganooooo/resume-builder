@@ -240,7 +240,9 @@ def ingest_one(path: str, profile: str = None, engine=None) -> str | None:
     with atomic_write(dest, encoding="utf-8") as f:
         json.dump(job, f, indent=2, ensure_ascii=False)
 
-    partial_note = " (partial -- image was cut off)" if job.get("_ingest_partial") else ""
+    partial_note = (
+        " (partial -- image was cut off)" if job.get("_ingest_partial") else ""
+    )
     cli_art.cli_info(
         f"{job['job_title'] or 'Untitled Role'} @ "
         f"{job['company_name'] or 'Unknown Company'}{partial_note} -> {dest}"
@@ -258,8 +260,12 @@ def ingest_one(path: str, profile: str = None, engine=None) -> str | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("sources", nargs="+", help="Image/PDF file(s) or a directory of them")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "sources", nargs="+", help="Image/PDF file(s) or a directory of them"
+    )
     parser.add_argument("--profile", help="Target profile (default: active profile)")
     args = parser.parse_args()
 
@@ -276,7 +282,9 @@ def main() -> int:
         if ingest_one(path, profile=args.profile, engine=engine):
             ok += 1
 
-    cli_art.cli_info(f"Ingested {ok}/{len(files)} file(s) into jds/{args.profile or profile_paths.active_profile()}/.")
+    cli_art.cli_info(
+        f"Ingested {ok}/{len(files)} file(s) into jds/{args.profile or profile_paths.active_profile()}/."
+    )
     return 0 if ok == len(files) else 1
 
 

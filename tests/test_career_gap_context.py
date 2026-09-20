@@ -22,7 +22,9 @@ compensation:
 
 class TestCareerGapContext(unittest.TestCase):
     def test_prompt_hardcodes_no_candidate_gap(self):
-        with open(os.path.join(ROOT, "resume-engine", "prompts", "evaluate_recruiter.md")) as f:
+        with open(
+            os.path.join(ROOT, "resume-engine", "prompts", "evaluate_recruiter.md")
+        ) as f:
             prompt = f.read()
         self.assertNotIn("2024-25", prompt)
         self.assertIn("career_gap:", prompt)

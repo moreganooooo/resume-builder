@@ -79,9 +79,12 @@ class TestBuildSample(unittest.TestCase):
             # developer's own output/<profile>/ on every suite run -- the
             # same partial-isolation trap that seeded jds/testprofile and
             # friends.
-            with patch.object(
-                build_sample, "SAMPLE_JD_PATH", "/nonexistent/sample_jd.txt"
-            ), profile_paths.isolate_for_tests(tmp_dir):
+            with (
+                patch.object(
+                    build_sample, "SAMPLE_JD_PATH", "/nonexistent/sample_jd.txt"
+                ),
+                profile_paths.isolate_for_tests(tmp_dir),
+            ):
                 res = build_sample.build_sample()
                 self.assertEqual(res, {"resume": {}, "coverletter": {}})
 

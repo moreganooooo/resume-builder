@@ -46,7 +46,9 @@ class TestApplicationAnswerStore(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "job.json")
             with open(path, "w", encoding="utf-8") as handle:
-                json.dump({"job_title": "Role", "_application_answers": {"items": []}}, handle)
+                json.dump(
+                    {"job_title": "Role", "_application_answers": {"items": []}}, handle
+                )
             self.assertNotIn("_application_answers", jd_manager.read_jd_text(path))
 
     def test_non_dict_is_noop(self):

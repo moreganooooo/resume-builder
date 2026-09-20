@@ -227,7 +227,7 @@ def _save_liveness_to_db(job_id: str, outcome: str, reason: str) -> None:
         with jd_source.resolved_jd(job_id) as (path, _is_db):
             jd_manager.save_liveness(path, outcome, reason)
     except (LookupError, OSError):
-        return
+        pass
 
 
 def _gather_db_candidates(refresh: bool = False) -> list:

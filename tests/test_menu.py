@@ -35,8 +35,12 @@ def _icon_glyph(title):
 
 
 def _first_option(choices):
-    return next(c for c in choices
-                if isinstance(c, questionary.Choice) and not isinstance(c, questionary.Separator))
+    return next(
+        c
+        for c in choices
+        if isinstance(c, questionary.Choice)
+        and not isinstance(c, questionary.Separator)
+    )
 
 
 def _doctor_choice(choices):
@@ -1183,7 +1187,9 @@ class TestHandleHelp(unittest.TestCase):
 
     @patch("menu._pause_and_return")
     @patch("menu.cli_art.display_help")
-    def test_pauses_so_the_panel_is_not_erased_by_the_redraw(self, _display, mock_pause):
+    def test_pauses_so_the_panel_is_not_erased_by_the_redraw(
+        self, _display, mock_pause
+    ):
         # "help" gets no automatic pause from _run_with_chain, and the main
         # loop clears the screen under alt-screen -- without this the panel
         # vanished the instant it drew.

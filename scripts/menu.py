@@ -47,6 +47,7 @@ import maintenance
 import orchestrator
 import picker
 import polish as polish_module
+import profile_paths
 import questionary
 import scan as scan_module
 import skills_menu
