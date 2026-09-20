@@ -220,6 +220,10 @@ def _build_build_documents_choices() -> list:
             title=_icon_title("save", "↳ Write Cover Letter for Specific Role(s)"),
             value="coverletter_pick",
         ),
+        questionary.Choice(
+            title=_icon_title("chat", "↳ Application Answers for a Specific Role"),
+            value="answers_pick",
+        ),
         charm_prompt.Heading("Many Roles"),
         questionary.Choice(
             title=_icon_title(
@@ -1864,6 +1868,23 @@ def _handle_coverletter_pick() -> bool:
     return successes > 0
 
 
+def _handle_answers_pick() -> bool:
+    """Open the dashboard's answer chat for one selected role."""
+    selected = picker.browse_and_select_jds(statuses=["Pending", "Completed"])
+    if not selected:
+        return False
+    path = selected[0].get("path")
+    if not path:
+        cli_art.cli_error("The selected role has no usable JD path.")
+        return False
+    success, msg = dashboard_module.run(
+        profile=profile_paths.active_profile(), view="answers", job=path
+    )
+    if not success:
+        cli_art.cli_error(msg)
+    return success
+
+
 def _handle_career_dashboard() -> bool:
     """Hands the terminal over entirely to the vendored Go dashboard
     (dashboard/) -- unlike every other handler here, this isn't
@@ -3083,6 +3104,7 @@ _HANDLERS = {
     "tailor_all": _handle_tailor_all,
     "tailor_pick": _handle_tailor_pick,
     "coverletter_pick": _handle_coverletter_pick,
+    "answers_pick": _handle_answers_pick,
     "browse_jobs": _handle_browse_jobs,
     "career_dashboard": _handle_career_dashboard,
     "polish": _handle_polish,

@@ -578,6 +578,15 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 			m.notice = "No job URL saved for this application"
 		}
 
+	case "a":
+		if app, ok := m.CurrentApp(); ok {
+			return m, func() tea.Msg {
+				return OpenAnswersMsg{Job: model.JobRow{
+					Path: app.JobPath, Title: app.Role, Company: app.Company,
+				}}
+			}
+		}
+
 	case "p":
 		return m, func() tea.Msg { return PipelineOpenProgressMsg{} }
 
@@ -1018,6 +1027,7 @@ var pipelineHelpCategories = []helpCategory{
 	{"Actions", []helpBinding{
 		{"Enter", "Open report"},
 		{"o", "Open job URL in browser"},
+		{"a", "Open application answers chat"},
 		{"c", "Change application status"},
 		{"r", "Refresh from disk"},
 	}},
