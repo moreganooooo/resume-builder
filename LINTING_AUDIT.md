@@ -258,17 +258,24 @@ The resume-builder codebase has accumulated linting issues across multiple categ
 
 ## How to Run Full Linter Suite
 
+### Python Linting
 ```bash
 # Individual tools
 black --target-version py310 scripts tests
 isort scripts tests
 pylint scripts tests --disable=all --enable=E,F
-mypy scripts tests  # 294 errors documented above
+mypy scripts tests  # 244 errors (50% reduction)
 bandit -r scripts tests -c .bandit
 radon cc scripts tests --show-complexity
 pydocstyle scripts tests
 codespell scripts tests
 yamllint profiles jds output
+```
+
+### Go Linting (dashboard/)
+```bash
+cd dashboard
+golangci-lint run ./...  # 25 issues (errcheck, staticcheck)
 ```
 
 ### Configuration Status
@@ -314,6 +321,45 @@ yamllint profiles jds output
 2. Separate retry logic in repair_violations_surgically
 3. Document decision trees in complex functions
 4. Continue gradual refactoring as files are edited
+
+---
+
+## Go Linting (dashboard/) - NEW
+
+**Current Status:** 25 issues found
+
+### Issue Breakdown
+
+| Category | Count | Severity | Action |
+|----------|-------|----------|--------|
+| **errcheck** | 15 | Medium | Add error handling or `_ =` ignores |
+| **staticcheck** | 8 | Low | Code quality improvements |
+| **deprecated** | 1 | Low | Replace `strings.Title` with `golang.org/x/text/cases` |
+| **govet** | 1 | Low | Tagged switch pattern |
+
+### Top Issues
+
+1. **Unchecked Close operations (8):** File closes, stream flushes
+   - Files: `rendercapture/main.go`, `atomic.go`, `profile.go`
+   - Fix: Add `_ = obj.Close()` or proper error handling
+
+2. **Unchecked Setenv/Unsetenv (4):** Environment variable operations  
+   - File: `anim_test.go`
+   - Fix: Add `_ =` prefix or error checks in tests
+
+3. **Inefficient formatting (3):** Using `WriteString(fmt.Sprintf(...))` instead of `fmt.Fprintf`
+   - File: `kb.go`
+   - Fix: Replace with `fmt.Fprintf` directly
+
+4. **Deprecated API (1):** `strings.Title` usage
+   - File: `career.go:1140`
+   - Fix: Replace with `golang.org/x/text/cases.Title(language.English)`
+
+### Remediation Plan
+
+- **Phase 1:** Fix errcheck issues (unchecked close operations - ~15 min)
+- **Phase 2:** Replace deprecated `strings.Title` (~5 min)
+- **Phase 3:** Apply staticcheck code quality improvements (~10 min)
 
 ---
 
