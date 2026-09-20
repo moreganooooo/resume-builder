@@ -1,14 +1,24 @@
 # Linting Issues Audit & Remediation Plan
 
 **Date:** 2026-09-20  
-**Status:** Phase 2 (MyPy) Active - 246 errors remaining (49% reduction)
+**Status:** Phase 2 (MyPy) Active - 244 errors remaining (50% reduction)
 
-**Session Progress:**
-- Started: 483 MyPy errors
-- After implicit Optional fixes: 294 errors (39% reduction)
-- After safety fixes: 276 errors (union-attr resolved)
-- After comprehensive fixes: 246 errors (49% reduction)
-- **Next targets:** no-any-return (141), var-annotated (33), remaining arg-type (24)
+**Session 2 Achievements:**
+- Fixed implicit Optional parameters: 8 errors
+- Fixed all union-attr errors (safety-critical): 7 errors
+- Fixed arg-type, return-value, assignment errors: 24 errors
+- Fixed var-annotated errors: 2 errors
+- **Total reduction this session:** 483 → 244 (50% reduction, 239 fixes)
+- **Files affected:** 70 files (down from original broader list)
+
+**Error Breakdown (244 remaining):**
+- no-any-return: 141 (YAML/JSON loading - requires cast/review)
+- var-annotated: 31 (type inference - requires annotations)
+- arg-type: 24 (type mismatches - needs fixes)
+- assignment: 22 (type conflicts - requires annotations)
+- return-value: 13 (wrong return types - needs adjustments)
+- dict-item: 5 (dict value type conflicts)
+- Others: 8 (return, operator, index, attr-defined, misc)
 
 ## Executive Summary
 
