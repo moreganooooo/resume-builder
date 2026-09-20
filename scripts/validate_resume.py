@@ -7,6 +7,7 @@ access, no LLM calls -- everything here is mechanically checkable.
 """
 
 import re
+from typing import Any
 
 _METRIC_PATTERN = re.compile(r"\$?\d[\d,.]*[%MK]?\b", re.IGNORECASE)
 _PRONOUN_PATTERN = re.compile(

@@ -1311,7 +1311,7 @@ def add_to_known_jobs_index(
 
 def job_key_known(
     job_key: str,
-    tracker: "JDTracker" | None = None,
+    tracker: JDTracker | None = None,
     source_url: str | None = None,
     company_name: str | None = None,
     job_title: str | None = None,

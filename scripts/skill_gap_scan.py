@@ -130,7 +130,11 @@ def gather_pending_skill_gaps(max_roles: int = DEFAULT_MAX_ROLES) -> tuple:
     except Exception:
         profile_data = {}
 
-    combined: dict[str, list[str]] = {"tools": [], "hard_skills": [], "core_functions": []}
+    combined: dict[str, list[str]] = {
+        "tools": [],
+        "hard_skills": [],
+        "core_functions": [],
+    }
     stats = {
         "total": len(identifiers),
         "cached": 0,

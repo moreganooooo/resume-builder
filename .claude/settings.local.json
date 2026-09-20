@@ -145,7 +145,8 @@
       "Bash(/tmp/check_workflow.sh)",
       "Bash(codespell --version)",
       "Bash(golangci-lint run *)",
-      "Bash(golangci-lint *)"
+      "Bash(golangci-lint *)",
+      "Bash(xargs yamllint -c .yamllint)"
     ]
   },
   "enableAllProjectMcpServers": true,

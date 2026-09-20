@@ -15,6 +15,7 @@ import re
 import sys
 import threading
 import time
+from typing import Any
 
 import cli_art
 import profile_paths
@@ -460,7 +461,7 @@ _CONSECUTIVE_FAILURES_STATE = [0]
 
 class _ConsecutiveFailuresDescriptor:
 
-    def __get__(self, obj, cls=None):
+    def __get__(self, obj, cls=None) -> int:
         return _CONSECUTIVE_FAILURES_STATE[0]
 
     def __set__(self, obj, value):
