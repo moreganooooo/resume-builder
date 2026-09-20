@@ -25,6 +25,7 @@ sys.path.insert(0, SCRIPTS_DIR)
 
 import orchestrator  # noqa: E402
 import validate_resume  # noqa: E402
+from tests import persona  # noqa: E402
 
 
 class TestTrailingPunctuationCheck(unittest.TestCase):
@@ -145,6 +146,12 @@ class TestTrailingPunctuationRepair(unittest.TestCase):
 
 
 class TestSkillsFragmentRepair(unittest.TestCase):
+    def setUp(self):
+        self._sandbox = persona.sandbox_profile()
+        self._sandbox.__enter__()
+
+    def tearDown(self):
+        self._sandbox.__exit__(None, None, None)
 
     def test_fragment_item_is_dropped_without_an_llm_call(self):
         resume_data = {

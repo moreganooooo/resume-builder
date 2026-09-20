@@ -298,6 +298,7 @@ class TestKnowledgeBaseGemmaTier(unittest.TestCase):
             {"label": f"Fact {i}", "claim": f"claim {i}", "confidence": "High"}
             for i in range(MAX_GEMMA_FILTER_ROWS + 3)
         ]
+        cls.kb.voice_anchors = ""
         cls.kb.gemma_static_prefix = cls.kb._build_gemma_static_prefix()
 
     def test_gemma_static_prefix_excludes_profile(self):
