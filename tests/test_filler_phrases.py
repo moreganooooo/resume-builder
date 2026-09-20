@@ -22,15 +22,31 @@ class TestFillerPhrases(unittest.TestCase):
         self.assertEqual(len(filler_phrases.filler_sentences(text)), 2)
 
     def test_html_is_stripped_and_plain_facts_pass(self):
-        self.assertEqual(filler_phrases.filler_sentences("<p><em>Cut processing time 30%.</em></p>"), [])
-        self.assertEqual(len(filler_phrases.filler_sentences("<em>This is the core of my professional mission.</em>")), 1)
+        self.assertEqual(
+            filler_phrases.filler_sentences("<p><em>Cut processing time 30%.</em></p>"),
+            [],
+        )
+        self.assertEqual(
+            len(
+                filler_phrases.filler_sentences(
+                    "<em>This is the core of my professional mission.</em>"
+                )
+            ),
+            1,
+        )
 
     def test_cover_letter_uses_the_shared_list(self):
-        letter = {"body_paragraphs": ["This work underscores my commitment to quality."]}
+        letter = {
+            "body_paragraphs": ["This work underscores my commitment to quality."]
+        }
         self.assertEqual(len(validate_coverletter._check_filler_lines(letter)), 1)
 
     def test_resume_why_filler_is_soft(self):
-        v = validate_resume._check_why_filler({"WHY_TEXT": "<p>I am a team player who thrives. It is a testament to grit.</p>"})
+        v = validate_resume._check_why_filler(
+            {
+                "WHY_TEXT": "<p>I am a team player who thrives. It is a testament to grit.</p>"
+            }
+        )
         self.assertEqual(len(v), 2)
         fatal, soft = orchestrator.partition_violations(v)
         self.assertEqual(fatal, [])

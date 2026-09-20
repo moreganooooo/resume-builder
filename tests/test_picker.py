@@ -689,9 +689,7 @@ class TestLocationFields(unittest.TestCase):
         # "Tri-State Area" has no single core city. ("Greater Austin Area"
         # used to be the example here, but metro phrasing now resolves
         # approximately via geo_distance.resolve_metro.)
-        fields = picker._location_fields(
-            {"location": "Tri-State Area"}, self.SETTINGS
-        )
+        fields = picker._location_fields({"location": "Tri-State Area"}, self.SETTINGS)
         self.assertIsNone(fields["distance_miles"])
 
     def _maps_enrichment(self, resolved_at):
@@ -711,7 +709,10 @@ class TestLocationFields(unittest.TestCase):
 
         fresh = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         fields = picker._location_fields(
-            {"location": "Springfield, IL", "_location_enrichment": self._maps_enrichment(fresh)},
+            {
+                "location": "Springfield, IL",
+                "_location_enrichment": self._maps_enrichment(fresh),
+            },
             self.SETTINGS,
         )
         self.assertTrue(fields["location"].endswith("· Google Maps"))

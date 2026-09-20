@@ -108,19 +108,20 @@ contain the JD's actual title, the tagline has failed regardless of how good it 
 - Maximum 5 lines of text
 - First sentence MUST be wrapped in `<strong>` tags
 - Years of experience: when profile.yml sets `years_of_experience`, state exactly that figure (e.g. "6+") — never recompute it from the dates. Only when it is absent, derive it from the CV's own dates
-- First sentence states role/identity, years of experience, and core expertise using the JD's vocabulary — write it pronoun-free and name-free (e.g. "Content Strategist with 10+ years..." not "[Candidate's name] is a..." or "She is a..."). The role/identity phrase MUST open with (or clearly contain) the same JD role title used in the Tagline's Part 1 — Tagline and Summary are read together, and if they name two different jobs the resume reads as applied to the wrong role
-- Remaining sentences: narrative bridge / exit story + at least one concrete, checkable specific — a real metric, a named tool/platform, or a named scope drawn from this candidate's verified profile data, not a generic capability claim — keep the same pronoun-free, name-free voice throughout. Vary your own sentence openers per resume; do not default to a stock verb like "Specializes in..." or "Transforms..." every time — that pattern is exactly what makes a Summary read as interchangeable with any other candidate's
+- First sentence states role/identity, years of experience, and core expertise using the JD's vocabulary — write it name-free and third-person-free; whether it opens first-person ("I'm a Content Strategist with 10+ years...") or pronoun-free ("Content Strategist with 10+ years...") follows the ROLE RULES block's "Summary Voice" line, defaulting to pronoun-free when absent. The role/identity phrase MUST open with (or clearly contain) the same JD role title used in the Tagline's Part 1 — Tagline and Summary are read together, and if they name two different jobs the resume reads as applied to the wrong role
+- Remaining sentences: narrative bridge / exit story + at least one concrete, checkable specific — a real metric, a named tool/platform, or a named scope drawn from this candidate's verified profile data, not a generic capability claim — same voice as the first sentence, name-free throughout. Vary your own sentence openers per resume; do not default to a stock verb like "Specializes in..." or "Transforms..." every time — that pattern is exactly what makes a Summary read as interchangeable with any other candidate's
 - Never let a vague size word stand in for a number: "significant", "substantial(ly)", "dramatic(ally)", "considerably", "notably", "greatly", "vastly", "massive" and their kin are banned as magnitude claims anywhere in the resume. When the candidate's own bullets carry the figure (a %, a count, a dollar amount, a time saved), state that figure; when no figure exists, name the concrete result instead ("cut a manual weekly report to a scheduled job"). "Statistically significant" as a technical term is fine
-- Draw tone and register from `voice-anchors.md` (in your knowledge base context) — its `>` blockquoted lines are real verbatim quotes from this candidate. Let them inform word choice and rhythm; don't copy them verbatim into a pronoun-free Summary
+- Draw tone and register from `voice-favorites.md` (in your knowledge base context) when it is present -- its blockquoted summaries are verbatim text this candidate wrote and liked, and they are the standard for how this resume should sound. `voice-anchors.md` (also in your knowledge base context) adds more real verbatim quotes; its `>` blockquoted lines are real answers from past applications. Let them inform word choice and rhythm; don't copy them verbatim
+- Summary person/voice: follow the ROLE RULES block's "Summary Voice" line when present (it is per-profile -- some candidates write first-person summaries and like them). When it is absent, write the Summary pronoun-free. Under BOTH settings: never third person ("She leads...", "[Name] is a..."), never naming the candidate
 - Mirror the company's tone (formal vs conversational, jargon level, keyword density) — apply to tone only, never to facts
 - Use the `=== COMPANY RESEARCH ===` context block as the actual source for this tone-mirroring — its tone_register/pronoun_framing/jargon_density/recurring_keywords fields describe the real signal to match. When that block carries a `Preferred vocabulary` line, use the company's own term in place of the generic one anywhere it reads naturally in the Summary — this is the strongest single signal that the candidate already speaks their language. Never bend a fact to fit a term: if the company's word doesn't actually apply to what the candidate did, keep the accurate word
 - BANNED words and phrases: avoid every term in the attached `=== STYLE RULES ===` block's `forbidden_phrases` list (the tested single source of truth — `tests/test_banned_phrase_consistency.py` enforces every other list in the repo against it) and every term in the attached `=== AI RISK SCORING RUBRIC ===` block's `buzzwords`/`adjective_padding`/`banned_openers`/`banned_phrases`. This applies everywhere in the resume, not just the Summary. Don't hardcode a duplicate list here — it drifts out of sync with the real ones
-- No pronouns anywhere in the resume (Summary, EXPERIENCE bullets, Education, or Skills) — first-person (I, my, me, we, our) or third-person (she, her, hers, he, him, his) — and don't refer to the candidate by name; pronouns are allowed strictly inside the Why section and auto-filled career notes (see "# Career Note" below)
+- No pronouns in EXPERIENCE bullets, Education, or Skills. The Summary follows the ROLE RULES block's "Summary Voice" line: first person (I, my, me) is allowed ONLY for a profile that opts in (it is that candidate's documented register, see their `voice-favorites.md`); the default is pronoun-free. Third-person pronouns (she, her, hers, he, him, his) are banned everywhere except the Why section, and the candidate is never referred to by name outside the header. Pronouns of any kind remain allowed in the Why section and auto-filled career notes (see "# Career Note" below)
 - No parentheses; replace with commas or semicolons
 
 ### Summary Structural Archetypes
 
-Analyze the target company's business stage (from JD and COMPANY RESEARCH) and select the corresponding narrative archetype to structure your professional summary. The templates below show STRUCTURE only — every bracket is filled from this candidate's verified background in the JD's own vocabulary. Never reuse a template's filler wording:
+Analyze the target company's business stage (from JD and COMPANY RESEARCH) and select the corresponding narrative archetype to structure your professional summary. The templates below show STRUCTURE only — every bracket is filled from this candidate's verified background in the JD's own vocabulary. Never reuse a template's filler wording. The bracketed opening may render in this candidate's own voice per the ROLE RULES block's "Summary Voice" line (first person where a profile opts in, pronoun-free by default):
 
 1. **Scale-First / Growth Archetype** (for established, enterprise, or scaling companies focused on optimization, operational efficiency, scaling existing systems, high performance, and standard processes):
    - Focus: Optimization, scaling, infrastructure, systematic execution, alignment.
@@ -279,8 +280,19 @@ candidate's exact schools, credentials, and bullet counts, in the exact order gi
 - Two short paragraphs, no subheadings
 - Maximum 8 lines total
 - Only the first and last sentences of the entire section are italicized
+- Mission-paragraph option: when the company's mission is genuinely specific and the
+  research supports it, the SECOND paragraph may be a mission connection — what the
+  candidate cares about, tied to what this company makes possible, in the candidate's
+  own reflective register (e.g. "But more than anything, I care about helping people..."
+  carried through to why THIS mission resonates). Keep it honest and specific — one
+  concrete thread from the candidate's real history, never generic mission-buzzword
+  inflation. Still within the 8-line total
 - Voice: first-person (I, my, me) — pronouns are allowed here and in the auto-filled career note
   (see "# Career Note" above); nowhere else
+- Use natural contractions (I've, I'm, that's, doesn't) exactly as the candidate's own
+  writing does -- "I've owned full-funnel messaging", not "I have owned full-funnel
+  messaging". Stilted un-contracted first person reads as formal-corporate, which is the
+  opposite of what this section exists to convey
 - Must reference specific company research details and connect each to verified facts from the candidate's history
 - Source those "specific company research details" ONLY from the `=== COMPANY RESEARCH ===` context block's `company_facts` field — never invent research-sounding details to satisfy this rule. When the block carries a `Preferred vocabulary` line, use the company's own terms here too; this section is where mirroring their language reads most naturally
 - **Do not skip this section pre-emptively over a page-count guess.** You have no way to see the actual rendered page count while writing this JSON — a separate, automated pass measures the real PDF afterward and removes this exact section first (see Trimming Priority below) if, and only if, it's genuinely needed. Write it whenever a `=== COMPANY RESEARCH ===` block is present; guessing "this might not fit" and leaving it out up front only produces a resume that's silently missing a section that would have fit.
@@ -290,7 +302,7 @@ candidate's exact schools, credentials, and bullet counts, in the exact order gi
 - Spell out whole numbers under 10 unless tied to a unit/metric ("six-email campaign" but "6% reply rate")
 - Always use numerals for: percentages, dollar figures ($3M, $1.1M), decimals (3.56 GPA), quantities over 10, date ranges
 - Use "&" in headings, labels, tagline, category names; use "and" in body prose and bullets
-- No pronouns, first- or third-person (I, my, me, we, our, she, her, hers, he, him, his), in Summary, Skills, Work Experience, Training, or Education -- the auto-filled career note (see "# Career Note" above) is the one deliberate exception within Work Experience
+- No third-person pronouns (she, her, hers, he, him, his) in Summary, Skills, Work Experience, Training, or Education; first-person is allowed in the Summary only for a profile whose ROLE RULES block carries the "Summary Voice" opt-in. The auto-filled career note (see "# Career Note" above) is the one deliberate exception within Work Experience
 
 # Trimming Priority (when content exceeds 2 pages)
 
@@ -319,7 +331,7 @@ Your JSON output MUST use these exact uppercase field names. Any deviation break
 
 ## SUMMARY_TEXT (string)
 
-Max 5 lines. First sentence wrapped in `<strong>` tags. No pronouns (first- or third-person), no naming the candidate by name.
+Max 5 lines. First sentence wrapped in `<strong>` tags. Follow the ROLE RULES block's "Summary Voice" line for first-person vs pronoun-free; under BOTH settings never third person ("she", "he") and never naming the candidate by name.
 
 ## SKILLS (array of strings)
 
@@ -342,9 +354,18 @@ Each object has these exact keys:
   "period": "08/2016 – 08/2024",
   "location": "City, ST or Remote",
   "achievements": ["Bullet one", "Bullet two"],
+  "achievement_group_starts": {},
   "career_note": ""
 }
 ```
+
+`achievement_group_starts` is OPTIONAL and usually empty `{}`. When one role genuinely
+spans distinct functions, map a bullet's zero-based index to a short craft-area label
+to start a visually-grouped subsection there — e.g. `{"0": "Product Messaging &
+Go-To-Market", "3": "Sales Enablement"}` for a role whose first bullets are
+product-marketing work and whose last two are enablement work. Labels are 2-5 words,
+not full sentences. Use it sparingly: at most two labels per role, only for roles that
+truly span functions, never as decoration — an unlabeled list is the correct default.
 
 Dates are always numeric MM/YYYY, never spelled-out months (e.g. `08/2016 – 08/2024`, not
 `August 2016 – August 2024`). `location` may be left as an empty string `""` if unknown.
@@ -394,10 +415,16 @@ leave both as empty strings `""` and the section is omitted entirely from the re
 
 ```json
 {
-  "SECTION_WHY": "Why Abnormal Security?",
-  "WHY_TEXT": "<p><em>Abnormal's behavioral-AI approach to email security is the kind of infrastructure-over-guesswork bet I look for in a company.</em> ...</p><p>...I built a similar system for exactly this reason — <em>durable systems outlast any single campaign.</em></p>"
+  "SECTION_WHY": "Why Example Company?",
+  "WHY_TEXT": "<p><em>[Opening sentence: one specific fact drawn from === COMPANY RESEARCH === company_facts, and why it genuinely matters to you, in first person.]</em> [1-2 sentences connecting that fact to specific, verified experience from this candidate's history.]</p><p>[1-2 sentences on how that experience would apply to this company's actual work, written fresh for this candidate and this company.] <em>[Closing sentence: a forward-looking, specific note — not a slogan.]</em></p>"
 }
 ```
+
+**The brackets above show STRUCTURE ONLY.** Write every sentence fresh from this
+candidate's real history and the real research block — never reuse the example's
+wording, its metaphors, or any phrasing pattern you have seen in a previous
+resume's Why section. A Why section that could belong to a different candidate
+or a different company has failed, no matter how polished it reads.
 
 # Private Context
 

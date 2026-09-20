@@ -394,7 +394,9 @@ def check_kb_allowlist() -> dict:
     # has no reason to have a file literally named after Morgan's own former
     # employer -- read as "your knowledge base is broken" when nothing was.
     missing = [
-        f for f in orchestrator.KB_REQUIRED_FILES if not os.path.exists(os.path.join(kb_dir, f))
+        f
+        for f in orchestrator.KB_REQUIRED_FILES
+        if not os.path.exists(os.path.join(kb_dir, f))
     ]
 
     now = time.time()

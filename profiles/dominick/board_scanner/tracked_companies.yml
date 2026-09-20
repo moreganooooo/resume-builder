@@ -35,10 +35,6 @@ tracked_companies:
   careers_url: https://jobs.lever.co/jobgether
   api: https://api.lever.co/v0/postings/jobgether?mode=json
   enabled: true
-- name: OpenAI
-  careers_url: https://jobs.ashbyhq.com/openai
-  api: https://api.ashbyhq.com/posting-api/job-board/openai
-  enabled: true
 - name: Lyra Health
   careers_url: https://jobs.lever.co/lyrahealth
   api: https://api.lever.co/v0/postings/lyrahealth?mode=json
@@ -234,4 +230,52 @@ tracked_companies:
 - name: "Zapier"
   careers_url: "https://jobs.ashbyhq.com/zapier"
   api: "https://api.ashbyhq.com/posting-api/job-board/zapier"
+  enabled: true
+- name: "ACV Auctions"
+  careers_url: "https://jobs.dayforcehcm.com/en-US/acv/CANDIDATEPORTAL"
+  enabled: true
+- name: "M&T Bank"
+  careers_url: "https://mtb.wd5.myworkdayjobs.com/MTB"
+  enabled: true
+- name: "Moog"
+  careers_url: "https://moog.wd5.myworkdayjobs.com/MOOG_External_Career_Site"
+  enabled: true
+- name: "Calspan"
+  careers_url: "https://careers-calspan.icims.com/"
+  enabled: true
+- name: "PostProcess Technologies"
+  careers_url: "https://www.postprocess.com/careers/"
+  scan_method: websearch
+  scan_query: "site:postprocess.com/career"
+  enabled: true
+- name: "Livingston International"
+  careers_url: "https://careers.smartrecruiters.com/livingstoninternational"
+  api: "https://api.smartrecruiters.com/v1/companies/livingstoninternational/postings"
+  enabled: true
+- name: "KeyBank"
+  careers_url: "https://keybank.wd5.myworkdayjobs.com/External_Career_Site"
+  enabled: true
+- name: "US Foods"
+  careers_url: "https://usfoods.wd1.myworkdayjobs.com/usfoodscareersExternal"
+  enabled: true
+- name: "Citi"
+  careers_url: "https://citi.wd5.myworkdayjobs.com/2"
+  enabled: true
+- name: "Deloitte"
+  careers_url: "https://apply.deloitte.com/en_US/careers"
+  enabled: true
+- name: "KPMG US"
+  careers_url: "https://us-talentcommunity.kpmg.com"
+  enabled: true
+- name: "ThermoFisher Scientific"
+  careers_url: "https://jobs.thermofisher.com/global/en"
+  enabled: true
+- name: "Rich's Foods"
+  careers_url: "https://careers.rich.com/"
+  enabled: true
+- name: "Univera Healthcare"
+  careers_url: "https://careers.univerahealthcare.com/us/en"
+  enabled: true
+- name: "National Fuel Gas"
+  careers_url: "https://www.nationalfuel.com/corporate/careers"
   enabled: true

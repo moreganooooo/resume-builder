@@ -10,9 +10,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from rewrite_bullets import compact_tools_text  # noqa: E402
 
 TOOLS = [
-    {"id": "tool_001", "name": "Airtable", "employer": "Corner Bakery",
-     "category": "Ops", "confidence": "Expert", "use_notes": "long note " * 20,
-     "tr_references": ["a.md", "b.md"]},
+    {
+        "id": "tool_001",
+        "name": "Airtable",
+        "employer": "Corner Bakery",
+        "category": "Ops",
+        "confidence": "Expert",
+        "use_notes": "long note " * 20,
+        "tr_references": ["a.md", "b.md"],
+    },
     {"id": "tool_002", "name": "Figma", "employer": "Corner Bakery"},
     {"id": "tool_003", "name": "airtable", "employer": "Corner Bakery"},
     {"id": "tool_004", "name": "Airtable", "employer": "Harbor Books"},
@@ -35,8 +41,11 @@ class TestCompactToolsText(unittest.TestCase):
             self.assertNotIn(noise, text)
 
     def test_dedupes_case_insensitively_within_an_employer(self):
-        line = [l for l in compact_tools_text(TOOLS).splitlines()
-                if l.startswith("Corner Bakery")][0]
+        line = [
+            l
+            for l in compact_tools_text(TOOLS).splitlines()
+            if l.startswith("Corner Bakery")
+        ][0]
         self.assertEqual(line.lower().count("airtable"), 1)
 
     def test_empty_ledger_is_empty_text(self):

@@ -47,7 +47,9 @@ class TestUnwrapImagePdf(unittest.TestCase):
     def test_single_image_page_becomes_png(self):
         from PIL import Image
 
-        out = jd_image_ingest._unwrap_image_pdf(self._pdf_bytes(Image.new("RGB", (40, 90))))
+        out = jd_image_ingest._unwrap_image_pdf(
+            self._pdf_bytes(Image.new("RGB", (40, 90)))
+        )
         self.assertIsNotNone(out)
         self.assertEqual(out[1], "image/png")
 
@@ -198,7 +200,9 @@ class TestExtractJdFromImage(unittest.TestCase):
         fake_engine.load_prompt.return_value = "prompt text"
         partial = dict(FAKE_EXTRACTION, is_partial=True)
         with patch.object(
-            orchestrator.GeminiClient, "generate", return_value=(json.dumps(partial), {})
+            orchestrator.GeminiClient,
+            "generate",
+            return_value=(json.dumps(partial), {}),
         ):
             job = jd_image_ingest.extract_jd_from_image(
                 self.image_path, engine=fake_engine
@@ -282,7 +286,10 @@ class TestIngestOne(unittest.TestCase):
             with patch.object(
                 jd_image_ingest,
                 "extract_jd_from_image",
-                return_value={"_ingest_error": "boom", "_ingest_source": self.image_path},
+                return_value={
+                    "_ingest_error": "boom",
+                    "_ingest_source": self.image_path,
+                },
             ):
                 dest = jd_image_ingest.ingest_one(self.image_path, profile="alice")
 
@@ -295,7 +302,9 @@ class TestIngestOne(unittest.TestCase):
             f.write(b"fake pdf bytes")
         with profile_paths.isolate_for_tests(self.sandbox):
             with patch.object(
-                jd_image_ingest, "extract_jd_from_image", return_value=dict(FAKE_EXTRACTION)
+                jd_image_ingest,
+                "extract_jd_from_image",
+                return_value=dict(FAKE_EXTRACTION),
             ):
                 dest = jd_image_ingest.ingest_one(pdf_path, profile="alice")
         self.assertIsNotNone(dest)
@@ -310,12 +319,16 @@ class TestIngestOne(unittest.TestCase):
             import datetime
 
             today = datetime.date.today().isoformat()
-            existing = os.path.join(jds_dir, f"{today}_Tesla_DataAnalyticsEngineer.json")
+            existing = os.path.join(
+                jds_dir, f"{today}_Tesla_DataAnalyticsEngineer.json"
+            )
             with open(existing, "w") as f:
                 f.write("{}")
 
             with patch.object(
-                jd_image_ingest, "extract_jd_from_image", return_value=dict(FAKE_EXTRACTION)
+                jd_image_ingest,
+                "extract_jd_from_image",
+                return_value=dict(FAKE_EXTRACTION),
             ):
                 dest = jd_image_ingest.ingest_one(self.image_path, profile="alice")
 

@@ -52,6 +52,7 @@ func JobRowsToApplications(rows []model.JobRow) []model.CareerApplication {
 			Status:              normalizeStatus(row),
 			Score:               row.Evaluation.CompositeScore,
 			JobURL:              row.SourceURL,
+			JobPath:             row.Path,
 			Notes:               row.Description,
 			SourcePlatform:      row.SourcePlatform,
 			Workplace:           row.Workplace,

@@ -12,6 +12,14 @@ _METRIC_PATTERN = re.compile(r"\$?\d[\d,.]*[%MK]?\b", re.IGNORECASE)
 _PRONOUN_PATTERN = re.compile(
     r"\b(i|me|my|we|our|she|her|hers|he|him|his)\b", re.IGNORECASE
 )
+# First-person only. The Summary is the one generated section where this
+# candidate's own favorite resumes all speak as "I" (see the profile's
+# voice-favorites.md) -- so the Summary is exempt from the first-person half
+# of the pronoun ban while bullets/skills/education keep it. Third-person
+# biography ("She leads...", "Alex is a...") stays a violation everywhere:
+# a resume that talks about its subject in the third person reads as a
+# ghostwritten bio, which the Summary rules never wanted either.
+_FIRST_PERSON_PATTERN = re.compile(r"\b(i|me|my|we|our)\b", re.IGNORECASE)
 _FIRST_WORD_PATTERN = re.compile(r"[^\w]*(\w+)")
 _TITLE_CASE_MINOR_WORDS = {
     "a",
@@ -86,6 +94,71 @@ def _all_bullets(resume_data: dict) -> list[str]:
     return bullets
 
 
+_TRAILING_PUNCTUATION_RE = re.compile(r"[.;:!?]\s*$")
+
+# Bare generic nouns that read as truncated filler when they appear ALONE as
+# a skills item ("Content Operations, Assets" -- a real 2026-09-17 build).
+# The hallucinated-tool check passes them whenever the verified ledger
+# contains any compound name bearing the word ("derivative content assets"),
+# so only a whole-item exact match here, never a substring.
+_SKILLS_FRAGMENT_WORDS = frozenset(
+    {"assets", "tools", "skills", "other", "misc", "software", "platforms", "etc"}
+)
+_SKILLS_LINE_RE = re.compile(r"^\*\*(?P<label>.+?):\*\*\s*(?P<items>.*)$")
+
+
+def skills_fragment_items(line: str) -> list[str]:
+    """Returns the bare generic-noun items in one skills line ([] if none).
+    Shared by the validator check and the surgical repair so the two can
+    never disagree about what a fragment is."""
+    match = _SKILLS_LINE_RE.match(line.strip())
+    if not match:
+        return []
+    fragments = []
+    for item in re.split(r"[,;|]", match.group("items")):
+        item = item.strip()
+        if item.lower() in _SKILLS_FRAGMENT_WORDS:
+            fragments.append(item)
+    return fragments
+
+
+def _check_skills_item_fragments(resume_data: dict) -> list[str]:
+    violations = []
+    for line in resume_data.get("SKILLS", []):
+        fragments = skills_fragment_items(line)
+        if fragments:
+            violations.append(
+                f"Skills line contains fragment item(s) {', '.join(fragments)!r} that "
+                f"are not real skills -- remove them or name the specific asset/tool "
+                f"they mean: {line!r}"
+            )
+    return violations
+
+
+def _check_bullet_trailing_punctuation(resume_data: dict) -> list[str]:
+    """Bullets never end with trailing punctuation (ai_risk.yaml's
+    ends_with_period flag; tailor_resume.md's Bullet Rules). The Step 3
+    critique enforces this on bank bullets, but a 2026-09-17 sample build
+    shipped a builder-produced bullet ending in a period -- nothing on the
+    builder path re-checked the rule the critique applies. Deterministic
+    and trivially fixable, so repair_violations_surgically strips it
+    directly (zero tokens) before the LLM loop ever sees it."""
+    violations = []
+    for entry in resume_data.get("EXPERIENCE", []):
+        for b in entry.get("achievements", []):
+            if _TRAILING_PUNCTUATION_RE.search(b.strip()):
+                violations.append(
+                    f"Bullet ends with trailing punctuation: {b!r} -- strip it."
+                )
+    for entry in resume_data.get("EDUCATION", []):
+        for b in entry.get("bullets", []):
+            if _TRAILING_PUNCTUATION_RE.search(b.strip()):
+                violations.append(
+                    f"Bullet ends with trailing punctuation: {b!r} -- strip it."
+                )
+    return violations
+
+
 def check_summary_specificity(resume_data: dict) -> list[str]:
     """
     tailor_resume.md requires the Summary's sentences after the opening
@@ -139,20 +212,46 @@ def _check_forbidden_phrases(resume_data: dict, style_rules: dict) -> list[str]:
     actually wants caught as their own explicit entries (synergized, synergy,
     synergies), so exact-word matching is the intended behavior, not a
     loosening of it.
+
+    prose_advisory_words (a per-profile opt-in, see profile.yml's
+    voice_preferences) downgrades SINGLE words from that list to soft
+    advisories in the Summary and Why section only -- the candidate's own
+    favorite summaries use "passionate"/"dynamic"/"driven" as grounded
+    adjectives ("I'm passionate about using thoughtful, data-informed
+    communication..."), and a hard ban there erased a register the
+    candidate demonstrably writes in. Bullets, Skills, and Education keep
+    the hard ban under BOTH settings, and multi-word phrases
+    ("results-driven professional") are never downgraded anywhere.
     """
     violations = []
     phrases = [p.lower() for p in style_rules.get("forbidden_phrases", [])]
-    haystacks = (
-        [_strip_html(resume_data.get("SUMMARY_TEXT", ""))]
-        + resume_data.get("SKILLS", [])
-        + [_strip_html(resume_data.get("WHY_TEXT", ""))]
-        + _all_bullets(resume_data)
+    advisory_words = (
+        {w.lower() for w in style_rules.get("prose_advisory_words", [])}
+        if style_rules.get("prose_advisory_words")
+        else set()
     )
-    for text in haystacks:
+    haystacks = (
+        [("Summary", _strip_html(resume_data.get("SUMMARY_TEXT", "")))]
+        + [(f"Skills line {i}", s) for i, s in enumerate(resume_data.get("SKILLS", []))]
+        + [("Why section", _strip_html(resume_data.get("WHY_TEXT", "")))]
+        + [("Bullet", b) for b in _all_bullets(resume_data)]
+    )
+    for label, text in haystacks:
         lowered = text.lower()
         for phrase in phrases:
             if re.search(rf"\b{re.escape(phrase)}\b", lowered):
-                violations.append(f"Forbidden phrase '{phrase}' found in: {text!r}")
+                if (
+                    label in ("Summary", "Why section")
+                    and " " not in phrase
+                    and phrase in advisory_words
+                ):
+                    violations.append(
+                        f"Advisory word '{phrase}' in {label}: allowed for this profile's "
+                        f"register, but keep it grounded -- if a concrete detail could say "
+                        f"the same thing, prefer the detail: {text!r}"
+                    )
+                else:
+                    violations.append(f"Forbidden phrase '{phrase}' found in: {text!r}")
     return violations
 
 
@@ -434,7 +533,9 @@ def _check_skills_title_case(resume_data: dict) -> list[str]:
     return violations
 
 
-def _check_pronouns_outside_why(resume_data: dict) -> list[str]:
+def _check_pronouns_outside_why(
+    resume_data: dict, summary_first_person: bool = False
+) -> list[str]:
     """
     Deliberately does not check EXPERIENCE[i]["career_note"]: that field is
     hand-authored fixed content (fixed_content.CAREER_NOTE), unconditionally
@@ -443,11 +544,28 @@ def _check_pronouns_outside_why(resume_data: dict) -> list[str]:
     by the LLM and would hard-fail the pipeline every run. tailor_resume.md's
     "Career Note" section documents it as a second, deliberate exception to
     the no-pronouns rule, alongside Why.
+
+    summary_first_person opts the ACTIVE profile into allowing first-person
+    pronouns (I, my, me) in SUMMARY_TEXT. It is set per profile -- see
+    profile.yml's voice_preferences.summary_first_person -- because it is a
+    fact about one candidate's real register (their own favorite summaries
+    all speak as "I", see voice-favorites.md), NOT a universal style rule;
+    the shared default stays pronoun-free. Third-person pronouns ("She
+    leads...") are flagged in the Summary under BOTH settings: a Summary
+    must never talk about the candidate as "she"/"he", named or not.
     """
     violations = []
-    checked_fields = {
-        "SUMMARY_TEXT": _strip_html(resume_data.get("SUMMARY_TEXT", "")),
-    }
+    summary_text = _strip_html(resume_data.get("SUMMARY_TEXT", ""))
+    # Summary exception: when the profile opts in, first-person pronouns in
+    # the Summary pass; anything left after removing them ("she", "her",
+    # "his") is still a violation. A first-person-only summary leaves no
+    # residual.
+    summary_residual = _FIRST_PERSON_PATTERN.sub("", summary_text)
+    checked_fields = {}
+    if _PRONOUN_PATTERN.search(summary_residual) or (
+        not summary_first_person and _PRONOUN_PATTERN.search(summary_text)
+    ):
+        checked_fields["SUMMARY_TEXT"] = summary_text
     checked_fields.update(
         {f"SKILLS[{i}]": s for i, s in enumerate(resume_data.get("SKILLS", []))}
     )
@@ -913,12 +1031,47 @@ _VAGUE_MAGNITUDE_EXEMPT_RE = re.compile(
     r"|\bsignificance\b",
     re.IGNORECASE,
 )
+# Count words standing in for a real figure ("thousands of schools" where
+# the source bullet said "1,578 schools"). Matched against the noun the
+# count attaches to, so "thousands of emails" isn't "fixed" with a figure
+# about schools.
+_COUNT_STANDIN_RE = re.compile(
+    r"\b(thousands|hundreds|millions|dozens)\s+of\s+([a-z][a-z-]*)",
+    re.IGNORECASE,
+)
+# A specific figure followed by the noun it quantifies, in the bank's own
+# source text ("1,578 schools", "$15.1M portfolio", "100+ districts").
+_NUMBER_THEN_NOUN_RE = re.compile(
+    r"(\$?\d[\d,.]*[%MK+]?\s+)([a-z][a-z-]*)", re.IGNORECASE
+)
 
 
-def _check_vague_magnitudes(resume_data: dict) -> list[str]:
+def _fold_noun(word: str) -> str | None:
+    """Folds plural/singular so 'schools' in the rewrite matches 'schools'
+    (or 'school') in the source. Returns None for stopwords that are part of
+    the metric syntax rather than a quantified noun ("of", "and", "in")."""
+    w = word.lower().rstrip("s")
+    if w in {"o", "and", "in", "the", "a", "an", "to", "per", "plus"}:
+        return None
+    return w
+
+
+def _check_vague_magnitudes(
+    resume_data: dict, bullet_tuples: list[tuple[str, str, str]] | None = None
+) -> list[str]:
     """Flags a vague size word in the Summary or a bullet. Soft (see
     orchestrator.partition_violations): the fix loop is asked to replace it
-    with the verified figure or a concrete result, but it never fails a build."""
+    with the verified figure or a concrete result, but it never fails a build.
+
+    With bullet_tuples, also flags count-stand-ins ("thousands of schools")
+    that replaced a figure the company's OWN bullet-bank source carries
+    ("1,578 schools") -- a 2026-09-17 sample build swapped the verified
+    1,578 for "thousands", hiding the strongest evidence in the bullet.
+    Only fires when the source really has the figure and the rewrite really
+    lost it; a count-stand-in with no source figure anywhere is legitimate
+    vagueness about a genuinely uncounted fact, and "hundreds of companies"
+    with no bank context (e.g. a polish.py partial validation) stays
+    unflagged."""
     fields = [("Summary", _strip_html(resume_data.get("SUMMARY_TEXT") or ""))]
     fields += [("bullet", b) for b in _all_bullets(resume_data)]
     violations = []
@@ -933,6 +1086,94 @@ def _check_vague_magnitudes(resume_data: dict) -> list[str]:
                 f"from the candidate's own bullets instead, or describe the concrete result "
                 f"-- {text[:90]!r}"
             )
+
+    if bullet_tuples:
+        # noun (lowercase, singular/plural-folded) -> display numbers the
+        # company's own source bullets attach to it ("1,578 schools").
+        source_nouns: dict[str, set[str]] = {}
+        for bullet, _company, _tags in bullet_tuples:
+            for m in _NUMBER_THEN_NOUN_RE.finditer(bullet):
+                noun = _fold_noun(m.group(2))
+                if noun:
+                    source_nouns.setdefault(noun, set()).add(m.group(1))
+        if source_nouns:
+            for entry in resume_data.get("EXPERIENCE", []):
+                company = entry.get("company", "")
+                for achievement in entry.get("achievements", []):
+                    for m in _COUNT_STANDIN_RE.finditer(achievement):
+                        figures = source_nouns.get(_fold_noun(m.group(2)), set())
+                        missing = [
+                            f for f in figures if f.rstrip("+") not in achievement
+                        ]
+                        if missing:
+                            violations.append(
+                                f"Vague count '{m.group(0)}' in a {company} bullet stands in "
+                                f"for the verified figure(s) {', '.join(sorted(missing))} from "
+                                f"this company's own bullet-bank source -- state the figure "
+                                f"instead: {achievement!r}"
+                            )
+    return violations
+
+
+def _check_prose_rhythm(resume_data: dict) -> list[str]:
+    """Offline stylometry on the resume's PROSE sections (Summary, Why) --
+    bullets are one-sentence fragments where sentence rhythm doesn't apply.
+    Reuses voice_metrics.py's sentence splitter/stats (the same machinery
+    validate_coverletter applies to cover letters), with resume-tuned bars:
+    the Summary is only 5 lines, so a monotonous-rhythm flag fires only on
+    a clearly uniform sample (< 2.0 words std-dev across 5+ sentences) and
+    a run-on flag at the shared 55-word ceiling. Soft -- see
+    orchestrator.partition_violations; a nudge toward varied pacing, never
+    a failed build."""
+    try:
+        import voice_metrics
+    except ImportError:
+        return []
+
+    violations = []
+    for label, key in (("Summary", "SUMMARY_TEXT"), ("Why section", "WHY_TEXT")):
+        text = _strip_html(resume_data.get(key) or "")
+        if not text:
+            continue
+        sentences = voice_metrics.split_sentences(text)
+        if len(sentences) < 5:
+            continue
+        stats = voice_metrics.compute_sentence_length_stats(sentences)
+        if stats["std_dev"] < 2.0:
+            violations.append(
+                f"Prose rhythm in {label}: sentence lengths are uniform (std-dev "
+                f"{stats['std_dev']:.1f} words across {len(sentences)} sentences). Vary pacing -- "
+                f"a short punchy sentence alongside a longer one. -- {text[:90]!r}"
+            )
+        if stats["max"] > 55:
+            violations.append(
+                f"Prose rhythm in {label}: longest sentence is {stats['max']} words "
+                f"(over the 55-word run-on ceiling). Split it. -- {text[:90]!r}"
+            )
+    return violations
+
+
+def _check_date_anchors(resume_data: dict) -> list[str]:
+    """School-year/calendar/season anchors a bullet never needs ("...raised
+    reply rates by X% in the 2020-21 school year") -- the role's period line
+    already dates the work, and the qualifier makes a durable achievement
+    read as expired. The rewrite path rejects and best_version() bypasses
+    its margin for these (see rewrite_bullets.date_anchors); this soft check
+    is the final backstop for anchors that reach the resume by any other
+    path. Soft, like vague magnitudes."""
+    try:
+        from rewrite_bullets import date_anchors
+    except ImportError:
+        return []
+    violations = []
+    for b in _all_bullets(resume_data):
+        anchors = date_anchors(b)
+        if anchors:
+            violations.append(
+                f"Date anchor ({', '.join(anchors)}) in bullet: drop the calendar/school-year "
+                f"qualifier -- the role's period line already dates the work; state the "
+                f"achievement timelessly -- {b[:90]!r}"
+            )
     return violations
 
 
@@ -944,7 +1185,9 @@ def _check_why_filler(resume_data: dict) -> list[str]:
     return [
         f"Generic filler line in Why section: {sentence!r} -- replace it with a specific "
         f"fact tied to this company, or cut it."
-        for sentence in filler_phrases.filler_sentences(resume_data.get("WHY_TEXT") or "")
+        for sentence in filler_phrases.filler_sentences(
+            resume_data.get("WHY_TEXT") or ""
+        )
     ]
 
 
@@ -2253,10 +2496,19 @@ def validate(
     violations.extend(_check_bullet_widows(resume_data, style_rules))
     violations.extend(_check_skills_line_lengths(resume_data, style_rules))
     violations.extend(_check_skills_title_case(resume_data))
+    violations.extend(_check_skills_item_fragments(resume_data))
     violations.extend(_check_hallucinated_tools(resume_data))
-    violations.extend(_check_vague_magnitudes(resume_data))
+    violations.extend(_check_vague_magnitudes(resume_data, bullet_tuples))
     violations.extend(_check_why_filler(resume_data))
-    violations.extend(_check_pronouns_outside_why(resume_data))
+    violations.extend(_check_date_anchors(resume_data))
+    violations.extend(_check_prose_rhythm(resume_data))
+    violations.extend(
+        _check_pronouns_outside_why(
+            resume_data,
+            summary_first_person=bool(style_rules.get("summary_first_person", False)),
+        )
+    )
+    violations.extend(_check_bullet_trailing_punctuation(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_metric_provenance(resume_data, bullet_tuples))
     violations.extend(_check_experience_completeness(resume_data))

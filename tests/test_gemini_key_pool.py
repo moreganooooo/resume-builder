@@ -6,8 +6,12 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import gemini_client  # noqa: E402
 
-ENV = {"GEMINI_API_KEY": "key-one", "GEMINI_API_KEY_2": "key-two", "GEMINI_API_KEY_10": "key-ten",
-       "GEMINI_API_KEYS": "key-two, key-three"}
+ENV = {
+    "GEMINI_API_KEY": "key-one",
+    "GEMINI_API_KEY_2": "key-two",
+    "GEMINI_API_KEY_10": "key-ten",
+    "GEMINI_API_KEYS": "key-two, key-three",
+}
 
 
 def _resp(status, payload=None):
@@ -30,7 +34,9 @@ class KeyPoolTest(unittest.TestCase):
         self.addCleanup(d.stop)
 
     def test_order_and_dedup(self):
-        self.assertEqual(gemini_client.api_keys(), ["key-one", "key-two", "key-ten", "key-three"])
+        self.assertEqual(
+            gemini_client.api_keys(), ["key-one", "key-two", "key-ten", "key-three"]
+        )
 
     def test_cooldown_is_per_model(self):
         self.assertTrue(gemini_client.mark_key_rate_limited("key-one", "m1"))
@@ -51,9 +57,11 @@ class KeyPoolTest(unittest.TestCase):
             sent.append(headers["x-goog-api-key"])
             return _resp(429) if len(sent) < 4 else ok
 
-        with patch.object(gemini_client, "_blocked_under_test", return_value=False), \
-                patch.object(gemini_client.requests, "post", side_effect=post), \
-                patch.object(gemini_client.time, "sleep") as sleep:
+        with (
+            patch.object(gemini_client, "_blocked_under_test", return_value=False),
+            patch.object(gemini_client.requests, "post", side_effect=post),
+            patch.object(gemini_client.time, "sleep") as sleep,
+        ):
             text, _ = gemini_client.generate_grounded("m", "p", tools=[], max_retries=1)
         self.assertEqual(text, "hi")
         self.assertEqual(sent, ["key-one", "key-two", "key-ten", "key-three"])

@@ -33,7 +33,9 @@ class TestSituationalGateText(unittest.TestCase):
             ["Corner Bakery"],
         )
         gated = orchestrator._situational_gate_text(brief)
-        self.assertEqual(situational_roles.detect_situational_candidates(gated, ROLES), [])
+        self.assertEqual(
+            situational_roles.detect_situational_candidates(gated, ROLES), []
+        )
 
     def test_brief_writer_and_gate_share_one_marker(self):
         brief = build_recruiter_resume.build_target_brief(PROFILE, CV)

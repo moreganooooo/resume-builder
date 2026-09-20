@@ -139,9 +139,7 @@ def _default_search_terms() -> list:
     missing, unreadable, or genuinely has no positive titles configured
     yet."""
     try:
-        path = os.path.join(
-            profile_paths.board_scanner_dir(), "scan_filters.yml"
-        )
+        path = os.path.join(profile_paths.board_scanner_dir(), "scan_filters.yml")
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     except (OSError, yaml.YAMLError):

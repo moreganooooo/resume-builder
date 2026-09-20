@@ -32,6 +32,7 @@ const (
 	viewMenu
 	viewJobs
 	viewKB
+	viewAnswers
 )
 
 type appModel struct {
@@ -40,11 +41,14 @@ type appModel struct {
 	progress        screens.ProgressModel
 	jobs            screens.JobsModel
 	kb              screens.KBModel
+	answers         screens.AnswersModel
 	menu            menu.MenuModel
 	state           viewState
 	previousState   viewState // screen to return to on "back" (esc); set by startTransition
 	careerOpsPath   string
 	jobsPath        string
+	pythonPath      string
+	projectRoot     string
 	theme           theme.Theme
 	progressMetrics model.ProgressMetrics
 	profile         data.ProfileInfo
@@ -132,6 +136,8 @@ func (m appModel) renderScreen() string {
 		return m.jobs.View()
 	case viewKB:
 		return m.kb.View()
+	case viewAnswers:
+		return m.answers.View()
 	default:
 		return m.pipeline.View()
 	}
@@ -214,6 +220,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.pipeline.Resize(wsm.Width, wsm.Height)
 		m.jobs.Resize(wsm.Width, wsm.Height)
 		m.kb.Resize(wsm.Width, wsm.Height)
+		m.answers.Resize(wsm.Width, wsm.Height)
 		if m.state == viewReport {
 			m.viewer.Resize(wsm.Width, wsm.Height)
 		}
@@ -269,6 +276,18 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		return m.startTransition(m.previousState)
+
+	case screens.AnswersClosedMsg:
+		if msg.Quit {
+			return m, tea.Quit
+		}
+		return m.startTransition(m.previousState)
+
+	case screens.OpenAnswersMsg:
+		m.answers = screens.NewAnswersModel(
+			m.theme, msg.Job, m.pythonPath, m.projectRoot, m.width, m.height,
+		)
+		return m.startTransition(viewAnswers)
 
 	case screens.PipelineLoadReportMsg:
 		archetype, tldr, remote, comp := data.LoadReportSummary(msg.CareerOpsPath, msg.ReportPath)
@@ -358,6 +377,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.kb = km
 			return m, cmd
 		}
+		if m.state == viewAnswers {
+			am, cmd := m.answers.Update(msg)
+			m.answers = am
+			return m, cmd
+		}
 		pm, cmd := m.pipeline.Update(msg)
 		m.pipeline = pm
 		return m, cmd
@@ -432,6 +456,8 @@ func main() {
 	profileFlag := flag.String("profile", "morgan", "Active user profile name")
 	backlogFlag := flag.Int("backlog", 0, "Pending roles not yet evaluated (see picker.count_unevaluated_roles); 0 hides the readout")
 	themeFlag := flag.String("theme", "resume-builder", "Theme name: resume-builder, catppuccin-mocha, catppuccin-latte, or auto")
+	viewFlag := flag.String("view", "", "Initial view: answers")
+	jobFlag := flag.String("job", "", "Job path or ID for the answers view")
 	flag.Parse()
 
 	careerOpsPath := *pathFlag
@@ -501,13 +527,24 @@ func main() {
 	kbDir := filepath.Join(*projectRootFlag, "profiles", *profileFlag, "knowledge_base")
 	kbItems := data.LoadKBItems(kbDir)
 	kbScreen := screens.NewKBModel(t, kbItems, 120, 40).WithProfile(profile)
+	answerJob := model.JobRow{Path: *jobFlag, Title: "Application question", Company: "Selected job"}
+	for _, row := range jobRows {
+		if row.Path == *jobFlag {
+			answerJob = row
+			break
+		}
+	}
+	answersScreen := screens.NewAnswersModel(t, answerJob, *pythonPathFlag, *projectRootFlag, 120, 40)
 
 	m := appModel{
 		pipeline:        pm,
 		jobs:            jm,
 		kb:              kbScreen,
+		answers:         answersScreen,
 		careerOpsPath:   careerOpsPath,
 		jobsPath:        jobsPath,
+		pythonPath:      *pythonPathFlag,
+		projectRoot:     *projectRootFlag,
 		theme:           t,
 		progressMetrics: progressMetrics,
 		profile:         profile,
@@ -516,6 +553,9 @@ func main() {
 		menu:             menu.NewMenuModel(t).WithProfile(profile),
 		transitioning:    !anim.ReducedMotion(),
 		transitionSpring: anim.NewSpring(anim.Organic, 0, 24),
+	}
+	if *viewFlag == "answers" && *jobFlag != "" {
+		m.state = viewAnswers
 	}
 
 	p := tea.NewProgram(m)

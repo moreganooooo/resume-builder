@@ -13,7 +13,7 @@ philosophy:
   - Mirror employer language for ATS; use exact JD phrasing across Summary Skills and bullets
   - Do not waste space on assumed soft skills; use space for scale technical depth and strategic ownership
   - Repeat real differentiators deliberately; identify this candidate's 2-3 most distinctive real skills/experiences (from their verified profile data) and repeat them across sections rather than diluting focus with generic breadth
-  - Summary is positioning not biography; role/identity, area of specialization, value created — written pronoun-free, not third-person biography
+  - Summary is positioning not biography; role/identity, area of specialization, value created — written in the candidate's own voice (pronoun-free by default; a profile whose ROLE RULES block carries a "Summary Voice" line opts into first person), never third-person biography
   - Skills reinforce identity; lead with the archetype-relevant category not a tool dumping ground
   - Think like the hiring manager; dissolve their core anxieties through content selection
   - Bullet bank is LEGO not prose inspiration; start from curated verified bullets not net-new text
@@ -254,6 +254,12 @@ metrics_rules:
       dollar_format: "$3M, $1.1M" # not $3,000,000
 
 pronoun_rules:
+  # Default: pronoun-free everywhere except the Why section. A profile may
+  # opt into first-person Summary text via its own profile.yml
+  # (voice_preferences.summary_first_person) -- that profile's ROLE RULES
+  # block then carries a "Summary Voice" line, and the validator honors the
+  # same opt-in. Third-person pronouns are forbidden everywhere under both
+  # settings -- "She leads..." reads as a ghostwritten biography.
   allowed_in: [why_section_only]
   forbidden_in: [summary, skills, work_experience, training, education]
 

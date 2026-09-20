@@ -77,7 +77,8 @@ class TestRemediationProtections(unittest.TestCase):
                 self.assertEqual(len(jobs), 1)
                 self.assertEqual(jobs[0]["title"], "Software Engineer")
 
-    def test_vector_store_stale_hash_trigger(self):
+    @patch("vector_store.GeminiClient.embed", return_value=[0.1] * 768)
+    def test_vector_store_stale_hash_trigger(self, mock_embed):
         """Verify vector_store triggers re-embedding on SHA hash mismatch."""
         with tempfile.TemporaryDirectory() as tmpdir:
             meta_path = os.path.join(tmpdir, "bullet_vectors_ge2_d768.meta")
@@ -102,7 +103,8 @@ class TestRemediationProtections(unittest.TestCase):
                 # When sha is stale, embed_bullet_bank.main should be triggered
                 self.assertTrue(mock_reembed.called)
 
-    def test_vector_store_row_count_mismatch_triggers_reembed(self):
+    @patch("vector_store.GeminiClient.embed", return_value=[0.1] * 768)
+    def test_vector_store_row_count_mismatch_triggers_reembed(self, mock_embed):
         """Pins F11 (docs/review/master_audit_document.md): adding or
         removing a bullet changes the row count, not just the content
         hash -- that path must also trigger re-embedding. Before the F11

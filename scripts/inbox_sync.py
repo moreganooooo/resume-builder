@@ -988,8 +988,9 @@ def generate_follow_up_draft(
     """Generates a concise, polite follow-up email subject and body for a silent application."""
     if not candidate_name:
         try:
-            profile_data = profile_paths.load_profile()
-            candidate_name = profile_data.get("name") or "Candidate"
+            profile_data = profile_paths.profile_yaml()
+            candidate_node = profile_data.get("candidate", {})
+            candidate_name = candidate_node.get("name") or "Candidate"
         except Exception:
             candidate_name = "Candidate"
 
@@ -1366,17 +1367,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.sent or args.chase:
         _render_sent(results, days=args.days, profile=None)
 
-    if args.chase:
-        password = _get_password()
-        if password:
-            sent = scan_sent_mail(
-                days=args.days,
-                user=os.environ.get("GMAIL_USER"),
-                password=password,
-                limit=args.limit,
-            )
-            silent = applications_without_replies(sent, results)
-            _render_chase_list(silent)
+    # TODO: Implement _get_password() and scan_sent_mail() or remove this feature
+    # if args.chase:
+    #     password = _get_password()
+    #     if password:
+    #         sent = scan_sent_mail(
+    #             days=args.days,
+    #             user=os.environ.get("GMAIL_USER"),
+    #             password=password,
+    #             limit=args.limit,
+    #         )
+    #         silent = applications_without_replies(sent, results)
+    #         _render_chase_list(silent)
 
     if not args.apply:
         cli_art.print_literal(

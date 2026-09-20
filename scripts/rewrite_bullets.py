@@ -119,10 +119,15 @@ KB_DIR = profile_paths.kb_dir()
 RULES_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "rules")
 SCORING_DIR = os.path.join(PROJECT_ROOT, "resume-engine", "scoring")
 
+import gemini_client  # noqa: E402
+
 # orchestrator.py lives in the same scripts/ directory as this file.
 # Import GeminiClient only — orchestrator.py has no module-level client object.
-from gemini_client import SCORING_FALLBACKS, GeminiClient, SustainedFailureError  # noqa: E402
-import gemini_client  # noqa: E402
+from gemini_client import (  # noqa: E402
+    SCORING_FALLBACKS,
+    GeminiClient,
+    SustainedFailureError,
+)
 
 CLUSTER_MAP_IN = os.path.join(KB_DIR, "bullet-bank-cluster-map.csv")
 CLUSTER_MAP_OUT = os.path.join(KB_DIR, "bullet-bank-cluster-map-updated.csv")
@@ -166,6 +171,10 @@ SCORE_MODEL = "gemini-3.1-flash-lite"
 MAX_ATTEMPTS = 3
 MAX_REWRITE_PARSE_FAILURES = 2
 GEMMA_MINIMAL_JSON = True
+
+# best_version(): minimum composite-score win a rewrite needs to displace
+# the bank's own bullet. See best_version's docstring for why this exists.
+VOICE_CONSERVATION_MARGIN = 5
 
 # Gemma calls use model_fallback=False (see process_bullet) so flash-lite
 # never inherits Gemma's slim context via GeminiClient's internal swap.
@@ -373,10 +382,16 @@ class RulesBundle:
                     "",
                     "=== VERB TAXONOMY (priority tiers) ===",
                     "Use elite > strong > acceptable. NEVER use verbs in the avoid list.",
+                    "Per-bullet exception: when the bullet's own tags (shown in the prompt below) "
+                    "match any tag name in archetype_allows.match_tags, the verbs in "
+                    "archetype_allows.allowed_from_avoid are acceptable openers for that bullet -- "
+                    "for craft/creative work the honest verb IS the plain creation verb. For every "
+                    "other bullet the avoid list applies in full.",
                     _yaml_to_str(
                         {
                             "priority_tiers": vt.get("priority_tiers", {}),
                             "avoid": vt.get("avoid", []),
+                            "archetype_allows": vt.get("archetype_allows", {}),
                         }
                     ),
                     "",
@@ -794,6 +809,32 @@ def foreign_numbers(rewritten: str, allowed_text: str) -> set:
     return _numbers_in(rewritten) - _numbers_in(allowed_text)
 
 
+# Calendar/school-year/season anchors a bullet never needs: the role's
+# period line already dates the work, and "38% reply rate across 751
+# contacts in the 2020-21 season" reads as if the skill expired with the
+# semester. REWRITE_SYSTEM_BASE's rewrite goals already instruct against
+# these; this is the deterministic backstop for when a rewrite (or a
+# margin-kept bank original) carries one anyway.
+# Matches: 2020-21, 2020-2021, 2020/21 (year ranges), Q3 2021, fall 2021.
+# Deliberately does NOT match: COVID-19 (2-digit), K-12, 20-30% (no
+# 4-digit year head), "$15.1M", "15 years later".
+_DATE_ANCHOR_RE = re.compile(
+    r"\b(?:19|20)\d{2}\s*[-\u2013\u2014/]\s*\d{2,4}\b"
+    r"|\bQ[1-4]\s*(?:19|20)\d{2}\b"
+    r"|\b(?:spring|summer|fall|autumn|winter)\s+(?:19|20)\d{2}\b",
+    re.IGNORECASE,
+)
+
+
+def date_anchors(text: str) -> list:
+    """Returns the calendar/school-year/season anchor substrings in `text`
+    ([] when the bullet is clean). Shared by the rewrite rejection path,
+    best_version's margin bypass, and validate_resume's soft check."""
+    if not text:
+        return []
+    return [m.group(0) for m in _DATE_ANCHOR_RE.finditer(text)]
+
+
 def _tool_pattern(name: str):
     return re.compile(r"(?<!\w)" + re.escape(name) + r"(?!\w)", re.IGNORECASE)
 
@@ -827,7 +868,9 @@ def build_tool_employer_index(tool_names, bank_rows) -> dict:
     return index
 
 
-def foreign_tools(rewritten: str, allowed_text: str, role_company: str, tool_index: dict) -> set:
+def foreign_tools(
+    rewritten: str, allowed_text: str, role_company: str, tool_index: dict
+) -> set:
     """Tool names a rewrite introduced that the bank ties only to OTHER
     employers. The numbers check (foreign_numbers) could not see this: a
     2026-09-16 audit found Treering's Salesforce work rewritten under Callahan
@@ -895,6 +938,7 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
         if any(kw in rc_lower for kw in keywords):
             matched_heading = heading
             break
+
     # A section's header is its heading line plus the line after it: in a
     # "### Title\n**Company** · Location · Period" block the company sits on
     # line 2, so neither a fixed 60-character window (a long title pushes the
@@ -1231,9 +1275,9 @@ class KnowledgeBase:
         # FULL (all 58 entries on this profile) in the Gemma STATIC
         # prefix, uncapped, on every single call -- see
         # _build_gemma_static_prefix()'s docstring.
-        filtered_tools = filter_projects_by_employer(
-            self.tools_entries, role_company
-        )[:MAX_GEMMA_FILTER_ROWS]
+        filtered_tools = filter_projects_by_employer(self.tools_entries, role_company)[
+            :MAX_GEMMA_FILTER_ROWS
+        ]
         if filtered_tools:
             sections.append(
                 f"=== VERIFIED TOOLS ({role_company} only, HF002 guard) ===\n"
@@ -1420,7 +1464,7 @@ class KnowledgeBase:
         rewrite's numbers must come from; see foreign_numbers()."""
         full = self.context_block_for_bullet(role_company, tags)
         if full.startswith(self.static_prefix):
-            return full[len(self.static_prefix):]
+            return full[len(self.static_prefix) :]
         return full
 
     def recruiter_context_block(self) -> str:
@@ -1462,6 +1506,11 @@ Rewrite goals:
 - Use only information supported by the provided context.
 - Use only metrics verified in the provided context.
 - Do not invent scope, ownership, tools, or results.
+- Do not anchor achievements to school years, calendar dates, or seasons (e.g. "in the
+  2020-21 school year", "during Q3") — the role's period line already carries the
+  timeframe. Drop such qualifiers entirely rather than rewording them.
+- Do not append filler purpose clauses ("ensuring optimal performance and accuracy",
+  "to support high-value campaign execution") — end on the concrete outcome instead.
 
 If the context is not strong enough to support an improved claim, keep the rewrite
 conservative and explain the limitation in context_gaps.
@@ -1560,6 +1609,7 @@ def build_rewrite_prompt(
     parts.extend(
         [
             f"Rewrite this bullet for {persona} roles.",
+            f"Bullet tags: {tags or '(none)'} -- used by the VERB TAXONOMY's archetype_allows exception.",
             f"Known weaknesses to fix: {weakness_text}",
             f"Bullet to rewrite: {bullet}",
         ]
@@ -1733,7 +1783,29 @@ def best_version(
         mgr_bonus = 10 if str(s.get("manager_test", "")).upper() == "PASS" else 0
         return sum(vals) + mgr_bonus
 
-    if composite(rewritten_scores) >= composite(original_scores):
+    # A rewrite must BUY its way in. The four scored dimensions measure
+    # keyword density and claim specificity, not voice -- a rewrite that
+    # merely reworded the same achievement in ATS-ese can score a point or
+    # two higher while reading less like the candidate. Bank bullets start
+    # pre-audited (often the candidate's own wording), so a rewrite only
+    # displaces one when its composite win exceeds this margin.
+    # 2026-09-17: before this margin, rewrites won ties outright, which is
+    # how "Secured a long-term freelance contract" degraded into "Won a
+    # sustained freelance contract after ... commercial client deployment".
+    #
+    # Date-anchor rules, decided BEFORE the margin (the composite can't see
+    # this failure mode). A rewrite that drops an anchor the original
+    # carried wins outright; a rewrite that INTRODUCES one loses outright.
+    original_anchors = date_anchors(original_bullet)
+    rewrite_anchors = date_anchors(rewritten_bullet)
+    if rewrite_anchors and not original_anchors:
+        return original_bullet, original_scores
+    if original_anchors and not rewrite_anchors:
+        return rewritten_bullet, rewritten_scores
+    if (
+        composite(rewritten_scores)
+        >= composite(original_scores) + VOICE_CONSERVATION_MARGIN
+    ):
         return rewritten_bullet, rewritten_scores
     return original_bullet, original_scores
 
@@ -2097,6 +2169,28 @@ def process_bullet(
                 f"The previous rewrite introduced tools ({', '.join(sorted(borrowed))}) "
                 f"that belong to another role's work, not {role_company}'s. Use only "
                 f"tools already in this bullet or in {role_company}'s own evidence."
+            )
+            if attempt < MAX_ATTEMPTS:
+                time.sleep(SLEEP_ON_RETRY)
+            continue
+
+        anchors = date_anchors(rewritten)
+        if anchors:
+            # Never scored, never kept, same shape as the foreign_numbers
+            # rejection: the rewrite goals already ban school-year/calendar
+            # anchors ("...in the 2020-21 school year") -- the role's period
+            # line dates the work. A rewrite that keeps one is told why and
+            # asked to drop the qualifier outright.
+            cli_art.console.print(
+                f"   {theme.colorize_icon('warning')} Rejected: rewrite keeps a "
+                f"calendar/school-year anchor ({', '.join(anchors)}).",
+                soft_wrap=True,
+            )
+            current_scores["weaknesses"] = (
+                f"The previous rewrite kept a calendar/school-year anchor "
+                f"({', '.join(anchors)}). The role's period line already dates the "
+                f"work -- DROP the qualifier entirely (do not reword it) and state "
+                f"the achievement timelessly."
             )
             if attempt < MAX_ATTEMPTS:
                 time.sleep(SLEEP_ON_RETRY)

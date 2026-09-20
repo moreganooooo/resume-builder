@@ -426,9 +426,7 @@ class TestVerifyJdPaths(unittest.TestCase):
         self.assertEqual(jd_manager.read_liveness(indeed_path)["result"], "blocked")
 
     @patch("liveness.subprocess.Popen")
-    def test_a_checkable_url_alongside_an_indeed_one_is_still_checked(
-        self, mock_popen
-    ):
+    def test_a_checkable_url_alongside_an_indeed_one_is_still_checked(self, mock_popen):
         indeed_path = os.path.join(self.tmp_dir, "indeed2.json")
         with open(indeed_path, "w", encoding="utf-8") as f:
             json.dump(

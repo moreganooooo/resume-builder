@@ -25,7 +25,12 @@ class TestSkillsScreenRobustness(unittest.TestCase):
         # str and raised TypeError, taking the whole Skills screen down.
         tools = [
             {"id": "tool_001", "name": None, "category": None, "confidence": "Expert"},
-            {"id": "tool_002", "name": "Asana", "category": "PM", "confidence": "Expert"},
+            {
+                "id": "tool_002",
+                "name": "Asana",
+                "category": "PM",
+                "confidence": "Expert",
+            },
         ]
         skills_menu._display_skills_dashboard(tools)
 
@@ -498,7 +503,9 @@ class TestSkillsMaintenanceViews(unittest.TestCase):
         self.assertEqual(skills_menu._duplicate_names(self.TOOLS), ["salesforce crm"])
 
     def test_blank_names_are_never_counted_as_duplicates(self):
-        self.assertEqual(skills_menu._duplicate_names([{"name": ""}, {"name": None}]), [])
+        self.assertEqual(
+            skills_menu._duplicate_names([{"name": ""}, {"name": None}]), []
+        )
 
     def test_null_category_groups_under_uncategorized(self):
         self.assertEqual(
@@ -517,7 +524,9 @@ class TestSkillsMaintenanceViews(unittest.TestCase):
     def test_skill_label_marks_duplicates(self):
         dupes = set(skills_menu._duplicate_names(self.TOOLS))
         self.assertTrue(skills_menu._skill_label(self.TOOLS[0], dupes).startswith("⧉ "))
-        self.assertFalse(skills_menu._skill_label(self.TOOLS[2], dupes).startswith("⧉ "))
+        self.assertFalse(
+            skills_menu._skill_label(self.TOOLS[2], dupes).startswith("⧉ ")
+        )
 
     @patch("skills_menu._pause")
     @patch("skills_menu._save_verified_tools", return_value=True)

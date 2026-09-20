@@ -278,7 +278,7 @@ class TestSetActiveProfileReloadsStaleModules(unittest.TestCase):
         # AWAY from whatever profile is ambient, so that one has to resolve
         # against the redirected PROFILES_DIR too.
         self._ambient = self._orig or profile_paths._LEGACY_DEFAULT_PROFILE
-        for name in {self._ambient, self.second_profile}:
+        for name in [self._ambient, self.second_profile]:
             os.makedirs(os.path.join(profile_paths.PROFILES_DIR, name), exist_ok=True)
 
         import jd_manager

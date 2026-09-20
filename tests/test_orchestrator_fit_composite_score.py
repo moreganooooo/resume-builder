@@ -489,7 +489,9 @@ class TestLegitimacyPenalty(unittest.TestCase):
     ~3% of composite); a caution/suspicious verdict now costs points."""
 
     def _score(self, legitimacy, **kw):
-        return orchestrator.fit_composite_score(4.0, 4.0, 4.0, posting_legitimacy=legitimacy, **kw)
+        return orchestrator.fit_composite_score(
+            4.0, 4.0, 4.0, posting_legitimacy=legitimacy, **kw
+        )
 
     def test_high_confidence_and_unknown_cost_nothing(self):
         self.assertEqual(self._score("High Confidence"), self._score(None))
@@ -497,7 +499,8 @@ class TestLegitimacyPenalty(unittest.TestCase):
     def test_caution_and_suspicious_cost_their_penalties(self):
         base = self._score(None)
         self.assertAlmostEqual(
-            base - self._score("Proceed with Caution"), orchestrator.LEGITIMACY_CAUTION_PENALTY
+            base - self._score("Proceed with Caution"),
+            orchestrator.LEGITIMACY_CAUTION_PENALTY,
         )
         self.assertAlmostEqual(
             base - self._score("Suspicious"), orchestrator.LEGITIMACY_SUSPICIOUS_PENALTY
@@ -506,7 +509,8 @@ class TestLegitimacyPenalty(unittest.TestCase):
     def test_profile_override_reaches_the_penalty(self):
         base = self._score(None)
         self.assertAlmostEqual(
-            base - self._score("Proceed with Caution", legitimacy_caution_penalty=0.2), 0.2
+            base - self._score("Proceed with Caution", legitimacy_caution_penalty=0.2),
+            0.2,
         )
 
     def test_rescore_applies_the_stored_verdict(self):
@@ -517,7 +521,9 @@ class TestLegitimacyPenalty(unittest.TestCase):
             "hard_blockers": [],
             "recommendation": "Strong pursue",
         }
-        clean = orchestrator.rescore_evaluation_with_location(dict(ev), posting_age_days=0)
+        clean = orchestrator.rescore_evaluation_with_location(
+            dict(ev), posting_age_days=0
+        )
         flagged = orchestrator.rescore_evaluation_with_location(
             dict(ev, posting_legitimacy="Suspicious"), posting_age_days=0
         )

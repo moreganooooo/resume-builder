@@ -106,9 +106,8 @@ def remove(rows, reason) -> tuple:
 
 def backfill_candidates() -> list:
     """keepers.csv rows Stage 4's merge would add back to the audited bank."""
-    import pandas as pd
-
     import audit_keepers
+    import pandas as pd
 
     if not (os.path.exists(KEEPERS_CSV) and os.path.exists(KEEPERS_AUDITED_CSV)):
         return []
@@ -210,7 +209,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.text:
-        rows, reason, delete = find_rows(args.text), args.reason or "removed by hand", True
+        rows, reason, delete = (
+            find_rows(args.text),
+            args.reason or "removed by hand",
+            True,
+        )
     elif args.from_review:
         rows, reason, delete = (
             review_candidates(args.from_review),

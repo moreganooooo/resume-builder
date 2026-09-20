@@ -13,7 +13,9 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-SCRIPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+SCRIPTS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"
+)
 sys.path.insert(0, SCRIPTS_DIR)
 
 import db  # noqa: E402
@@ -35,17 +37,27 @@ class TestArchiveCopies(unittest.TestCase):
             ("a", "Data Analyst", "posting text one"),
             ("c", "Data Engineer", "a different opening"),
         ):
-            db.upsert_job({"id": job_id, "title": title, "company": "Acme LLC",
-                           "status": "pending", "raw_text": text})
+            db.upsert_job(
+                {
+                    "id": job_id,
+                    "title": title,
+                    "company": "Acme LLC",
+                    "status": "pending",
+                    "raw_text": text,
+                }
+            )
         # upsert_job itself folds a same company+title row into the existing
         # one, so a real stray copy (created under another id by another path)
         # is inserted directly: row "a" duplicated as "b" with its own hash.
         conn = db.get_db(None)
         cols = [c[1] for c in conn.execute("PRAGMA table_info(jobs)")]
         select = ", ".join(
-            "'b'" if c == "id" else "'legacy-copy'" if c == "dedup_hash" else c for c in cols
+            "'b'" if c == "id" else "'legacy-copy'" if c == "dedup_hash" else c
+            for c in cols
         )
-        conn.execute(f"INSERT INTO jobs ({', '.join(cols)}) SELECT {select} FROM jobs WHERE id = 'a'")
+        conn.execute(
+            f"INSERT INTO jobs ({', '.join(cols)}) SELECT {select} FROM jobs WHERE id = 'a'"
+        )
         conn.commit()
         conn.close()
 
@@ -58,13 +70,17 @@ class TestArchiveCopies(unittest.TestCase):
 
 
 class TestCoverLetterGroundingBackup(unittest.TestCase):
-    SENTENCE = "Built lifecycle automation that doubled onboarding completion across accounts."
+    SENTENCE = (
+        "Built lifecycle automation that doubled onboarding completion across accounts."
+    )
 
     def _violations(self, backup_matrix):
         letter = {"body_paragraphs": [self.SENTENCE]}
         with (
             patch("gemini_client.GeminiClient.embed", return_value=None),
-            patch("embed_bullet_bank.embed_batch", return_value=[[1.0, 0.0, 0.0]]) as mock_embed,
+            patch(
+                "embed_bullet_bank.embed_batch", return_value=[[1.0, 0.0, 0.0]]
+            ) as mock_embed,
         ):
             v = validate_coverletter._check_semantic_grounding(
                 letter, ["bullet"], np.array([[0.0, 1.0, 0.0]]), backup_matrix
@@ -74,7 +90,9 @@ class TestCoverLetterGroundingBackup(unittest.TestCase):
     def test_backup_index_is_used_when_the_primary_fails(self):
         v, mock_embed = self._violations(np.array([[1.0, 0.0, 0.0]]))
         self.assertEqual(v, [])  # matches the backup index, not the primary
-        self.assertEqual(mock_embed.call_args.kwargs["model"], embed_bullet_bank.BACKUP_EMBED_MODEL)
+        self.assertEqual(
+            mock_embed.call_args.kwargs["model"], embed_bullet_bank.BACKUP_EMBED_MODEL
+        )
 
     def test_backup_uses_its_own_cutoff(self):
         # similarity 0.7: passes the primary's 0.60 but not the backup's 0.72
@@ -92,9 +110,9 @@ class TestBankSearchBackup(unittest.TestCase):
         self.kb = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.kb, True)
         bullets = ["First bullet about email", "Second bullet about data"]
-        pd.DataFrame({"Bullet Point": bullets, "Role / Company": ["A", "B"], "Tags": ["", ""]}).to_csv(
-            os.path.join(self.kb, "bullet-bank-keepers-audited.csv"), index=False
-        )
+        pd.DataFrame(
+            {"Bullet Point": bullets, "Role / Company": ["A", "B"], "Tags": ["", ""]}
+        ).to_csv(os.path.join(self.kb, "bullet-bank-keepers-audited.csv"), index=False)
         sha = bullets_sha(bullets)
         for model, matrix in (
             (embed_bullet_bank.EMBED_MODEL, [[1.0, 0.0], [0.0, 1.0]]),

@@ -107,7 +107,11 @@ def _score_legend(include_skip: bool = False) -> str:
     """Legend swatches for the picker tables. Derived from theme.SCORE_BANDS
     rather than restating the thresholds, so the legend cannot drift from the
     colors the rows are actually painted with."""
-    labels = {4.0: "4.0+", ACTIONABLE_SCORE: f"{ACTIONABLE_SCORE}+ (actionable)", 2.5: "2.5+"}
+    labels = {
+        4.0: "4.0+",
+        ACTIONABLE_SCORE: f"{ACTIONABLE_SCORE}+ (actionable)",
+        2.5: "2.5+",
+    }
     parts = [
         f"[{color}]■[/{color}] {labels.get(floor, f'{floor}+')}"
         for floor, color in theme.SCORE_BANDS
@@ -576,6 +580,11 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "company": company,
                     "description": jd_data.get("description", "") or "",
                     "source_platform": jd_data.get("source_platform", "") or "",
+                    "added_manually": bool(
+                        jd_data.get("added_manually")
+                        or jd_data.get("source_platform")
+                        in {"manual", "manual-screenshot"}
+                    ),
                     "source_url": jd_data.get("source_url")
                     or jd_data.get("application_url", "")
                     or "",
@@ -617,6 +626,11 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
                     "company": company,
                     "description": jd_data.get("description", "") or "",
                     "source_platform": jd_data.get("source_platform", "") or "",
+                    "added_manually": bool(
+                        jd_data.get("added_manually")
+                        or jd_data.get("source_platform")
+                        in {"manual", "manual-screenshot"}
+                    ),
                     "source_url": jd_data.get("source_url")
                     or jd_data.get("application_url", "")
                     or "",
@@ -757,6 +771,10 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
                 "company": record["company"] or data.get("company_name") or "",
                 "description": data.get("description", "") or "",
                 "source_platform": data.get("source_platform", "") or "",
+                "added_manually": bool(
+                    data.get("added_manually")
+                    or data.get("source_platform") in {"manual", "manual-screenshot"}
+                ),
                 "source_url": data.get("source_url")
                 or data.get("application_url", "")
                 or "",

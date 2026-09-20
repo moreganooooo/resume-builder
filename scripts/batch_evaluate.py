@@ -148,7 +148,9 @@ def _evaluate_one(engine, identifier: str, on_label=None) -> dict:
         source = identifier if is_database_backed else path
         if skipped and not is_database_backed:
             source = jd_manager.archive_jd(path)
-            _archive_copies_of(lambda: dedup_pending_roles.archive_copies_of_file(source))
+            _archive_copies_of(
+                lambda: dedup_pending_roles.archive_copies_of_file(source)
+            )
 
     # Outside the context ON PURPOSE. Leaving the block runs sync_back(),
     # which writes the temp file's payload over the row -- including its

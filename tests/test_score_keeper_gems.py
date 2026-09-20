@@ -58,7 +58,9 @@ class TestScoreKeeperGems(unittest.TestCase):
             mock_generate.call_args.kwargs["fallbacks"],
             score_keeper_gems.SCORING_FALLBACKS,
         )
-        self.assertNotIn("gemini-3.5-flash-lite", score_keeper_gems.SCORING_FALLBACKS.values())
+        self.assertNotIn(
+            "gemini-3.5-flash-lite", score_keeper_gems.SCORING_FALLBACKS.values()
+        )
 
         # Failure returns None
         mock_generate.return_value = (None, None)

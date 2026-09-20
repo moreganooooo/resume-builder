@@ -17,7 +17,9 @@ class TestCategoryTokens(unittest.TestCase):
         self.assertEqual(list(merges.values()), ["Salesforce CRM"])
 
     def test_general_skill_is_not_narrowed_into_a_crm_skill(self):
-        self.assertEqual(d.plan_tool_merges(_tools("data quality", "CRM Data Quality")), {})
+        self.assertEqual(
+            d.plan_tool_merges(_tools("data quality", "CRM Data Quality")), {}
+        )
 
     def test_vendor_prefix_still_merges(self):
         merges = d.plan_tool_merges(_tools("word", "Microsoft Word"))

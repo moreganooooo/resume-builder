@@ -115,7 +115,9 @@ class TestBuildRoleRulesBlock(unittest.TestCase):
 
         yml = {
             "fixed_credentials": {
-                "education": [{"credential": "BA", "achievement_options": {"k": "framing"}}]
+                "education": [
+                    {"credential": "BA", "achievement_options": {"k": "framing"}}
+                ]
             }
         }
         with patch.object(profile_paths, "profile_yaml", return_value=yml):

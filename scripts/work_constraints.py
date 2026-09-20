@@ -99,7 +99,9 @@ DEFAULTS = {
 
 def merged(settings: dict | None) -> dict:
     out = dict(DEFAULTS)
-    out.update({k: v for k, v in (settings or {}).items() if k in DEFAULTS and v is not None})
+    out.update(
+        {k: v for k, v in (settings or {}).items() if k in DEFAULTS and v is not None}
+    )
     return out
 
 
@@ -128,7 +130,11 @@ def _sentence(text: str, match: re.Match) -> str:
 
 
 def _negated(text: str, match: re.Match) -> bool:
-    return bool(_NEGATION_RE.search(text[max(0, match.start() - _NEGATION_WINDOW) : match.start()]))
+    return bool(
+        _NEGATION_RE.search(
+            text[max(0, match.start() - _NEGATION_WINDOW) : match.start()]
+        )
+    )
 
 
 def detect(text: str, settings: dict | None) -> list[dict]:
@@ -146,7 +152,14 @@ def detect(text: str, settings: dict | None) -> list[dict]:
             sentence = _sentence(text, m)
             if _negated(text, m) or _STANDING_VOIDERS.search(sentence):
                 continue
-            findings.append({"kind": "standing", "severity": BLOCKER, "text": sentence, "penalty": 0.0})
+            findings.append(
+                {
+                    "kind": "standing",
+                    "severity": BLOCKER,
+                    "text": sentence,
+                    "penalty": 0.0,
+                }
+            )
             break
 
     if s["max_lift_lbs"]:
@@ -159,10 +172,20 @@ def detect(text: str, settings: dict | None) -> list[dict]:
             if lbs >= s["heavy_lift_lbs"] or (
                 _FREQUENT_RE.search(sentence) and not _OCCASIONAL_RE.search(sentence)
             ):
-                worst = {"kind": "lifting", "severity": BLOCKER, "text": sentence, "penalty": 0.0}
+                worst = {
+                    "kind": "lifting",
+                    "severity": BLOCKER,
+                    "text": sentence,
+                    "penalty": 0.0,
+                }
                 break
             if worst is None:
-                worst = {"kind": "lifting", "severity": PENALTY, "text": sentence, "penalty": float(s["lift_penalty"])}
+                worst = {
+                    "kind": "lifting",
+                    "severity": PENALTY,
+                    "text": sentence,
+                    "penalty": float(s["lift_penalty"]),
+                }
         if worst:
             findings.append(worst)
 
@@ -170,7 +193,14 @@ def detect(text: str, settings: dict | None) -> list[dict]:
         for m in _MANUAL_LABOR_RE.finditer(text):
             if _negated(text, m):
                 continue
-            findings.append({"kind": "manual_labor", "severity": BLOCKER, "text": _sentence(text, m), "penalty": 0.0})
+            findings.append(
+                {
+                    "kind": "manual_labor",
+                    "severity": BLOCKER,
+                    "text": _sentence(text, m),
+                    "penalty": 0.0,
+                }
+            )
             break
 
     if s["phone_heavy_penalty"]:
@@ -178,7 +208,12 @@ def detect(text: str, settings: dict | None) -> list[dict]:
             if _negated(text, m):
                 continue
             findings.append(
-                {"kind": "phone_heavy", "severity": PENALTY, "text": _sentence(text, m), "penalty": float(s["phone_heavy_penalty"])}
+                {
+                    "kind": "phone_heavy",
+                    "severity": PENALTY,
+                    "text": _sentence(text, m),
+                    "penalty": float(s["phone_heavy_penalty"]),
+                }
             )
             break
 
