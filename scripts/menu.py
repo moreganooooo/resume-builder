@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
+from typing import Any
 
 # MUST run before the imports below: cli_art -> jd_manager resolves
 # JDS_DIR at module level, so an unresolvable RESUME_PROFILE aborts with a

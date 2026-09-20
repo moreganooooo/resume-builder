@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import TYPE_CHECKING, List, Literal, Tuple
+from typing import TYPE_CHECKING, Any, List, Literal, Tuple
 
 if TYPE_CHECKING:  # annotations only -- see the lazy imports below
     import pandas as pd

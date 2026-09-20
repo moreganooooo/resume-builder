@@ -16,6 +16,7 @@ import os
 import shutil
 import subprocess
 import uuid
+from typing import Any
 
 import cli_art
 import jd_manager
