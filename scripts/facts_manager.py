@@ -428,11 +428,11 @@ def review_staged_facts_interactive(profile: Optional[str] = None) -> Dict[str, 
             break
 
         if "Accept & Verify" in choice:
-            promoted = promote_fact(sf.get("id"), profile=profile)
-            if promoted:
+            promoted_fact = promote_fact(sf.get("id"), profile=profile)
+            if promoted_fact:
                 tally["accepted"] += 1
                 cli_art.cli_info(
-                    f"Promoted '{promoted.get('label')}' as {promoted.get('id')}!"
+                    f"Promoted '{promoted_fact.get('label')}' as {promoted_fact.get('id')}!"
                 )
 
         elif "Edit & Accept" in choice:
@@ -470,12 +470,14 @@ def review_staged_facts_interactive(profile: Optional[str] = None) -> Dict[str, 
                 "category": new_category.strip(),
             }
 
-            promoted = promote_fact(
+            promoted_edited = promote_fact(
                 sf.get("id"), edited_fact=edited_payload, profile=profile
             )
-            if promoted:
+            if promoted_edited:
                 tally["edited"] += 1
-                cli_art.cli_info(f"Promoted edited claim as {promoted.get('id')}!")
+                cli_art.cli_info(
+                    f"Promoted edited claim as {promoted_edited.get('id')}!"
+                )
 
         elif "Reject" in choice:
             if reject_fact(sf.get("id"), profile=profile):

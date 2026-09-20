@@ -58,6 +58,17 @@ QUESTIONARY_STYLE = theme.QUESTIONARY_STYLE
 # Unified table header styling (used across all render_*_table functions)
 TABLE_HEADER_STYLE = f"bold {theme.BRAND_ACCENT}"
 
+# Sparkle glyphs for decorative banner scatter
+_SPARKLE_GLYPHS = ["✨", "⭐", "💫", "✦", "✧", "⚡", "🌟"]
+_SPARKLE_DENSITY = 0.15  # 15% chance of each cell being a sparkle
+
+# Main banner ASCII art lines
+MAIN_BANNER_LINES = [
+    "  ╔═══════════════════════════════════════════════════════╗",
+    "  ║          R E S U M E   B U I L D E R                  ║",
+    "  ╚═══════════════════════════════════════════════════════╝",
+]
+
 
 def scrub_pii(text: str) -> str:
     """Redacts candidate emails and phone numbers from tracebacks and log messages."""

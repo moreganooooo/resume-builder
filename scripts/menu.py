@@ -1814,7 +1814,7 @@ def _handle_browse_jobs() -> bool:
     """Launch the interactive dashboard to browse, evaluate, and manage jobs.
     The dashboard provides a superior interactive experience with real-time
     actions (liveness, tailor, status updates) compared to the old CLI picker."""
-    success, msg = dashboard_module.run()
+    success, msg = dashboard_module.run()  # type: ignore[attr-defined]
     if not success:
         cli_art.cli_error(msg)
         return False
@@ -1878,7 +1878,7 @@ def _handle_answers_pick() -> bool:
     if not path:
         cli_art.cli_error("The selected role has no usable JD path.")
         return False
-    success, msg = dashboard_module.run(
+    success, msg = dashboard_module.run(  # type: ignore[attr-defined]
         profile=profile_paths.active_profile(), view="answers", job=path
     )
     if not success:
@@ -1891,7 +1891,7 @@ def _handle_career_dashboard() -> bool:
     (dashboard/) -- unlike every other handler here, this isn't
     questionary-driven; the dashboard is its own full-screen TUI that
     takes over stdio until the user quits it (`q`)."""
-    success, message = dashboard_module.run()
+    success, message = dashboard_module.run()  # type: ignore[attr-defined]
     if not success:
         cli_art.display_error(message)
     return False
@@ -1988,7 +1988,7 @@ def _handle_run_doctor() -> None:
         maintenance.record_run("doctor")
 
         # Define mapping of repairable checks and their corresponding auto-repair instructions
-        REPAIRABLE_CHECKS = {
+        REPAIRABLE_CHECKS: dict[str, dict] = {
             "Dashboard theme sync (Go)": {
                 "description": "Regenerate the Go TUI color theme to match theme.py",
                 "command": [sys.executable, "scripts/sync_dashboard_theme.py"],
