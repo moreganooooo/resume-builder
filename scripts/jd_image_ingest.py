@@ -94,10 +94,15 @@ def _unwrap_image_pdf(file_bytes: bytes) -> tuple[bytes, str] | None:
         from pypdf import PdfReader
 
         pages = PdfReader(io.BytesIO(file_bytes)).pages
+        # pypdf's page container is dynamically built, so pylint cannot see
+        # extract_text on it. The pragma must sit on the line that makes the
+        # call: black had wrapped it down onto `> 50`, where it suppressed
+        # nothing. The call stays inside the `or` so a multi-page PDF
+        # short-circuits before ever extracting text.
         if (
             len(pages) != 1
-            or len((pages[0].extract_text() or "").strip())
-            > 50  # pylint: disable=no-member
+            or len((pages[0].extract_text() or "").strip())  # pylint: disable=no-member
+            > 50
         ):
             return None
         images = list(pages[0].images)  # pylint: disable=no-member

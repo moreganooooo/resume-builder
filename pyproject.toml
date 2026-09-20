@@ -76,9 +76,13 @@ reportMissingImports = "none"
 extraPaths = ["scripts"]
 exclude = ["dashboard", ".venv", "node_modules", "**/__pycache__", "**/.*"]
 
+# NOTE: pydocstyle's real configuration lives in .pydocstyle, which takes
+# precedence over this file. This block is kept only because it is what a
+# reader looks for first, and it must not disagree with .pydocstyle -- it
+# previously said `ignore = ["D100", "D104"]` while .pydocstyle ignored 50
+# codes, so neither file described what actually ran. See .pydocstyle.
 [tool.pydocstyle]
 match_dir = "scripts"
-ignore = ["D100", "D104"]
 
 [tool.coverage.run]
 source = ["scripts", "tests"]
@@ -94,10 +98,32 @@ version = "0.1.0"
 tag_format = "$version"
 
 [tool.codespell]
+# THIS IS THE SINGLE SOURCE OF TRUTH for codespell. .pre-commit-config.yaml
+# used to carry its own --skip/--ignore-words-list copy of these settings,
+# which drifted: a bare `codespell scripts tests` reported 35 findings the
+# hook did not, so "clean under the hook" and "clean by hand" meant
+# different things. The hook now passes no args and reads this block.
+#
 # content_filters.py is skipped because it carries German, Spanish,
 # French and Portuguese function words as DATA, several of which
 # codespell reads as misspelled English. Skipping the one file is
 # narrower than adding them to ignore-words-list, where they would also
 # mask real typos in English prose everywhere else.
-skip = "*.json,*.csv,*.db,*.pyc,*.pycache,node_modules,scripts/content_filters.py"
-ignore-words-list = "datas,nd,sav"
+skip = "*.json,*.csv,*.db,*.pyc,*.pycache,*.rtf,*.html,node_modules,scripts/content_filters.py"
+# Every entry here is a word this codebase uses ON PURPOSE, not a typo
+# being tolerated. Grouped by why:
+#   spelling this codebase standardized on: unparseable (liveness.py's
+#     own failure message, quoted verbatim in CLAUDE.md)
+#   regex STEMS, deliberately truncated so they match inflections:
+#     countr (eligible countr\w+), significan (statistically significan\w*),
+#     ment (a suffix-stripping stemmer's literal), categor ("categor(ies)")
+#   domain vocabulary: hsa/fsa (US Health Savings / Flexible Spending
+#     Account, in compensation.py's benefit words that must NOT read as
+#     salary), ehr (Electronic Health Records), coo (Chief Operating
+#     Officer), bu (Business Unit), hims (the company Hims & Hers Health)
+#   foreign-language data: ist (German, in liveness-core.mjs's
+#     expired-posting patterns)
+#   identifiers quoted in prose: alllocations (lever.mjs's allLocations)
+#   pandas/stdlib vocabulary: datas, nd, sav
+#   genuine dialect words in prose: cant, wit
+ignore-words-list = "unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations,ment,hsa,fsa,significan,categor,datas,nd,sav"

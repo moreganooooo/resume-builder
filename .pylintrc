@@ -2,7 +2,12 @@
 # Files or directories to be ignored
 ignore=node_modules,.venv,dashboard,dist,build,scratch,archive,resume-engine/archive
 ignore-patterns=.*archive.*,.*scratch.*
-init-hook='import sys, os; sys.path.insert(0, os.path.abspath("scripts"))'
+# "tests" is on this path as well as "scripts": tests/persona.py is
+# imported as a bare `import persona` by 25 test modules, which add the
+# directory to sys.path themselves at runtime. Without it here, pylint
+# reported 48 spurious E0401 "Unable to import 'persona'" errors -- the
+# single largest block of findings in the whole suite, none of them real.
+init-hook='import sys, os; sys.path[:0] = [os.path.abspath("scripts"), os.path.abspath("tests")]'
 ignored-modules=google,google.genai,genai
 extension-pkg-allow-list=google.genai,pydantic
 
@@ -35,6 +40,7 @@ disable=
     R0912, # too-many-branches
     R0913, # too-many-arguments
     R0914, # too-many-locals
+    R0916, # too-many-boolean-expressions
     R0915, # too-many-statements
     R0917, # too-many-positional-arguments
     R1702, # too-many-nested-blocks

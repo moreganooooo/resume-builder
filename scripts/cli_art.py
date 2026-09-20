@@ -2109,7 +2109,7 @@ def new_progress(**kwargs) -> Progress:
     spinner+description+bar+percentage columns, themed via `console` --
     the same construction cli.py's batch tailor command uses. Any batch
     operation processing a known number of items should build its
-    progress bar through this instead of re-declaring the column set, so
+    progress bar through this instead of redeclaring the column set, so
     every progress bar in the program looks identical. Usage:
 
         with cli_art.new_progress() as progress:
@@ -2420,7 +2420,7 @@ def thinking_status(message: str):
 
 def display_footer_commands() -> None:
     """Draws a beautiful, unified footer command bar at the very bottom line of the terminal,
-    re-using our brand sparkles and Catppuccin styles to match Crush's premium visual grade.
+    reusing our brand sparkles and Catppuccin styles to match Crush's premium visual grade.
     """
     columns, rows = shutil.get_terminal_size()
     # Save current cursor position

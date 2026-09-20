@@ -198,7 +198,7 @@ def _apply(rows, reason, delete):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--text", action="append", help="exact bullet text (repeatable)")
     group.add_argument("--from-review", metavar="CSV")

@@ -176,7 +176,7 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
     def test_several_items_together_fill_a_second_line_one_alone_cannot(self):
         # 105 printed: any single append lands in the 111-134 dead band,
         # but three together reach a legal two-line row.
-        line = "**Scientific Computing:** " + ", ".join(["Fortran"] * 9) + ", Fo"
+        line = "**Scientific Computing:** " + ", ".join(["Fortran"] * 9) + ", Fx"
         self.assertEqual(len(orchestrator._plain_skills_line(line)), 105)
         ledger = LEDGER + ["Numerical Methods", "Finite Element Modeling"]
         cv = CV_TEXT.replace(
@@ -193,7 +193,7 @@ class TestTopUpVerifiedSkills(unittest.TestCase):
 
     @patch.object(orchestrator, "MAX_SKILLS_ROWS_NEWLY_WRAPPED", 1)
     def test_wraps_stop_at_the_per_build_cap(self):
-        a = "**Scientific Computing:** " + ", ".join(["Fortran"] * 9) + ", Fo"
+        a = "**Scientific Computing:** " + ", ".join(["Fortran"] * 9) + ", Fx"
         b = "**Languages & Libraries:** " + ", ".join(["Python"] * 11)
         b = b[: len(b) - (len(orchestrator._plain_skills_line(b)) - 105)]
         ledger = LEDGER + [
