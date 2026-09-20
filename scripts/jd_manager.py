@@ -273,6 +273,63 @@ def read_evaluation(jd_path: str) -> dict | None:
     return data.get("_evaluation")
 
 
+def save_application_answers(jd_path: str, answers: dict) -> None:
+    """Persist job-scoped application answers using an explicit allowlist."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    items = []
+    for item in answers.get("items", []) if isinstance(answers, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        history = []
+        for turn in item.get("history", []):
+            if not isinstance(turn, dict):
+                continue
+            history.append(
+                {
+                    "role": turn.get("role") or "",
+                    "text": turn.get("text") or "",
+                    "warnings": turn.get("warnings") or [],
+                    "created_at": turn.get("created_at") or "",
+                }
+            )
+        items.append(
+            {
+                "id": item.get("id") or "",
+                "question": item.get("question") or "",
+                "kind": item.get("kind") or "general",
+                "char_limit": item.get("char_limit"),
+                "final": item.get("final") or "",
+                "history": history,
+            }
+        )
+    data["_application_answers"] = {
+        "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "items": items,
+    }
+    with atomic_write(jd_path, encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    _sync_jd_to_db(jd_path, data)
+
+
+def read_application_answers(jd_path: str) -> dict | None:
+    """Read the persisted application-answer transcript, if present."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data.get("_application_answers")
+
+
 def save_research(jd_path: str, research: dict) -> None:
     """Persists a company research result into the JD's own JSON file under
     an _research key, so the dashboard or picker can display it without

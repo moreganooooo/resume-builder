@@ -95,7 +95,21 @@ def sync_back(path: str, job_id: str, profile: Optional[str] = None) -> None:
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return
     data["id"] = job_id
+    existing = lookup_job(job_id, profile)
     jd_manager._sync_jd_to_db(path, data, profile=profile)
+    # A temporary database-backed JD has no directory-derived status. Saving
+    # answer metadata must not turn an applied/interview/archived row into
+    # pending merely because the materialized path lives in /tmp.
+    if existing and existing.get("status") not in (None, "", "pending"):
+        conn = db.get_db(profile)
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE jobs SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (existing["status"], job_id),
+                )
+        finally:
+            conn.close()
 
 
 @contextlib.contextmanager

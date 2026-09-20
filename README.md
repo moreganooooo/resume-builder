@@ -14,6 +14,23 @@ This system **scans** real postings, **verifies** they're still active, **scores
 
 Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Terminal User Interface (TUI) on both your **Desktop computer** and **Android Linux Mobile (Google Pixel 10)**.
 
+## Application answer chat
+
+From Browse & Manage Jobs or Pipeline, select a role and press `a` to open
+Application Answers. The chat drafts grounded answers using the job, evaluation,
+company research, verified experience, and writing voice, then saves the
+conversation back to that job. Sensitive EEO questions are never answered by
+the model. Use `resume dashboard -view answers -job <path-or-id>` to open the
+screen directly, or choose **Build Documents → One Role → Application Answers**
+from the menu.
+
+The command-line protocol is also available:
+
+```bash
+printf '%s' '{"job":"<path-or-id>","question":"Why do you want this role?"}' \
+  | .venv/bin/python scripts/application_answers.py turn
+```
+
 ---
 
 ```

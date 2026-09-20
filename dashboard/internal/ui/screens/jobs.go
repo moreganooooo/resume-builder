@@ -1416,7 +1416,11 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 				m.statusPicker = true
 				m.statusCursor = 0
 			}
-		case "a", "x":
+		case "a":
+			if job, ok := m.CurrentJob(); ok {
+				return m, func() tea.Msg { return OpenAnswersMsg{Job: job} }
+			}
+		case "x":
 			if _, ok := m.CurrentJob(); ok {
 				m.showConfirm = true
 			}
@@ -1508,7 +1512,8 @@ var jobsHelpCategories = []helpCategory{
 		{"M", "Compute Skills Gap Matrix for pending jobs missing one (bulk, capped)"},
 		{"t", "Tailor (or re-tailor) resume for this job"},
 		{"u", "Change application status"},
-		{"a", "Archive this job (removes from all filters)"},
+		{"a", "Open application answers chat"},
+		{"x", "Archive this job (removes from all filters)"},
 	}},
 	{"Filters", []helpBinding{
 		{"f", "Cycle filters: All / Pending / Completed / High Fit / Good Fit"},

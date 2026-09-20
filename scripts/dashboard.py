@@ -115,7 +115,7 @@ def compile_dashboard_if_needed() -> str:
         return None
 
 
-def run(profile: str = None) -> tuple[bool, str]:
+def run(profile: str = None, view: str = "", job: str = "") -> tuple[bool, str]:
     """Launches the dashboard TUI against `profile`'s applications.md,
     full-screen and interactive -- inherits this process's stdio (unlike
     every other subprocess call in this codebase, which captures output)
@@ -212,6 +212,10 @@ def run(profile: str = None) -> tuple[bool, str]:
                 "-backlog",
                 str(backlog),
             ]
+        if view:
+            cmd.extend(["-view", view])
+        if job:
+            cmd.extend(["-job", job])
         # interactive_subprocess.run(), not subprocess.run() directly:
         # this is the long-running TUI itself -- two of these were found
         # orphaned and still running hours after their parent was gone.

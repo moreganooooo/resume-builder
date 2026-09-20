@@ -914,6 +914,13 @@ candidate:
   portfolio_url: "{portfolio_url}"
   extra_link: "{extra_link}"
 
+# Optional, deterministic answers for sensitive application questions. Leave
+# these blank to require the candidate to answer work-authorization questions
+# manually rather than guessing.
+application_answers:
+  work_authorization: null
+  requires_sponsorship: null
+
 target_roles:
   primary:
 {primary_roles_yaml}
