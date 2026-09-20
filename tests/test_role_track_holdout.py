@@ -40,7 +40,7 @@ class TestDescriptionExtraction(unittest.TestCase):
         self.assertEqual(holdout._description_of("{not json"), "")
 
     def test_tags_become_spaces_so_phrases_stay_matchable(self):
-        """Welding list items together would break \\b-anchored matching."""
+        r"""Welding list items together would break \b-anchored matching."""
         body = holdout._strip_html("<li>direct reports</li><li>Manage a team</li>")
         self.assertNotIn("reportsManage", body)
         self.assertTrue(holdout.REPORTS_EVIDENCE.search(body))
