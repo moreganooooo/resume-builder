@@ -84,7 +84,7 @@ def frame_of(rows):
     """A minimal stand-in for the DataFrame JobSpy returns."""
     frame = MagicMock()
     frame.__len__.return_value = len(rows)
-    frame.iterrows.return_value = [(i, row) for i, row in enumerate(rows)]
+    frame.iterrows.return_value = list(enumerate(rows))
     return frame
 
 

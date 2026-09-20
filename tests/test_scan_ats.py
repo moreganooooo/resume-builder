@@ -530,7 +530,7 @@ class TestConcurrentCompanyFetching(unittest.TestCase):
         self._persona_sandbox.__enter__()
         self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
 
-    """The company loop runs in a thread pool; the sweep loop must not."""
+    # The company loop runs in a thread pool; the sweep loop must not.
 
     @patch("scan_boards._fetch_posting_text", return_value="")
     @patch("scan_ats._load_search_queries", return_value=[])

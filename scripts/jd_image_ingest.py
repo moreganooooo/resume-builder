@@ -94,9 +94,13 @@ def _unwrap_image_pdf(file_bytes: bytes) -> tuple[bytes, str] | None:
         from pypdf import PdfReader
 
         pages = PdfReader(io.BytesIO(file_bytes)).pages
-        if len(pages) != 1 or len((pages[0].extract_text() or "").strip()) > 50:
+        if (
+            len(pages) != 1
+            or len((pages[0].extract_text() or "").strip())
+            > 50  # pylint: disable=no-member
+        ):
             return None
-        images = list(pages[0].images)
+        images = list(pages[0].images)  # pylint: disable=no-member
         if len(images) != 1:
             return None
         buf = io.BytesIO()

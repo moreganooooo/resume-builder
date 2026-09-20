@@ -15,9 +15,12 @@ class TestKeepCleanBulletEdits(unittest.TestCase):
     def test_keeps_clean_edits_and_reverts_the_violating_one(self):
         original = _resume("long one", "long two", "long three")
         edited = _resume("short one", "BAD two", "short three")
-        check = lambda data: [
-            b for b in data["EXPERIENCE"][0]["achievements"] if b.startswith("BAD")
-        ]
+
+        def check(data):
+            return [
+                b for b in data["EXPERIENCE"][0]["achievements"] if b.startswith("BAD")
+            ]
+
         result = orchestrator._keep_clean_bullet_edits(original, edited, check)
         self.assertEqual(
             result["EXPERIENCE"][0]["achievements"],
