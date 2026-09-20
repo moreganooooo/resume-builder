@@ -442,7 +442,7 @@ func generateJobsExport(pythonPath, projectRoot string) (string, error) {
 	cmd.Dir = projectRoot
 
 	if out, err := cmd.CombinedOutput(); err != nil {
-		os.Remove(path)
+		_ = os.Remove(path)
 		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return path, nil

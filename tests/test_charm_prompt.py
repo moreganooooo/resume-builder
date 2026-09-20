@@ -494,6 +494,8 @@ class TestRealBinaryOverAPty(unittest.TestCase):
     raw mode is settable), which is exactly the distinction both bugs
     hinged on."""
 
+    bin_path: str
+
     @classmethod
     def setUpClass(cls):
         if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):

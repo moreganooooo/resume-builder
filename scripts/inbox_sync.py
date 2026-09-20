@@ -791,7 +791,9 @@ def gmail_search(conn: imaplib.IMAP4_SSL, query: str) -> List[bytes]:
     as an IMAP literal rather than as a plain argument -- passing it
     directly fails with "Could not parse command".
     """
-    conn.literal = query.encode("utf-8")
+    # imaplib accepts bytes here at runtime (that is the whole point of the
+    # literal); typeshed types the attribute too narrowly.
+    conn.literal = query.encode("utf-8")  # type: ignore[assignment]
     status, data = conn.search("UTF-8", "X-GM-RAW")
     if status != "OK" or not data or not data[0]:
         return []
@@ -830,7 +832,9 @@ def scan_sent(
     results = []
     for msg_id in reversed(ids):
         try:
-            status, payload = conn.fetch(msg_id, "(RFC822)")
+            # Ids come back from gmail_search() as bytes, which fetch()
+            # accepts at runtime even though typeshed declares str.
+            status, payload = conn.fetch(msg_id, "(RFC822)")  # type: ignore[arg-type]
         except imaplib.IMAP4.abort:
             raise
         except imaplib.IMAP4.error:

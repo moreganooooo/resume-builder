@@ -61,7 +61,7 @@ PLAYWRIGHT_CACHE_DIR = (
 )
 
 
-def _check(name: str, passed: bool, detail: str, fix: str = "") -> dict:
+def _check(name: str, passed: bool, detail: str | None, fix: str = "") -> dict:
     return {
         "name": name,
         "passed": passed,

@@ -260,7 +260,9 @@ def _fetch_ashby_structured_posting(url: str) -> dict | None:
     }
 
 
-def _normalize_raw_job(raw: dict, provider_id: str, entry_name: str) -> dict:
+def _normalize_raw_job(
+    raw: dict, provider_id: str, entry_name: str | None
+) -> dict | None:
     """Same normalization scan_boards.py's fetch_board_jobs() does
     (title/company cleanup, HTML-entity decoding, title/location
     prefilter, prefer a provider-supplied description over a page

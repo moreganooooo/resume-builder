@@ -285,7 +285,9 @@ def normalize_structured(value, period_hint: str = "") -> dict | None:
             low = high
         if high is None:
             high = low
-        assert high is not None  # One of low/high is guaranteed non-None
+        # One of low/high is guaranteed non-None, and each fills in for the
+        # other above, so by here both are real numbers.
+        assert low is not None and high is not None
         raw_period = ""
         for key in ("interval", "period", "unit", "frequency", "payPeriod"):
             if value.get(key):

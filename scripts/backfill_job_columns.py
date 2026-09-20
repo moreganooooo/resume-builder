@@ -34,6 +34,8 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from typing import Any
+
 import profile_paths  # noqa: E402
 
 PLACEHOLDER_TITLE = "Untitled Role"
@@ -75,7 +77,7 @@ def derive_fixes(row: sqlite3.Row) -> dict:
     if not isinstance(evaluation, dict):
         evaluation = {}
 
-    fixes = {}
+    fixes: dict[str, Any] = {}
 
     if _is_placeholder(row["title"], PLACEHOLDER_TITLE):
         title = data.get("job_title") or data.get("title")
@@ -116,7 +118,11 @@ def backfill(db_path: str, apply_changes: bool) -> dict:
         " recruiter_score, metadata_json, raw_text FROM jobs"
     ).fetchall()
 
-    stats = {"scanned": len(rows), "repaired": 0, "unrecoverable": 0}
+    stats: dict[str, Any] = {
+        "scanned": len(rows),
+        "repaired": 0,
+        "unrecoverable": 0,
+    }
     per_column: dict[str, int] = {}
     updates: list = []
 

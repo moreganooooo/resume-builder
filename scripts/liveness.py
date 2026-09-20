@@ -117,6 +117,38 @@ def _resolve_activity(activity):
 _LIVENESS_TMP_GLOB = "liveness_*_tmp_*.json"
 
 
+_TEST_TMP_DIR: str | None = None
+
+
+def _temp_dir() -> str:
+    """Directory holding a run's temp pair.
+
+    Normally the active profile's own output/. Under unittest with an
+    unisolated profile it is a throwaway directory instead: dozens of
+    tests reach run_liveness_check() with subprocess.Popen mocked, and
+    every one of them wrote its pair into the developer's REAL
+    output/<profile>/ (76 files after a single full-suite run). That
+    residue then failed the three cleanup tests on the NEXT run, since
+    they assert leftover_temp_files() == [] -- a suite that poisons its
+    own next invocation. Same guard and same reasoning as
+    db._is_unisolated_test_write: isolate at the source rather than sweep
+    up afterwards.
+
+    Cached per process, so leftover_temp_files() and _run_temp_paths()
+    always agree on where a run's files are.
+    """
+    global _TEST_TMP_DIR
+    import db
+
+    if db._is_unisolated_test_write():
+        if _TEST_TMP_DIR is None:
+            import tempfile
+
+            _TEST_TMP_DIR = tempfile.mkdtemp(prefix="liveness_test_tmp_")
+        return _TEST_TMP_DIR
+    return profile_paths.output_dir()
+
+
 def leftover_temp_files() -> list:
     """Any liveness temp files still on disk for the active profile.
 
@@ -127,9 +159,7 @@ def leftover_temp_files() -> list:
     """
     import glob
 
-    return sorted(
-        glob.glob(os.path.join(profile_paths.output_dir(), _LIVENESS_TMP_GLOB))
-    )
+    return sorted(glob.glob(os.path.join(_temp_dir(), _LIVENESS_TMP_GLOB)))
 
 
 def _run_temp_paths() -> tuple[str, str]:
@@ -161,7 +191,7 @@ def _run_temp_paths() -> tuple[str, str]:
     its own dead run's file.
     """
     unique = f"{os.getpid()}_{uuid.uuid4().hex[:8]}"
-    out_dir = profile_paths.output_dir()
+    out_dir = _temp_dir()
     return (
         os.path.join(out_dir, f"liveness_input_tmp_{unique}.json"),
         os.path.join(out_dir, f"liveness_output_tmp_{unique}.json"),
@@ -450,6 +480,172 @@ def _styled_jd_label(source_file: str | None, meta: dict | None = None) -> str:
     return os.path.basename(source_file)
 
 
+def _empty_summary(blocked: int = 0, error: bool = False) -> dict:
+    """A summary reporting no verdicts -- every early return's shape.
+
+    `blocked` carries the uncheckable-host count, which is real even when
+    the sweep itself never ran.
+    """
+    summary = {
+        "active": 0,
+        "likely_active": 0,
+        "expired": 0,
+        "blocked": blocked,
+        "uncertain": 0,
+        "moved": 0,
+        "expired_source_paths": [],
+    }
+    if error:
+        summary["error"] = True
+    return summary
+
+
+def _record_uncheckable(uncheckable: list) -> None:
+    """Writes the blocked verdict for hosts we deliberately never visit."""
+    for c in uncheckable:
+        source_file = c.get("source_file")
+        if not source_file:
+            continue
+        if os.path.exists(source_file):
+            jd_manager.save_liveness(source_file, "blocked", _UNCHECKABLE_REASON)
+        else:
+            _save_liveness_to_db(source_file, "blocked", _UNCHECKABLE_REASON)
+    if uncheckable:
+        cli_art.console.print(
+            f"\n  {theme.colorize_icon('skip')}  {len(uncheckable)} posting(s) on "
+            "sites that block automated checks (Indeed) were not visited -- "
+            "they stay in your list.",
+            soft_wrap=True,
+        )
+
+
+def _stream_progress(
+    proc,
+    candidates: list,
+    candidate_by_source: dict,
+    resumed_results: dict,
+    resolved_activity,
+) -> list:
+    """Consumes the child's stderr, reporting and checkpointing as it goes.
+
+    Returns the progress events seen. Every event carries its candidate's
+    verdict, so the run's work is already in hand by the time the final
+    blob is read -- see the recovery path in the caller.
+    """
+    streamed_results: list = []
+    # Persisted as they arrive so an interrupted sweep can resume instead
+    # of re-checking work already done.
+    checkpoint = dict(resumed_results)
+    candidate_meta = {
+        c["source_file"]: {
+            "title": c.get("title") or "",
+            "company": c.get("company") or "",
+        }
+        for c in candidates
+        if c.get("source_file")
+    }
+    assert proc.stderr is not None
+    for line in proc.stderr:
+        stripped = line.rstrip()
+        event = None
+        try:
+            event = json.loads(stripped)
+        except json.JSONDecodeError:
+            pass
+        if not (isinstance(event, dict) and event.get("type") == "progress"):
+            cli_art.print_subprocess_output(f"  {stripped}")
+            continue
+        streamed_results.append(event)
+        source = event.get("source_file")
+        if source and source in candidate_by_source:
+            checkpoint[candidate_by_source[source]["job_key"]] = {
+                "result": event.get("result"),
+                "code": event.get("code"),
+                "reason": event.get("reason"),
+                "source_file": source,
+            }
+            # Batched: a sweep is hundreds of events and the file is
+            # rewritten whole each time. Every 10 bounds a crash to at
+            # most 10 re-checks.
+            if len(checkpoint) % 10 == 0:
+                _save_checkpoint(checkpoint)
+        icon_name = _LIVENESS_ICON_BY_RESULT.get(event.get("result") or "", "warning")
+        message = _styled_jd_label(event.get("source_file"), candidate_meta)
+        resolved_activity.step(icon_name, "Verify", message, preserve_markup=True)
+    return streamed_results
+
+
+def _read_results_blob(output_path: str) -> tuple[list, str]:
+    """Reads the child's final JSON blob. Returns (results, raw text)."""
+    if not os.path.exists(output_path):
+        return [], ""
+    with open(output_path, "r", encoding="utf-8") as f:
+        stdout_data = f.read()
+    try:
+        parsed = json.loads(stdout_data)
+    except json.JSONDecodeError:
+        return [], stdout_data
+    return (parsed if isinstance(parsed, list) else []), stdout_data
+
+
+def _persist_results(results: list) -> tuple[dict, dict]:
+    """Saves every verdict. Returns (counts by outcome, results by outcome)."""
+    counts: dict[str, int] = {}
+    results_by_status: dict[str, list[dict[str, Any]]] = {
+        "active": [],
+        "likely_active": [],
+        "expired": [],
+        "blocked": [],
+        "uncertain": [],
+    }
+    for r in results:
+        outcome = r.get("result", "uncertain")
+        counts[outcome] = counts.get(outcome, 0) + 1
+        results_by_status.setdefault(outcome, []).append(r)
+
+    for r in results:
+        source_file = r.get("source_file")
+        outcome = r.get("result", "uncertain")
+        if source_file and os.path.exists(source_file):
+            jd_manager.save_liveness(source_file, outcome, r.get("reason", ""))
+        elif source_file:
+            # A database-only role: source_file is its job id, not a path.
+            # Round-trip through jd_source so the same save_liveness() call
+            # applies, then the result is synced back into the row.
+            _save_liveness_to_db(source_file, outcome, r.get("reason", ""))
+    return counts, results_by_status
+
+
+def _move_expired(expired_results: list) -> tuple[int, list]:
+    """Retires every expired posting. Returns (moved count, pre-move paths).
+
+    The paths are each file's PRE-move location, which is the identity
+    scan.py looks an entry back up by (B42).
+    """
+    moved = 0
+    expired_source_paths = []
+    for r in expired_results:
+        source_file = r.get("source_file")
+        if source_file and os.path.exists(source_file):
+            # Was a bare shutil.move to a fixed destination path, which
+            # silently overwrote any JD already in expired/ under the same
+            # basename -- two postings sharing a company+title (ordinary
+            # when the same role is found via two sources) destroyed one of
+            # them, along with its evaluation and application history, with
+            # no error. move_jd_to() suffixes on collision instead.
+            jd_manager.move_jd_to(source_file, jd_manager.EXPIRED_DIR)
+            moved += 1
+            expired_source_paths.append(source_file)
+        elif source_file:
+            # Nothing to move -- expiring a database-only role is a status
+            # change, not a file operation.
+            import jd_source
+
+            jd_source.set_status(source_file, "expired")
+            moved += 1
+    return moved, expired_source_paths
+
+
 def _verify_candidates(candidates: list, activity=None) -> dict:
     """Given exactly these {job_key, source_file, url} candidates, runs
     check-liveness.mjs, persists each result via jd_manager.save_liveness(),
@@ -474,32 +670,10 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
     # gatherers because this is the single chokepoint both the standalone
     # sweep and scan.py's post-scan verify pass go through.
     candidates, uncheckable = _split_uncheckable(candidates)
-    for c in uncheckable:
-        source_file = c.get("source_file")
-        if not source_file:
-            continue
-        if os.path.exists(source_file):
-            jd_manager.save_liveness(source_file, "blocked", _UNCHECKABLE_REASON)
-        else:
-            _save_liveness_to_db(source_file, "blocked", _UNCHECKABLE_REASON)
-    if uncheckable:
-        cli_art.console.print(
-            f"\n  {theme.colorize_icon('skip')}  {len(uncheckable)} posting(s) on "
-            "sites that block automated checks (Indeed) were not visited -- "
-            "they stay in your list.",
-            soft_wrap=True,
-        )
+    _record_uncheckable(uncheckable)
 
     if not candidates:
-        return {
-            "active": 0,
-            "likely_active": 0,
-            "expired": 0,
-            "blocked": len(uncheckable),
-            "uncertain": 0,
-            "moved": 0,
-            "expired_source_paths": [],
-        }
+        return _empty_summary(blocked=len(uncheckable))
 
     # Resume an interrupted sweep. A full run is 30-50 minutes of real
     # browser work, which is long enough that a Ctrl-C, a closed lid, or
@@ -567,71 +741,22 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                 # final blob is read. Kept so an unparseable blob costs
                 # the formatting, not the results -- see the fallback
                 # below.
-                streamed_results = []
-                # Persisted as they arrive so an interrupted sweep can
-                # resume instead of re-checking work already done.
-                checkpoint = dict(resumed_results)
-                candidate_meta = {
-                    c["source_file"]: {
-                        "title": c.get("title") or "",
-                        "company": c.get("company") or "",
-                    }
-                    for c in candidates
-                    if c.get("source_file")
-                }
                 with _resolve_activity(activity) as resolved_activity:
                     resolved_activity.start_source(len(candidates), label="Checking")
-                    assert proc.stderr is not None
-                    for line in proc.stderr:
-                        stripped = line.rstrip()
-                        event = None
-                        try:
-                            event = json.loads(stripped)
-                        except json.JSONDecodeError:
-                            pass
-                        if isinstance(event, dict) and event.get("type") == "progress":
-                            streamed_results.append(event)
-                            source = event.get("source_file")
-                            if source and source in candidate_by_source:
-                                checkpoint[candidate_by_source[source]["job_key"]] = {
-                                    "result": event.get("result"),
-                                    "code": event.get("code"),
-                                    "reason": event.get("reason"),
-                                    "source_file": source,
-                                }
-                                # Batched: a sweep is hundreds of events
-                                # and the file is rewritten whole each
-                                # time. Every 10 bounds a crash to at
-                                # most 10 re-checks.
-                                if len(checkpoint) % 10 == 0:
-                                    _save_checkpoint(checkpoint)
-                            icon_name = _LIVENESS_ICON_BY_RESULT.get(
-                                event.get("result"), "warning"
-                            )
-                            message = _styled_jd_label(
-                                event.get("source_file"), candidate_meta
-                            )
-                            resolved_activity.step(
-                                icon_name, "Verify", message, preserve_markup=True
-                            )
-                        else:
-                            cli_art.print_subprocess_output(f"  {stripped}")
+                    streamed_results = _stream_progress(
+                        proc,
+                        candidates,
+                        candidate_by_source,
+                        resumed_results,
+                        resolved_activity,
+                    )
                 proc.wait(timeout=timeout_s)
             except subprocess.TimeoutExpired:
                 cli_art.console.print(
                     f"\n  {theme.colorize_icon('warning')}  Liveness check timed out after {timeout_s}s.",
                     soft_wrap=True,
                 )
-                return {
-                    "active": 0,
-                    "likely_active": 0,
-                    "expired": 0,
-                    "blocked": 0,
-                    "uncertain": 0,
-                    "moved": 0,
-                    "expired_source_paths": [],
-                    "error": True,
-                }
+                return _empty_summary(error=True)
             finally:
                 if proc.poll() is None:
                     try:
@@ -647,17 +772,7 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                         pass
                 proc.wait()
 
-        results = []
-        stdout_data = ""
-        if os.path.exists(output_path):
-            with open(output_path, "r", encoding="utf-8") as f:
-                stdout_data = f.read()
-            try:
-                parsed = json.loads(stdout_data)
-                if isinstance(parsed, list):
-                    results = parsed
-            except json.JSONDecodeError:
-                results = []
+        results, stdout_data = _read_results_blob(output_path)
 
         if not results:
             # The child prints one final JSON blob after the browser
@@ -683,31 +798,13 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                     f"\n  {theme.colorize_icon('warning')}  Liveness check failed (exit code {proc.returncode}).",
                     soft_wrap=True,
                 )
-                return {
-                    "active": 0,
-                    "likely_active": 0,
-                    "expired": 0,
-                    "blocked": len(uncheckable),
-                    "uncertain": 0,
-                    "moved": 0,
-                    "expired_source_paths": [],
-                    "error": True,
-                }
+                return _empty_summary(blocked=len(uncheckable), error=True)
             else:
                 cli_art.console.print(
                     f"\n  {theme.colorize_icon('warning')}  Liveness check produced unparseable output:\n{stdout_data[:500]}",
                     soft_wrap=True,
                 )
-                return {
-                    "active": 0,
-                    "likely_active": 0,
-                    "expired": 0,
-                    "blocked": len(uncheckable),
-                    "uncertain": 0,
-                    "moved": 0,
-                    "expired_source_paths": [],
-                    "error": True,
-                }
+                return _empty_summary(blocked=len(uncheckable), error=True)
         elif proc.returncode != 0:
             cli_art.console.print(
                 f"\n  {theme.colorize_icon('warning')}  Liveness check exited with code {proc.returncode}, but successfully parsed {len(results)} result(s).",
@@ -737,56 +834,9 @@ def _verify_candidates(candidates: list, activity=None) -> dict:
                 }
             )
 
-    counts: dict[str, int] = {}
-    moved = 0
     os.makedirs(jd_manager.EXPIRED_DIR, exist_ok=True)
-
-    # Group results by outcome for better visual organization
-    results_by_status: dict[str, list[dict[str, Any]]] = {
-        "active": [],
-        "likely_active": [],
-        "expired": [],
-        "blocked": [],
-        "uncertain": [],
-    }
-    for r in results:
-        outcome = r.get("result", "uncertain")
-        counts[outcome] = counts.get(outcome, 0) + 1
-        results_by_status.setdefault(outcome, []).append(r)
-
-    # Save liveness status for all results
-    for r in results:
-        source_file = r.get("source_file")
-        outcome = r.get("result", "uncertain")
-        if source_file and os.path.exists(source_file):
-            jd_manager.save_liveness(source_file, outcome, r.get("reason", ""))
-        elif source_file:
-            # A database-only role: source_file is its job id, not a path.
-            # Round-trip through jd_source so the same save_liveness() call
-            # applies, then the result is synced back into the row.
-            _save_liveness_to_db(source_file, outcome, r.get("reason", ""))
-
-    # Move expired JDs to expired/ folder
-    expired_source_paths = []
-    for r in results_by_status.get("expired", []):
-        source_file = r.get("source_file")
-        if source_file and os.path.exists(source_file):
-            # Was a bare shutil.move to a fixed destination path, which
-            # silently overwrote any JD already in expired/ under the same
-            # basename -- two postings sharing a company+title (ordinary
-            # when the same role is found via two sources) destroyed one of
-            # them, along with its evaluation and application history, with
-            # no error. move_jd_to() suffixes on collision instead.
-            jd_manager.move_jd_to(source_file, jd_manager.EXPIRED_DIR)
-            moved += 1
-            expired_source_paths.append(source_file)
-        elif source_file:
-            # Nothing to move -- expiring a database-only role is a status
-            # change, not a file operation.
-            import jd_source
-
-            jd_source.set_status(source_file, "expired")
-            moved += 1
+    counts, results_by_status = _persist_results(results)
+    moved, expired_source_paths = _move_expired(results_by_status.get("expired", []))
 
     # Every verdict is now persisted via save_liveness(), so the
     # checkpoint has done its job. Cleared only on this path -- an early

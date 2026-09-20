@@ -73,14 +73,15 @@ func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		// Button, not Y (always >= 0, the screen row -- not a delta),
 		// determines wheel direction. See jobs.go's identical fix.
-		if msg.Button == tea.MouseWheelUp {
+		switch msg.Button {
+		case tea.MouseWheelUp:
 			if m.scrollOffset > 0 {
 				m.scrollOffset -= 2
 				if m.scrollOffset < 0 {
 					m.scrollOffset = 0
 				}
 			}
-		} else if msg.Button == tea.MouseWheelDown {
+		case tea.MouseWheelDown:
 			m.scrollOffset += 2
 			m.clampScrollOffset()
 		}
@@ -553,11 +554,7 @@ func (m ProgressModel) renderHeatmap() string {
 	}
 
 	curr := startDate
-	for {
-		if curr.After(endDate) {
-			break
-		}
-
+	for !curr.After(endDate) {
 		d := curr.Format("2006-01-02")
 		count := m.metrics.DailyActivity[d]
 

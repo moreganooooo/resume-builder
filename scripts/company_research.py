@@ -297,7 +297,7 @@ _LEGAL_WORDS = {
 }
 
 
-def _normalized_words(text: str) -> str:
+def _normalized_words(text: str | None) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).split())
 
 
@@ -582,7 +582,11 @@ def apply_vocabulary_substitutions(text: str, substitutions: list) -> str:
         left = r"\b" if _is_word_char(generic[0]) else r"(?<!\w)"
         right = r"\b" if _is_word_char(generic[-1]) else r"(?!\w)"
         pattern = re.compile(rf"{left}{re.escape(generic)}{right}", re.IGNORECASE)
-        text = pattern.sub(lambda m, p=preferred: _match_case(m.group(0), p), text)
+
+        def _substitute(match: re.Match, replacement: str = preferred) -> str:
+            return _match_case(match.group(0), replacement)
+
+        text = pattern.sub(_substitute, text)
 
     return text
 

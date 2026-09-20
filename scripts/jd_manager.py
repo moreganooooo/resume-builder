@@ -1231,7 +1231,7 @@ def _read_dedup_fields(path: str) -> tuple:
     return None, None, None
 
 
-def _normalize_for_match(text: str) -> str:
+def _normalize_for_match(text: str | None) -> str:
     """Lowercase, alphanumeric-only normalization for comparing values
     that may differ cosmetically (case, punctuation, whitespace) but
     represent the same real thing -- e.g. a job title scraped from two

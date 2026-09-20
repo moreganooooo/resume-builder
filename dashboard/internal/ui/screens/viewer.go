@@ -190,12 +190,13 @@ func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		// Button, not Y (always >= 0, the screen row -- not a delta),
 		// determines wheel direction. See jobs.go's identical fix.
-		if msg.Button == tea.MouseWheelUp {
+		switch msg.Button {
+		case tea.MouseWheelUp:
 			m.scrollOffset -= 3
 			if m.scrollOffset < 0 {
 				m.scrollOffset = 0
 			}
-		} else if msg.Button == tea.MouseWheelDown {
+		case tea.MouseWheelDown:
 			maxScroll := len(m.renderedLines) - m.bodyHeight()
 			if maxScroll < 0 {
 				maxScroll = 0

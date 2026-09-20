@@ -56,14 +56,18 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 			cleanUp()
 			return fmt.Errorf("rename failed (%v) and fallback open failed: %w", err, srcErr)
 		}
-		defer src.Close()
+		// Read side of a best-effort fallback copy: a close error here
+		// tells us nothing the copy itself did not already report.
+		defer func() { _ = src.Close() }()
 
 		dst, dstErr := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 		if dstErr != nil {
 			cleanUp()
 			return fmt.Errorf("rename failed (%v) and fallback dst open failed: %w", err, dstErr)
 		}
-		defer dst.Close()
+		// dst is explicitly Sync()'d below, so the data is already on disk
+		// by the time this runs.
+		defer func() { _ = dst.Close() }()
 
 		if _, copyErr := io.Copy(dst, src); copyErr != nil {
 			cleanUp()

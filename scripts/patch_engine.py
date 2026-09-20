@@ -38,6 +38,139 @@ def parse_json_pointer(pointer: str) -> List[Union[str, int]]:
     return tokens
 
 
+def _navigate_to_parent(doc: Any, tokens: List[Union[str, int]], path: str) -> Any:
+    """Walks every token but the last, returning the container to operate on."""
+    curr = doc
+    for token in tokens[:-1]:
+        if isinstance(curr, list):
+            if not isinstance(token, int) or token < 0 or token >= len(curr):
+                raise JsonPatchError(
+                    f"Array index out of bounds at token '{token}' in path '{path}'"
+                )
+            curr = curr[token]
+        elif isinstance(curr, dict):
+            if token not in curr:
+                raise JsonPatchError(f"Key '{token}' not found in path '{path}'")
+            curr = curr[token]
+        else:
+            raise JsonPatchError(
+                f"Cannot navigate into primitive at token '{token}' in path '{path}'"
+            )
+    return curr
+
+
+def _checked_index(
+    target: List[Any], token: Union[str, int], message: str, *, allow_end: bool = False
+) -> int:
+    """Validates a list index token, raising JsonPatchError with `message`.
+
+    `allow_end` permits len(target) itself, which RFC 6902 'add' uses to mean
+    "append" -- every other op needs an index that already exists.
+    """
+    limit = len(target) if allow_end else len(target) - 1
+    if not isinstance(token, int) or token < 0 or token > limit:
+        raise JsonPatchError(message)
+    return token
+
+
+def _op_replace(
+    curr: Any, last_token: Union[str, int], operation: Dict[str, Any], path: str
+) -> None:
+    value = operation.get("value")
+    if isinstance(curr, list):
+        idx = _checked_index(
+            curr,
+            last_token,
+            f"Index {last_token} out of bounds for replace in path '{path}'",
+        )
+        curr[idx] = value
+    elif isinstance(curr, dict):
+        if last_token not in curr:
+            raise JsonPatchError(
+                f"Key '{last_token}' not in dict for replace in path '{path}'"
+            )
+        curr[last_token] = value
+    else:
+        raise JsonPatchError(
+            f"Cannot replace on non-collection target at path '{path}'"
+        )
+
+
+def _op_add(
+    curr: Any, last_token: Union[str, int], operation: Dict[str, Any], path: str
+) -> None:
+    value = operation.get("value")
+    if isinstance(curr, list):
+        if last_token == "-":
+            curr.append(value)
+            return
+        if not isinstance(last_token, int):
+            raise JsonPatchError(f"Invalid list index '{last_token}' in add operation")
+        idx = _checked_index(
+            curr,
+            last_token,
+            f"Index {last_token} out of bounds for add in path '{path}'",
+            allow_end=True,
+        )
+        curr.insert(idx, value)
+    elif isinstance(curr, dict):
+        curr[str(last_token)] = value
+    else:
+        raise JsonPatchError(f"Cannot add on non-collection target at path '{path}'")
+
+
+def _op_remove(
+    curr: Any, last_token: Union[str, int], operation: Dict[str, Any], path: str
+) -> None:
+    del operation  # remove carries no value
+    if isinstance(curr, list):
+        idx = _checked_index(
+            curr,
+            last_token,
+            f"Index {last_token} out of bounds for remove in path '{path}'",
+        )
+        del curr[idx]
+    elif isinstance(curr, dict):
+        if last_token not in curr:
+            raise JsonPatchError(
+                f"Key '{last_token}' not found for remove in path '{path}'"
+            )
+        del curr[last_token]
+    else:
+        raise JsonPatchError(
+            f"Cannot remove from non-collection target at path '{path}'"
+        )
+
+
+def _op_test(
+    curr: Any, last_token: Union[str, int], operation: Dict[str, Any], path: str
+) -> None:
+    del path  # the failure messages here name the token, not the pointer
+    expected_value = operation.get("value")
+    actual_value = None
+    if isinstance(curr, list):
+        idx = _checked_index(
+            curr, last_token, f"Test failed: index {last_token} out of bounds"
+        )
+        actual_value = curr[idx]
+    elif isinstance(curr, dict):
+        if last_token not in curr:
+            raise JsonPatchError(f"Test failed: key '{last_token}' not found")
+        actual_value = curr[last_token]
+    if actual_value != expected_value:
+        raise JsonPatchError(
+            f"Test operation failed: expected {expected_value}, got {actual_value}"
+        )
+
+
+_OPERATIONS = {
+    "replace": _op_replace,
+    "add": _op_add,
+    "remove": _op_remove,
+    "test": _op_test,
+}
+
+
 def apply_operation(doc: Any, operation: Dict[str, Any]) -> Any:
     """
     Applies a single RFC 6902 operation (replace, add, remove, test) to the document.
@@ -56,116 +189,11 @@ def apply_operation(doc: Any, operation: Dict[str, Any]) -> Any:
             return operation.get("value")
         raise JsonPatchError("Root path modification not supported for op: " + str(op))
 
-    # Navigate to parent
-    curr = doc
-    for i, token in enumerate(tokens[:-1]):
-        if isinstance(curr, list):
-            if not isinstance(token, int) or token < 0 or token >= len(curr):
-                raise JsonPatchError(
-                    f"Array index out of bounds at token '{token}' in path '{path}'"
-                )
-            curr = curr[token]
-        elif isinstance(curr, dict):
-            if token not in curr:
-                raise JsonPatchError(f"Key '{token}' not found in path '{path}'")
-            curr = curr[token]
-        else:
-            raise JsonPatchError(
-                f"Cannot navigate into primitive at token '{token}' in path '{path}'"
-            )
-
-    last_token = tokens[-1]
-
-    if op == "replace":
-        value = operation.get("value")
-        if isinstance(curr, list):
-            if (
-                not isinstance(last_token, int)
-                or last_token < 0
-                or last_token >= len(curr)
-            ):
-                raise JsonPatchError(
-                    f"Index {last_token} out of bounds for replace in path '{path}'"
-                )
-            curr[last_token] = value
-        elif isinstance(curr, dict):
-            if last_token not in curr:
-                raise JsonPatchError(
-                    f"Key '{last_token}' not in dict for replace in path '{path}'"
-                )
-            curr[last_token] = value
-        else:
-            raise JsonPatchError(
-                f"Cannot replace on non-collection target at path '{path}'"
-            )
-
-    elif op == "add":
-        value = operation.get("value")
-        if isinstance(curr, list):
-            if last_token == "-":
-                curr.append(value)
-            elif isinstance(last_token, int):
-                if last_token < 0 or last_token > len(curr):
-                    raise JsonPatchError(
-                        f"Index {last_token} out of bounds for add in path '{path}'"
-                    )
-                curr.insert(last_token, value)
-            else:
-                raise JsonPatchError(
-                    f"Invalid list index '{last_token}' in add operation"
-                )
-        elif isinstance(curr, dict):
-            curr[str(last_token)] = value
-        else:
-            raise JsonPatchError(
-                f"Cannot add on non-collection target at path '{path}'"
-            )
-
-    elif op == "remove":
-        if isinstance(curr, list):
-            if (
-                not isinstance(last_token, int)
-                or last_token < 0
-                or last_token >= len(curr)
-            ):
-                raise JsonPatchError(
-                    f"Index {last_token} out of bounds for remove in path '{path}'"
-                )
-            del curr[last_token]
-        elif isinstance(curr, dict):
-            if last_token not in curr:
-                raise JsonPatchError(
-                    f"Key '{last_token}' not found for remove in path '{path}'"
-                )
-            del curr[last_token]
-        else:
-            raise JsonPatchError(
-                f"Cannot remove from non-collection target at path '{path}'"
-            )
-
-    elif op == "test":
-        expected_value = operation.get("value")
-        actual_value = None
-        if isinstance(curr, list):
-            if (
-                not isinstance(last_token, int)
-                or last_token < 0
-                or last_token >= len(curr)
-            ):
-                raise JsonPatchError(f"Test failed: index {last_token} out of bounds")
-            actual_value = curr[last_token]
-        elif isinstance(curr, dict):
-            if last_token not in curr:
-                raise JsonPatchError(f"Test failed: key '{last_token}' not found")
-            actual_value = curr[last_token]
-        if actual_value != expected_value:
-            raise JsonPatchError(
-                f"Test operation failed: expected {expected_value}, got {actual_value}"
-            )
-
-    else:
+    handler = _OPERATIONS.get(op)
+    if handler is None:
         raise JsonPatchError(f"Unsupported operation '{op}'")
 
+    handler(_navigate_to_parent(doc, tokens, path), tokens[-1], operation, path)
     return doc
 
 

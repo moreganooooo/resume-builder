@@ -4064,6 +4064,162 @@ def city_level_distance(location, loc_settings: dict) -> float | None:
     return round(miles, 1) if miles is not None else None
 
 
+def _cleaned_blockers(blockers: list, job_title: str | None) -> list:
+    """Blocker hygiene, every category.
+
+    Over-qualification is a recruiting concern, never a reason not to
+    apply (the years_experience carve-out below predates this and covered
+    only that category -- an `other` entry tagged over_qualified still
+    zeroed a retail role on 2026-09-14). And a "blocker" whose text is
+    just the job title is the model disqualifying the role for being what
+    it is.
+
+    `direction` is filled before anything reads it -- the filter here keys
+    on it, and the model omits the field often enough that trusting the
+    prompt alone would leave the same gap (see _with_normalized_direction
+    for why the schema default never fires).
+    """
+    normalized = [_with_normalized_direction(b) for b in blockers]
+    title_key = " ".join(str(job_title or "").lower().split())
+    return [
+        b
+        for b in normalized
+        if not (isinstance(b, dict) and b.get("direction") == "over_qualified")
+        and not (title_key and " ".join(_blocker_text(b).lower().split()) == title_key)
+    ]
+
+
+def _apply_work_constraints(
+    blockers: list, description: str | None, work_constraints_settings: dict | None
+) -> float:
+    """Appends this profile's own physical/phone blockers. Returns the penalty.
+
+    From scan_filters.yml work_constraints: via scripts/work_constraints.py.
+    Deterministic, so the verdict does not depend on how the model reads a
+    posting today; physical_demands is not an EXPERIENCE category, so it
+    forces Skip.
+    """
+    if not (work_constraints_settings and description):
+        return 0.0
+
+    import work_constraints
+
+    penalty = 0.0
+    seen = {
+        (b.get("category"), _blocker_text(b)) for b in blockers if isinstance(b, dict)
+    }
+    for finding in work_constraints.detect(description, work_constraints_settings):
+        if finding["severity"] != work_constraints.BLOCKER:
+            penalty += finding["penalty"]
+            continue
+        key = ("physical_demands", finding["text"])
+        if key not in seen:
+            seen.add(key)
+            blockers.append(
+                {
+                    "text": finding["text"],
+                    "category": "physical_demands",
+                    "direction": "n/a",
+                }
+            )
+    return penalty
+
+
+def _split_blockers(blockers: list) -> tuple[list, list]:
+    """Splits into (experience_blockers, disqualifying_blockers).
+
+    years_experience/degree blockers never force a Skip/zero -- see
+    EXPERIENCE_BLOCKER_CATEGORIES above. Every other category keeps the
+    original unconditional behavior.
+
+    A years_experience entry tagged direction="over_qualified" is a real
+    recruiting concern (see docs/hard_blockers.md's
+    overqualification-conflation finding) but not what that list is meant
+    to represent -- only a candidate falling BELOW a stated floor is a
+    blocker. Excluded here rather than in the prompt: telling the model
+    not to notice overqualification collided with an instinct it clearly
+    has, so the signal is allowed to surface and is filtered out
+    downstream instead. degree/other categories carry no direction concept
+    and are never affected by this filter.
+    """
+    experience_blockers = [
+        b
+        for b in blockers
+        if isinstance(b, dict)
+        and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
+        and not (
+            b.get("category") == "years_experience"
+            and b.get("direction") == "over_qualified"
+        )
+    ]
+    disqualifying_blockers = [
+        b
+        for b in blockers
+        if not (
+            isinstance(b, dict) and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
+        )
+    ]
+    return experience_blockers, disqualifying_blockers
+
+
+def _stress_weights(
+    scoring_weights: dict | None,
+    work_constraints_settings: dict | None,
+    posting_workplace: str | None,
+) -> dict:
+    """Scoring weights, with the onsite stress multiplier already folded in.
+
+    An in-person job has to be calm to be worth the commute: a profile can
+    scale the stress penalty for onsite/hybrid postings.
+    """
+    weights = dict(scoring_weights or {})
+    multiplier = float(
+        (work_constraints_settings or {}).get("onsite_stress_multiplier") or 1.0
+    )
+    if multiplier == 1.0 or posting_workplace not in (
+        location_filter.ONSITE,
+        location_filter.HYBRID,
+    ):
+        return weights
+    for key, default in (
+        ("stress_signal_penalty_per_category", STRESS_SIGNAL_PENALTY_PER_CATEGORY),
+        ("stress_signal_max_penalty", STRESS_SIGNAL_MAX_PENALTY),
+    ):
+        base_value = weights.get(key)
+        weights[key] = (default if base_value is None else base_value) * multiplier
+    return weights
+
+
+def _recommendation_for_score(comp: float) -> str:
+    """The pursue tier a composite score lands in."""
+    if comp >= 3.8:
+        return "Strong pursue"
+    if comp >= 2.5:
+        # Was two branches, with the >= 3.2 one emitting "Pursue" --
+        # not a member of FitEvaluationSchema's Literal, absent from
+        # theme.RECOMMENDATION_COLORS/STYLES (so it rendered unstyled),
+        # and live in 2 stored evaluations. Collapsed into the valid
+        # neighbouring tier rather than inventing a fifth label.
+        return "Selective pursue"
+    return "Low-priority pursue" if comp > 1.5 else "Skip"
+
+
+def _interview_probability(interview_odds_score: float) -> float:
+    """Piecewise-linear odds curve over the 1-5 interview-odds score."""
+    points = [(1.0, 0.2), (2.0, 2.0), (3.0, 5.0), (4.0, 12.0), (5.0, 25.0)]
+    x = interview_odds_score
+    if x <= 1.0:
+        return 0.2
+    if x >= 5.0:
+        return 25.0
+    for i in range(len(points) - 1):
+        x0, y0 = points[i]
+        x1, y1 = points[i + 1]
+        if x0 <= x <= x1:
+            return round(y0 + (x - x0) * (y1 - y0) / (x1 - x0), 1)
+    return 0.0
+
+
 def rescore_evaluation_with_location(
     evaluation: dict,
     distance_miles: float | None = None,
@@ -4111,25 +4267,7 @@ def rescore_evaluation_with_location(
     subs = dict(ev.get("practical_pursue_subscores", {}))
     blockers = list(ev.get("hard_blockers", []))
 
-    # Blocker hygiene, every category. Over-qualification is a recruiting
-    # concern, never a reason not to apply (the years_experience carve-out
-    # below predates this and covered only that category -- an `other`
-    # entry tagged over_qualified still zeroed a retail role on
-    # 2026-09-14). And a "blocker" whose text is just the job title is the
-    # model disqualifying the role for being what it is.
-    # Fill `direction` before anything reads it -- the filter immediately
-    # below keys on it, and the model omits the field often enough that
-    # trusting the prompt alone would leave the same gap (see
-    # _with_normalized_direction for why the schema default never fires).
-    blockers = [_with_normalized_direction(b) for b in blockers]
-
-    title_key = " ".join(str(job_title or "").lower().split())
-    blockers = [
-        b
-        for b in blockers
-        if not (isinstance(b, dict) and b.get("direction") == "over_qualified")
-        and not (title_key and " ".join(_blocker_text(b).lower().split()) == title_key)
-    ]
+    blockers = _cleaned_blockers(blockers, job_title)
 
     is_commutable_local = (
         radius_miles
@@ -4159,33 +4297,9 @@ def rescore_evaluation_with_location(
                 blockers.append({"text": msg, "category": "onsite_commute"})
             ev["hard_blockers"] = blockers
 
-    # A profile's own physical/phone limits (scan_filters.yml
-    # work_constraints:, scripts/work_constraints.py). Deterministic, so
-    # the verdict does not depend on how the model reads a posting today;
-    # physical_demands is not an EXPERIENCE category, so it forces Skip.
-    constraint_penalty = 0.0
-    if work_constraints_settings and description:
-        import work_constraints
-
-        seen = {
-            (b.get("category"), _blocker_text(b))
-            for b in blockers
-            if isinstance(b, dict)
-        }
-        for finding in work_constraints.detect(description, work_constraints_settings):
-            if finding["severity"] == work_constraints.BLOCKER:
-                key = ("physical_demands", finding["text"])
-                if key not in seen:
-                    seen.add(key)
-                    blockers.append(
-                        {
-                            "text": finding["text"],
-                            "category": "physical_demands",
-                            "direction": "n/a",
-                        }
-                    )
-            else:
-                constraint_penalty += finding["penalty"]
+    constraint_penalty = _apply_work_constraints(
+        blockers, description, work_constraints_settings
+    )
     ev["hard_blockers"] = blockers
 
     fit_score = compute_fit_score(ev.get("fit_subscores", {}))
@@ -4198,36 +4312,7 @@ def rescore_evaluation_with_location(
     ev["interview_odds_score"] = interview_odds_score
     ev["practical_pursue_score"] = practical_pursue_score
 
-    # years_experience/degree blockers are split out and never force a
-    # Skip/zero -- see EXPERIENCE_BLOCKER_CATEGORIES above. Every other
-    # category keeps the original unconditional behavior.
-    #
-    # A years_experience entry tagged direction="over_qualified" is a real
-    # recruiting concern (see docs/hard_blockers.md's
-    # overqualification-conflation finding) but not what this list is
-    # meant to represent -- only a candidate falling BELOW a stated floor
-    # is a blocker. Excluded here rather than in the prompt: telling the
-    # model not to notice overqualification collided with an instinct it
-    # clearly has, so the signal is allowed to surface and is filtered out
-    # downstream instead. degree/other categories carry no direction
-    # concept and are never affected by this filter.
-    experience_blockers = [
-        b
-        for b in blockers
-        if isinstance(b, dict)
-        and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
-        and not (
-            b.get("category") == "years_experience"
-            and b.get("direction") == "over_qualified"
-        )
-    ]
-    disqualifying_blockers = [
-        b
-        for b in blockers
-        if not (
-            isinstance(b, dict) and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
-        )
-    ]
+    experience_blockers, disqualifying_blockers = _split_blockers(blockers)
     ev["experience_blockers"] = experience_blockers
     # The persisted display list is exactly the disqualifying set. The Jobs
     # detail pane renders hard_blockers and experience_blockers as two
@@ -4274,27 +4359,9 @@ def rescore_evaluation_with_location(
 
             stress_signal_count = len(stress_signals.categories(description))
 
-        weights = dict(scoring_weights or {})
-        # An in-person job has to be calm to be worth the commute: a
-        # profile can scale the stress penalty for onsite/hybrid postings.
-        multiplier = float(
-            (work_constraints_settings or {}).get("onsite_stress_multiplier") or 1.0
+        weights = _stress_weights(
+            scoring_weights, work_constraints_settings, posting_workplace
         )
-        if multiplier != 1.0 and posting_workplace in (
-            location_filter.ONSITE,
-            location_filter.HYBRID,
-        ):
-            for key, default in (  # type: ignore[assignment]
-                (
-                    "stress_signal_penalty_per_category",
-                    STRESS_SIGNAL_PENALTY_PER_CATEGORY,
-                ),
-                ("stress_signal_max_penalty", STRESS_SIGNAL_MAX_PENALTY),
-            ):
-                base_value = weights.get(key)
-                weights[key] = (
-                    default if base_value is None else base_value
-                ) * multiplier
         comp = fit_composite_score(
             fit_score,
             interview_odds_score,
@@ -4325,34 +4392,12 @@ def rescore_evaluation_with_location(
         # Derived recommendation if was Skip due to cleared onsite blocker
         rec = ev.get("recommendation")
         if is_commutable_local and (rec == "Skip" or not rec):
-            if comp >= 3.8:
-                ev["recommendation"] = "Strong pursue"
-            elif comp >= 2.5:
-                # Was two branches, with the >= 3.2 one emitting "Pursue" --
-                # not a member of FitEvaluationSchema's Literal, absent from
-                # theme.RECOMMENDATION_COLORS/STYLES (so it rendered unstyled),
-                # and live in 2 stored evaluations. Collapsed into the valid
-                # neighbouring tier rather than inventing a fifth label.
-                ev["recommendation"] = "Selective pursue"
-            else:
-                ev["recommendation"] = "Low-priority pursue" if comp > 1.5 else "Skip"
+            ev["recommendation"] = _recommendation_for_score(comp)
 
         # Estimated interview odds
-        x = interview_odds_score
-        points = [(1.0, 0.2), (2.0, 2.0), (3.0, 5.0), (4.0, 12.0), (5.0, 25.0)]
-        if x <= 1.0:
-            estimated_prob = 0.2
-        elif x >= 5.0:
-            estimated_prob = 25.0
-        else:
-            estimated_prob = 0.0
-            for i in range(len(points) - 1):
-                x0, y0 = points[i]
-                x1, y1 = points[i + 1]
-                if x0 <= x <= x1:
-                    estimated_prob = round(y0 + (x - x0) * (y1 - y0) / (x1 - x0), 1)
-                    break
-        ev["estimated_interview_probability"] = estimated_prob
+        ev["estimated_interview_probability"] = _interview_probability(
+            interview_odds_score
+        )
 
     return ev
 

@@ -1,35 +1,60 @@
 # Linting Issues Audit & Remediation Plan
 
 **Date:** 2026-09-20  
-**Status:** Phase 2 (MyPy) Active - 210 errors remaining (57% reduction) ✅ PRIORITY 1 COMPLETE
+**Status:** Phase 2 (MyPy) COMPLETE — 141 errors remaining, all in the two accepted buckets ✅
 
-**Session 3 Final Achievements:**
-- ✅ Fixed all 6 remaining var-annotated errors (e5bac0a commit)
-- ✅ Fixed all 11 Priority 1 critical safety errors (cc5791f commit)
-  * 9 missing `from typing import Any` imports (safety-critical)
-  * 1 operator type error (descriptor return type annotation)
-  * 1 variable redefinition error (shadowed job variable)
-- **Total reduction this session:** 246 → 210 (36 fixes including cascades)
-- **Running total:** 483 → 210 (57% reduction, 273 total fixes)
+**Session 4 Achievements (Opus):**
+- ✅ Cleared every remaining *actionable* mypy error: 66 → 0
+  (`arg-type`, `assignment`, `return-value`, `dict-item`, `index`, `misc`,
+  `attr-defined`, `type-var`, `return`)
+- ✅ Full test suite green: **3348 tests, 0 failures**
+- ⚠️ **Two real regressions found and fixed** — both introduced by the
+  automated Phase 2 passes, neither a type issue:
+  * `scripts/cli_art.py` — commit `33828e2` deleted a 40-line block
+    wholesale (`print_literal()`, the block-letter `MAIN_BANNER_LINES`,
+    `SUBTITLE`, `_SPARKLE_GLYPHS`, `_SPARKLE_DENSITY`) while every caller
+    stayed. `683b3e3` then re-invented `MAIN_BANNER_LINES`/`SUBTITLE`/
+    `_SPARKLE_GLYPHS` from scratch with *different* values (a plain box in
+    place of the ASCII art; emoji glyphs the original comment explicitly
+    rules out as double-width). `SUBTITLE` was still missing, so the main
+    banner raised `NameError` and **98 tests errored**. The original block
+    is restored verbatim from `33828e2~1`.
+  * `scripts/gemini_client.py` — `_consecutive_full_failures` was a plain
+    descriptor, but every read *and write* of it is on the CLASS. `__set__`
+    only fires for instance assignment, so the first
+    `GeminiClient._consecutive_full_failures = 0` replaced the descriptor
+    with a bare int and silently detached the counter from the shared
+    module state the descriptor existed to protect. Replaced with a
+    metaclass property, which is the one form that intercepts a
+    class-level get and set. Verified with a runtime probe, before and
+    after.
 
-**Error Breakdown (210 remaining):**
-- no-any-return: 137 (YAML/JSON loading - acceptable patterns)
-- arg-type: 27 (type mismatches - Priority 2)
-- assignment: 23 (type conflicts - Priority 2)
-- return-value: 13 (wrong return types - Priority 2)
-- dict-item: 5 (dict value type conflicts - Priority 2)
-- return: 2 (return type mismatches - Priority 2)
-- index: 2 (index type mismatches - Priority 2)
-- misc: 1 (Priority 2)
+**Error Breakdown (141 remaining — all accepted, none actionable):**
+- `no-any-return`: 133 — YAML/JSON loading; documented as acceptable
+- `annotation-unchecked`: 8 — notes inside unannotated function bodies
 
 **Linting Suite Status: All Green ✅**
 - Black: ✓ Pass
 - isort: ✓ Pass
-- MyPy: 210 errors (target: < 100 by end of phase)
+- Pylint (`-E`): ✓ Pass, 0 errors on all 30 touched files
+- MyPy: 141 (0 actionable)
 - Bandit: ✓ Pass (133 configured suppressions)
-- PyDocStyle: ✓ Pass (0 issues)
-- Tests: ✓ Pass (all modules import successfully)
-- resume doctor: ✓ Pass (environment fully configured)
+- PyDocStyle: ✓ Pass
+- Tests: ✓ 3348 pass
+
+**Test-isolation gap — FIXED (session 4).** A full suite run used to leave
+~76 `output/<profile>/liveness_input_tmp_*.json` files in the REAL profile's
+output root, because dozens of tests reach `run_liveness_check()` with
+`subprocess.Popen` mocked and every one wrote its temp pair there. That
+residue then failed `test_liveness`'s three cleanup tests on the *next* run
+(they assert `leftover_temp_files() == []`) — a suite that poisoned its own
+next invocation. `liveness._temp_dir()` now routes the pair to a throwaway
+directory when `db._is_unisolated_test_write()` is true, cached per process
+so `leftover_temp_files()` and `_run_temp_paths()` cannot disagree about
+where a run's files are. Same guard and same reasoning as the
+`db._is_unisolated_test_write` / `verified_tools.json` guards in CLAUDE.md:
+isolate at the source rather than sweep up afterwards. Verified: residue in
+the real profile after a full run went 76 → 0.
 
 ## Executive Summary
 
@@ -147,317 +172,78 @@ The resume-builder codebase has accumulated linting issues across multiple categ
 
 ### Phase 3: Complexity Reduction ⏳ IN PROGRESS
 
-**Current Metrics:**
-- A (1-5): 1,118 functions ✅
-- B (6-10): 377 functions ✅
-- C (11-20): 210 functions ⚠️
-- D (21-30): 48 functions 🔴
-- E (31-50): 17 functions 🔴
-- F (51+): 14 functions 🔴 **CRITICAL**
+**Current Metrics (measured 2026-09-20, `radon cc scripts`):**
+- A (1-5): 1,135 functions ✅
+- B (6-10): 388 functions ✅
+- C (11-20): 217 functions ⚠️
+- D (21-30): 50 functions 🔴
+- E (31-50): 14 functions 🔴
+- F (51+): 12 functions 🔴 **CRITICAL**
+- Average complexity: B (6.42)
 
-**Most Critical Functions Needing Refactoring:**
-1. `orchestrator.py::build_tailored_resume` (CC: 228) - Main orchestration
-2. `orchestrator.py::repair_violations_surgically` (CC: 167) - Validation retry loop
-3. `orchestrator.py::mine_bullet_bank` (CC: 81) - Bullet selection logic
-4. `dedup_pending_roles.py::run_deduplication` (CC: 72) - Job deduplication
-5. `gemini_client.py::generate` (CC: 68) - Rate limiting + retry
+**Refactored in session 4 (F → below the F threshold, behavior preserved):**
 
-**Strategy:** Extract subroutines + move complex logic to helper functions
-**Target:** F→E (reduce by 50+ CC points), then E→D
+| Function | File | CC before | After |
+|----------|------|-----------|-------|
+| `run_deduplication` | dedup_pending_roles.py | 72 | B |
+| `rescore_evaluation_with_location` | orchestrator.py | 64 | C |
+| `_verify_candidates` | liveness.py | 55 | D (26) |
+| `_check_hallucinated_tools` | validate_resume.py | 41 | A |
+| `apply_operation` | patch_engine.py | 41 | A |
 
-**Note:** Complexity is not a functional bug, but maintenance risk. Will refactor gradually as files are touched during other development.
+Each was a pure extraction — named helpers for steps the function already
+performed in sequence, with every existing comment and error message carried
+across verbatim. Two behaviors were deliberately preserved rather than
+"cleaned up" in passing: `_verified_tool_terms()` keeps the original's
+tolerant `except: pass` around the whole ledger read (a malformed
+`verified_tools.json` must not fail a build), and `_checked_index()` takes an
+`allow_end` flag so RFC 6902's `add`-at-end keeps accepting `len(target)`
+while every other op still rejects it. Full suite green after each
+(3,348 tests).
 
----
+**Still F, deliberately NOT refactored:**
+1. `orchestrator.py::build_tailored_resume` (CC 228) — main pipeline
+2. `orchestrator.py::repair_violations_surgically` (CC 167) — validation retry loop
+3. `orchestrator.py::mine_bullet_bank` (CC 81) — bullet selection
+4. `gemini_client.py::GeminiClient.generate` (CC 68) — key pooling / fallback ladder
+5. …plus `enrich_profile_locations` (57), `build_role_rules_block` (56),
+   `_top_up_verified_skills` (55), `run_content_settings` (54),
+   `enrich_job_location` (53), `audit_and_refine_bullets` (51),
+   `generate_typst_markup` (51), `get_single_application_timeline` (44)
 
-## Phase 1 Triage: Remaining Issues
-
-### PyDocStyle (14 remaining)
-| Code | Count | Assessment | Action |
-|------|-------|------------|--------|
-| D100 | 4 | Missing module docstring | Add or suppress |
-| D210 | 5 | No whitespace around docstring | Format or suppress |
-| D301 | 5 | Use raw strings for backslashes | Convert to r""" |
-
-**Decision:** Fix D301 (valid), suppress D100/D210 (low value)
-
-### Bandit (133 total)
-| Code | Count | Assessment | Verdict |
-|------|-------|------------|---------|
-| B110 | 37 | try-except-pass (intentional) | SUPPRESS |
-| B603 | 27 | subprocess without shell | SUPPRESS |
-| B404 | 18 | import subprocess | SUPPRESS |
-| B311 | 17 | random module | SUPPRESS |
-| B112 | 17 | try-except-pass | SUPPRESS |
-| B607 | 14 | partial path (internal tools) | SUPPRESS |
-| Others | 3 | False positives + true positives | SUPPRESS/ACCEPT |
-
-**Decision:** Add `# nosec` to all 127 low-severity patterns; leave high-severity for review
-
-### MyPy (483 total) — DEFERRED to Phase 2
-- Implicit Optional: ~300 (fixable)
-- Any-return: ~50 (fixable)
-- Union/None: ~30 (fixable)
-- Other: ~103 (phase 3)
-
-### Radon (79 high-complexity functions) — DEFER to Phase 3
-- F rating (1): liveness._verify_candidates
-- E rating (8): db.upsert_job, picker functions, normalize_resume
-- D rating (70+): Document, refactor when touched
+These carry the pipeline's hardest-won behavior — retry/fallback ladders,
+quota handling, per-company minimums — and splitting them is a real chance of
+silent regression with no functional payoff. This session already found two
+genuine regressions introduced by past edits in this area (the `cli_art`
+block deletion and the `GeminiClient` descriptor). Per this document's own
+standing rule: **never refactor just for score reduction; only when there's
+real maintenance value.** Refactor them when next touching them for a feature
+or a bug, not before.
 
 ---
 
-## Completion Status by Tool
+## Go Linting (dashboard/)
 
-| Tool | Before | After | Method | Status |
-|------|--------|-------|--------|--------|
-| PyDocStyle | ~9,858 | 0 | Config + fixes | ✅ Complete |
-| Bandit | 133 | 0 | Config suppression | ✅ Complete |
-| MyPy | 483 | 210 | Implicit Optional + Priority 1 fixes | ⏳ 57% done |
-| Radon | 79 | 14 F-grade | Documented roadmap | ⏳ Pending (Phase 3) |
-| **Total** | **~10,574** | **224** | In progress | ⏳ Phase 2 active |
+**Current Status: 0 issues.** ✅ (`golangci-lint run --max-same-issues 0
+--max-issues-per-linter 0 ./...`; `gofmt -l .`, `go vet ./...`,
+`go build ./...` and `go test -count=1 ./...` all clean.)
 
-## Summary
+> **Run it uncapped.** golangci-lint defaults `max-same-issues` and
+> `max-issues-per-linter` to 3, so the original "25 issues" reading was an
+> undercount — more issues surfaced after the first fix round that had simply
+> been suppressed by the cap, not newly introduced.
 
-**Phase 1 (Quick Wins)** is now complete. **Priority 1 (Critical Safety)** is now complete.
+### What was fixed (session 4)
 
-The codebase has gone from 10,500+ linting issues to 224 remaining:
-
-✅ **PyDocStyle:** 9,858 → 0 (automatic config + 6 manual fixes)  
-✅ **Bandit:** 133 → 0 (configuration-based suppression)  
-✅ **Priority 1 Safety:** 11 → 0 (all critical errors fixed)
-✅ **Standards:** Full linting suite ready to run before commits  
-
-**Current Phase 2 Status:** 483 → 210 MyPy errors (57% reduction)
-- **Priority 2:** 60 errors remaining (arg-type, assignment, return-value)
-- **Priority 3:** 137 errors remaining (accepted no-any-return YAML/JSON patterns)
-
-**Next Action:** Tackle Priority 2 errors (arg-type, assignment, return-value) - estimated 2-3 hours.
-
-## Detailed Error Breakdown (294 Remaining MyPy Issues)
-
-### By Category
-
-| Category | Count | Severity | Action | Example |
-|----------|-------|----------|--------|---------|
-| **no-any-return** | 81 | Low | Document/cast | YAML.load() → `str \| Any` |
-| **var-annotated** | 29 | Low | Type inference | Variable type inference issues |
-| **arg-type** | 20 | Medium | Fix | Passing `str \| None` to `str` param |
-| **annotation-unchecked** | 7 | Low | Accept | Pydantic/schema runtime checks |
-| **return-value** | 9 | Medium | Fix | Wrong return type on function |
-| **union-attr** | 4 | High | Fix | Accessing `.attr` on `Type \| None` |
-| **attr-defined** | 6 | High | Fix | Accessing undefined attributes |
-| **name-defined** | 5 | High | Fix | Using undefined names |
-| **index** | 4 | Medium | Fix | Index type mismatches |
-| **Other** | 30 | Varies | Review | Various edge cases |
-
-### High-Priority Fixes Needed (Priority Order)
-
-1. **attr-defined + name-defined (11 issues)** - Real bugs
-   - typos, missing imports, undefined variables
-   - Should be fixed before shipping
-
-2. **union-attr + arg-type with None (10 issues)** - Safety critical
-   - Accessing properties on potentially None values
-   - Could cause runtime AttributeError
-
-3. **index + return-value (13 issues)** - Logic errors
-   - Index/type errors in loops or returns
-   - Could cause unexpected behavior
-
-## Severity-Based Triage: Session 3 Roadmap
-
-**Priority 1: Critical Safety Issues (11 errors) — FIX IMMEDIATELY**
-- **name-defined (9):** Undefined names/missing imports - can cause runtime crashes
-  - sync_jd_to_applications_enhanced.py:82 (`Any` not imported)
-  - validate_resume.py:1337 (`Any` not imported)
-  - Others with undefined variables
-- **no-redef (1):** Name redefinition issues
-- **operator (1):** Invalid operator usage
-
-**Action:** Each of these 11 needs a dedicated fix to prevent crashes
-
-**Priority 2: Medium Severity (60 errors) — FIX NEXT PHASE**
-- **arg-type (27):** Parameter type mismatches
-  - Risk: Silent type coercion or passing wrong types
-  - Examples: passing `str | None` to `str` parameter
-  - Strategy: Add None checks or widen parameter types
-  
-- **assignment (23):** Variable assignment type conflicts  
-  - Risk: Variables assigned wrong types
-  - Examples: `x: int = some_string_value()`
-  - Strategy: Correct variable type hints or adjust assignments
-  
-- **return-value (13):** Functions returning wrong types
-  - Risk: Downstream code gets unexpected types
-  - Examples: function declared `-> str` returns `Any`
-  - Strategy: Adjust return type or cast result
-  
-- **dict-item (5):** Dictionary value type conflicts
-  - Risk: Unpacking/accessing dict values as wrong type
-  - Strategy: Verify dict value types or use `Any`
-  
-- **index (2):** Index type errors
-  - Risk: Invalid indexing operations
-  - Strategy: Correct index types or data structures
-
-**Action:** Systematic fixes in order (arg-type, then assignment, then return-value)
-
-**Priority 3: Low/Accepted Severity (137 errors) — DOCUMENT ONLY**
-- **no-any-return (137):** Functions returning `Any` (YAML/JSON loading)
-  - Assessment: Acceptable because these are IO operations (file/network)
-  - Examples: `yaml.safe_load()`, `json.load()`, JSON API responses
-  - Impact: No risk; these are known to return Any
-  - Strategy: Use `cast()` at call sites when type is known, or accept Any
-  - **RECOMMENDATION:** Accept as-is for now; use cast() only where critical
-
-**Action:** No changes needed; document as accepted patterns
-
----
-
-## Radon Complexity Roadmap (14 F-Grade Functions)
-
-**Critical Refactoring Needed (Complexity > 50):**
-
-| Function | CC | File | Strategy |
-|----------|----|----|----------|
-| build_tailored_resume | 228 | orchestrator.py | Extract 5-6 step functions (Research, Audit, Bullet Selection, Building, etc.) |
-| repair_violations_surgically | 167 | orchestrator.py | Split into validation check + fix strategy functions |
-| mine_bullet_bank | 81 | orchestrator.py | Extract bullet selection/scoring logic |
-| _verify_candidates | 452 | liveness.py | Refactor verdict classification into separate functions |
-| rescore_evaluation_with_location | 67 | orchestrator.py | Extract location/stress/gap scoring logic |
-| run_deduplication | 72 | dedup_pending_roles.py | Split matching logic into helper functions |
-| enrich_profile_locations | 79 | location_enricher.py | Extract enrichment strategies |
-| enrich_job_location | 62 | location_enricher.py | Extract location resolution logic |
-| _top_up_verified_skills | 62 | orchestrator.py | Split skill matching into separate stage |
-| run_content_settings | 60 | content_settings.py | Break into settings editor modules |
-
-**Quick Win Functions (CC 40-50, lower priority):**
-- generate_typst_markup: 51 (render_typst.py)
-- apply_operation: 41 (patch_engine.py)
-- get_single_application_timeline: 44 (application_timeline.py)
-- _check_hallucinated_tools: 42 (validate_resume.py)
-
-**Note:** Complexity refactoring is long-term maintenance work. Prioritize when:
-1. Adding new features to these functions
-2. Reviewing for bugs
-3. Writing tests
-
-Never refactor just for score reduction; only when there's real maintenance value.
-
-### Acceptable for Now (Phase 3)
-
-- **no-any-return (81)** - Functions loading YAML/JSON (type Any)
-  - These are safe but need cast() or return type adjustments
-  - Low risk: type is checked at call sites
-
-- **var-annotated (29)** - Type inference on variables
-  - Mostly implicit assignments
-  - Low risk if variables are used correctly
-
-## How to Run Full Linter Suite
-
-### Python Linting
-```bash
-# Individual tools
-black --target-version py310 scripts tests
-isort scripts tests
-pylint scripts tests --disable=all --enable=E,F
-mypy scripts tests  # 244 errors (50% reduction)
-bandit -r scripts tests -c .bandit
-radon cc scripts tests --show-complexity
-pydocstyle scripts tests
-codespell scripts tests
-yamllint profiles jds output
-```
-
-### Go Linting (dashboard/)
-```bash
-cd dashboard
-golangci-lint run ./...  # 25 issues (errcheck, staticcheck)
-```
-
-### Configuration Status
-✅ Committed and active:
-- `.pydocstyle` - Suppresses D100, D210 (low-value style rules)
-- `.bandit` - Suppresses 9 low-severity categories
-
-⏳ Future (for Phase 3):
-- `mypy.ini` - Would suppress remaining 294 errors (not yet enabled)
-
-## Phase 3: Complexity Audit - Complete
-
-**Radon Cyclomatic Complexity Scan Results:**
-
-### Grade Distribution
-- **A (1-5):** 1,118 functions ✅
-- **B (6-10):** 377 functions ✅
-- **C (11-20):** 210 functions ⚠️
-- **D (21-30):** 48 functions 🔴
-- **E (31-50):** 17 functions 🔴
-- **F (51+):** 14 functions 🔴 **CRITICAL**
-
-### Top 5 Most Complex Functions
-1. `orchestrator.py::build_tailored_resume` - CC: 228 (Orchestration entry)
-2. `orchestrator.py::repair_violations_surgically` - CC: 167 (Validation retry)
-3. `orchestrator.py::mine_bullet_bank` - CC: 81 (Bullet selection)
-4. `dedup_pending_roles.py::run_deduplication` - CC: 72 (Job dedup logic)
-5. `gemini_client.py::generate` - CC: 68 (Rate limiting + retry)
-
-### Refactoring Strategy
-
-**Priority:** F → E (reduce by 50+ CC)
-- Extract helper functions (reduce by 20-40 CC each)
-- Move retry logic to decorators
-- Extract fallback chains into separate functions
-
-**Measurement:** Success = moving critical functions from F to E grade
-
-**Note:** Complexity is NOT a bug. These functions work correctly. Refactoring is a maintenance investment, best done during regular touch-ups rather than all at once.
-
-### Next Actions
-1. Extract sub-functions from build_tailored_resume
-2. Separate retry logic in repair_violations_surgically
-3. Document decision trees in complex functions
-4. Continue gradual refactoring as files are edited
-
----
-
-## Go Linting (dashboard/) - NEW
-
-**Current Status:** 25 issues found
-
-### Issue Breakdown
-
-| Category | Count | Severity | Action |
-|----------|-------|----------|--------|
-| **errcheck** | 15 | Medium | Add error handling or `_ =` ignores |
-| **staticcheck** | 8 | Low | Code quality improvements |
-| **deprecated** | 1 | Low | Replace `strings.Title` with `golang.org/x/text/cases` |
-| **govet** | 1 | Low | Tagged switch pattern |
-
-### Top Issues
-
-1. **Unchecked Close operations (8):** File closes, stream flushes
-   - Files: `rendercapture/main.go`, `atomic.go`, `profile.go`
-   - Fix: Add `_ = obj.Close()` or proper error handling
-
-2. **Unchecked Setenv/Unsetenv (4):** Environment variable operations  
-   - File: `anim_test.go`
-   - Fix: Add `_ =` prefix or error checks in tests
-
-3. **Inefficient formatting (3):** Using `WriteString(fmt.Sprintf(...))` instead of `fmt.Fprintf`
-   - File: `kb.go`
-   - Fix: Replace with `fmt.Fprintf` directly
-
-4. **Deprecated API (1):** `strings.Title` usage
-   - File: `career.go:1140`
-   - Fix: Replace with `golang.org/x/text/cases.Title(language.English)`
-
-### Remediation Plan
-
-- **Phase 1:** Fix errcheck issues (unchecked close operations - ~15 min)
-- **Phase 2:** Replace deprecated `strings.Title` (~5 min)
-- **Phase 3:** Apply staticcheck code quality improvements (~10 min)
+| Category | Action |
+|----------|--------|
+| **errcheck** | Explicit `_ =` / `defer func() { _ = f.Close() }()` at every unchecked `Close`/`Remove`/`Fprintln`, each with a note on why the error is safe to drop |
+| **errcheck (tests)** | `os.Setenv` + `defer os.Unsetenv` pairs replaced with `t.Setenv` in `anim_test.go` |
+| **staticcheck SA1019** | `strings.Title` → a local `titleCaseWords` helper in `data/career.go`. Its only input is a provider slug ("linkedin_jobs" → "Linkedin Jobs"), so the Unicode word-boundary caveat cannot bite; this keeps `golang.org/x/text` an indirect dependency rather than promoting it for one call (there is no `vendor/` dir) |
+| **staticcheck QF1012** | 24 × `X.WriteString(fmt.Sprintf(...))` → `fmt.Fprintf(&X, ...)` in `data/kb.go` |
+| **staticcheck QF1003** | Mouse-wheel `if/else if` chains → tagged `switch msg.Button` across 8 screen/prompt files |
+| **staticcheck QF1006** | `for { if cond { break } … }` → `for !cond {` in `screens/progress.go` |
+| **unused** | Deleted the unused `renderSidebarRow` wrapper (doc comment merged into `renderSidebarRowTagged`) and `sectionModel`'s unused `offset` field |
 
 ---
 

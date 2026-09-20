@@ -38,8 +38,8 @@ func main() {
 		os.Exit(1)
 	}
 	tmpFile := mdFile.Name()
-	mdFile.Close()
-	defer os.Remove(tmpFile)
+	_ = mdFile.Close()
+	defer func() { _ = os.Remove(tmpFile) }()
 	md := strings.Join([]string{
 		"# Engineering Manager Report",
 		"",
@@ -73,9 +73,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to create render output file: %v\n", err)
 		os.Exit(1)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
-	fmt.Fprintln(out, "=== PIPELINE ===")
+	_, _ = fmt.Fprintln(out, "=== PIPELINE ===")
 	_, _ = out.WriteString(pm.View())
 	_, _ = out.WriteString("\n\n=== PROGRESS ===\n")
 	_, _ = out.WriteString(progressModel.View())

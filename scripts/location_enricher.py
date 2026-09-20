@@ -684,7 +684,11 @@ def enrich_job_location(
         )
         if cached_entry and not cached_failure:
             discovery_result = dict(cached_entry)
-        elif cached_failure and not _negative_cache_expired(cached_entry):
+        elif (
+            cached_entry is not None
+            and cached_failure
+            and not _negative_cache_expired(cached_entry)
+        ):
             # A prior run already spent an OSM + free-search + scrape
             # attempt on this exact company and came up empty -- retrying
             # it on every subsequent job posting for the same employer

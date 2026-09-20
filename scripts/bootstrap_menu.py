@@ -297,20 +297,24 @@ def _run_express_setup(interactive: bool = True) -> bool:
         import traceback
 
         log_path = os.path.join(profile_paths.profile_root(), "bootstrap-error.log")
+        # None until the write actually succeeds -- the path is only worth
+        # showing the user if there is a file at the end of it.
+        written_log: str | None = None
         try:
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
             with open(log_path, "w", encoding="utf-8") as f:
                 f.write(f"Express setup failed during: {_stage['name']}\n\n")
                 f.write(traceback.format_exc())
+            written_log = log_path
         except OSError:
-            log_path = None
+            written_log = None
 
         cli_art.print_literal(
             f"\n{theme.colorize_icon('warning')} Express setup failed during "
             f"{_stage['name']}: {type(e).__name__}: {e}"
         )
-        if log_path:
-            cli_art.print_literal(f"   Full traceback: {log_path}")
+        if written_log:
+            cli_art.print_literal(f"   Full traceback: {written_log}")
         cli_art.print_literal(
             "   Your profile still exists -- fix the problem and re-run setup to "
             "resume from where it stopped."

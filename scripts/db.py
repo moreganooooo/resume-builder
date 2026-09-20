@@ -533,7 +533,7 @@ def log_human_verification(
             """,
                 (job_id, prof_name, reviewer_action, candidate_signoff_hash, notes),
             )
-            return cursor.lastrowid
+            return cursor.lastrowid or 0
     finally:
         if close_conn:
             conn.close()
@@ -663,7 +663,7 @@ def log_application_status(
                     notes,
                 ),
             )
-            log_id = cursor.lastrowid
+            log_id = cursor.lastrowid or 0
             if job_id:
                 # Update status in jobs table if the job exists
                 normalized_status = status.lower()

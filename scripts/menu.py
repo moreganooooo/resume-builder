@@ -348,9 +348,10 @@ def _handle_discover_employers() -> bool:
             soft_wrap=True,
         )
     _pause_and_return()
+    return True
 
 
-def _handle_scan_pending_skills() -> None:
+def _handle_scan_pending_skills() -> bool:
     """Settings & Upkeep -> Scan Pending Pipeline for Skills to Verify.
 
     Same idea as the tailoring pipeline's Step 1.5 Skill Gap Discovery
@@ -3080,6 +3081,9 @@ def _handle_check_updates() -> bool:
                 else:
                     cli_art.console.print(f"{cli_art.ERROR} Update failed: {result}\n")
                     return False
+            # The user declined the pull: nothing was applied, so this is
+            # the same "no change made" answer as "already up to date".
+            return False
         else:
             cli_art.console.print(f"{cli_art.SUCCESS} {message}\n")
             return False

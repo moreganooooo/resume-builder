@@ -88,7 +88,7 @@ type zoneMenuDelegate struct {
 func (d zoneMenuDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	var buf bytes.Buffer
 	d.DefaultDelegate.Render(&buf, m, index, item)
-	fmt.Fprint(w, zone.Mark(fmt.Sprintf("menu_item_%d", index), buf.String()))
+	_, _ = fmt.Fprint(w, zone.Mark(fmt.Sprintf("menu_item_%d", index), buf.String()))
 }
 
 // NewMenuModel builds a list of top‑level commands using the token palette.
@@ -157,9 +157,10 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		// Button, not Y (always >= 0, the screen row -- not a delta),
 		// determines wheel direction. See screens/jobs.go's identical fix.
-		if msg.Button == tea.MouseWheelUp {
+		switch msg.Button {
+		case tea.MouseWheelUp:
 			m.list.CursorUp()
-		} else if msg.Button == tea.MouseWheelDown {
+		case tea.MouseWheelDown:
 			m.list.CursorDown()
 		}
 		return m, nil

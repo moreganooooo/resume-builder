@@ -28,7 +28,7 @@ import theme
 import vector_store
 
 # ATS Platform Signatures & Parsing Rules
-ATS_SIGNATURES = {
+ATS_SIGNATURES: Dict[str, Dict[str, Any]] = {
     "workday": {
         "patterns": [r"myworkdayjobs\.com", r"workday", r"wd\d+\.myworkday"],
         "name": "Workday",

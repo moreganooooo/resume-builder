@@ -65,6 +65,8 @@ import textwrap
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from typing import Any
+
 import profile_paths  # noqa: E402
 
 # Cheap signals used ONLY to decide which stratum a role is sampled into
@@ -167,7 +169,9 @@ def _excerpt(body: str) -> str:
     return prefix + " ".join(window.split())
 
 
-def load_rows(profile: str | None) -> list[dict]:
+def load_rows(
+    profile: str | None,
+) -> tuple[list[dict[str, Any]], dict[Any, dict[str, Any]]]:
     root = (
         profile_paths.profile_root(profile) if profile else profile_paths.profile_root()
     )

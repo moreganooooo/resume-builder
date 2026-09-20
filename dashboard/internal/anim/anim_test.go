@@ -39,8 +39,7 @@ func TestSpringConvergence(t *testing.T) {
 }
 
 func TestReducedMotion(t *testing.T) {
-	os.Setenv("RESUME_BUILDER_MOTION", "reduced")
-	defer os.Unsetenv("RESUME_BUILDER_MOTION")
+	t.Setenv("RESUME_BUILDER_MOTION", "reduced")
 
 	if !ReducedMotion() {
 		t.Fatalf("expected ReducedMotion() to be true when env is set")
@@ -57,7 +56,7 @@ func TestReducedMotion(t *testing.T) {
 }
 
 func TestConfettiEngine_ParticleEmission(t *testing.T) {
-	os.Unsetenv("RESUME_BUILDER_MOTION")
+	_ = os.Unsetenv("RESUME_BUILDER_MOTION")
 	engine := NewConfettiEngine(80, 24)
 	if engine.Active() {
 		t.Fatalf("expected initial engine to be inactive")
@@ -98,7 +97,7 @@ func TestConfettiEngine_ReducedMotion(t *testing.T) {
 }
 
 func TestSpringCursor_KineticInterpolation(t *testing.T) {
-	os.Unsetenv("RESUME_BUILDER_MOTION")
+	_ = os.Unsetenv("RESUME_BUILDER_MOTION")
 	cursor := NewSpringCursor(0)
 	cursor.SetTarget(5)
 

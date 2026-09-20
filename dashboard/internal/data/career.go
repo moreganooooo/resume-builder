@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 )
@@ -1137,8 +1138,27 @@ func NormalizePlatformName(raw string) string {
 	case strings.Contains(lower, "jooble"):
 		return "Jooble"
 	default:
-		return strings.Title(strings.ReplaceAll(raw, "_", " "))
+		return titleCaseWords(strings.ReplaceAll(raw, "_", " "))
 	}
+}
+
+// titleCaseWords upper-cases the first letter of each space-separated word.
+//
+// Replaces strings.Title, deprecated since Go 1.18 because its word
+// boundaries mishandle Unicode punctuation. That caveat cannot bite here:
+// the only input is a provider slug with underscores already turned into
+// spaces ("linkedin_jobs" -> "Linkedin Jobs"), so this stays dependency
+// free rather than pulling golang.org/x/text/cases in for one call.
+func titleCaseWords(s string) string {
+	parts := strings.Split(s, " ")
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		r := []rune(p)
+		parts[i] = string(unicode.ToUpper(r[0])) + string(r[1:])
+	}
+	return strings.Join(parts, " ")
 }
 
 // safePct returns the percentage of part/whole, or 0 if whole is 0.
