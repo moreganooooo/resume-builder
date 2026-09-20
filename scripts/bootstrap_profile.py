@@ -13,6 +13,7 @@ import json
 import os
 import re
 import sys
+from typing import Any
 
 import questionary
 import yaml
@@ -2043,7 +2044,7 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
     cli_art.cli_info(
         'Enter one search term per line (e.g. "Email OR Campaign"). Leave blank when done.'
     )
-    queries: list[str] = []
+    queries: list[Any] = []
     while True:
         q = cli_art.text(f"Search term {len(queries) + 1} (blank to finish):")
         if not q or not q.strip():

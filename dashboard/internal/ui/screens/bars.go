@@ -130,19 +130,14 @@ func scoreIcon(t theme.Theme, score float64) string {
 	}
 }
 
-// renderSidebarRow renders the shared two-line sidebar row shape: a score
-// prefix plus a company/primary name (bold when selected), then a Blue
+// renderSidebarRowTagged renders the shared two-line sidebar row shape: a
+// score prefix plus a company/primary name (bold when selected) followed
+// by an already-styled tag (e.g. Jobs' employment-type badge), then a Blue
 // subtitle (job title / role) on the line below, hover-highlighted when
 // selected. jobs.go's renderSidebarLine and pipeline.go's
-// renderSidebarAppLine were identical apart from field names.
-func renderSidebarRow(t theme.Theme, score float64, company, subtitle string, width int, selected bool) string {
-	return renderSidebarRowTagged(t, score, company, "", subtitle, width, selected)
-}
-
-// renderSidebarRowTagged is renderSidebarRow with an already-styled tag
-// (e.g. Jobs' employment-type badge) after the company name. The tag's
+// renderSidebarAppLine were identical apart from field names. The tag's
 // width is reserved before the company is truncated, so a long company
-// name is cut rather than the tag.
+// name is cut rather than the tag; pass "" for no tag.
 func renderSidebarRowTagged(t theme.Theme, score float64, company, tag, subtitle string, width int, selected bool) string {
 	// Every color below resolves from t, so dimming the whole theme once
 	// here recolors the score, company and subtitle together and keeps

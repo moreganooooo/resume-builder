@@ -14,7 +14,7 @@ import db
 import jd_manager
 
 
-def normalize_text(text: str) -> str:
+def normalize_text(text: str | None) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
 
 
@@ -130,49 +130,55 @@ def archive_copies_of_id(job_id: str, profile: str | None = None) -> int:
     return archive_copies_of(meta, exclude_ids={job_id}, profile=profile)
 
 
-def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
-    conn = db.get_db(profile)
-    conn.row_factory = sqlite3.Row
+def _own_row_keys(pending_file_paths: list[str]) -> tuple[set[str], set[str]]:
+    """Ids and dedup_hashes of the data.db rows that MIRROR a pending file.
 
-    db_rows = conn.execute("SELECT * FROM jobs WHERE status = 'pending'").fetchall()
-    pending_file_paths = jd_manager.get_pending_jds()
-    # A file-backed job may also have its OWN data.db row, which
-    # jd_manager._sync_jd_to_db() keys by the file's source_job_id, else its
-    # id, else compute_job_key(path). That row mirrors the file rather than
-    # duplicating it, so it is skipped here (the file represents the job);
-    # any OTHER row for the same posting -- a copy under a different id --
-    # still clusters with the file and is archived as a genuine duplicate.
-    #
-    # Matching that id alone is not enough: db.upsert_job() MERGES into an
-    # existing row with the same dedup_hash instead of inserting, so when a
-    # scan wrote the row before the file's sync ran, the file's own row
-    # survives under the SCANNER's id and none of the three keys above
-    # names it. Such a row then looked like a genuine duplicate of its own file
-    # (6 of Dom's roles on 2026-09-15). The row's dedup_hash is matched too.
-    own_row_ids = set()
-    own_row_hashes = set()
+    A file-backed job may also have its OWN data.db row, which
+    jd_manager._sync_jd_to_db() keys by the file's source_job_id, else its
+    id, else compute_job_key(path). That row mirrors the file rather than
+    duplicating it, so it is skipped by the caller (the file represents the
+    job); any OTHER row for the same posting -- a copy under a different id
+    -- still clusters with the file and is archived as a genuine duplicate.
+
+    Matching that id alone is not enough: db.upsert_job() MERGES into an
+    existing row with the same dedup_hash instead of inserting, so when a
+    scan wrote the row before the file's sync ran, the file's own row
+    survives under the SCANNER's id and none of the three keys above names
+    it. Such a row then looked like a genuine duplicate of its own file
+    (6 of one profile's roles on 2026-09-15). The row's dedup_hash is
+    returned too.
+    """
+    own_row_ids: set[str] = set()
+    own_row_hashes: set[str] = set()
     for path in pending_file_paths:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 f_data = json.load(f)
         except Exception:
             continue
-        if isinstance(f_data, dict):
-            own_row_ids.add(
-                str(
-                    f_data.get("source_job_id")
-                    or f_data.get("id")
-                    or jd_manager.compute_job_key(path)
-                )
+        if not isinstance(f_data, dict):
+            continue
+        own_row_ids.add(
+            str(
+                f_data.get("source_job_id")
+                or f_data.get("id")
+                or jd_manager.compute_job_key(path)
             )
-            own_hash = f_data.get("dedup_hash") or db.compute_job_dedup_hash(
-                f_data.get("job_title") or f_data.get("title") or "",
-                f_data.get("company_name") or f_data.get("company") or "",
-                f_data.get("location") or "",
-            )
-            if own_hash:
-                own_row_hashes.add(str(own_hash))
+        )
+        own_hash = f_data.get("dedup_hash") or db.compute_job_dedup_hash(
+            f_data.get("job_title") or f_data.get("title") or "",
+            f_data.get("company_name") or f_data.get("company") or "",
+            f_data.get("location") or "",
+        )
+        if own_hash:
+            own_row_hashes.add(str(own_hash))
+    return own_row_ids, own_row_hashes
 
+
+def _db_row_items(
+    db_rows: list, own_row_ids: set[str], own_row_hashes: set[str]
+) -> dict:
+    """Clusterable entries for every pending row that is not a file's mirror."""
     items = {}
     for r in db_rows:
         if str(r["id"]) in own_row_ids:
@@ -182,7 +188,6 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
         meta = json.loads(r["metadata_json"] or "{}")
         eval_data = meta.get("_evaluation") or {}
         score = r["final_score"] or eval_data.get("composite_score") or 0.0
-        u = get_job_url(meta)
         c_norm = normalize_text(r["company"])
         t_norm = normalize_text(r["title"])
         items[r["id"]] = {
@@ -195,22 +200,25 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
             "location": r["location"] or "",
             "dedup_hash": r["dedup_hash"] or "",
             "score": score,
-            "url": u,
+            "url": get_job_url(meta),
             "norm_tc": (c_norm, t_norm),
             "norm_tcl": (c_norm, t_norm, normalize_text(r["location"])),
             "meta": meta,
             "created_at": r["created_at"] or "",
         }
+    return items
 
+
+def _file_items(pending_file_paths: list[str]) -> dict:
+    """Clusterable entries for every pending JD file on disk."""
+    items = {}
     for p in pending_file_paths:
         try:
             with open(p, "r", encoding="utf-8") as f:
                 f_data = json.load(f)
-            u = get_job_url(f_data)
             c = f_data.get("company_name") or f_data.get("company") or ""
             t = f_data.get("job_title") or f_data.get("title") or ""
             eval_data = f_data.get("_evaluation") or {}
-            score = eval_data.get("composite_score") or 0.0
             c_norm = normalize_text(c)
             t_norm = normalize_text(t)
             items[p] = {
@@ -222,8 +230,8 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
                 "company": c,
                 "location": f_data.get("location") or "",
                 "dedup_hash": f_data.get("dedup_hash") or jd_manager.compute_job_key(p),
-                "score": score,
-                "url": u,
+                "score": eval_data.get("composite_score") or 0.0,
+                "url": get_job_url(f_data),
                 "norm_tc": (c_norm, t_norm),
                 "norm_tcl": (c_norm, t_norm, normalize_text(f_data.get("location"))),
                 "meta": f_data,
@@ -231,8 +239,15 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
             }
         except Exception:
             pass
+    return items
 
-    # Union-Find
+
+def _cluster_items(items: dict) -> dict:
+    """Union-finds `items` into clusters, keyed by each cluster's root id.
+
+    Three independent passes union a pair: an identical dedup_hash, an
+    identical (URL, company, title), and an identical (company, title).
+    """
     parent = {i: i for i in items}
 
     def find(i):
@@ -245,15 +260,18 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
         if ri != rj:
             parent[ri] = rj
 
+    def union_all(groups: dict) -> None:
+        for ids in groups.values():
+            for o in ids[1:]:
+                union(ids[0], o)
+
     # 1. Union by dedup_hash
     by_hash: dict[str, list[str]] = {}
     for i, it in items.items():
         h = it["dedup_hash"]
         if h:
             by_hash.setdefault(h, []).append(i)
-    for h, ids in by_hash.items():
-        for o in ids[1:]:
-            union(ids[0], o)
+    union_all(by_hash)
 
     # 2. Union by (source URL, normalized company). URL alone is not safe:
     # some ATS platforms (observed: ADP Workforce Now) route every posting
@@ -275,9 +293,7 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
         c_norm, t_norm = it["norm_tc"]
         if u and len(u) > 15 and c_norm and t_norm:
             by_url.setdefault((u, c_norm, t_norm), []).append(i)
-    for key, ids in by_url.items():
-        for o in ids[1:]:
-            union(ids[0], o)
+    union_all(by_url)
 
     # 3. Union by exact normalized company + title
     by_tc: dict[tuple[str, str], list[str]] = {}
@@ -285,16 +301,120 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
         c, t = it["norm_tc"]
         if c and t:
             by_tc.setdefault((c, t), []).append(i)
-    for ids in by_tc.values():
-        for o in ids[1:]:
-            union(ids[0], o)
+    union_all(by_tc)
 
-    # Group into clusters
     clusters: dict[str, list[str]] = {}
     for i in items:
-        root = find(i)
-        clusters.setdefault(root, []).append(i)
+        clusters.setdefault(find(i), []).append(i)
+    return clusters
 
+
+def _rank_cluster(items: dict, member_ids: list[str]) -> list[str]:
+    """Orders a cluster best-first, so the head is the copy worth keeping.
+
+    1. is_file (True first)
+    2. score (highest first)
+    3. richness of metadata (keys count)
+    4. created_at (most recent first)
+    """
+    return sorted(
+        member_ids,
+        key=lambda cid: (
+            1 if items[cid]["is_file"] else 0,
+            items[cid]["score"],
+            len(items[cid]["meta"]),
+            items[cid]["created_at"],
+        ),
+        reverse=True,
+    )
+
+
+# Fields a loser can contribute to the winner: a copy often carries
+# enrichment the winner never got, and losing it to the archive would
+# mean paying for it again.
+_MERGEABLE_FIELDS = (
+    "_location_enrichment",
+    "_liveness",
+    "_research",
+    "_coverage",
+    "source_url",
+    "application_url",
+    "company_website",
+    "skills",
+    "salary_min",
+    "salary_max",
+)
+
+
+def _merged_winner_meta(items: dict, winner_id: str, losers: list[str]) -> dict:
+    """The winner's metadata, fill-only from each loser's."""
+    winner_meta = dict(items[winner_id]["meta"])
+    for loser_id in losers:
+        loser_meta = items[loser_id]["meta"]
+        for field in _MERGEABLE_FIELDS:
+            if loser_meta.get(field) and not winner_meta.get(field):
+                winner_meta[field] = loser_meta[field]
+    return winner_meta
+
+
+def _persist_winner(
+    cursor, winner_item: dict, winner_id: str, winner_meta: dict
+) -> int:
+    """Writes merged metadata back. Returns 1 if anything was written."""
+    if winner_meta == winner_item["meta"]:
+        return 0
+    if not winner_item["is_file"]:
+        cursor.execute(
+            "UPDATE jobs SET metadata_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (json.dumps(winner_meta), winner_id),
+        )
+        return 1
+    # Winner is a file -- update file on disk if missing fields merged
+    try:
+        with open(winner_id, "w", encoding="utf-8") as f:
+            json.dump(winner_meta, f, indent=2, ensure_ascii=False)
+        return 1
+    except Exception as e:
+        print(f"Warning: could not update winner file {winner_id}: {e}")
+        return 0
+
+
+def _archive_losers(cursor, items: dict, losers: list[str], winner_id: str) -> int:
+    """Archives every loser in a cluster. Returns how many were archived."""
+    archived = 0
+    for loser_id in losers:
+        loser_item = items[loser_id]
+        loser_meta = dict(loser_item["meta"])
+        loser_meta["archived_reason"] = "duplicate"
+        loser_meta["canonical_job_id"] = winner_id
+
+        if not loser_item["is_file"]:
+            cursor.execute(
+                "UPDATE jobs SET status = 'archived', metadata_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (json.dumps(loser_meta), loser_id),
+            )
+            archived += 1
+        elif loser_item["file_path"] and os.path.exists(loser_item["file_path"]):
+            try:
+                jd_manager.archive_jd(loser_item["file_path"])
+                archived += 1
+            except Exception as e:
+                print(f"Warning: could not archive file {loser_item['file_path']}: {e}")
+    return archived
+
+
+def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
+    conn = db.get_db(profile)
+    conn.row_factory = sqlite3.Row
+
+    db_rows = conn.execute("SELECT * FROM jobs WHERE status = 'pending'").fetchall()
+    pending_file_paths = jd_manager.get_pending_jds()
+    own_row_ids, own_row_hashes = _own_row_keys(pending_file_paths)
+
+    items = _db_row_items(db_rows, own_row_ids, own_row_hashes)
+    items.update(_file_items(pending_file_paths))
+
+    clusters = _cluster_items(items)
     multi_clusters = {k: v for k, v in clusters.items() if len(v) > 1}
 
     archived_count = 0
@@ -304,26 +424,10 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
     cursor = conn.cursor()
 
     for member_ids in multi_clusters.values():
-        # Rank candidates:
-        # 1. is_file (True first)
-        # 2. score (highest first)
-        # 3. richness of metadata (keys count)
-        # 4. created_at (most recent first)
-        sorted_members = sorted(
-            member_ids,
-            key=lambda cid: (
-                1 if items[cid]["is_file"] else 0,
-                items[cid]["score"],
-                len(items[cid]["meta"]),
-                items[cid]["created_at"],
-            ),
-            reverse=True,
-        )
-
+        sorted_members = _rank_cluster(items, member_ids)
         winner_id = sorted_members[0]
         losers = sorted_members[1:]
         winner_item = items[winner_id]
-        winner_meta = dict(winner_item["meta"])
 
         sample_clusters.append(
             {
@@ -338,66 +442,9 @@ def run_deduplication(profile: str | None = None, dry_run: bool = True) -> dict:
         if dry_run:
             continue
 
-        # Merge metadata from losers into winner
-        for loser_id in losers:
-            loser_meta = items[loser_id]["meta"]
-            for key in (
-                "_location_enrichment",
-                "_liveness",
-                "_research",
-                "_coverage",
-                "source_url",
-                "application_url",
-                "company_website",
-                "skills",
-                "salary_min",
-                "salary_max",
-            ):
-                if loser_meta.get(key) and not winner_meta.get(key):
-                    winner_meta[key] = loser_meta[key]
-
-        # Update winner if it's a DB row
-        if not winner_item["is_file"]:
-            if winner_meta != winner_item["meta"]:
-                cursor.execute(
-                    "UPDATE jobs SET metadata_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (json.dumps(winner_meta), winner_id),
-                )
-                updated_winners += 1
-        else:
-            # Winner is a file -- update file on disk if missing fields merged
-            if winner_meta != winner_item["meta"]:
-                try:
-                    with open(winner_id, "w", encoding="utf-8") as f:
-                        json.dump(winner_meta, f, indent=2, ensure_ascii=False)
-                    updated_winners += 1
-                except Exception as e:
-                    print(f"Warning: could not update winner file {winner_id}: {e}")
-
-        # Archive losers
-        for loser_id in losers:
-            loser_item = items[loser_id]
-            loser_meta = dict(loser_item["meta"])
-            loser_meta["archived_reason"] = "duplicate"
-            loser_meta["canonical_job_id"] = winner_id
-
-            if not loser_item["is_file"]:
-                # DB row
-                cursor.execute(
-                    "UPDATE jobs SET status = 'archived', metadata_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (json.dumps(loser_meta), loser_id),
-                )
-                archived_count += 1
-            else:
-                # File row
-                if loser_item["file_path"] and os.path.exists(loser_item["file_path"]):
-                    try:
-                        jd_manager.archive_jd(loser_item["file_path"])
-                        archived_count += 1
-                    except Exception as e:
-                        print(
-                            f"Warning: could not archive file {loser_item['file_path']}: {e}"
-                        )
+        winner_meta = _merged_winner_meta(items, winner_id, losers)
+        updated_winners += _persist_winner(cursor, winner_item, winner_id, winner_meta)
+        archived_count += _archive_losers(cursor, items, losers, winner_id)
 
     if dry_run:
         conn.close()

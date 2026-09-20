@@ -79,17 +79,17 @@ func LoadKBItems(kbDir string) []KBItem {
 		if err := json.Unmarshal(data, &tf); err == nil {
 			for _, t := range tf.Tools {
 				var content strings.Builder
-				content.WriteString(fmt.Sprintf("### %s\n\n", t.Name))
-				content.WriteString(fmt.Sprintf("- **Category:** %s\n", t.Category))
-				content.WriteString(fmt.Sprintf("- **Confidence:** %s\n", t.Confidence))
+				fmt.Fprintf(&content, "### %s\n\n", t.Name)
+				fmt.Fprintf(&content, "- **Category:** %s\n", t.Category)
+				fmt.Fprintf(&content, "- **Confidence:** %s\n", t.Confidence)
 				if t.EvidenceCount > 0 {
-					content.WriteString(fmt.Sprintf("- **Evidence Count:** %d\n", t.EvidenceCount))
+					fmt.Fprintf(&content, "- **Evidence Count:** %d\n", t.EvidenceCount)
 				}
 				if t.UseNotes != "" {
-					content.WriteString(fmt.Sprintf("\n**Usage Notes:**\n%s\n", t.UseNotes))
+					fmt.Fprintf(&content, "\n**Usage Notes:**\n%s\n", t.UseNotes)
 				}
 				if len(t.References) > 0 {
-					content.WriteString(fmt.Sprintf("\n**References:** %s\n", strings.Join(t.References, ", ")))
+					fmt.Fprintf(&content, "\n**References:** %s\n", strings.Join(t.References, ", "))
 				}
 
 				items = append(items, KBItem{
@@ -112,25 +112,25 @@ func LoadKBItems(kbDir string) []KBItem {
 		if err := json.Unmarshal(data, &mf); err == nil {
 			for _, m := range mf.Metrics {
 				var content strings.Builder
-				content.WriteString(fmt.Sprintf("### %s\n\n", m.Label))
-				content.WriteString(fmt.Sprintf("**Value:** %s\n\n", m.Value))
+				fmt.Fprintf(&content, "### %s\n\n", m.Label)
+				fmt.Fprintf(&content, "**Value:** %s\n\n", m.Value)
 				if m.Volume != "" {
-					content.WriteString(fmt.Sprintf("- **Volume:** %s\n", m.Volume))
+					fmt.Fprintf(&content, "- **Volume:** %s\n", m.Volume)
 				}
 				if m.Category != "" {
-					content.WriteString(fmt.Sprintf("- **Category:** %s\n", m.Category))
+					fmt.Fprintf(&content, "- **Category:** %s\n", m.Category)
 				}
 				if m.Confidence != "" {
-					content.WriteString(fmt.Sprintf("- **Confidence:** %s\n", m.Confidence))
+					fmt.Fprintf(&content, "- **Confidence:** %s\n", m.Confidence)
 				}
 				if m.Source != "" {
-					content.WriteString(fmt.Sprintf("- **Source:** %s\n", m.Source))
+					fmt.Fprintf(&content, "- **Source:** %s\n", m.Source)
 				}
 				if m.Context != "" {
-					content.WriteString(fmt.Sprintf("\n**Context:**\n%s\n", m.Context))
+					fmt.Fprintf(&content, "\n**Context:**\n%s\n", m.Context)
 				}
 				if m.Caveat != "" {
-					content.WriteString(fmt.Sprintf("\n> **Caveat:** %s\n", m.Caveat))
+					fmt.Fprintf(&content, "\n> **Caveat:** %s\n", m.Caveat)
 				}
 
 				items = append(items, KBItem{
@@ -153,18 +153,18 @@ func LoadKBItems(kbDir string) []KBItem {
 		if err := json.Unmarshal(data, &ff); err == nil {
 			for _, f := range ff.Facts {
 				var content strings.Builder
-				content.WriteString(fmt.Sprintf("### %s\n\n", f.Statement))
+				fmt.Fprintf(&content, "### %s\n\n", f.Statement)
 				if f.Category != "" {
-					content.WriteString(fmt.Sprintf("- **Category:** %s\n", f.Category))
+					fmt.Fprintf(&content, "- **Category:** %s\n", f.Category)
 				}
 				if f.Confidence != "" {
-					content.WriteString(fmt.Sprintf("- **Confidence:** %s\n", f.Confidence))
+					fmt.Fprintf(&content, "- **Confidence:** %s\n", f.Confidence)
 				}
 				if f.Source != "" {
-					content.WriteString(fmt.Sprintf("- **Source:** %s\n", f.Source))
+					fmt.Fprintf(&content, "- **Source:** %s\n", f.Source)
 				}
 				if f.Context != "" {
-					content.WriteString(fmt.Sprintf("\n**Context:**\n%s\n", f.Context))
+					fmt.Fprintf(&content, "\n**Context:**\n%s\n", f.Context)
 				}
 
 				items = append(items, KBItem{
@@ -187,18 +187,18 @@ func LoadKBItems(kbDir string) []KBItem {
 		if err := json.Unmarshal(data, &pf); err == nil {
 			for _, p := range pf.Projects {
 				var content strings.Builder
-				content.WriteString(fmt.Sprintf("### %s\n\n", p.Name))
+				fmt.Fprintf(&content, "### %s\n\n", p.Name)
 				if p.Role != "" {
-					content.WriteString(fmt.Sprintf("- **Role:** %s\n", p.Role))
+					fmt.Fprintf(&content, "- **Role:** %s\n", p.Role)
 				}
 				if len(p.Stack) > 0 {
-					content.WriteString(fmt.Sprintf("- **Tech Stack:** %s\n", strings.Join(p.Stack, ", ")))
+					fmt.Fprintf(&content, "- **Tech Stack:** %s\n", strings.Join(p.Stack, ", "))
 				}
 				if p.Impact != "" {
-					content.WriteString(fmt.Sprintf("\n**Impact:**\n%s\n", p.Impact))
+					fmt.Fprintf(&content, "\n**Impact:**\n%s\n", p.Impact)
 				}
 				if p.Description != "" {
-					content.WriteString(fmt.Sprintf("\n**Description:**\n%s\n", p.Description))
+					fmt.Fprintf(&content, "\n**Description:**\n%s\n", p.Description)
 				}
 
 				items = append(items, KBItem{

@@ -178,7 +178,7 @@ def generate_grounded(
     raises TestNetworkBlockedError, the same fail-closed rule as every other
     call in this module."""
     url = f"{BASE_URL}/{model}:generateContent"
-    body = {"contents": [{"parts": [{"text": prompt}]}], "tools": tools}
+    body: dict[str, Any] = {"contents": [{"parts": [{"text": prompt}]}], "tools": tools}
     if tool_config:
         body["toolConfig"] = tool_config
     fallbacks = grounded_fallbacks(tools)
@@ -459,16 +459,27 @@ class SustainedFailureError(RuntimeError):
 _CONSECUTIVE_FAILURES_STATE = [0]
 
 
-class _ConsecutiveFailuresDescriptor:
+class _GeminiClientMeta(type):
+    """Keeps _consecutive_full_failures backed by the module-level
+    _CONSECUTIVE_FAILURES_STATE even though every read and write of it is on
+    the CLASS (GeminiClient._consecutive_full_failures = 0). A plain
+    descriptor cannot do that: __set__ only fires for an INSTANCE
+    assignment, so the first class-level write replaced the descriptor
+    object with a bare int and silently detached the counter from the shared
+    state -- which is exactly the second-copy-of-the-class leak the shared
+    state exists to prevent. A metaclass property is the one form that
+    intercepts a class-level get AND set."""
 
-    def __get__(self, obj, cls=None) -> int:
+    @property
+    def _consecutive_full_failures(cls) -> int:
         return _CONSECUTIVE_FAILURES_STATE[0]
 
-    def __set__(self, obj, value):
+    @_consecutive_full_failures.setter
+    def _consecutive_full_failures(cls, value: int) -> None:
         _CONSECUTIVE_FAILURES_STATE[0] = int(value)
 
 
-class GeminiClient:
+class GeminiClient(metaclass=_GeminiClientMeta):
 
     _cache_map: dict[str, Any] = {}
     # Models where a cache-creation call has already come back with a
@@ -520,7 +531,7 @@ class GeminiClient:
                 return entry["cache_name"]
 
         cache_url = "https://generativelanguage.googleapis.com/v1beta/cachedContents"
-        payload = {
+        payload: dict[str, Any] = {
             "model": base_model,
             "systemInstruction": {"parts": [{"text": system_instruction}]},
             "ttl": "1200s",  # 20 minutes
@@ -592,7 +603,6 @@ class GeminiClient:
     # which succeeded at 138s). 90s was cutting off requests that would
     # otherwise have completed, not detecting genuinely stuck ones.
     _timeout = 180
-    _consecutive_full_failures = _ConsecutiveFailuresDescriptor()
     SUSTAINED_FAILURE_THRESHOLD = 2
 
     # gemma-4-31b-it's TPM cap is 16k tokens/minute (confirmed 2026-07-16),
@@ -655,7 +665,7 @@ class GeminiClient:
         }
         if not isinstance(schema, dict):
             return schema
-        cleaned = {}
+        cleaned: dict[Any, Any] = {}
         for k, v in schema.items():
             if k == "properties" and isinstance(v, dict):
                 # Keys here are field names, not schema metadata -- must
@@ -746,7 +756,7 @@ class GeminiClient:
         service_tier: str = "standard",
         model_fallback: bool = True,
         tools: list | None = None,
-        inline_file: tuple[bytes, str] = None,
+        inline_file: tuple[bytes, str] | None = None,
         fallbacks: dict | None = None,
     ) -> tuple[str | None, dict]:
         # fallbacks overrides MODEL_FALLBACKS for an ungrounded call -- e.g.
@@ -905,7 +915,7 @@ class GeminiClient:
                     model, system_instruction
                 )
 
-            parts = [{"text": contents}]
+            parts: list[dict[str, Any]] = [{"text": contents}]
             if inline_file is not None:
                 file_bytes, mime_type = inline_file
                 parts.append(
@@ -917,7 +927,7 @@ class GeminiClient:
                     }
                 )
 
-            body = {
+            body: dict[str, Any] = {
                 "contents": [{"role": "user", "parts": parts}],
                 "generationConfig": generation_config,
                 "serviceTier": tier,
@@ -1155,7 +1165,7 @@ class GeminiClient:
                 break
 
             url = f"{BASE_URL}/{model}:embedContent"
-            payload = {
+            payload: dict[str, Any] = {
                 "model": f"models/{model}",
                 "content": {"parts": [{"text": text}]},
                 "outputDimensionality": EMBED_DIM,
@@ -1318,7 +1328,7 @@ class OllamaClient:
     ) -> str | None:
         """Generates a text completion using the local Ollama instance."""
         url = f"{host}/api/generate"
-        payload = {
+        payload: dict[str, Any] = {
             "model": model,
             "prompt": prompt,
             "system": system_instruction,

@@ -1137,23 +1137,25 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			// standing in for. That bug made every wheel-up event fall into
 			// the "else" (scroll down) branch, making it look like scrolling
 			// up was "impossible" from wherever the mouse happened to be.
-			if msg.Button == tea.MouseWheelUp {
+			switch msg.Button {
+			case tea.MouseWheelUp:
 				if m.detailScrollOffset > 0 {
 					m.detailScrollOffset--
 				}
-			} else if msg.Button == tea.MouseWheelDown {
+			case tea.MouseWheelDown:
 				m.detailScrollOffset++
 				m.clampDetailScroll()
 			}
 			return m, nil
 		}
 		if len(m.filtered) > 0 {
-			if msg.Button == tea.MouseWheelUp {
+			switch msg.Button {
+			case tea.MouseWheelUp:
 				if m.cursor > 0 {
 					m.cursor--
 					m.adjustScroll()
 				}
-			} else if msg.Button == tea.MouseWheelDown {
+			case tea.MouseWheelDown:
 				if m.cursor < len(m.filtered)-1 {
 					m.cursor++
 					m.adjustScroll()

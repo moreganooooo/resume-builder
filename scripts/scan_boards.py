@@ -677,7 +677,7 @@ def fetch_board_jobs(
             # call site passed one, so a posting that SAID "Remote" was still
             # classified by guessing at its place name.
             if not _passes_location_filter(
-                raw.get("location"),
+                raw.get("location") or "",
                 work_model=raw.get("work_model") or "",
                 is_remote=raw.get("is_remote"),
             ):

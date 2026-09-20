@@ -189,7 +189,7 @@ def _prompt_workplace_modes(current) -> list | None:
     return sorted(picked)
 
 
-def _radius_choices(current: int) -> list:
+def _radius_choices(current: int | None) -> list:
     import questionary
 
     return [

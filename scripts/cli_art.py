@@ -58,17 +58,6 @@ QUESTIONARY_STYLE = theme.QUESTIONARY_STYLE
 # Unified table header styling (used across all render_*_table functions)
 TABLE_HEADER_STYLE = f"bold {theme.BRAND_ACCENT}"
 
-# Sparkle glyphs for decorative banner scatter
-_SPARKLE_GLYPHS = ["✨", "⭐", "💫", "✦", "✧", "⚡", "🌟"]
-_SPARKLE_DENSITY = 0.15  # 15% chance of each cell being a sparkle
-
-# Main banner ASCII art lines
-MAIN_BANNER_LINES = [
-    "  ╔═══════════════════════════════════════════════════════╗",
-    "  ║          R E S U M E   B U I L D E R                  ║",
-    "  ╚═══════════════════════════════════════════════════════╝",
-]
-
 
 def scrub_pii(text: str) -> str:
     """Redacts candidate emails and phone numbers from tracebacks and log messages."""
@@ -103,6 +92,43 @@ def display_success(message: str) -> None:
     console.print(
         f"[bold {theme.SUCCESS}]{theme.colorize_icon('success')}[/bold {theme.SUCCESS}] {_escape_markup(message)}"
     )
+
+
+def print_literal(message: str = "") -> None:
+    """Print a literal string without Rich markup parsing (shortcut used by
+    callers that previously relied on `console.print(..., markup=False)`.
+    Keeps `soft_wrap=True` to match previous call sites."""
+    console.print(message, markup=False, soft_wrap=True)
+
+
+# Raw block-letter lines, no markup -- color now comes from the diagonal
+# gradient applied per-character in display_main_banner(), not a blanket
+# style wrapper.
+MAIN_BANNER_LINES = [
+    "██████╗ ███████╗███████╗██╗   ██╗███╗   ███╗███████╗",
+    "██╔══██╗██╔════╝██╔════╝██║   ██║████╗ ████║██╔════╝",
+    "██████╔╝█████╗  ███████╗██║   ██║██╔████╔██║█████╗  ",
+    "██╔══██╗██╔══╝  ╚════██║██║   ██║██║╚██╔╝██║██╔══╝  ",
+    "██║  ██║███████╗███████║╚██████╔╝██║ ╚═╝ ██║███████╗",
+    "╚═╝  ╚═╝╚══════╝╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝",
+    "",
+    "██████╗ ██╗   ██╗██╗██╗     ██████╗ ███████╗██████╗ ",
+    "██╔══██╗██║   ██║██║██║     ██╔══██╗██╔════╝██╔══██╗",
+    "██████╔╝██║   ██║██║██║     ██║  ██║█████╗  ██████╔╝",
+    "██╔══██╗██║   ██║██║██║     ██║  ██║██╔══╝  ██╔══██╗",
+    "██████╔╝╚██████╔╝██║███████╗██████╔╝███████╗██║  ██║",
+    "╚═════╝  ╚═════╝ ╚═╝╚══════╝╚═════╝ ╚══════╝╚═╝  ╚═╝",
+]
+
+SUBTITLE = "Custom Resumes & Cover Letters, Powered by Gemini\n"
+
+# Glyphs for the banner's decorative sparkle field -- weighted toward the
+# plain small dot so stars stay an accent, not the majority. Plain symbol
+# glyphs only (not emoji-presentation ones like an outlined star with
+# VS16) -- those commonly render double-width and would throw off a row's
+# alignment relative to the others.
+_SPARKLE_GLYPHS = ["·", "·", "·", "⋆", "⋆", "✦", "✧"]
+_SPARKLE_DENSITY = 0.08
 
 
 def _sparkle_field(rows: int, width: int) -> list:
@@ -2650,7 +2676,7 @@ def sparkle_banner(title: str, subtitle: str = "") -> None:
 
 
 def render_sparkle_celebration(
-    title: str, message: str, tips: list[str] = None
+    title: str, message: str, tips: list[str] | None = None
 ) -> None:
     """Renders a high-dopamine, ADHD-friendly completion screen celebrating user progress."""
     content = Text()

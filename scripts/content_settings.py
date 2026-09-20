@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import os
 import re
+from typing import Any
 
 import cli_art
 import compensation
@@ -207,7 +208,7 @@ def read_settings(path: str | None = None) -> dict:
             data = yaml.safe_load(handle) or {}
     except (OSError, yaml.YAMLError):
         return {}
-    settings = {}
+    settings: dict[str, Any] = {}
     languages = data.get("languages")
     if isinstance(languages, list) and languages:
         settings["languages"] = [str(code).strip().lower() for code in languages]

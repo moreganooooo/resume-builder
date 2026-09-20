@@ -46,6 +46,7 @@ class ScanStreamEmitter:
         self, target_stream: Optional[TextIO] = None, fd: Optional[int] = None
     ):
         self._fd_file: Optional[TextIO] = None
+        self.stream: TextIO
         if fd is not None:
             self._fd_file = os.fdopen(fd, "w", buffering=1, encoding="utf-8")
             self.stream = self._fd_file

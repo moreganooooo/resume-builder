@@ -345,7 +345,7 @@ def validate(
     cover_letter_data: dict,
     style_rules: dict,
     kb_corpus: str = "",
-    keeper_bullets: list[str] = None,
+    keeper_bullets: list[str] | None = None,
     keeper_embs=None,
     voice_rules: dict | None = None,
     keeper_embs_backup=None,
@@ -362,7 +362,7 @@ def validate(
     violations.extend(_check_cliched_openers(cover_letter_data))
     violations.extend(
         _check_semantic_grounding(
-            cover_letter_data, keeper_bullets, keeper_embs, keeper_embs_backup
+            cover_letter_data, keeper_bullets or [], keeper_embs, keeper_embs_backup
         )
     )
     violations.extend(_check_voice_metrics(cover_letter_data, voice_rules))

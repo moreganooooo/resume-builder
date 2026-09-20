@@ -50,7 +50,6 @@ type sectionModel struct {
 	title    string
 	opts     []Option
 	cursor   int
-	offset   int
 	width    int
 	height   int
 	lastMove time.Time

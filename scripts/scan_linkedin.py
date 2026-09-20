@@ -19,6 +19,7 @@ import signal
 import threading
 import time
 import traceback
+from typing import Any
 
 import cli_art
 import content_settings
@@ -216,12 +217,12 @@ def get_li_at_cookie() -> str:
     return ""
 
 
-def _fetch_personalized_extras(job_url: str, li_at_cookie: str) -> dict:
+def _fetch_personalized_extras(job_url: str | None, li_at_cookie: str) -> dict:
     """Authenticated pass over the job page to detect "Top Applicant" status
     and recover a backup description from the page's embedded JSON, using
     Morgan's live session cookie. Paced by
     _PERSONALIZED_EXTRAS_DELAY_SECONDS -- see that constant's comment."""
-    extras = {"is_top_applicant": False, "backup_description": None}
+    extras: dict[str, Any] = {"is_top_applicant": False, "backup_description": None}
     if not job_url or not li_at_cookie:
         return extras
 

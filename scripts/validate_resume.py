@@ -333,7 +333,7 @@ def uniqueness_keys(bullet: str) -> tuple[set[str], str | None]:
 
 def _check_unique_opening_verbs(resume_data: dict) -> list[str]:
     violations = []
-    seen: dict[str, int] = {}
+    seen: dict[str, str] = {}
     for bullet in _all_bullets(resume_data):
         first_word = opening_verb(bullet)
         if first_word is None:
@@ -1105,7 +1105,10 @@ def _check_vague_magnitudes(
                         group_2 = m.group(2)
                         if group_2 is None:
                             continue
-                        figures = source_nouns.get(_fold_noun(group_2), set())
+                        folded = _fold_noun(group_2)
+                        if folded is None:
+                            continue
+                        figures = source_nouns.get(folded, set())
                         missing = [
                             f for f in figures if f.rstrip("+") not in achievement
                         ]
@@ -1195,14 +1198,142 @@ def _check_why_filler(resume_data: dict) -> list[str]:
     ]
 
 
+_FALLBACK_TOOLS = (
+    "outreach.io",
+    "outreach",
+    "salesforce",
+    "salesforce crm",
+    "hubspot",
+    "vidyard",
+    "persistiq",
+    "mailchimp",
+    "mindnode",
+    "canva",
+    "google sheets",
+    "thnks",
+)
+
+# Spellings the model may use for a tool the ledger records under another
+# name. Each key is allowed outright; the value is only documentation of
+# what it stands for.
+_TOOL_SYNONYMS = {
+    "sf": "salesforce crm",
+    "sfdc": "salesforce crm",
+    "salesforce": "salesforce crm",
+    "excel": "google sheets / g-connector",
+    "google sheet": "google sheets / g-connector",
+    "sheets": "google sheets / g-connector",
+    "illustrator": "adobe creative suite",
+    "photoshop": "adobe creative suite",
+    "indesign": "adobe creative suite",
+    "html": "html (email)",
+    "css": "html (email)",
+    "persistiq": "persist",
+}
+
+
+def _verified_tool_terms(verified_tools_path: str) -> set[str]:
+    """Every term the profile's verified_tools.json vouches for.
+
+    Falls back to a small built-in list when the ledger is missing, so a
+    profile that has not been bootstrapped does not flag every skill.
+    """
+    import json
+    import os
+
+    terms: set[str] = set()
+    if not os.path.exists(verified_tools_path):
+        return {tool.lower() for tool in _FALLBACK_TOOLS}
+    try:
+        with open(verified_tools_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for tool in data.get("tools", []):
+            terms.add(tool["name"].lower())
+            # Also add category name words
+            if tool.get("category"):
+                for w in re.split(r"[,;/ \s]+", tool["category"].lower()):
+                    if len(w) > 3:
+                        terms.add(w)
+    except Exception:
+        # A malformed ledger must not fail the build: whatever was read
+        # before the error still counts as verified.
+        pass
+    return terms
+
+
+def _profile_terms(profile_yml_path: str) -> set[str]:
+    """Tag names, tag keywords and target-role words from profile.yml."""
+    import os
+
+    import profile_paths
+    import yaml
+
+    pdata: dict[str, Any] = {}
+    if os.path.exists(profile_yml_path):
+        try:
+            with open(profile_yml_path, "r", encoding="utf-8") as f:
+                pdata = yaml.safe_load(f) or {}
+        except Exception:
+            pdata = {}
+    else:
+        try:
+            pdata = profile_paths.profile_yaml() or {}
+        except Exception:
+            pdata = {}
+
+    terms: set[str] = set()
+    if not pdata:
+        return terms
+    for tag in pdata.get("tags", []):
+        terms.add(tag["name"].lower())
+        for kw in tag.get("keywords", []):
+            terms.add(kw.lower())
+    target_roles = pdata.get("target_roles", {}) or {}
+    for role_group in ["primary", "secondary"]:
+        for role in target_roles.get(role_group, []):
+            for w in role.lower().split():
+                if len(w) > 3:
+                    terms.add(w)
+    return terms
+
+
+def _term_is_allowed(part: str, allowed_terms: set[str]) -> bool:
+    """Whether one skills-line item is vouched for by `allowed_terms`.
+
+    Three widening passes: the exact phrase, the phrase overlapping an
+    allowed term in either direction ("salesforce crm" vs. "salesforce"),
+    and finally every word of it being allowed on its own.
+    """
+    if part in allowed_terms:
+        return True
+    for allowed in allowed_terms:
+        if part in allowed or allowed in part:
+            return True
+    words = [w.strip("(),./") for w in part.split() if len(w.strip("(),./")) > 2]
+    return bool(words) and all(
+        w in allowed_terms or any(w in a or a in w for a in allowed_terms)
+        for w in words
+    )
+
+
+def _skills_line_items(line: str) -> list[tuple[str, str]]:
+    """Splits a skills line into (original, normalized) item pairs."""
+    # Strip bold header category part e.g. "**Sales Operations:** Salesforce CRM"
+    clean_line = re.sub(r"^\*\*.+?\*\*[:\-]?\s*", "", line)
+    items = []
+    for p in re.split(r"[,;|]", clean_line):
+        clean_part = p.strip().strip("[]()\"'").lower()
+        if clean_part:
+            items.append((p.strip(), clean_part))
+    return items
+
+
 def _check_hallucinated_tools(resume_data: dict) -> list[str]:
     """
     Checks if any skills or tools mentioned in the SKILLS section of the resume are
     not present in the verified tools list or master profile configuration.
     """
-    import json
     import os
-    import re
 
     # Locate knowledge base for the active profile. Previously this called
     # profile_paths.get_kb_dir() -- a function that has never existed
@@ -1214,7 +1345,6 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
     # base. Let failures genuinely propagate now -- validating against
     # the wrong profile's data is worse than a loud crash (F3).
     import profile_paths
-    import yaml
 
     kb_dir = profile_paths.kb_dir()
 
@@ -1303,119 +1433,14 @@ def _check_hallucinated_tools(resume_data: dict) -> list[str]:
         "campaign messaging",
     }
 
-    # 1. Load verified tools
-    if os.path.exists(verified_tools_path):
-        try:
-            with open(verified_tools_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                for tool in data.get("tools", []):
-                    allowed_terms.add(tool["name"].lower())
-                    # Also add category name words
-                    if tool.get("category"):
-                        for w in re.split(r"[,;/ \s]+", tool["category"].lower()):
-                            if len(w) > 3:
-                                allowed_terms.add(w)
-        except Exception:
-            pass
-    else:
-        for fallback_tool in [
-            "outreach.io",
-            "outreach",
-            "salesforce",
-            "salesforce crm",
-            "hubspot",
-            "vidyard",
-            "persistiq",
-            "mailchimp",
-            "mindnode",
-            "canva",
-            "google sheets",
-            "thnks",
-        ]:
-            allowed_terms.add(fallback_tool.lower())
-
-    # 2. Load profile.yml
-    pdata: dict[str, Any] = {}
-    if os.path.exists(profile_yml_path):
-        try:
-            with open(profile_yml_path, "r", encoding="utf-8") as f:
-                pdata = yaml.safe_load(f) or {}
-        except Exception:
-            pdata = {}
-    else:
-        try:
-            pdata = profile_paths.profile_yaml() or {}
-        except Exception:
-            pdata = {}
-
-    if pdata:
-        # Add tags and their keywords
-        for tag in pdata.get("tags", []):
-            allowed_terms.add(tag["name"].lower())
-            for kw in tag.get("keywords", []):
-                allowed_terms.add(kw.lower())
-        # Add target roles
-        target_roles = pdata.get("target_roles", {}) or {}
-        for role_group in ["primary", "secondary"]:
-            for role in target_roles.get(role_group, []):
-                for w in role.lower().split():
-                    if len(w) > 3:
-                        allowed_terms.add(w)
-
-    # Standard synonyms
-    synonyms = {
-        "sf": "salesforce crm",
-        "sfdc": "salesforce crm",
-        "salesforce": "salesforce crm",
-        "excel": "google sheets / g-connector",
-        "google sheet": "google sheets / g-connector",
-        "sheets": "google sheets / g-connector",
-        "illustrator": "adobe creative suite",
-        "photoshop": "adobe creative suite",
-        "indesign": "adobe creative suite",
-        "html": "html (email)",
-        "css": "html (email)",
-        "persistiq": "persist",
-    }
-    for syn in synonyms:
-        allowed_terms.add(syn)
+    allowed_terms |= _verified_tool_terms(verified_tools_path)
+    allowed_terms |= _profile_terms(profile_yml_path)
+    allowed_terms |= set(_TOOL_SYNONYMS)
 
     violations = []
-    skills = resume_data.get("SKILLS", []) or []
-    for line in skills:
-        # Strip bold header category part e.g. "**Sales Operations:** Salesforce CRM"
-        clean_line = re.sub(r"^\*\*.+?\*\*[:\-]?\s*", "", line)
-        parts = []
-        for p in re.split(r"[,;|]", clean_line):
-            clean_part = p.strip().strip("[]()\"'").lower()
-            if clean_part:
-                parts.append((p.strip(), clean_part))
-
-        for orig_part, part in parts:
-            # Check if this part (e.g. "salesforce crm") directly matches or contains/is-contained-in
-            # any of our allowed terms, or if the individual words in it are allowed.
-            matched = False
-            if part in allowed_terms:
-                matched = True
-            else:
-                # Substring check
-                for allowed in allowed_terms:
-                    if part in allowed or allowed in part:
-                        matched = True
-                        break
-
-            # If not matched as a whole phrase, check if each word in it is a common/allowed word
-            if not matched:
-                words = [
-                    w.strip("(),./") for w in part.split() if len(w.strip("(),./")) > 2
-                ]
-                if words and all(
-                    w in allowed_terms or any(w in a or a in w for a in allowed_terms)
-                    for w in words
-                ):
-                    matched = True
-
-            if not matched:
+    for line in resume_data.get("SKILLS", []) or []:
+        for orig_part, part in _skills_line_items(line):
+            if not _term_is_allowed(part, allowed_terms):
                 violations.append(
                     f"Strict Semantic Guardrail: Hallucinated skill or tool detected: {orig_part!r} "
                     f"(not present in verified_tools.json or profile.yml)"

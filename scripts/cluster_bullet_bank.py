@@ -56,6 +56,7 @@ import json
 import os
 import sys
 import time
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -114,7 +115,7 @@ MAX_RETRIES = 4
 
 API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-AUTH_HEADERS = {"x-goog-api-key": API_KEY}
+AUTH_HEADERS = {"x-goog-api-key": API_KEY or ""}
 
 # ---------------------------------------------------------------------------
 # EMBEDDING
@@ -132,7 +133,7 @@ def embed_batch(texts: list) -> list:
         }
         for t in texts
     ]
-    body = {"requests": requests_payload}
+    body: dict[str, Any] = {"requests": requests_payload}
 
     for attempt in range(MAX_RETRIES):
         resp = requests.post(url, json=body, headers=AUTH_HEADERS, timeout=120)

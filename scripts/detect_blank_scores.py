@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import cli_art
 import pandas as pd
@@ -84,7 +85,7 @@ def scan_csv(csv_path: Path) -> dict:
         'unscored_bullets': [str],         # bullet text for unscored rows
       }
     """
-    report = {
+    report: dict[str, Any] = {
         "path": str(csv_path),
         "total_rows": 0,
         "bullet_col": None,

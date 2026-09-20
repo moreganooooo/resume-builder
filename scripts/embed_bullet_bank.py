@@ -51,6 +51,8 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
+from typing import Any
+
 import cli_art
 import profile_paths  # noqa: E402
 import theme
@@ -160,7 +162,7 @@ def embed_batch(
         }
         for t in texts
     ]
-    body = {"requests": requests_payload}
+    body: dict[str, Any] = {"requests": requests_payload}
 
     # Same test-network chokepoint every gemini_client call goes through.
     # This module builds its own headers, so it slipped past that guard: a
@@ -184,7 +186,7 @@ def embed_batch(
         if attempt - key_switches >= retries:
             break
         key = gemini_client._get_api_key(model) or API_KEY
-        headers = {"x-goog-api-key": key}
+        headers = {"x-goog-api-key": key or ""}
         resp = requests.post(url, json=body, headers=headers, timeout=120)
         if resp.status_code == 429:
             if gemini_client.mark_key_rate_limited(key, model):
