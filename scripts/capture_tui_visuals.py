@@ -18,6 +18,19 @@ import sys
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ARTIFACTS_DIR = os.path.join(PROJECT_ROOT, "artifacts")
+# One entry per dashboard/tapes/<name>.tape. "answers" submits a real
+# question, so it costs one Gemini call per capture.
+ALL_SCREENS = [
+    "menu",
+    "pipeline",
+    "progress",
+    "heatmap",
+    "jobs",
+    "matrix",
+    "kb_view",
+    "answers",
+    "mobile",
+]
 
 
 def parse_ansi_to_html(ansi_text: str) -> str:
@@ -184,7 +197,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--screen",
-        choices=["menu", "pipeline", "jobs", "kb_view", "mobile", "progress", "all"],
+        choices=[*ALL_SCREENS, "all"],
         default="all",
         help="Screen tape to capture",
     )
@@ -199,11 +212,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.vhs or shutil.which("vhs"):
-        screens = (
-            ["menu", "pipeline", "jobs", "kb_view", "mobile", "progress"]
-            if args.screen == "all"
-            else [args.screen]
-        )
+        screens = ALL_SCREENS if args.screen == "all" else [args.screen]
         for s in screens:
             capture_with_vhs(s)
     else:
