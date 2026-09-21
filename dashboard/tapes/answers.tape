@@ -1,5 +1,7 @@
 # VHS Tape: Application-question answers view
 # NOTE: submitting the question makes one real Gemini call per capture.
+# Runs against a throwaway copy: the answers view saves each answer into
+# the job file, and fixtures/sample_jd.txt must stay pristine.
 Output artifacts/tui_answers.gif
 
 Set FontSize 14
@@ -12,7 +14,7 @@ Env RESUME_BUILDER_ICONS "unicode"
 Set TypingSpeed 0
 
 Hide
-Type "clear && .venv/bin/python scripts/dashboard.py --view answers --job fixtures/sample_jd.txt"
+Type "cp fixtures/sample_jd.txt artifacts/answers_sample_jd.txt && clear && .venv/bin/python scripts/dashboard.py --view answers --job artifacts/answers_sample_jd.txt"
 Enter
 Wait+Screen@60s /Paste an application question/
 Sleep 500ms
