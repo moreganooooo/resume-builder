@@ -53,57 +53,51 @@ def _parse_timestamp(ts_str: Optional[str]) -> Optional[datetime]:
     return None
 
 
-def get_single_application_timeline(
-    job_id_or_query: str, profile: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
-    """Reconstructs the full lifecycle timeline for a specific job."""
-    conn = db.get_db(profile)
-    try:
-        # Search by ID or company/title query
-        row = conn.execute(
-            """
-            SELECT * FROM jobs
-            WHERE id = ? OR id LIKE ? OR company LIKE ? OR title LIKE ?
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            (
-                job_id_or_query,
-                f"%{job_id_or_query}%",
-                f"%{job_id_or_query}%",
-                f"%{job_id_or_query}%",
-            ),
-        ).fetchone()
+def _fetch_timeline_rows(conn, job_id_or_query: str):
+    """Return (job_dict, app_rows, audit_rows, contact_rows), or None if no job matches."""
+    # Search by ID or company/title query
+    row = conn.execute(
+        """
+        SELECT * FROM jobs
+        WHERE id = ? OR id LIKE ? OR company LIKE ? OR title LIKE ?
+        ORDER BY created_at DESC LIMIT 1
+        """,
+        (
+            job_id_or_query,
+            f"%{job_id_or_query}%",
+            f"%{job_id_or_query}%",
+            f"%{job_id_or_query}%",
+        ),
+    ).fetchone()
 
-        if not row:
-            return None
+    if not row:
+        return None
 
-        job_dict = dict(row)
-        job_id = job_dict["id"]
+    job_dict = dict(row)
+    job_id = job_dict["id"]
 
-        # Fetch application_log events
-        app_rows = conn.execute(
-            "SELECT * FROM application_log WHERE job_id = ? OR (company = ? AND role = ?) ORDER BY applied_at ASC",
-            (job_id, job_dict["company"], job_dict["title"]),
-        ).fetchall()
+    # Fetch application_log events
+    app_rows = conn.execute(
+        "SELECT * FROM application_log WHERE job_id = ? OR (company = ? AND role = ?) ORDER BY applied_at ASC",
+        (job_id, job_dict["company"], job_dict["title"]),
+    ).fetchall()
 
-        # Fetch verification audits
-        audit_rows = conn.execute(
-            "SELECT * FROM verification_audit_log WHERE job_id = ? ORDER BY reviewed_at ASC",
-            (job_id,),
-        ).fetchall()
+    # Fetch verification audits
+    audit_rows = conn.execute(
+        "SELECT * FROM verification_audit_log WHERE job_id = ? ORDER BY reviewed_at ASC",
+        (job_id,),
+    ).fetchall()
 
-        # Fetch contacts
-        contact_rows = conn.execute(
-            "SELECT * FROM contacts WHERE company = ? ORDER BY created_at ASC",
-            (job_dict["company"],),
-        ).fetchall()
+    # Fetch contacts
+    contact_rows = conn.execute(
+        "SELECT * FROM contacts WHERE company = ? ORDER BY created_at ASC",
+        (job_dict["company"],),
+    ).fetchall()
+    return job_dict, app_rows, audit_rows, contact_rows
 
-    finally:
-        conn.close()
 
-    milestones: List[TimelineMilestone] = []
-
-    # 1. Milestone: Scraped / Discovered
+def _discovered_milestone(job_dict: Dict[str, Any]) -> TimelineMilestone:
+    """1. Milestone: Scraped / Discovered."""
     created_at = job_dict.get("created_at") or ""
     source_info = ""
     try:
@@ -113,35 +107,36 @@ def get_single_application_timeline(
     except Exception:
         pass
 
-    milestones.append(
-        TimelineMilestone(
-            event_type="DISCOVERED",
-            timestamp=created_at,
-            title=f"Job Discovered & Ingested{source_info}",
-            detail=f"{job_dict['title']} at {job_dict['company']} (Location: {job_dict.get('location') or 'Remote'})",
-            status_badge="INFO",
-        )
+    return TimelineMilestone(
+        event_type="DISCOVERED",
+        timestamp=created_at,
+        title=f"Job Discovered & Ingested{source_info}",
+        detail=f"{job_dict['title']} at {job_dict['company']} (Location: {job_dict.get('location') or 'Remote'})",
+        status_badge="INFO",
     )
 
-    # 2. Milestone: Evaluated
-    score = job_dict.get("final_score")
-    if score is not None and score > 0:
-        cap = job_dict.get("capability_score") or 0.0
-        rec = job_dict.get("recruiter_score") or 0.0
-        score_badge = (
-            "SUCCESS" if score >= 80 else ("WARNING" if score >= 65 else "INFO")
-        )
-        milestones.append(
-            TimelineMilestone(
-                event_type="EVALUATED",
-                timestamp=job_dict.get("updated_at") or created_at,
-                title=f"Evaluated Fit Score: {score:.1f}%",
-                detail=f"Capability Match: {cap:.1f}% │ Recruiter Fit: {rec:.1f}%",
-                status_badge=score_badge,
-            )
-        )
 
-    # 3. Check Filesystem Artifacts (Tailored PDF / JSON)
+def _evaluated_milestone(job_dict: Dict[str, Any]) -> Optional[TimelineMilestone]:
+    """2. Milestone: Evaluated (only when a positive score exists)."""
+    score = job_dict.get("final_score")
+    if score is None or score <= 0:
+        return None
+    cap = job_dict.get("capability_score") or 0.0
+    rec = job_dict.get("recruiter_score") or 0.0
+    score_badge = "SUCCESS" if score >= 80 else ("WARNING" if score >= 65 else "INFO")
+    return TimelineMilestone(
+        event_type="EVALUATED",
+        timestamp=job_dict.get("updated_at") or job_dict.get("created_at") or "",
+        title=f"Evaluated Fit Score: {score:.1f}%",
+        detail=f"Capability Match: {cap:.1f}% │ Recruiter Fit: {rec:.1f}%",
+        status_badge=score_badge,
+    )
+
+
+def _tailored_milestone(
+    job_id: str, profile: Optional[str]
+) -> Optional[TimelineMilestone]:
+    """3. Check Filesystem Artifacts (Tailored PDF / JSON)."""
     prof_name = profile or profile_paths.active_profile()
     root = profile_paths.PROJECT_ROOT
     pdf_path = os.path.join(root, "output", prof_name, "pdf", f"{job_id}_Resume.pdf")
@@ -150,39 +145,43 @@ def get_single_application_timeline(
     )
     json_path = os.path.join(root, "output", prof_name, "json", f"{job_id}.json")
 
-    tailored_dt = None
-    if os.path.isfile(pdf_path) or os.path.isfile(json_path):
-        target_f = pdf_path if os.path.isfile(pdf_path) else json_path
-        mtime = os.path.getmtime(target_f)
-        tailored_dt = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
-        doc_types = ["Tailored Resume"]
-        if os.path.isfile(cl_path):
-            doc_types.append("Targeted Cover Letter")
-        milestones.append(
-            TimelineMilestone(
-                event_type="TAILORED",
-                timestamp=tailored_dt,
-                title=f"Documents Compiled ({' + '.join(doc_types)})",
-                detail=f"Rendered to {os.path.relpath(pdf_path, root) if os.path.isfile(pdf_path) else os.path.relpath(json_path, root)}",
-                status_badge="SUCCESS",
-            )
-        )
+    has_pdf = os.path.isfile(pdf_path)
+    if not has_pdf and not os.path.isfile(json_path):
+        return None
+    target_f = pdf_path if has_pdf else json_path
+    mtime = os.path.getmtime(target_f)
+    tailored_dt = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+    doc_types = ["Tailored Resume"]
+    if os.path.isfile(cl_path):
+        doc_types.append("Targeted Cover Letter")
+    return TimelineMilestone(
+        event_type="TAILORED",
+        timestamp=tailored_dt,
+        title=f"Documents Compiled ({' + '.join(doc_types)})",
+        detail=f"Rendered to {os.path.relpath(target_f, root)}",
+        status_badge="SUCCESS",
+    )
 
-    # 4. Milestone: Audited
-    for a in audit_rows:
-        milestones.append(
-            TimelineMilestone(
-                event_type="AUDITED",
-                timestamp=a["reviewed_at"] or "",
-                title=f"Human Verification Audit: {a['reviewer_action']}",
-                detail=f"Sign-off Hash: {a['candidate_signoff_hash'] or 'N/A'} │ {a['notes'] or ''}",
-                status_badge=(
-                    "SUCCESS" if a["reviewer_action"] == "APPROVED" else "WARNING"
-                ),
-            )
-        )
 
-    # 5. Milestone: Application Submissions
+def _audit_milestones(audit_rows) -> List[TimelineMilestone]:
+    """4. Milestone: Audited."""
+    return [
+        TimelineMilestone(
+            event_type="AUDITED",
+            timestamp=a["reviewed_at"] or "",
+            title=f"Human Verification Audit: {a['reviewer_action']}",
+            detail=f"Sign-off Hash: {a['candidate_signoff_hash'] or 'N/A'} │ {a['notes'] or ''}",
+            status_badge=(
+                "SUCCESS" if a["reviewer_action"] == "APPROVED" else "WARNING"
+            ),
+        )
+        for a in audit_rows
+    ]
+
+
+def _application_milestones(app_rows) -> List[TimelineMilestone]:
+    """5. Milestone: Application Submissions (plus any employer response)."""
+    milestones: List[TimelineMilestone] = []
     for app in app_rows:
         milestones.append(
             TimelineMilestone(
@@ -207,23 +206,52 @@ def get_single_application_timeline(
                     ),
                 )
             )
+    return milestones
 
-    # 6. Current Status Milestone if not yet captured
+
+def _status_milestone(job_dict: Dict[str, Any]) -> Optional[TimelineMilestone]:
+    """6. Current Status Milestone if not yet captured."""
     st = (job_dict.get("status") or "pending").lower()
-    if st in ("interview", "offer", "rejected", "discarded", "expired"):
-        milestones.append(
-            TimelineMilestone(
-                event_type=st.upper(),
-                timestamp=job_dict.get("updated_at") or "",
-                title=f"Current Lifecycle Stage: {st.upper()}",
-                detail=f"Deal-breakers / Notes: {job_dict.get('deal_breakers') or 'None'}",
-                status_badge=(
-                    "SUCCESS"
-                    if st in ("interview", "offer")
-                    else ("ERROR" if st == "rejected" else "INFO")
-                ),
-            )
-        )
+    if st not in ("interview", "offer", "rejected", "discarded", "expired"):
+        return None
+    return TimelineMilestone(
+        event_type=st.upper(),
+        timestamp=job_dict.get("updated_at") or "",
+        title=f"Current Lifecycle Stage: {st.upper()}",
+        detail=f"Deal-breakers / Notes: {job_dict.get('deal_breakers') or 'None'}",
+        status_badge=(
+            "SUCCESS"
+            if st in ("interview", "offer")
+            else ("ERROR" if st == "rejected" else "INFO")
+        ),
+    )
+
+
+def get_single_application_timeline(
+    job_id_or_query: str, profile: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Reconstructs the full lifecycle timeline for a specific job."""
+    conn = db.get_db(profile)
+    try:
+        fetched = _fetch_timeline_rows(conn, job_id_or_query)
+    finally:
+        conn.close()
+    if fetched is None:
+        return None
+    job_dict, app_rows, audit_rows, contact_rows = fetched
+    job_id = job_dict["id"]
+
+    optional = [
+        _evaluated_milestone(job_dict),
+        _tailored_milestone(job_id, profile),
+    ]
+    milestones: List[TimelineMilestone] = [_discovered_milestone(job_dict)]
+    milestones.extend(m for m in optional if m is not None)
+    milestones.extend(_audit_milestones(audit_rows))
+    milestones.extend(_application_milestones(app_rows))
+    status_milestone = _status_milestone(job_dict)
+    if status_milestone is not None:
+        milestones.append(status_milestone)
 
     # Sort milestones chronologically
     def _sort_key(m: TimelineMilestone):
@@ -248,8 +276,8 @@ def get_single_application_timeline(
         "company": job_dict["company"],
         "location": job_dict.get("location") or "Remote",
         "status": job_dict.get("status") or "pending",
-        "score": score,
-        "created_at": created_at,
+        "score": job_dict.get("final_score"),
+        "created_at": job_dict.get("created_at") or "",
         "milestones": [m.to_dict() for m in milestones],
         "contacts": contacts_summary,
     }
