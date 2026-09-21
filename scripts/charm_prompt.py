@@ -38,6 +38,7 @@ import json
 import os
 import shutil
 import subprocess
+from typing import Any, cast
 
 import cli_art
 import interactive_subprocess
@@ -169,7 +170,7 @@ def _flush_stdin() -> None:
         pass
 
 
-def _run_prompt(spec: dict):
+def _run_prompt(spec: dict) -> dict[str, Any] | None:
     _flush_stdin()
     # Run from _DASHBOARD_DIR where go.mod is located
     bin_path = _compile_prompt_if_needed()
@@ -201,7 +202,7 @@ def _run_prompt(spec: dict):
         # printed live to the terminal, so this just carries the exit code.
         raise RuntimeError(f"charm_prompt failed (exit {result.returncode})")
     try:
-        return json.loads(result.stdout.strip())
+        return cast("dict[str, Any] | None", json.loads(result.stdout.strip()))
     except json.JSONDecodeError as e:
         raise RuntimeError(
             f"charm_prompt returned invalid JSON: {result.stdout!r}"
@@ -223,19 +224,25 @@ def _warn_and_degrade(e: Exception) -> None:
 
 def confirm(message: str, default: bool = True) -> bool | None:
     if not _go_available():
-        return questionary.confirm(
-            message, default=default, style=cli_art.QUESTIONARY_STYLE
-        ).ask()
+        return cast(
+            "bool | None",
+            questionary.confirm(
+                message, default=default, style=cli_art.QUESTIONARY_STYLE
+            ).ask(),
+        )
     try:
         data = _run_prompt({"type": "confirm", "message": message, "default": default})
     except RuntimeError as e:
         _warn_and_degrade(e)
-        return questionary.confirm(
-            message, default=default, style=cli_art.QUESTIONARY_STYLE
-        ).ask()
+        return cast(
+            "bool | None",
+            questionary.confirm(
+                message, default=default, style=cli_art.QUESTIONARY_STYLE
+            ).ask(),
+        )
     if data is None:
         return None
-    return data["confirmed"]
+    return cast("bool | None", data["confirmed"])
 
 
 def select(message: str, choices: list, default: str | None = None):
@@ -264,9 +271,12 @@ def select(message: str, choices: list, default: str | None = None):
 
 def checkbox(message: str, choices: list, grid: bool = False) -> list | None:
     if not _go_available():
-        return questionary.checkbox(
-            message, choices=choices, style=cli_art.QUESTIONARY_STYLE
-        ).ask()
+        return cast(
+            "list | None",
+            questionary.checkbox(
+                message, choices=choices, style=cli_art.QUESTIONARY_STYLE
+            ).ask(),
+        )
     spec = {
         # "grid" is a full-screen multi-column, mouse-clickable variant for
         # long lists (dashboard/internal/ui/prompt/grid.go).
@@ -278,30 +288,39 @@ def checkbox(message: str, choices: list, grid: bool = False) -> list | None:
         data = _run_prompt(spec)
     except RuntimeError as e:
         _warn_and_degrade(e)
-        return questionary.checkbox(
-            message, choices=choices, style=cli_art.QUESTIONARY_STYLE
-        ).ask()
+        return cast(
+            "list | None",
+            questionary.checkbox(
+                message, choices=choices, style=cli_art.QUESTIONARY_STYLE
+            ).ask(),
+        )
     if data is None:
         return None
-    return data.get("values", [])
+    return cast("list | None", data.get("values", []))
 
 
 def text(message: str, default: str = "") -> str | None:
     if not _go_available():
-        return questionary.text(
-            message, default=default, style=cli_art.QUESTIONARY_STYLE
-        ).ask()
+        return cast(
+            "str | None",
+            questionary.text(
+                message, default=default, style=cli_art.QUESTIONARY_STYLE
+            ).ask(),
+        )
     spec = {"type": "text", "message": message, "default_value": default}
     try:
         data = _run_prompt(spec)
     except RuntimeError as e:
         _warn_and_degrade(e)
-        return questionary.text(
-            message, default=default, style=cli_art.QUESTIONARY_STYLE
-        ).ask()
+        return cast(
+            "str | None",
+            questionary.text(
+                message, default=default, style=cli_art.QUESTIONARY_STYLE
+            ).ask(),
+        )
     if data is None:
         return None
-    return data["value"]
+    return cast("str | None", data["value"])
 
 
 def password(message: str) -> str | None:
@@ -312,16 +331,22 @@ def password(message: str) -> str | None:
     unavailable, same degrade-gracefully contract as every other function
     here."""
     if not _go_available():
-        return questionary.password(message, style=cli_art.QUESTIONARY_STYLE).ask()
+        return cast(
+            "str | None",
+            questionary.password(message, style=cli_art.QUESTIONARY_STYLE).ask(),
+        )
     spec = {"type": "text", "message": message, "masked": True}
     try:
         data = _run_prompt(spec)
     except RuntimeError as e:
         _warn_and_degrade(e)
-        return questionary.password(message, style=cli_art.QUESTIONARY_STYLE).ask()
+        return cast(
+            "str | None",
+            questionary.password(message, style=cli_art.QUESTIONARY_STYLE).ask(),
+        )
     if data is None:
         return None
-    return data["value"]
+    return cast("str | None", data["value"])
 
 
 def file_picker(
@@ -363,4 +388,4 @@ def file_picker(
         )
     if data is None:
         return None
-    return data.get("value") or None
+    return cast("str | None", data.get("value") or None)

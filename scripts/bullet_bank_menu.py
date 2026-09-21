@@ -19,6 +19,7 @@ import datetime
 import os
 import subprocess
 import sys
+from typing import Any
 
 import charm_prompt
 import cli_art
@@ -278,7 +279,7 @@ def _embed_progress():
 # Verified directly against each script's own path constants -- see
 # docs/superpowers/specs/2026-07-15-bullet-bank-management-design.md's
 # Architecture section 1 table.
-STAGES = [
+STAGES: list[dict[str, Any]] = [
     {
         "key": "audit",
         "number": 1,
@@ -362,7 +363,7 @@ STAGES = [
 # for the one entry (triage) that isn't tied to a specific pipeline stage
 # at all (needs-review.csv fills up from everyday resume builds, not from
 # running the 6-stage rebuild).
-MAINTENANCE = [
+MAINTENANCE: list[dict[str, Any]] = [
     {
         "key": "triage",
         "label": "Triage Needs-Review Queue",

@@ -7,6 +7,7 @@ verified_tools.json in their active profile's knowledge base.
 import json
 import os
 import sys
+from typing import cast
 
 import charm_prompt
 import cli_art
@@ -44,7 +45,7 @@ def _load_verified_tools() -> dict:
         }
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            return cast("dict", json.load(f))
     except Exception as e:
         # Do NOT fall back to an empty skeleton here. The caller edits
         # whatever this returns and saves it straight back over the same
@@ -94,7 +95,7 @@ def _load_dismissed_skills() -> list:
         return []
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f).get("dismissed", [])
+            return cast("list", json.load(f).get("dismissed", []))
     except Exception:
         return []
 

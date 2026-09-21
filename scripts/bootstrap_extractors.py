@@ -86,7 +86,7 @@ def _extract_spreadsheet_text(path: str) -> str:
         df = pd.read_csv(path)
     else:
         df = pd.read_excel(path)
-    return df.to_csv(index=False)
+    return cast("str", df.to_csv(index=False))
 
 
 def _extract_plain_text(path: str) -> str:
@@ -109,7 +109,7 @@ def extract_local_text(path: str, kind: str) -> str:
 
 
 import sys
-from typing import Literal, Optional
+from typing import Literal, Optional, cast
 
 from google import genai
 from google.genai import errors as genai_errors
@@ -398,7 +398,7 @@ def _generate_from_upload(path: str, system_prompt: str, response_schema) -> str
                 f"Gemini returned no text for uploaded file {os.path.basename(path)!r} "
                 "-- possibly blocked by safety filters or a transient failure."
             )
-        return response.text
+        return cast("str | None", response.text)
 
     # Unreachable: the loop above always either returns or raises.
     raise IngestionAPIError(
@@ -531,7 +531,7 @@ def classify_document_type(
             f"Gemini API call failed while classifying {filename!r} -- see the WARNING above for the status code."
         )
     data = GeminiClient.parse_json(raw) if isinstance(raw, str) else (raw or {})
-    return data.get("doc_type", "other")
+    return cast("str", data.get("doc_type", "other"))
 
 
 def extract_achievements(
@@ -590,7 +590,7 @@ def extract_achievements(
     raw, _ = GeminiClient.generate(
         model=EXTRACTION_MODEL,
         system_instruction=system_prompt,
-        contents=text,
+        contents=cast(str, text),  # exactly one of text/upload_path, checked above
         response_schema=RawAchievementList,
         temperature=0.0,
     )
@@ -627,7 +627,7 @@ def extract_certificate(
         raw, _ = GeminiClient.generate(
             model=EXTRACTION_MODEL,
             system_instruction=_CERTIFICATE_PROMPT,
-            contents=text,
+            contents=cast(str, text),  # exactly one of text/upload_path, checked above
             response_schema=Certificate,
             temperature=0.0,
         )
@@ -674,7 +674,7 @@ def extract_resume_timeline_and_achievements(
         raw, _ = GeminiClient.generate(
             model=EXTRACTION_MODEL,
             system_instruction=_RESUME_EXTRACTION_PROMPT,
-            contents=text,
+            contents=cast(str, text),  # exactly one of text/upload_path, checked above
             response_schema=ResumeExtraction,
             temperature=0.0,
         )
@@ -867,7 +867,7 @@ def extract_contact_info(
         raw, _ = GeminiClient.generate(
             model=EXTRACTION_MODEL,
             system_instruction=_CONTACT_INFO_PROMPT,
-            contents=text,
+            contents=cast(str, text),  # exactly one of text/upload_path, checked above
             response_schema=ContactInfo,
             temperature=0.0,
         )
@@ -901,7 +901,7 @@ def extract_recommendation_quote(
         raw, _ = GeminiClient.generate(
             model=EXTRACTION_MODEL,
             system_instruction=_RECOMMENDATION_QUOTE_PROMPT,
-            contents=text,
+            contents=cast(str, text),  # exactly one of text/upload_path, checked above
             response_schema=RecommendationQuote,
             temperature=0.0,
         )
@@ -930,7 +930,7 @@ def suggest_secondary_roles(
         temperature=0.0,
     )
     data = GeminiClient.parse_json(raw)
-    return data.get("secondary_roles", [])
+    return cast("list[str]", data.get("secondary_roles", []))
 
 
 def generate_tag_taxonomy(
@@ -1164,7 +1164,7 @@ def extract_candidate_facts(
         raw, _ = GeminiClient.generate(
             model=EXTRACTION_MODEL,
             system_instruction=_FACTS_PROMPT,
-            contents=text,
+            contents=cast(str, text),  # exactly one of text/upload_path, checked above
             response_schema=StagedFactsExtractionSchema,
             temperature=0.0,
         )

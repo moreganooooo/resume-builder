@@ -35,7 +35,7 @@ import re
 import shutil
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -60,7 +60,7 @@ def _load(path: str, list_key: str) -> Dict[str, Any]:
         data = json.load(f)
     data.setdefault(list_key, [])
     data.setdefault("_meta", {})
-    return data
+    return cast("dict[str, Any]", data)
 
 
 def _next_id(existing: List[dict], prefix: str) -> int:

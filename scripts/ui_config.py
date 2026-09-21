@@ -8,6 +8,7 @@ Same small-JSON-file-per-profile pattern as maintenance.py
 
 import json
 import os
+from typing import cast
 
 import profile_paths
 from atomic_write import atomic_write
@@ -55,7 +56,7 @@ def get_celebrations_enabled(profile: str | None = None) -> bool:
     if get_motion_preference(profile) == "reduced":
         return False
     config = get_full_ui_config(profile)
-    return config.get("celebrations_enabled", True)
+    return cast("bool", config.get("celebrations_enabled", True))
 
 
 def get_default_view(profile: str | None = None) -> str:

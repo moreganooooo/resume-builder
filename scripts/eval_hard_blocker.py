@@ -50,6 +50,7 @@ import argparse
 import json
 import os
 import sys
+from typing import cast
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -98,7 +99,7 @@ def _predict(engine, jd_text: str) -> list[dict]:
         temperature=0.0,
     )
     parsed = orchestrator.GeminiClient.parse_json(recruiter_text or "") or {}
-    return parsed.get("hard_blockers", [])
+    return cast("list[dict]", parsed.get("hard_blockers", []))
 
 
 def _confusion_matrix(rows: list[dict], label_key: str, predicted_key: str) -> None:

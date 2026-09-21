@@ -13,7 +13,7 @@ import json
 import os
 import re
 import sys
-from typing import Any
+from typing import Any, Callable, cast
 
 import questionary
 import yaml
@@ -64,14 +64,14 @@ def _load_checkpoint() -> dict:
     if not os.path.exists(bootstrap_bullet_bank.CHECKPOINT_PATH):
         return {}
     with open(bootstrap_bullet_bank.CHECKPOINT_PATH, encoding="utf-8") as f:
-        return json.load(f)
+        return cast("dict", json.load(f))
 
 
 def _load_timeline() -> list:
     if not os.path.exists(bootstrap_bullet_bank.TIMELINE_PATH):
         return []
     with open(bootstrap_bullet_bank.TIMELINE_PATH, encoding="utf-8") as f:
-        return json.load(f)
+        return cast("list", json.load(f))
 
 
 def _achievements_summary_text() -> str:
@@ -407,7 +407,7 @@ def collect_identity(dry_run: bool = False) -> dict:
             default=defaults["remote_preference"],
         )
 
-        result = {
+        result: dict[str, Any] = {
             "full_name": full_name,
             "email": email,
             "phone": phone,
@@ -829,7 +829,9 @@ def set_industries_of_genuine_fit(items: list) -> None:
 # from the Personal Narrative & Story settings menu -- one list so the
 # two stay in sync by construction rather than by remembering to update
 # both places whenever a field is added.
-PERSONAL_NARRATIVE_FIELDS = [
+PERSONAL_NARRATIVE_FIELDS: list[
+    tuple[str, Callable[[], Any], Callable[[Any], None], str]
+] = [
     ("Headline", get_narrative_headline, set_narrative_headline, "scalar"),
     ("Exit story", get_narrative_exit_story, set_narrative_exit_story, "scalar"),
     ("Background context", get_background_context, set_background_context, "scalar"),
@@ -1469,7 +1471,7 @@ def _load_cv_draft_checkpoint() -> dict:
     if not os.path.exists(CV_DRAFT_CHECKPOINT_PATH):
         return {}
     with open(CV_DRAFT_CHECKPOINT_PATH, encoding="utf-8") as f:
-        return json.load(f)
+        return cast("dict", json.load(f))
 
 
 def _save_cv_draft_checkpoint(state: dict) -> None:
@@ -1509,7 +1511,7 @@ def _polish_bullet(
     checkpoint = checkpoint if checkpoint is not None else {}
     key = _cv_draft_checkpoint_key(role_company, bullet)
     if key in checkpoint:
-        return checkpoint[key]
+        return cast("dict", checkpoint[key])
 
     row = pd.Series(
         {
@@ -2081,7 +2083,7 @@ def collect_linkedin_search_queries(primary_roles: list, dry_run: bool = False) 
                 "Location for this search (blank for nationwide 'United States'):",
                 default="",
             )
-            entry_dict = {"query": entry}
+            entry_dict: dict[str, Any] = {"query": entry}
             if modes:
                 entry_dict["workplace_mode"] = modes
             if location and location.strip():

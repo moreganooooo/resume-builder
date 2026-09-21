@@ -10,7 +10,7 @@ import json
 import os
 import sqlite3
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import profile_paths
 
@@ -470,7 +470,7 @@ def get_job_count(
             )
         else:
             cursor = conn.execute("SELECT COUNT(*) FROM jobs")
-        return cursor.fetchone()[0]
+        return cast("int", cursor.fetchone()[0])
     finally:
         if close_conn:
             conn.close()

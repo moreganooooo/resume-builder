@@ -46,7 +46,7 @@ import logging
 import os
 import re
 import subprocess
-from typing import Any
+from typing import Any, cast
 
 import cli_art
 import compensation
@@ -166,7 +166,7 @@ def _load_filters() -> dict:
         )
         with open(path, "r", encoding="utf-8") as f:
             _filters_cache[profile] = yaml.safe_load(f)
-    return _filters_cache[profile]
+    return cast("dict", _filters_cache[profile])
 
 
 def _passes_title_filter(title: str) -> bool:
@@ -305,7 +305,7 @@ def _passes_hybrid_preference_filter(location: str, description: str) -> bool:
     return verdict.passes
 
 
-def _passes_location_filter(location: str, **posting) -> bool:
+def _passes_location_filter(location: str | None, **posting) -> bool:
     """The single location gate for BOTH scanners -- scan_ats.py routes
     through this function too, so anything added here covers both.
 

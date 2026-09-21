@@ -56,7 +56,7 @@ import json
 import os
 import sys
 import time
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -227,7 +227,7 @@ def load_or_build_vectors(bullets: list[str]) -> np.ndarray:
             cli_art.cli_info(
                 f"Loaded {len(bullets)} cached vectors from {VECTOR_CACHE}"
             )
-            return cached
+            return cast("np.ndarray", cached)
         elif cached.shape != (len(bullets), EMBED_DIM):
             cli_art.cli_warning(
                 f"Cache shape mismatch ({cached.shape} vs expected ({len(bullets)}, {EMBED_DIM})). Re-embedding..."
@@ -275,7 +275,7 @@ def cosine_similarity_matrix(matrix: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
     norms = np.where(norms == 0, 1e-9, norms)
     normed = matrix / norms
-    return normed @ normed.T
+    return cast("np.ndarray", normed @ normed.T)
 
 
 def single_linkage_cluster(sim_matrix: np.ndarray, threshold: float) -> list[int]:
@@ -389,9 +389,13 @@ def elect_representative(group: pd.DataFrame, bullet_col: str) -> int:
         candidates = group.index[lengths == lengths.max()]
 
     if len(candidates) == 1:
-        return candidates[0]
-    return min(
-        candidates, key=lambda idx: normalize_bullet_text(group.at[idx, bullet_col])
+        return cast("int", candidates[0])
+    return cast(
+        int,
+        min(
+            candidates,
+            key=lambda idx: normalize_bullet_text(group.at[idx, bullet_col]),
+        ),
     )
 
 

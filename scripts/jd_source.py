@@ -30,7 +30,7 @@ import os
 import sqlite3
 import tempfile
 from datetime import datetime
-from typing import Iterator, Optional, Tuple
+from typing import Iterator, Optional, Tuple, cast
 
 import db
 import jd_manager
@@ -163,7 +163,7 @@ def materialize_permanently(job_id: str, profile: Optional[str] = None) -> str:
     payload = job_payload(row)
     existing = payload.get("path")
     if existing and os.path.exists(existing):
-        return existing
+        return cast("str", existing)
 
     os.makedirs(jd_manager.JDS_DIR, exist_ok=True)
     # Same naming scheme scan.py uses when it writes a scraped JD, so a

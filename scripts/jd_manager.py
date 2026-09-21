@@ -16,6 +16,7 @@ import re
 import shutil
 import sqlite3
 import sys
+from typing import cast
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -1386,7 +1387,7 @@ def load_checkpoint(job_key: str) -> dict:
         return {}
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            return cast("dict", json.load(f))
     except (json.JSONDecodeError, OSError) as e:
         logging.error(
             f"Corrupt checkpoint at {path}: {e}. Falling back to an empty "

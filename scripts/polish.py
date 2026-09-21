@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import subprocess
+from typing import cast
 
 import cli_art
 import normalize_resume
@@ -29,6 +30,7 @@ from orchestrator import (
     ResumeEngine,
     TemplateSchema,
 )
+from pydantic import BaseModel
 from render_coverletter import render_coverletter
 from render_html import render_html
 
@@ -193,6 +195,7 @@ def generate_candidate(
     contact/cert/education fields and formatting rules) and have
     _recommendation_actions (not part of TemplateSchema) reattached
     unchanged if the original had it."""
+    schema: type[BaseModel]
     if doc_type == "resume":
         schema = TemplateSchema
         prompt_file = "polish_resume.md"
@@ -539,7 +542,7 @@ def pick_polish_target(page_size: int = _POLISH_PAGE_SIZE) -> str | None:
         elif result == _POLISH_NAV_NEXT:
             page += 1
         else:
-            return result
+            return cast("str | None", result)
 
 
 _EXIT_WORDS = {"", "done", "exit", "quit"}

@@ -144,6 +144,7 @@ def gather_pending_skill_gaps(max_roles: int = DEFAULT_MAX_ROLES) -> tuple:
     }
 
     for identifier in identifiers:
+        keywords: dict | None
         try:
             with jd_source.resolved_jd(identifier) as (path, _is_db):
                 cached = jd_manager.read_extracted_keywords(path)

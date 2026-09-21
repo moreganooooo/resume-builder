@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import cli_art
 import profile_paths
@@ -47,7 +47,7 @@ def get_active_theme(profile: Optional[str] = None) -> str:
                 data = json.load(f)
                 theme_name = data.get("theme", "modern").lower()
                 if theme_name in SUPPORTED_THEMES:
-                    return theme_name
+                    return cast("str", theme_name)
         except Exception:
             pass
     return "modern"

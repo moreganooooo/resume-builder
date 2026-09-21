@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+from typing import cast
 
 import batch_evaluate
 import cli_art
@@ -152,7 +153,7 @@ def _row_cell(text, width: int, justify: str = "left") -> str:
     header/row alignment contract (see render_picker_header's docstring
     in cli_art.py)."""
     text = _truncate(str(text), width)
-    return text.rjust(width) if justify == "right" else text.ljust(width)
+    return cast("str", text.rjust(width) if justify == "right" else text.ljust(width))
 
 
 def _format_row(cells: list, widths: list, justifies: list, styles: list) -> list:
@@ -831,7 +832,7 @@ def _evaluation_is_stale(evaluation, evaluated_before: str) -> bool:
         return True
     version = evaluation.get("scoring_version")
     if version is not None:
-        return version < jd_manager.SCORING_VERSION
+        return cast("bool", version < jd_manager.SCORING_VERSION)
     return (evaluation.get("evaluated_at") or "")[:10] < evaluated_before
 
 
@@ -1155,4 +1156,4 @@ def interactive_file_picker(
         elif os.path.isdir(selected):
             current_dir = selected
         else:
-            return selected
+            return cast("str", selected)

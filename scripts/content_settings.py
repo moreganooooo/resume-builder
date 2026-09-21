@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any
+from typing import Any, cast
 
 import cli_art
 import compensation
@@ -410,7 +410,7 @@ def _yaml_scalar(value) -> str:
 def _write_list_block(text: str, name: str, pattern, values) -> str:
     """Replaces (or drops) a `name:` list block in the raw YAML text."""
     if not values:
-        return pattern.sub("", text, count=1)
+        return cast("str", pattern.sub("", text, count=1))
     block = f"{name}:\n" + "".join(f"- {value}\n" for value in values)
     return _replace_or_append(text, pattern, block)
 
@@ -423,7 +423,7 @@ def _write_mapping_block(text: str, name: str, pattern, values, allowed) -> str:
     """
     kept = _kept_keys(values or {}, allowed)
     if not kept:
-        return pattern.sub("", text, count=1)
+        return cast("str", pattern.sub("", text, count=1))
     block = f"{name}:\n" + "".join(
         f"  {key}: {_yaml_scalar(kept[key])}\n" for key in allowed if key in kept
     )

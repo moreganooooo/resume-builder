@@ -64,7 +64,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 TIMEOUT = 25
 UA = "Mozilla/5.0 (compatible; resume-builder provider probe)"
@@ -104,7 +104,7 @@ def _post(url: str, payload: dict) -> Any:
 
 def _get_text(url: str) -> str:
     with urllib.request.urlopen(_request(url), timeout=TIMEOUT) as resp:  # nosec B310
-        return resp.read().decode("utf-8", "replace")
+        return cast("str", resp.read().decode("utf-8", "replace"))
 
 
 # Salary in free text. Deliberately conservative -- a bare "$50" is more

@@ -15,7 +15,7 @@ import re
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
 import cli_art
 import profile_paths
@@ -96,7 +96,9 @@ def _get_api_key(model: str = "") -> str:
     return min(keys, key=lambda k: _KEY_COOLDOWNS.get((k, model), 0))
 
 
-def mark_key_rate_limited(key: str, model: str = "", secs: float | None = None) -> bool:
+def mark_key_rate_limited(
+    key: str | None, model: str = "", secs: float | None = None
+) -> bool:
     """Cools `key` down for `model`. Returns True when another key is fresh
     for that model right now, i.e. an immediate retry is worth making."""
     if not key:
@@ -314,7 +316,7 @@ HIGH_DEMAND_STATUS = 503
 # 2026-09-16: both flash-lites answering in <1s while gemma-4-31b-it took
 # 21s, 500'd, then took 59s -- and every Gemma call also waits 65s first.
 MODEL_BENCH_SECS = 15 * 60
-_benched_until: dict = {}
+_benched_until: dict[str, float] = {}
 
 
 def bench_model(model: str, seconds: float = MODEL_BENCH_SECS) -> None:
@@ -481,7 +483,7 @@ class _GeminiClientMeta(type):
 
 class GeminiClient(metaclass=_GeminiClientMeta):
 
-    _cache_map: dict[str, Any] = {}
+    _cache_map: dict[str, dict[str, Any]] = {}
     # Models where a cache-creation call has already come back with a
     # permanent "this API key's tier allows zero cache storage" error
     # (TotalCachedContentStorageTokensPerModelFreeTier limit=0) -- as
@@ -528,7 +530,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
         if key in cls._cache_map:
             entry = cls._cache_map[key]
             if entry["expiry"] > now + 30:
-                return entry["cache_name"]
+                return cast("str | None", entry["cache_name"])
 
         cache_url = "https://generativelanguage.googleapis.com/v1beta/cachedContents"
         payload: dict[str, Any] = {
@@ -546,7 +548,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
             )
             if resp.status_code == 200:
                 data = resp.json()
-                cache_name = data.get("name")
+                cache_name: str | None = data.get("name")
                 expire_str = data.get("expireTime")
                 expiry = now + 1150  # Default fallback expiry
                 if expire_str:
@@ -634,7 +636,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
             return schema
         defs = schema.get("$defs", {})
 
-        def _resolve(node, seen):
+        def _resolve(node: Any, seen: frozenset) -> Any:
             if isinstance(node, dict):
                 if "$ref" in node:
                     key = node["$ref"].rsplit("/", 1)[-1]
@@ -650,7 +652,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                 return [_resolve(item, seen) for item in node]
             return node
 
-        return _resolve(schema, frozenset())
+        return cast(dict, _resolve(schema, frozenset()))
 
     @staticmethod
     def sanitize_schema(schema: dict) -> dict:
@@ -718,7 +720,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
         return salvaged
 
     @staticmethod
-    def parse_json(text: str) -> dict:
+    def parse_json(text: str | None) -> dict:
         if not text:
             return {}
         cleaned = re.sub(
@@ -731,7 +733,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned.strip(), flags=re.MULTILINE)
         cleaned = re.sub(r"```\s*$", "", cleaned.strip(), flags=re.MULTILINE)
         try:
-            return json.loads(cleaned)
+            return cast(dict, json.loads(cleaned))
         except json.JSONDecodeError:
             salvaged = GeminiClient._salvage_fields(cleaned)
             if salvaged:
@@ -1288,7 +1290,10 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                 return None
 
             try:
-                return resp.json().get("embedding", {}).get("values")
+                return cast(
+                    "list[float] | None",
+                    resp.json().get("embedding", {}).get("values"),
+                )
             except Exception as e:
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed error reading response: {e}",
@@ -1339,7 +1344,7 @@ class OllamaClient:
             resp = requests.post(url, json=payload, timeout=120)
             if resp.status_code == 200:
                 data = resp.json()
-                return data.get("response", "")
+                return cast("str | None", data.get("response", ""))
             return None
         except Exception:
             return None

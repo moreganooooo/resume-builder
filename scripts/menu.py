@@ -19,7 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
-from typing import Any
+from typing import Any, cast
 
 # MUST run before the imports below: cli_art -> jd_manager resolves
 # JDS_DIR at module level, so an unresolvable RESUME_PROFILE aborts with a
@@ -1269,7 +1269,7 @@ def _handle_bootstrap() -> bool:
             }
             source_choice_val = source_map[source_choice]
 
-            ingest_path = ""
+            ingest_path: str | None = ""
             if source_choice_val != "manual":
                 allowed_exts = [".pdf"] if source_choice_val == "pdf" else [".json"]
                 ingest_path = cli_art.file_picker(
@@ -1588,7 +1588,7 @@ def _handle_liveness() -> bool:
         + summary.get("blocked", 0)
         + summary["uncertain"]
     )
-    return checked > 0
+    return cast("bool", checked > 0)
 
 
 def _print_no_pending_jds_hint(action: str = "tailor") -> None:
@@ -1675,7 +1675,7 @@ def _handle_tailor_all() -> bool:
         cli_art.console.print("Aborted.")
         return False
     completed, _failed = orchestrator.run_pipeline()
-    return completed > 0
+    return cast("bool", completed > 0)
 
 
 def _handle_log_followup(row: dict) -> None:
@@ -2888,7 +2888,7 @@ def _offer_discovery_backfill() -> bool:
 
     result = stale_sweep.backfill_discovery_dates(dry_run=False)
     cli_art.cli_success(f"Dated {result['stamped_count']} posting(s).")
-    return result["stamped_count"] > 0
+    return cast("bool", result["stamped_count"] > 0)
 
 
 def _handle_stale_sweep() -> bool:

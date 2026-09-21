@@ -9,7 +9,7 @@ import json
 import os
 import re
 import sys
-from typing import Any
+from typing import Any, cast
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -32,7 +32,7 @@ def load_job_target(target: str, profile: str | None = None) -> dict[str, Any] |
         try:
             with open(target, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                return data
+                return cast("dict[str, Any] | None", data)
         except Exception:
             with open(target, "r", encoding="utf-8") as f:
                 return {"raw_text": f.read(), "title": os.path.basename(target)}
@@ -85,7 +85,7 @@ def load_job_target(target: str, profile: str | None = None) -> dict[str, Any] |
             or target.lower() in str(j.get("company", "")).lower()
             or target.lower() in str(j.get("title", "")).lower()
         ):
-            return j
+            return cast("dict[str, Any] | None", j)
 
     return None
 

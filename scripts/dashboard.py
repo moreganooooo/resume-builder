@@ -78,7 +78,7 @@ def _write_jobs_export(profile: str | None = None) -> str:
     return path
 
 
-def compile_dashboard_if_needed() -> str:
+def compile_dashboard_if_needed() -> str | None:
     """Pre-compiles the Go dashboard binary if missing or stale, returning the path
     to the compiled binary. If compilation fails or Go is missing, returns
     None so execution can fall back to 'go run .'."""

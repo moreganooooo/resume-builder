@@ -23,7 +23,7 @@ import time
 import urllib.parse
 import urllib.request
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import geo_distance
 import location_filter
@@ -600,7 +600,7 @@ def load_locations_cache(profile: str | None = None) -> Dict[str, Any]:
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as handle:
-                return json.load(handle)
+                return cast("dict[str, Any]", json.load(handle))
         except Exception:
             return {}
     return {}

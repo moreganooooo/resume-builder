@@ -31,7 +31,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import cli_art
 
@@ -52,7 +52,7 @@ def load_json(path: Path) -> dict:
     """
     try:
         with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            return cast("dict", json.load(f))
     except json.JSONDecodeError:
         # Try to decode the first JSON object if extra data is present
         try:
@@ -62,7 +62,7 @@ def load_json(path: Path) -> dict:
                     return {}
                 decoder = json.JSONDecoder()
                 obj, _ = decoder.raw_decode(text)
-                return obj
+                return cast("dict", obj)
         except Exception as e:
             cli_art.cli_warning(
                 f"Couldn't parse {path}, showing a placeholder row: {e}"

@@ -36,7 +36,7 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 from email.header import decode_header, make_header
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import cli_art
 import db
@@ -797,7 +797,7 @@ def gmail_search(conn: imaplib.IMAP4_SSL, query: str) -> List[bytes]:
     status, data = conn.search("UTF-8", "X-GM-RAW")
     if status != "OK" or not data or not data[0]:
         return []
-    return data[0].split()
+    return cast("list[bytes]", data[0].split())
 
 
 def scan_sent(

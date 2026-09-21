@@ -17,20 +17,21 @@ repos:
       - id: isort
         args: ["--profile", "black"]
 
-  # Type checking. Manual stage: this config was written but its git hook
-  # was never installed, so mypy and pydocstyle below had never actually
-  # run against the codebase -- 38 mypy errors and 652 pydocstyle findings
-  # of pre-existing debt. Blocking every commit on all of it would just
-  # mean every commit uses --no-verify, which is worse than an honest
-  # "run this deliberately". Run with:
-  #   pre-commit run --hook-stage manual mypy --all-files
+  # Type checking, whole package. pass_filenames is off on purpose:
+  # scripts/__init__.py makes mypy name modules scripts.<x>, so checking
+  # only the staged files left every bare `import cli_art` unresolved
+  # (silently Any) and cross-module types were never checked at all.
+  # mypy_path/explicit_package_bases in pyproject.toml fix the naming;
+  # checking the package keeps a change's callers in scope. Clean as of
+  # 2026-09-20 -- keep it that way.
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+    rev: v2.3.1
     hooks:
       - id: mypy
-        stages: [manual]
-        additional_dependencies: ["types-pyyaml", "types-requests"]
-        args: ["--ignore-missing-imports"]
+        pass_filenames: false
+        args: ["scripts"]
+        additional_dependencies:
+          ["types-pyyaml", "types-requests", "pydantic==2.13.5", "numpy==1.26.3"]
 
   # Security scanning
   - repo: https://github.com/PyCQA/bandit

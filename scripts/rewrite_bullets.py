@@ -78,7 +78,7 @@ import re
 import sys
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 # _LAZY_HEAVY_DEPS -- pandas is imported inside the functions that use it,
 # not here. orchestrator.py reaches this module via bullet_feedback on every
@@ -311,7 +311,9 @@ def _load_yaml_safe(path: str, label: str) -> dict:
 
 def _yaml_to_str(data: dict) -> str:
     try:
-        return yaml.dump(data, default_flow_style=False, allow_unicode=True).strip()
+        return cast(
+            "str", yaml.dump(data, default_flow_style=False, allow_unicode=True).strip()
+        )
     except Exception as e:
         cli_art.friendly_warning(
             e,
@@ -740,7 +742,7 @@ def load_screenshot_metrics(path: str) -> str:
             f"   {theme.colorize_icon('success')} Loaded screenshot metrics ({len(df)} rows)",
             soft_wrap=True,
         )
-        return content
+        return cast("str", content)
     except Exception as e:
         cli_art.console.print(
             f"   {theme.colorize_icon('warning')} Could not load screenshot metrics: {e}",
@@ -757,7 +759,7 @@ def get_verified_claims_text(df_claims: "pd.DataFrame") -> str:
         return ""
     cols = ["Claim / Finding", "Metric(s)", "Confidence", "Evidence / Detail"]
     available = [c for c in cols if c in df_claims.columns]
-    return df_claims[available].to_csv(index=False)
+    return cast("str", df_claims[available].to_csv(index=False))
 
 
 def is_deep_evidence_bullet(role_company: str, keywords: list) -> bool:
@@ -1470,10 +1472,11 @@ class KnowledgeBase:
     def recruiter_context_block(self) -> str:
         if not self.recruiter_patterns:
             return ""
-        return (
+        return cast(
+            str,
             "=== RECRUITER READING PATTERNS (what hiring managers notice first) ===\n"
             "Use these patterns to calibrate believability and manager_test scoring.\n"
-            + self.recruiter_patterns
+            + self.recruiter_patterns,
         )
 
 
