@@ -233,7 +233,13 @@ if __name__ == "__main__":
     # in dashboard/tapes/ launch the TUI this way. Without it the module
     # imported, did nothing, and exited 0, so every capture recorded an
     # empty prompt instead of the UI.
-    ok, message = run()
+    import argparse
+
+    _parser = argparse.ArgumentParser(description="Launch the dashboard TUI.")
+    _parser.add_argument("--view", default="", help="Initial view, e.g. answers")
+    _parser.add_argument("--job", default="", help="Job path or id for --view")
+    _args = _parser.parse_args()
+    ok, message = run(view=_args.view, job=_args.job)
     if not ok:
         print(message, file=sys.stderr)
         sys.exit(1)

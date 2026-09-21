@@ -6,7 +6,7 @@
   - Application Answers keeps model-written text on the job until the user explicitly finalizes it. EEO handling and grounding validation happen in `scripts/application_answers.py`; the dashboard is presentation and subprocess orchestration only.
   - Harmonica Physics & Responsive Viewport: Smooth spring-eased reveal animations and automatic terminal resize reflow with 80x24 minimum viewport warning cards.
   - **Visual TUI Inspection**: Generate high-DPI retina snapshots with `python3 scripts/capture_tui_visuals.py --out artifacts/tui_capture.png`. Claude can read/view `artifacts/tui_capture.png` directly to visually audit terminal layout, alignment, and color contrast.
-  - **VHS Recordings**: Tapes located in `dashboard/tapes/` (`menu.tape`, `pipeline.tape`, `jobs.tape`, `kb_view.tape`, `mobile.tape`) record animated GIFs via `vhs <tape_path>`.
+  - **VHS Recordings**: Tapes located in `dashboard/tapes/` (`menu`, `pipeline`, `progress`, `heatmap`, `jobs`, `matrix`, `kb_view`, `answers`, `mobile`; run all via `scripts/capture_tui_visuals.py`, which writes `artifacts/tui_*.png|gif`. `answers` makes one real Gemini call) record animated GIFs via `vhs <tape_path>`.
   - **Android & Mobile Termux**: Termux (`TERMUX_VERSION`) and mobile mode (`RESUME_BUILDER_MOBILE=1`) are auto-detected, relaxing minimum terminal dimensions to 35x12 and enabling full touch/tap navigation via `tea.WithMouseCellMotion()`. Run `./scripts/build_mobile.sh` to cross-compile static ARM64/AMD64 binaries into `dist/mobile/`. Slash commands `/visual-tui`, `/build-mobile`, and `/audit-tui` are available in `.claude/commands/`.
 - **`dashboard/` was vendored from the `career-ops` sibling repo's
   `dashboard/` on 2026-07-22** (themed to this project's palette/icons,
