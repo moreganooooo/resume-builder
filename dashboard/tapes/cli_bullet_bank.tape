@@ -1,9 +1,9 @@
-# VHS Tape: Jobs screen help overlay
-Output artifacts/tui_jobs_help.gif
+# VHS Tape: Python CLI menu > Bullet Bank
+Output artifacts/tui_cli_bullet_bank.gif
 
 Set FontSize 14
 Set Width 1200
-Set Height 1150
+Set Height 750
 Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set FontFamily "JetBrainsMono Nerd Font, Menlo, monospace"
@@ -12,17 +12,15 @@ Set TypingSpeed 0
 
 # Launch off-camera so the recording starts on the rendered UI.
 Hide
-Type "clear && .venv/bin/python scripts/dashboard.py"
+Type "clear && .venv/bin/python scripts/cli.py"
 Enter
-Wait+Screen@60s /Knowledge Base|Pipeline/
+Wait+Screen@60s /What would you like to do/
 Sleep 500ms
 Show
 Sleep 500ms
-Type "3"
-Wait+Screen@30s /JOBS/
+Down@200ms 2
+Sleep 300ms
+Enter
+Sleep 6s
+Screenshot artifacts/tui_cli_bullet_bank.png
 Sleep 500ms
-Type "?"
-Sleep 1s
-Sleep 1s
-Screenshot artifacts/tui_jobs_help.png
-Sleep 1s

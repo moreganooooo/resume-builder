@@ -464,7 +464,15 @@ func renderHelpOverlay(t theme.Theme, title string, categories []helpCategory, w
 			lipgloss.NewStyle().Foreground(t.Subtext).Background(t.Surface).Render(" close help"))
 
 	catStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Mauve)
-	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Blue).Width(14)
+	// Size the key column to the longest key: a fixed 14 wrapped
+	// "Composite Score" onto two lines and ran "Interview Odds" into its text.
+	keyWidth := 14
+	for _, cat := range categories {
+		for _, b := range cat.bindings {
+			keyWidth = max(keyWidth, lipgloss.Width(b.key)+2)
+		}
+	}
+	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Blue).Width(keyWidth)
 	descStyle := lipgloss.NewStyle().Foreground(t.Text)
 
 	innerWidth := width - 6 // border (2) + PadHorizontal-equivalent (2+2)

@@ -202,3 +202,16 @@ func TestEmptyDetailPaneHintsAreScreenSpecific(t *testing.T) {
 		}
 	}
 }
+
+func TestHelpOverlayKeyColumnFitsLongestKey(t *testing.T) {
+	cats := []helpCategory{{label: "Terms", bindings: []helpBinding{
+		{key: "Composite Score", desc: "Overall fit"},
+		{key: "Interview Odds", desc: "Screen odds"},
+	}}}
+	out := ansi.Strip(renderHelpOverlay(theme.NewTheme("resume-builder"), "Jobs", cats, 100, 40))
+	for _, want := range []string{"Composite Score  Overall fit", "Interview Odds   Screen odds"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing aligned row %q in:\n%s", want, out)
+		}
+	}
+}
