@@ -1,18 +1,25 @@
-# VHS Tape: Progress Analytics Screen
-Output artifacts/tui_progress.png
+# VHS Tape: Progress screen (generated layout: hidden launch, wait on real UI text)
 Output artifacts/tui_progress.gif
 
 Set FontSize 14
 Set Width 1200
-Set Height 900
+Set Height 750
 Set Padding 20
 Set Theme "Catppuccin Mocha"
-Set FontFamily "JetBrainsMono Nerd Font"
+Set FontFamily "JetBrainsMono Nerd Font, Menlo, monospace"
+Env RESUME_BUILDER_ICONS "unicode"
+Set TypingSpeed 0
 
-Type ".venv/bin/python scripts/dashboard.py"
+# Launch off-camera so the recording starts on the rendered dashboard.
+Hide
+Type "clear && .venv/bin/python scripts/dashboard.py"
 Enter
-Sleep 2s
+Wait+Screen@60s /Knowledge Base|Pipeline/
+Sleep 500ms
+Show
+Sleep 500ms
 Type "2"
-Sleep 2s
+Wait+Screen@30s /Progress|Funnel|funnel/
+Sleep 1s
 Screenshot artifacts/tui_progress.png
-Sleep 2s
+Sleep 1s

@@ -1,5 +1,4 @@
-# VHS Tape: Career Pipeline Screen
-Output artifacts/tui_pipeline.png
+# VHS Tape: Pipeline screen (generated layout: hidden launch, wait on real UI text)
 Output artifacts/tui_pipeline.gif
 
 Set FontSize 14
@@ -7,12 +6,20 @@ Set Width 1200
 Set Height 750
 Set Padding 20
 Set Theme "Catppuccin Mocha"
-Set FontFamily "JetBrainsMono Nerd Font"
+Set FontFamily "JetBrainsMono Nerd Font, Menlo, monospace"
+Env RESUME_BUILDER_ICONS "unicode"
+Set TypingSpeed 0
 
-Type "python3 scripts/dashboard.py"
+# Launch off-camera so the recording starts on the rendered dashboard.
+Hide
+Type "clear && .venv/bin/python scripts/dashboard.py"
 Enter
-Sleep 1s
+Wait+Screen@60s /Knowledge Base|Pipeline/
+Sleep 500ms
+Show
+Sleep 500ms
 Type "1"
-Sleep 1.5s
+Wait+Screen@30s /Pipeline/
+Sleep 1s
 Screenshot artifacts/tui_pipeline.png
-Sleep 2s
+Sleep 1s

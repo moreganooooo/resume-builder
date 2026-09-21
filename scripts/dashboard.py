@@ -226,3 +226,14 @@ def run(profile: str | None = None, view: str = "", job: str = "") -> tuple[bool
     if result.returncode != 0:
         return False, f"Dashboard exited with an error (code {result.returncode})."
     return True, ""
+
+
+if __name__ == "__main__":
+    # Direct entry point for `python scripts/dashboard.py` -- the VHS tapes
+    # in dashboard/tapes/ launch the TUI this way. Without it the module
+    # imported, did nothing, and exited 0, so every capture recorded an
+    # empty prompt instead of the UI.
+    ok, message = run()
+    if not ok:
+        print(message, file=sys.stderr)
+        sys.exit(1)
