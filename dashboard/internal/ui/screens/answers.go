@@ -124,8 +124,14 @@ func (m AnswersModel) Update(msg tea.Msg) (AnswersModel, tea.Cmd) {
 				return m, nil
 			}
 			return m, func() tea.Msg { return AnswersClosedMsg{} }
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			return m, func() tea.Msg { return AnswersClosedMsg{Quit: true} }
+		case "q":
+			// Only an empty box treats q as quit; otherwise it is a letter
+			// ("What quality...") and goes to the input below.
+			if m.input.Value() == "" {
+				return m, func() tea.Msg { return AnswersClosedMsg{Quit: true} }
+			}
 		case "enter":
 			if m.busy || strings.TrimSpace(m.input.Value()) == "" {
 				return m, nil

@@ -98,3 +98,29 @@ func TestAnswersScrollback(t *testing.T) {
 		t.Fatal("a new answer should snap back to the newest line")
 	}
 }
+
+func TestAnswersQTypesUnlessInputEmpty(t *testing.T) {
+	m := NewAnswersModel(theme.NewTheme("resume-builder"), model.JobRow{Path: "job"}, "python3", ".", 80, 24)
+	press := func(r rune) tea.Cmd {
+		var cmd tea.Cmd
+		m, cmd = m.Update(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
+		return cmd
+	}
+	press('W')
+	if cmd := press('q'); cmd != nil {
+		if _, quit := cmd().(AnswersClosedMsg); quit {
+			t.Fatal("q while typing a question must not quit")
+		}
+	}
+	if m.input.Value() != "Wq" {
+		t.Fatalf("q should be typed into the input, got %q", m.input.Value())
+	}
+	m.input.Reset()
+	cmd := press('q')
+	if cmd == nil {
+		t.Fatal("q on an empty input should quit")
+	}
+	if msg, ok := cmd().(AnswersClosedMsg); !ok || !msg.Quit {
+		t.Fatal("q on an empty input should send a quit message")
+	}
+}
