@@ -1,5 +1,4 @@
-# VHS Tape: Main Menu Screen
-Output artifacts/tui_menu.png
+# VHS Tape: Main menu screen (generated layout: hidden launch, wait on real UI text)
 Output artifacts/tui_menu.gif
 
 Set FontSize 14
@@ -7,10 +6,17 @@ Set Width 1200
 Set Height 750
 Set Padding 20
 Set Theme "Catppuccin Mocha"
-Set FontFamily "JetBrainsMono Nerd Font"
+Set FontFamily "JetBrainsMono Nerd Font, Menlo, monospace"
+Env RESUME_BUILDER_ICONS "unicode"
+Set TypingSpeed 0
 
-Type ".venv/bin/python3 scripts/menu.py"
+# Launch off-camera so the recording starts on the rendered dashboard.
+Hide
+Type "clear && .venv/bin/python scripts/dashboard.py"
 Enter
-Sleep 2s
+Wait+Screen@60s /Knowledge Base|Pipeline/
+Sleep 500ms
+Show
+Sleep 1s
 Screenshot artifacts/tui_menu.png
-Sleep 2s
+Sleep 1s

@@ -1,17 +1,23 @@
-# VHS Tape: Mobile Termux Screen (40x24)
-Output artifacts/tui_mobile.png
+# VHS Tape: Mobile screen (generated layout: hidden launch, wait on real UI text)
 Output artifacts/tui_mobile.gif
 
-Set FontSize 16
-Set Width 420
-Set Height 720
-Set Padding 10
+Set FontSize 13
+Set Width 460
+Set Height 820
+Set Padding 20
 Set Theme "Catppuccin Mocha"
-Set FontFamily "JetBrainsMono Nerd Font"
+Set FontFamily "JetBrainsMono Nerd Font, Menlo, monospace"
+Env RESUME_BUILDER_ICONS "unicode"
+Set TypingSpeed 0
 Env RESUME_BUILDER_MOBILE "1"
 
-Type "python3 scripts/dashboard.py"
+# Launch off-camera so the recording starts on the rendered dashboard.
+Hide
+Type "clear && .venv/bin/python scripts/dashboard.py"
 Enter
-Sleep 1.5s
+Wait+Screen@60s /Knowledge Base|Pipeline/
+Sleep 500ms
+Show
+Sleep 1s
 Screenshot artifacts/tui_mobile.png
-Sleep 2s
+Sleep 1s
