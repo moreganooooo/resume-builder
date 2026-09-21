@@ -539,9 +539,13 @@ class TestReportJobBoardReadiness(BootstrapProfileTestCase):
             bootstrap_profile.report_job_board_readiness(dry_run=True)
             mock_confirm.assert_not_called()
 
-    @patch("discover_local_employers.append_entries", return_value="/tmp/backup.yml")
     @patch(
-        "discover_local_employers.tracked_companies_path", return_value="/tmp/tc.yml"
+        "discover_local_employers.append_entries",
+        return_value="/nonexistent/backup.yml",
+    )
+    @patch(
+        "discover_local_employers.tracked_companies_path",
+        return_value="/nonexistent/tc.yml",
     )
     @patch(
         "discover_local_employers.discover",
@@ -555,7 +559,8 @@ class TestReportJobBoardReadiness(BootstrapProfileTestCase):
 
         mock_discover.assert_called_once()
         mock_append.assert_called_once_with(
-            [{"name": "Acme", "provider": "greenhouse", "postings": 3}], "/tmp/tc.yml"
+            [{"name": "Acme", "provider": "greenhouse", "postings": 3}],
+            "/nonexistent/tc.yml",
         )
 
 

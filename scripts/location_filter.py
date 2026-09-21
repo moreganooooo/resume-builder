@@ -651,6 +651,89 @@ def origin_from_config(config: dict) -> str:
     return ""
 
 
+def _enriched_distance_verdict(
+    posting: dict, location: str, origin: str, radius, workplace: str
+) -> LocationVerdict | None:
+    """Verdict from an already-resolved location enrichment, if there is one.
+
+    Returns None when the posting carries no resolved enrichment, so the
+    caller falls through to the hub/metro lookup.
+    """
+    enrichment = posting.get("_location_enrichment") or posting.get("enrichment")
+    if isinstance(enrichment, dict) and enrichment.get("status") == "resolved":
+        dest_lat = enrichment.get("lat")
+        dest_lon = enrichment.get("lon")
+        if dest_lat is not None and dest_lon is not None:
+            origin_point = geo_distance.resolve_location(origin)
+            if origin_point:
+                miles = geo_distance.haversine_distance_miles(
+                    origin_point[0], origin_point[1], dest_lat, dest_lon
+                )
+                addr = (
+                    enrichment.get("resolved_address")
+                    or enrichment.get("resolved_zip")
+                    or location
+                )
+                src = enrichment.get("source") or "enriched"
+                # Google Maps terms: a Maps-sourced address must carry
+                # "Google Maps" attribution in proper case, right after it.
+                if src == "google_maps":
+                    src = "Google Maps"
+                if miles > float(radius):
+                    return LocationVerdict(
+                        False,
+                        workplace,
+                        miles,
+                        f"{miles:.0f} mi exceeds {radius} mi radius",
+                    )
+                label = (
+                    f"{miles:.1f} mi ({addr} via {src})"
+                    if src != "discovery"
+                    else f"{miles:.1f} mi ({addr})"
+                )
+                return LocationVerdict(True, workplace, miles, label)
+    return None
+
+
+def _hub_distance_verdict(
+    location: str, origin: str, radius, workplace: str
+) -> LocationVerdict:
+    """Verdict from the nearest configured hub, falling back to metro phrasing."""
+    miles, hub = nearest_hub_distance(location, origin)
+    if miles is None:
+        # No exact point -- try LinkedIn-style metro phrasing ("Greater
+        # Boston Area"). That distance is approximate, so it earns a
+        # distance for nearest-first sorting but is only rejected past
+        # the radius PLUS METRO_SLACK_MILES.
+        metro_miles, metro_hub = nearest_metro_distance(location, origin)
+        if metro_miles is not None:
+            if metro_miles > float(radius) + METRO_SLACK_MILES:
+                return LocationVerdict(
+                    False,
+                    workplace,
+                    metro_miles,
+                    f"~{metro_miles:.0f} mi (metro area) exceeds {radius} mi radius",
+                )
+            return LocationVerdict(
+                True,
+                workplace,
+                metro_miles,
+                f"~{metro_miles:.1f} mi ({metro_hub}, metro area, approximate)",
+            )
+        # Unresolvable is NOT far. Surfacing an unknown location is a
+        # cheap mistake for a human to spot; silently dropping a
+        # commutable role is not.
+        return LocationVerdict(
+            True, workplace, None, "location not resolvable; kept for review"
+        )
+    if miles > float(radius):
+        return LocationVerdict(
+            False, workplace, miles, f"{miles:.0f} mi exceeds {radius} mi radius"
+        )
+    label = f"{miles:.1f} mi" + (f" ({hub})" if hub else "")
+    return LocationVerdict(True, workplace, miles, label)
+
+
 def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict:
     """The tiered verdict. `config` is scan_filters.yml's `location:` block.
 
@@ -704,73 +787,13 @@ def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict
     # On-site and hybrid roles are worth seeing only within commuting
     # range, which is the whole point of configuring an origin.
     if origin and radius:
-        enrichment = posting.get("_location_enrichment") or posting.get("enrichment")
-        if isinstance(enrichment, dict) and enrichment.get("status") == "resolved":
-            dest_lat = enrichment.get("lat")
-            dest_lon = enrichment.get("lon")
-            if dest_lat is not None and dest_lon is not None:
-                origin_point = geo_distance.resolve_location(origin)
-                if origin_point:
-                    miles = geo_distance.haversine_distance_miles(
-                        origin_point[0], origin_point[1], dest_lat, dest_lon
-                    )
-                    addr = (
-                        enrichment.get("resolved_address")
-                        or enrichment.get("resolved_zip")
-                        or location
-                    )
-                    src = enrichment.get("source") or "enriched"
-                    # Google Maps terms: a Maps-sourced address must carry
-                    # "Google Maps" attribution in proper case, right after it.
-                    if src == "google_maps":
-                        src = "Google Maps"
-                    if miles > float(radius):
-                        return LocationVerdict(
-                            False,
-                            workplace,
-                            miles,
-                            f"{miles:.0f} mi exceeds {radius} mi radius",
-                        )
-                    label = (
-                        f"{miles:.1f} mi ({addr} via {src})"
-                        if src != "discovery"
-                        else f"{miles:.1f} mi ({addr})"
-                    )
-                    return LocationVerdict(True, workplace, miles, label)
+        enriched = _enriched_distance_verdict(
+            posting, location, origin, radius, workplace
+        )
+        if enriched is not None:
+            return enriched
 
-        miles, hub = nearest_hub_distance(location, origin)
-        if miles is None:
-            # No exact point -- try LinkedIn-style metro phrasing ("Greater
-            # Boston Area"). That distance is approximate, so it earns a
-            # distance for nearest-first sorting but is only rejected past
-            # the radius PLUS METRO_SLACK_MILES.
-            metro_miles, metro_hub = nearest_metro_distance(location, origin)
-            if metro_miles is not None:
-                if metro_miles > float(radius) + METRO_SLACK_MILES:
-                    return LocationVerdict(
-                        False,
-                        workplace,
-                        metro_miles,
-                        f"~{metro_miles:.0f} mi (metro area) exceeds {radius} mi radius",
-                    )
-                return LocationVerdict(
-                    True,
-                    workplace,
-                    metro_miles,
-                    f"~{metro_miles:.1f} mi ({metro_hub}, metro area, approximate)",
-                )
-            # Unresolvable is NOT far. Surfacing an unknown location is a
-            # cheap mistake for a human to spot; silently dropping a
-            # commutable role is not.
-            return LocationVerdict(
-                True, workplace, None, "location not resolvable; kept for review"
-            )
-        if miles > float(radius):
-            return LocationVerdict(
-                False, workplace, miles, f"{miles:.0f} mi exceeds {radius} mi radius"
-            )
-        label = f"{miles:.1f} mi" + (f" ({hub})" if hub else "")
-        return LocationVerdict(True, workplace, miles, label)
+        return _hub_distance_verdict(location, origin, radius, workplace)
 
     return LocationVerdict(True, workplace, None, "no radius configured")
 

@@ -174,14 +174,14 @@ class TestRunScanVerify(unittest.TestCase):
             patch.dict(
                 scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True
             ),
-            patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"),
+            patch.object(scan, "_write_jd_file", return_value="/nonexistent/fake.json"),
             patch(
                 "scan.liveness.verify_jd_paths",
                 return_value={"expired_source_paths": []},
             ) as mock_verify,
         ):
             scan.run_scan(["boards"])
-        mock_verify.assert_called_once_with(["/tmp/fake.json"], activity=ANY)
+        mock_verify.assert_called_once_with(["/nonexistent/fake.json"], activity=ANY)
 
     @patch("scan.jd_manager.job_key_known", return_value=False)
     @patch("scan.jd_manager.JDTracker")
@@ -201,7 +201,7 @@ class TestRunScanVerify(unittest.TestCase):
             patch.dict(
                 scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True
             ),
-            patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json"),
+            patch.object(scan, "_write_jd_file", return_value="/nonexistent/fake.json"),
             patch("scan.liveness.verify_jd_paths") as mock_verify,
         ):
             scan.run_scan(["boards"], verify=False)
@@ -226,7 +226,7 @@ class TestRunScanVerify(unittest.TestCase):
                 "description": "Run lifecycle campaigns end to end.",
             },
         ]
-        paths = iter(["/tmp/still-open.json", "/tmp/already-gone.json"])
+        paths = iter(["/nonexistent/still-open.json", "/nonexistent/already-gone.json"])
         with (
             patch.dict(
                 scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: jobs}, clear=True
@@ -234,7 +234,9 @@ class TestRunScanVerify(unittest.TestCase):
             patch.object(scan, "_write_jd_file", side_effect=lambda job: next(paths)),
             patch(
                 "scan.liveness.verify_jd_paths",
-                return_value={"expired_source_paths": ["/tmp/already-gone.json"]},
+                return_value={
+                    "expired_source_paths": ["/nonexistent/already-gone.json"]
+                },
             ),
             patch("scan.cli_art.render_scan_report") as mock_report,
         ):
@@ -414,7 +416,9 @@ class TestEmptyDescriptionGuard(unittest.TestCase):
             patch.dict(
                 scan.SOURCE_FETCHERS, {"boards": lambda **kwargs: [job]}, clear=True
             ),
-            patch.object(scan, "_write_jd_file", return_value="/tmp/fake.json") as w,
+            patch.object(
+                scan, "_write_jd_file", return_value="/nonexistent/fake.json"
+            ) as w,
             patch(
                 "scan.liveness.verify_jd_paths",
                 return_value={"expired_source_paths": []},

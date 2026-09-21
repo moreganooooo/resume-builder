@@ -55,13 +55,8 @@ def _is_blank_or_null(value: str) -> bool:
     return not value or value.strip().lower() == "null"
 
 
-def render_resume_docx(resume_data: dict, output_path: str) -> str:
-    """
-    Builds an ATS-optimized .docx from resume_data and writes it to
-    output_path. Returns output_path on success.
-    """
-    doc = Document()
-
+def _write_header(doc, resume_data: dict) -> None:
+    """Writes the name line and the contact/tagline line."""
     # --- Header ---
     doc.add_heading(resume_data.get("NAME", ""), level=0)
     contact_parts = [
@@ -78,6 +73,9 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
     if contact_parts:
         doc.add_paragraph(" | ".join(contact_parts))
 
+
+def _write_summary(doc, resume_data: dict) -> None:
+    """Writes the Professional Summary section, if there is one."""
     # --- Summary ---
     summary_text = resume_data.get("SUMMARY_TEXT", "")
     if summary_text:
@@ -87,6 +85,9 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
         p = doc.add_paragraph()
         _add_bold_first_sentence(p, summary_text)
 
+
+def _write_skills(doc, resume_data: dict) -> None:
+    """Writes the Skills section, if there is one."""
     # --- Skills ---
     skills = resume_data.get("SKILLS", [])
     if skills:
@@ -95,6 +96,9 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
             p = doc.add_paragraph()
             _add_bold_markdown_runs(p, skill)
 
+
+def _write_experience(doc, resume_data: dict) -> None:
+    """Writes the Work Experience section, if there is one."""
     # --- Experience ---
     experience = resume_data.get("EXPERIENCE", [])
     if experience:
@@ -138,6 +142,9 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
                 run.bold = True
                 p.add_run(job["career_note"])
 
+
+def _write_certifications(doc, resume_data: dict) -> None:
+    """Writes the Training & Certifications section, if there is one."""
     # --- Certifications ---
     certifications = resume_data.get("CERTIFICATIONS", [])
     if certifications:
@@ -157,6 +164,9 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
             ]
             doc.add_paragraph(" | ".join(cert_parts))
 
+
+def _write_education(doc, resume_data: dict) -> None:
+    """Writes the Education section, if there is one."""
     # --- Education ---
     education = resume_data.get("EDUCATION", [])
     if education:
@@ -184,6 +194,9 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
             for bullet in edu.get("bullets", []):
                 doc.add_paragraph(bullet, style="List Bullet")
 
+
+def _write_why(doc, resume_data: dict) -> None:
+    """Writes the optional 'Additional Relevant Experience' section."""
     # --- Why (optional) ---
     why_text = resume_data.get("WHY_TEXT", "")
     if not _is_blank_or_null(why_text):
@@ -202,6 +215,22 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
             clean = re.sub(r"</?p>|</?em>", "", raw_p).strip()
             if clean:
                 doc.add_paragraph(clean)
+
+
+def render_resume_docx(resume_data: dict, output_path: str) -> str:
+    """
+    Builds an ATS-optimized .docx from resume_data and writes it to
+    output_path. Returns output_path on success.
+    """
+    doc = Document()
+
+    _write_header(doc, resume_data)
+    _write_summary(doc, resume_data)
+    _write_skills(doc, resume_data)
+    _write_experience(doc, resume_data)
+    _write_certifications(doc, resume_data)
+    _write_education(doc, resume_data)
+    _write_why(doc, resume_data)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     doc.save(output_path)

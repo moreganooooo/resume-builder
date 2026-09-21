@@ -141,6 +141,50 @@ def grouped_achievements(job: dict) -> list:
     return [(label, bullets) for label, bullets in segments if bullets]
 
 
+def _apply_company_metadata(
+    job: dict, company: str, fixed_content, include_optional_clients: bool
+) -> None:
+    """Applies the profile's per-company fixed content onto one job in place.
+
+    Covers size/revenue and location metadata, rename notes, fixed titles
+    and title descriptors, the career note, and the client roster.
+    """
+    meta = fixed_content.COMPANY_META.get(company)
+    if meta:
+        if "size_revenue" in meta:
+            job["size_revenue"] = meta["size_revenue"]
+        if "location" in meta:
+            job["location"] = meta["location"]
+
+    rename_note = fixed_content.COMPANY_RENAME_NOTE.get(company)
+    if rename_note:
+        job["company"] = f"{company} (Now {rename_note})"
+
+    fixed_title = fixed_content.COMPANY_FIXED_TITLE.get(company)
+    if fixed_title:
+        job["title"] = fixed_title
+
+    descriptor = fixed_content.COMPANY_TITLE_DESCRIPTOR.get(company)
+    if (
+        descriptor
+        and job.get("title")
+        and not job["title"].rstrip().endswith(f"({descriptor})")
+    ):
+        job["title"] = f"{job['title']} ({descriptor})"
+
+    if (
+        fixed_content.CAREER_NOTE_COMPANY
+        and company == fixed_content.CAREER_NOTE_COMPANY
+    ):
+        job["career_note"] = fixed_content.CAREER_NOTE
+
+    clients = fixed_content.CLIENTS.get(company)
+    if clients and (clients["essential"] or include_optional_clients):
+        job["clients"] = clients["list"]
+    else:
+        job.pop("clients", None)
+
+
 def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
     """Returns a new dict; never mutates the input.
 
@@ -218,40 +262,9 @@ def normalize(resume_data: dict, include_optional_clients: bool = True) -> dict:
                 new_experience.append(dict(career_break_entry))
                 has_break_already = True
 
-            meta = fixed_content.COMPANY_META.get(company)
-            if meta:
-                if "size_revenue" in meta:
-                    job["size_revenue"] = meta["size_revenue"]
-                if "location" in meta:
-                    job["location"] = meta["location"]
-
-            rename_note = fixed_content.COMPANY_RENAME_NOTE.get(company)
-            if rename_note:
-                job["company"] = f"{company} (Now {rename_note})"
-
-            fixed_title = fixed_content.COMPANY_FIXED_TITLE.get(company)
-            if fixed_title:
-                job["title"] = fixed_title
-
-            descriptor = fixed_content.COMPANY_TITLE_DESCRIPTOR.get(company)
-            if (
-                descriptor
-                and job.get("title")
-                and not job["title"].rstrip().endswith(f"({descriptor})")
-            ):
-                job["title"] = f"{job['title']} ({descriptor})"
-
-            if (
-                fixed_content.CAREER_NOTE_COMPANY
-                and company == fixed_content.CAREER_NOTE_COMPANY
-            ):
-                job["career_note"] = fixed_content.CAREER_NOTE
-
-            clients = fixed_content.CLIENTS.get(company)
-            if clients and (clients["essential"] or include_optional_clients):
-                job["clients"] = clients["list"]
-            else:
-                job.pop("clients", None)
+            _apply_company_metadata(
+                job, company, fixed_content, include_optional_clients
+            )
 
             new_experience.append(job)
         result["EXPERIENCE"] = new_experience

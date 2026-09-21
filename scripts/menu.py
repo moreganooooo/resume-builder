@@ -2551,6 +2551,64 @@ def _browse_keywords(keywords: list, label: str) -> None:
     )
 
 
+# Which title_filter list each menu action edits, plus the wording that
+# action uses: (key, prompt, noun).
+_TITLE_KEYWORD_ACTIONS = {
+    "add_pos": (
+        "positive",
+        'Enter positive title keyword (e.g. "Marketing", not a full title):',
+        "Positive",
+    ),
+    "add_neg": (
+        "negative",
+        'Enter negative title keyword (e.g. "Intern", "Director"):',
+        "Negative",
+    ),
+    "del_pos": ("positive", "Select positive keyword to remove:", "Positive"),
+    "del_neg": ("negative", "Select negative keyword to remove:", "Negative"),
+}
+
+
+def _save_title_filters(filters, title_filter, filters_path, message):
+    """Writes scan_filters.yml back and reports what changed."""
+    import time
+
+    import yaml
+
+    filters["title_filter"] = title_filter
+    with open(filters_path, "w", encoding="utf-8") as f:
+        yaml.safe_dump(filters, f, default_flow_style=False, allow_unicode=True)
+    cli_art.cli_info(message)
+    time.sleep(1)
+
+
+def _add_title_keyword(filters, title_filter, action, filters_path):
+    """Prompts for one keyword and adds it to the list that action names."""
+    key, prompt, noun = _TITLE_KEYWORD_ACTIONS[action]
+    keyword = cli_art.text(prompt)
+    if not keyword or not keyword.strip():
+        return
+    existing = title_filter.get(key) or []
+    existing.append(keyword.strip())
+    title_filter[key] = sorted(set(existing))
+    _save_title_filters(filters, title_filter, filters_path, f"{noun} filter updated!")
+
+
+def _delete_title_keyword(filters, title_filter, action, filters_path):
+    """Prompts for one existing keyword and removes it from the list that action names."""
+    key, prompt, noun = _TITLE_KEYWORD_ACTIONS[action]
+    existing = title_filter.get(key) or []
+    if not existing:
+        return
+    choices_del = [questionary.Choice(x, value=x) for x in existing] + ["Cancel"]
+    to_del = cli_art.select(prompt, choices=choices_del)
+    if not to_del or to_del == "Cancel":
+        return
+    existing.remove(to_del)
+    title_filter[key] = existing
+    _save_title_filters(filters, title_filter, filters_path, f"{noun} keyword removed!")
+
+
 def _handle_edit_title_filters(filters_path):
     import time
 
@@ -2611,77 +2669,147 @@ def _handle_edit_title_filters(filters_path):
         if not act or act == "back":
             break
 
-        if act == "add_pos":
-            k = cli_art.text(
-                'Enter positive title keyword (e.g. "Marketing", not a full title):'
-            )
-            if k and k.strip():
-                pos.append(k.strip())
-                title_filter["positive"] = sorted(list(set(pos)))
-                filters["title_filter"] = title_filter
-                with open(filters_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(
-                        filters, f, default_flow_style=False, allow_unicode=True
-                    )
-                cli_art.cli_info("Positive filter updated!")
-                time.sleep(1)
-        elif act == "add_neg":
-            k = cli_art.text(
-                'Enter negative title keyword (e.g. "Intern", "Director"):'
-            )
-            if k and k.strip():
-                neg.append(k.strip())
-                title_filter["negative"] = sorted(list(set(neg)))
-                filters["title_filter"] = title_filter
-                with open(filters_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(
-                        filters, f, default_flow_style=False, allow_unicode=True
-                    )
-                cli_art.cli_info("Negative filter updated!")
-                time.sleep(1)
-        elif act == "del_pos":
-            if not pos:
-                continue
-            choices_del = [questionary.Choice(x, value=x) for x in pos] + ["Cancel"]
-            to_del = cli_art.select(
-                "Select positive keyword to remove:", choices=choices_del
-            )
-            if to_del and to_del != "Cancel":
-                pos.remove(to_del)
-                title_filter["positive"] = pos
-                filters["title_filter"] = title_filter
-                with open(filters_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(
-                        filters, f, default_flow_style=False, allow_unicode=True
-                    )
-                cli_art.cli_info("Positive keyword removed!")
-                time.sleep(1)
-        elif act == "del_neg":
-            if not neg:
-                continue
-            choices_del = [questionary.Choice(x, value=x) for x in neg] + ["Cancel"]
-            to_del = cli_art.select(
-                "Select negative keyword to remove:", choices=choices_del
-            )
-            if to_del and to_del != "Cancel":
-                neg.remove(to_del)
-                title_filter["negative"] = neg
-                filters["title_filter"] = title_filter
-                with open(filters_path, "w", encoding="utf-8") as f:
-                    yaml.safe_dump(
-                        filters, f, default_flow_style=False, allow_unicode=True
-                    )
-                cli_art.cli_info("Negative keyword removed!")
-                time.sleep(1)
+        if act in ("add_pos", "add_neg"):
+            _add_title_keyword(filters, title_filter, act, filters_path)
+        elif act in ("del_pos", "del_neg"):
+            _delete_title_keyword(filters, title_filter, act, filters_path)
         elif act == "view_pos":
             _browse_keywords(pos, "POSITIVE KEYWORDS")
         elif act == "view_neg":
             _browse_keywords(neg, "NEGATIVE KEYWORDS")
 
 
-def _handle_manage_profiles():
+def _create_profile_flow() -> None:
+    """Prompts for a new profile name, creates it, and offers to switch."""
+    import bootstrap_bullet_bank
+    import profile_paths
+
+    # cli_art.text(), not raw questionary -- every interactive
+    # prompt routes through the Go/huh binary so it renders
+    # consistently with the rest of the menu (and survives the
+    # DECSTBM scroll region _run_with_chain sets for
+    # non-interactive actions).
+    # cli_art.text() has no validate= hook (charm_prompt's huh
+    # binding takes message/default only), so the empty-name case
+    # is handled here rather than in the prompt.
+    new_name = cli_art.text("New profile name (e.g., 'dom'):")
+    if not new_name or not new_name.strip():
+        return
+    new_name = new_name.strip()
+
+    # Check if profile already exists
+    # Every result message below pauses before `continue`: the loop
+    # clears the screen at its top under alt-screen, so without it
+    # each message was erased the instant it printed.
+    if os.path.exists(os.path.join(profile_paths.PROFILES_DIR, new_name)):
+        cli_art.display_error(f"Profile '{new_name}' already exists.")
+        _pause_and_return()
+        return
+
+    # Create the new profile
+    try:
+        bootstrap_bullet_bank.create_new_profile(new_name)
+        cli_art.display_success(
+            f"Profile '{new_name}' created! You can now switch to it."
+        )
+
+        # Ask if they want to switch to the new profile now
+        if cli_art.confirm(f"Switch to profile '{new_name}' now?", default=True):
+            profile_paths.set_active_profile(new_name)
+            cli_art.display_success(f"Switched to profile '{new_name}'.")
+            cli_art.console.print(
+                f"\n[{theme.INFO}]Remember to run the bootstrap wizard "
+                f"(New User? Start Here!) to set up this profile![/{theme.INFO}]\n"
+            )
+        _pause_and_return()
+        return
+    except Exception as e:
+        cli_art.display_error(f"Failed to create profile: {e}")
+        _pause_and_return()
+        return
+
+
+def _delete_profile_flow(target: str) -> None:
+    """Confirms, then removes all four of a profile's roots."""
     import shutil
 
+    import profile_paths
+
+    # Resolved BEFORE deleting, same as rename below: once the
+    # directories are gone active_profile() can raise ValueError,
+    # which escaped after the data was already destroyed and left
+    # RESUME_PROFILE pointing at a deleted profile.
+    try:
+        was_active = target == profile_paths.active_profile()
+    except ValueError:
+        was_active = False
+    # cli_art.confirm with default=False, not raw questionary.confirm
+    # (which defaults to True): a stray Enter irreversibly deleted
+    # all four of the profile's roots.
+    if not cli_art.confirm(
+        f"Are you sure you want to completely delete the profile '{target}' "
+        "and all its data? This cannot be undone.",
+        default=False,
+    ):
+        return
+    for _label, path in profile_paths.sync_roots(target):
+        if os.path.exists(path):
+            shutil.rmtree(path)
+    cli_art.display_success(f"Profile '{target}' deleted.")
+    if was_active:
+        # Not a bare os.environ.pop: modules like jd_manager resolved
+        # their paths at import and must be reloaded too.
+        profile_paths.clear_active_profile()
+    _pause_and_return()
+
+
+def _rename_profile_flow(target: str) -> None:
+    """Prompts for a new name, shows the side effects, then renames."""
+    import profile_paths
+
+    new_name = cli_art.text(f"New name for '{target}':")
+    if not new_name or not new_name.strip():
+        return
+    new_name = new_name.strip()
+
+    # Resolved BEFORE the rename. This used to be checked after the
+    # directories had already moved, at which point
+    # active_profile() can no longer find profiles/<target>/ and
+    # raises ValueError -- uncaught, straight out of the menu.
+    try:
+        was_active = target == profile_paths.active_profile()
+    except ValueError:
+        was_active = False
+
+    cli_art.console.print()
+    for topic, text in profile_paths.rename_side_effects(target, new_name):
+        cli_art.console.print(
+            f"[{theme.WARNING}]{topic}:[/{theme.WARNING}] {text}",
+            soft_wrap=True,
+        )
+        cli_art.console.print()
+    if not cli_art.confirm(f"Rename '{target}' to '{new_name}' anyway?", default=False):
+        cli_art.cli_info("Left it alone.")
+        _pause_and_return()
+        return
+
+    try:
+        moved = profile_paths.rename_profile(target, new_name)
+    except (ValueError, FileExistsError) as exc:
+        cli_art.display_error(str(exc))
+        _pause_and_return()
+        return
+
+    cli_art.display_success(
+        f"Profile '{target}' renamed to '{new_name}' "
+        f"({len(moved)} director{'y' if len(moved) == 1 else 'ies'} moved)."
+    )
+    if was_active:
+        profile_paths.set_active_profile(new_name)
+    _pause_and_return()
+
+
+def _handle_manage_profiles():
     import profile_paths
 
     use_alt = _should_use_alt_screen()
@@ -2717,54 +2845,8 @@ def _handle_manage_profiles():
             return
 
         if choice == "create":
-            # Launch the bootstrap wizard for a new profile
-            import bootstrap_bullet_bank
-
-            # cli_art.text(), not raw questionary -- every interactive
-            # prompt routes through the Go/huh binary so it renders
-            # consistently with the rest of the menu (and survives the
-            # DECSTBM scroll region _run_with_chain sets for
-            # non-interactive actions).
-            # cli_art.text() has no validate= hook (charm_prompt's huh
-            # binding takes message/default only), so the empty-name case
-            # is handled here rather than in the prompt.
-            new_name = cli_art.text("New profile name (e.g., 'dom'):")
-            if not new_name or not new_name.strip():
-                continue
-            new_name = new_name.strip()
-
-            # Check if profile already exists
-            # Every result message below pauses before `continue`: the loop
-            # clears the screen at its top under alt-screen, so without it
-            # each message was erased the instant it printed.
-            if os.path.exists(os.path.join(profile_paths.PROFILES_DIR, new_name)):
-                cli_art.display_error(f"Profile '{new_name}' already exists.")
-                _pause_and_return()
-                continue
-
-            # Create the new profile
-            try:
-                bootstrap_bullet_bank.create_new_profile(new_name)
-                cli_art.display_success(
-                    f"Profile '{new_name}' created! You can now switch to it."
-                )
-
-                # Ask if they want to switch to the new profile now
-                if cli_art.confirm(
-                    f"Switch to profile '{new_name}' now?", default=True
-                ):
-                    profile_paths.set_active_profile(new_name)
-                    cli_art.display_success(f"Switched to profile '{new_name}'.")
-                    cli_art.console.print(
-                        f"\n[{theme.INFO}]Remember to run the bootstrap wizard "
-                        f"(New User? Start Here!) to set up this profile![/{theme.INFO}]\n"
-                    )
-                _pause_and_return()
-                continue
-            except Exception as e:
-                cli_art.display_error(f"Failed to create profile: {e}")
-                _pause_and_return()
-                continue
+            _create_profile_flow()
+            continue
 
         target = cli_art.select(
             f"Select profile to {choice}:", choices=names + ["Cancel"]
@@ -2773,76 +2855,9 @@ def _handle_manage_profiles():
             continue
 
         if choice == "delete":
-            # Resolved BEFORE deleting, same as rename below: once the
-            # directories are gone active_profile() can raise ValueError,
-            # which escaped after the data was already destroyed and left
-            # RESUME_PROFILE pointing at a deleted profile.
-            try:
-                was_active = target == profile_paths.active_profile()
-            except ValueError:
-                was_active = False
-            # cli_art.confirm with default=False, not raw questionary.confirm
-            # (which defaults to True): a stray Enter irreversibly deleted
-            # all four of the profile's roots.
-            if not cli_art.confirm(
-                f"Are you sure you want to completely delete the profile '{target}' "
-                "and all its data? This cannot be undone.",
-                default=False,
-            ):
-                continue
-            for _label, path in profile_paths.sync_roots(target):
-                if os.path.exists(path):
-                    shutil.rmtree(path)
-            cli_art.display_success(f"Profile '{target}' deleted.")
-            if was_active:
-                # Not a bare os.environ.pop: modules like jd_manager resolved
-                # their paths at import and must be reloaded too.
-                profile_paths.clear_active_profile()
-            _pause_and_return()
-
+            _delete_profile_flow(target)
         elif choice == "rename":
-            new_name = cli_art.text(f"New name for '{target}':")
-            if not new_name or not new_name.strip():
-                continue
-            new_name = new_name.strip()
-
-            # Resolved BEFORE the rename. This used to be checked after the
-            # directories had already moved, at which point
-            # active_profile() can no longer find profiles/<target>/ and
-            # raises ValueError -- uncaught, straight out of the menu.
-            try:
-                was_active = target == profile_paths.active_profile()
-            except ValueError:
-                was_active = False
-
-            cli_art.console.print()
-            for topic, text in profile_paths.rename_side_effects(target, new_name):
-                cli_art.console.print(
-                    f"[{theme.WARNING}]{topic}:[/{theme.WARNING}] {text}",
-                    soft_wrap=True,
-                )
-                cli_art.console.print()
-            if not cli_art.confirm(
-                f"Rename '{target}' to '{new_name}' anyway?", default=False
-            ):
-                cli_art.cli_info("Left it alone.")
-                _pause_and_return()
-                continue
-
-            try:
-                moved = profile_paths.rename_profile(target, new_name)
-            except (ValueError, FileExistsError) as exc:
-                cli_art.display_error(str(exc))
-                _pause_and_return()
-                continue
-
-            cli_art.display_success(
-                f"Profile '{target}' renamed to '{new_name}' "
-                f"({len(moved)} director{'y' if len(moved) == 1 else 'ies'} moved)."
-            )
-            if was_active:
-                profile_paths.set_active_profile(new_name)
-            _pause_and_return()
+            _rename_profile_flow(target)
 
 
 def _offer_discovery_backfill() -> bool:
