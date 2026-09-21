@@ -39,3 +39,25 @@ func TestAnswersEscClosesAndEnterRequiresQuestion(t *testing.T) {
 		t.Fatal("escape returned the wrong message")
 	}
 }
+
+func TestAnswersWrapsLongAnswerAndKeepsInputVisible(t *testing.T) {
+	m := NewAnswersModel(theme.NewTheme("resume-builder"), model.JobRow{Path: "job"}, "python3", ".", 40, 12)
+	long := strings.Repeat("alpha beta gamma delta ", 12) + "OMEGA"
+	m.turns = append(m.turns, answerTurn{Question: "Why?", Answer: long})
+	view := m.View()
+	if !strings.Contains(view, "OMEGA") {
+		t.Fatalf("end of the answer is missing:\n%s", view)
+	}
+	lines := strings.Split(view, "\n")
+	if len(lines) > 12 {
+		t.Fatalf("view has %d lines, exceeds height 12", len(lines))
+	}
+	for _, line := range lines {
+		if ansi.StringWidth(line) > 40 {
+			t.Fatalf("line exceeds width 40: %q", line)
+		}
+	}
+	if !strings.Contains(view, "Enter send") {
+		t.Fatalf("footer pushed off-screen:\n%s", view)
+	}
+}
