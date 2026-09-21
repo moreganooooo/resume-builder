@@ -158,24 +158,44 @@ func (m AnswersModel) Update(msg tea.Msg) (AnswersModel, tea.Cmd) {
 func (m AnswersModel) View() string {
 	header := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).
 		Render(ansi.Truncate(fmt.Sprintf("Application Answers · %s · %s", m.job.Title, m.job.Company), max(1, m.width), "…"))
+	// Questions and answers word-wrap to the terminal width -- per-line
+	// truncation used to cut every answer after its first line.
+	wrap := func(s string) string { return ansi.Wrap(s, max(1, m.width), "") }
 	var body []string
 	for _, turn := range m.turns {
-		body = append(body, lipgloss.NewStyle().Foreground(m.theme.Blue).Render("You: ")+turn.Question)
-		body = append(body, lipgloss.NewStyle().Foreground(m.theme.Green).Render("Answer: ")+turn.Answer)
+		body = append(body, wrap(lipgloss.NewStyle().Foreground(m.theme.Blue).Render("You: ")+turn.Question))
+		body = append(body, wrap(lipgloss.NewStyle().Foreground(m.theme.Green).Render("Answer: ")+turn.Answer))
 		if turn.Limit > 0 {
 			body = append(body, fmt.Sprintf("%s · chars %d/%d", turn.Kind, len([]rune(turn.Answer)), turn.Limit))
 		}
 		for _, warning := range turn.Warnings {
-			body = append(body, lipgloss.NewStyle().Foreground(m.theme.Peach).Render("⚠ "+warning))
+			body = append(body, wrap(lipgloss.NewStyle().Foreground(m.theme.Peach).Render("⚠ "+warning)))
 		}
 	}
 	if len(body) == 0 {
-		body = append(body, lipgloss.NewStyle().Foreground(m.theme.Subtext).
-			Render("Paste an application question and press Enter."))
+		body = append(body, wrap(lipgloss.NewStyle().Foreground(m.theme.Subtext).
+			Render("Paste an application question and press Enter.")))
 	}
 	footer := lipgloss.NewStyle().Foreground(m.theme.Subtext).
 		Render(fmt.Sprintf("%s · Enter send · Esc back · q quit", m.status))
-	lines := strings.Split(strings.Join([]string{header, "", strings.Join(body, "\n"), "", m.input.View(), footer}, "\n"), "\n")
+	bodyLines := strings.Split(strings.Join(body, "\n"), "\n")
+	inputLines := strings.Split(m.input.View(), "\n")
+	// Header, input and footer stay put; when wrapped answers outgrow the
+	// screen, keep the newest body lines so the latest answer stays visible.
+	if m.height > 0 {
+		avail := m.height - len(inputLines) - 4 // header, two blanks, footer
+		if avail < 1 {
+			avail = 1
+		}
+		if len(bodyLines) > avail {
+			bodyLines = bodyLines[len(bodyLines)-avail:]
+		}
+	}
+	lines := []string{header, ""}
+	lines = append(lines, bodyLines...)
+	lines = append(lines, "")
+	lines = append(lines, inputLines...)
+	lines = append(lines, footer)
 	for i, line := range lines {
 		lines[i] = ansi.Truncate(line, max(1, m.width), "…")
 	}
