@@ -462,7 +462,9 @@ class LocationVerdict:
 
 
 def classify_workplace(
-    location: str, is_remote: bool | None = None, work_model: str = ""
+    location: str | None,
+    is_remote: bool | None = None,
+    work_model: str | None = "",
 ) -> str:
     """Returns REMOTE / HYBRID / ONSITE / UNKNOWN for a posting.
 
@@ -734,7 +736,7 @@ def _hub_distance_verdict(
     return LocationVerdict(True, workplace, miles, label)
 
 
-def evaluate_location(location: str, config: dict, **posting) -> LocationVerdict:
+def evaluate_location(location: str | None, config: dict, **posting) -> LocationVerdict:
     """The tiered verdict. `config` is scan_filters.yml's `location:` block.
 
     Callers pass provider-supplied structured hints through **posting

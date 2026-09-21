@@ -32,6 +32,7 @@ import json
 import os
 import re
 import sys
+from typing import cast
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -242,7 +243,7 @@ def _load_checkpoint() -> dict:
     if not os.path.exists(CHECKPOINT_PATH):
         return {}
     with open(CHECKPOINT_PATH, encoding="utf-8") as f:
-        return json.load(f)
+        return cast("dict", json.load(f))
 
 
 def _save_checkpoint(state: dict) -> None:

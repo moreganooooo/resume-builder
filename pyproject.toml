@@ -57,6 +57,10 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+# scripts/ is a package (it has __init__.py) but its modules import each
+# other bare (`import cli_art`); both settings are needed for those to resolve.
+mypy_path = "scripts"
+explicit_package_bases = true
 exclude = ["dashboard"]
 
 [tool.pyright]

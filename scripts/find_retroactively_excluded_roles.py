@@ -49,6 +49,7 @@ import os
 import shutil
 import sys
 from datetime import datetime
+from typing import cast
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -67,7 +68,7 @@ def _raw_jd_fields(identifier: str, profile: str) -> dict:
     via a synced-back temp file for the latter."""
     with jd_source.resolved_jd(identifier, profile) as (path, _):
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            return cast("dict", json.load(f))
 
 
 def check_gates(data: dict) -> list:

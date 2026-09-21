@@ -1,10 +1,13 @@
 import csv
 import os
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts import answer_library
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+
+import answer_library  # noqa: E402
 
 
 class TestAnswerLibrary(unittest.TestCase):

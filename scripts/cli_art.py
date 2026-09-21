@@ -9,6 +9,7 @@ import re
 import shutil
 import sys
 import time
+from typing import cast
 
 import charm_prompt
 import followup
@@ -743,7 +744,7 @@ def _followup_cell(application: dict | None) -> str:
     status = application.get("status", "?")
     urgency = followup.compute_urgency(application)
     if not urgency:
-        return status
+        return cast("str", status)
     color = _FOLLOWUP_COLORS.get(urgency, theme.MUTED)
     return f"{status} [{color}]({urgency})[/{color}]"
 
@@ -2029,7 +2030,10 @@ def text(message: str, default: str = "") -> str | None:
     import sys
 
     if "unittest" in sys.modules:
-        return questionary.text(message, default=default, style=QUESTIONARY_STYLE).ask()
+        return cast(
+            "str | None",
+            questionary.text(message, default=default, style=QUESTIONARY_STYLE).ask(),
+        )
     return charm_prompt.text(message, default=default)
 
 
@@ -2053,7 +2057,9 @@ def password(message: str) -> str | None:
     import sys
 
     if "unittest" in sys.modules:
-        return questionary.password(message, style=QUESTIONARY_STYLE).ask()
+        return cast(
+            "str | None", questionary.password(message, style=QUESTIONARY_STYLE).ask()
+        )
     return charm_prompt.password(message)
 
 

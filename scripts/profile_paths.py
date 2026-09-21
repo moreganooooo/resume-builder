@@ -29,6 +29,7 @@ before any recovery flow can run.
 
 import importlib.util
 import os
+from typing import cast
 
 import yaml
 
@@ -210,10 +211,10 @@ def _default_profile() -> str:
     """
     names = available_profiles()
     if len(names) == 1:
-        return names[0]
+        return cast("str", names[0])
     if names:
         by_lower = {n.lower(): n for n in names}
-        return by_lower.get(_LEGACY_DEFAULT_PROFILE, sorted(names)[0])
+        return cast("str", by_lower.get(_LEGACY_DEFAULT_PROFILE, sorted(names)[0]))
     return _LEGACY_DEFAULT_PROFILE
 
 
@@ -237,7 +238,7 @@ def active_profile() -> str:
     # behaviour change for profiles that already resolve correctly.
     match = {n.lower(): n for n in available_profiles()}.get(name.lower())
     if match:
-        return match
+        return cast("str", match)
     raise ValueError(
         f"RESUME_PROFILE is set to {name!r}, but profiles/{name}/ does not exist. "
         "Check for a typo, or create it via the bootstrap 'New Profile' flow."
@@ -456,7 +457,9 @@ def profile_yaml(profile: str | None = None) -> dict:
 
 def full_name(profile: str | None = None) -> str:
     """Reads candidate.full_name from profile.yml (e.g. "Alex Mercer")."""
-    return (profile_yaml(profile).get("candidate") or {}).get("full_name", "")
+    return cast(
+        "str", (profile_yaml(profile).get("candidate") or {}).get("full_name", "")
+    )
 
 
 def education_achievement_slots(profile: str | None = None) -> list:

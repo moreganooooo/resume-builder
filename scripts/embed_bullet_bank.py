@@ -51,7 +51,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
-from typing import Any
+from typing import Any, cast
 
 import cli_art
 import profile_paths  # noqa: E402
@@ -138,7 +138,7 @@ def index_is_current(npy_path: str, meta_path: str, sha: str, n_rows: int) -> bo
             meta = json.load(f)
     except Exception:
         return False
-    return meta.get("bullets_sha") == sha and meta.get("rows") == n_rows
+    return cast("bool", meta.get("bullets_sha") == sha and meta.get("rows") == n_rows)
 
 
 def embed_batch(

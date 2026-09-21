@@ -5,8 +5,8 @@ from __future__ import annotations
 import csv
 import os
 
-from scripts import profile_paths
-from scripts.atomic_write import atomic_write
+import profile_paths
+from atomic_write import atomic_write
 
 HEADERS = [
     "Filename",
@@ -51,7 +51,7 @@ def add_to_library(
     if quote:
         # Rebuild is intentionally opt-in; a quote-less promotion must not
         # alter voice anchors.
-        from scripts.build_voice_anchors import build_voice_anchors
+        from build_voice_anchors import build_voice_anchors
 
         voice_path = os.path.join(profile_paths.kb_dir(), "voice-anchors.md")
         content = build_voice_anchors(path)

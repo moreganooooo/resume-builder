@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import TYPE_CHECKING, Any, List, Literal, Tuple
+from typing import TYPE_CHECKING, Any, List, Literal, Tuple, cast
 
 if TYPE_CHECKING:  # annotations only -- see the lazy imports below
     import pandas as pd
@@ -534,7 +534,7 @@ def get_verified_claims_text(df_claims: "pd.DataFrame") -> str:
         return ""
     cols = ["Claim / Finding", "Metric(s)", "Confidence", "Evidence / Detail"]
     available = [c for c in cols if c in df_claims.columns]
-    return df_claims[available].to_csv(index=False)
+    return cast("str", df_claims[available].to_csv(index=False))
 
 
 def persona_context(tags: str) -> str:
@@ -2364,10 +2364,10 @@ def _lookup_role_metadata(role_metadata: dict, company: str) -> dict:
     identically ('Element 8 / Strategy LLC' vs 'Element 8 + Strategy, LLC')."""
     needle = validate_resume._normalize_company(company)
     if needle in role_metadata:
-        return role_metadata[needle]
+        return cast("dict", role_metadata[needle])
     for key, meta in role_metadata.items():
         if key and (needle in key or key in needle):
-            return meta
+            return cast("dict", meta)
     return {}
 
 
@@ -3205,7 +3205,7 @@ def confirm_jd_skill_gaps_interactively(
     if checkpoint is not None:
         confirmed = checkpoint.get("confirmed_skill_gaps")
         if confirmed is not None:
-            return confirmed
+            return cast("list[str]", confirmed)
 
     import profile_paths
     import skills_menu
@@ -3292,7 +3292,7 @@ def confirm_jd_skill_gaps_interactively(
         if job_key:
             jd_manager.save_checkpoint(job_key, checkpoint)
 
-    return selected
+    return cast("list[str]", selected)
 
 
 def confirm_missing_coverage_keywords_interactively(missing: list[str]) -> list[str]:
@@ -3393,7 +3393,7 @@ def _review_recommendations_interactively(
     """
     approved_recs = checkpoint.get("approved_recommendations")
     if approved_recs is not None:
-        return approved_recs
+        return cast("list[str]", approved_recs)
 
     cli_art.console.rule("Step 5.5 review", style=theme.BRAND)
     cli_art.detail(
@@ -3688,8 +3688,11 @@ def _weighted_score(subscores: dict, weights: dict) -> float:
     """1-5 weighted average of a subscore dict against its matching
     weight dict (FIT_SUBSCORE_WEIGHTS / INTERVIEW_ODDS_WEIGHTS /
     PRACTICAL_PURSUE_WEIGHTS)."""
-    return round(
-        sum(subscores.get(dim, 0) * weight for dim, weight in weights.items()), 2
+    return cast(
+        float,
+        round(
+            sum(subscores.get(dim, 0) * weight for dim, weight in weights.items()), 2
+        ),
     )
 
 
@@ -3706,7 +3709,7 @@ def compute_practical_pursue_score(practical_pursue_subscores: dict) -> float:
 
 
 def calibrate_commute_quality(
-    distance_miles: float | None = None, radius_miles: float = 5.0
+    distance_miles: float | None = None, radius_miles: float | None = 5.0
 ) -> float:
     """Scores commute convenience on a 1-5 scale for local jobs within radius:
     0.0 - 1.0 mi -> 5.0 (walking/ultra-local)
@@ -4226,7 +4229,7 @@ def _interview_probability(interview_odds_score: float) -> float:
 def rescore_evaluation_with_location(
     evaluation: dict,
     distance_miles: float | None = None,
-    radius_miles: float = 5.0,
+    radius_miles: float | None = 5.0,
     workplace_mode: str = "any",
     remote_required: bool = False,
     posting_age_days: int | None = None,
@@ -4497,7 +4500,7 @@ def _resolve_company_location(research: dict | None, jd_data: dict) -> str:
     Shown regardless of remote/on-site status -- the candidate wants the
     address line for professionalism even on remote roles."""
     if research and research.get("company_hq_location"):
-        return research["company_hq_location"]
+        return cast("str", research["company_hq_location"])
     return jd_data.get("location") or ""
 
 
@@ -5609,7 +5612,7 @@ class ResumeEngine:
             self._segment_cache[key] = self._build_audit_segment_bundle(
                 company, normalized_tags
             )
-        return self._segment_cache[key]
+        return cast("str", self._segment_cache[key])
 
     def audit_segment_bundle_for_gemma(self, company: str, tags: str) -> str:
         """Memoized accessor for _build_audit_segment_bundle_gemma (Tier 2,
@@ -5624,7 +5627,7 @@ class ResumeEngine:
             self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(
                 company, normalized_tags
             )
-        return self._gemma_segment_cache[key]
+        return cast("str", self._gemma_segment_cache[key])
 
     @staticmethod
     def _normalize_tags(tags_str: str) -> str:
@@ -6079,6 +6082,11 @@ class ResumeEngine:
                             # rewrite_parse_failures handoff below is the only path
                             # allowed to switch models for this call. Matches
                             # rewrite_bullets.py's process_bullet() exactly.
+                            retry_kwargs: dict[str, Any] = (
+                                {"max_retries": GEMMA_REWRITE_MAX_RETRIES}
+                                if is_gemma_attempt
+                                else {}
+                            )
                             rewrite_text, rw_usage = GeminiClient.generate(
                                 model=active_rewrite_model,
                                 system_instruction=active_rewrite_system,
@@ -6087,11 +6095,7 @@ class ResumeEngine:
                                 temperature=0.7,
                                 max_output_tokens=REWRITE_MAX_OUTPUT_TOKENS,
                                 model_fallback=False,
-                                **(
-                                    {"max_retries": GEMMA_REWRITE_MAX_RETRIES}
-                                    if is_gemma_attempt
-                                    else {}
-                                ),
+                                **retry_kwargs,
                             )
 
                             if not rewrite_text:
@@ -6628,7 +6632,7 @@ class ResumeEngine:
         339 of 344 came back generalist_coordinator or marketing_ops_crm. The
         resume critique's ROLE DNA rubric read the same file."""
         own = os.path.join(self.kb_dir, "role_dna.yaml")
-        return self.kb_dir if os.path.exists(own) else self.scoring_dir
+        return cast("str", self.kb_dir if os.path.exists(own) else self.scoring_dir)
 
     def build_fit_evaluation_context(
         self, jd_text: str, jd_skill_names: list | None = None, commute_block: str = ""
@@ -7376,12 +7380,12 @@ class ResumeEngine:
                 f"{PDF_GENERATION_TIMEOUT_SECONDS}s.",
                 soft_wrap=True,
             )
-            return {}
+            return False
         if pdf_result.returncode != 0:
             cli_art.friendly_subprocess_error(
                 pdf_result.stderr, "creating the PDF for this cover letter"
             )
-            return {}
+            return False
         cli_art.print_subprocess_output(pdf_result.stdout)
 
         docx_out = os.path.join(self.output_docx_dir, f"{stem}_CoverLetter.docx")
@@ -7389,7 +7393,7 @@ class ResumeEngine:
             render_coverletter_docx(letter_data, docx_out)
         except Exception as e:
             cli_art.friendly_error(e, "creating the DOCX for this cover letter")
-            return {}
+            return False
 
         cl_text_warnings = validate_pdf_text.validate_coverletter_pdf_text(
             pdf_out, letter_data, jd_keywords=jd_keywords
@@ -8851,7 +8855,7 @@ class ResumeEngine:
                         normalize_resume.normalize(condensed),
                         condense_targets,
                     )
-                    _validate_kwargs = {
+                    _validate_kwargs: dict[str, Any] = {
                         "role_bullet_maximums": role_bullet_maximums,
                         "bullet_tuples": bullet_tuples,
                     }
@@ -8960,7 +8964,7 @@ class ResumeEngine:
                     # that slipped through an earlier step), and treating
                     # those as "introduced by this backfill" would wrongly
                     # discard a perfectly good Why section forever.
-                    baseline_violations = set(
+                    why_baseline_violations = set(
                         validate_resume.validate(
                             resume_data,
                             style_rules_for_validation,
@@ -8984,7 +8988,7 @@ class ResumeEngine:
                         bullet_tuples=bullet_tuples,
                     )
                     why_violations = [
-                        v for v in all_violations if v not in baseline_violations
+                        v for v in all_violations if v not in why_baseline_violations
                     ]
                     if not why_violations:
                         # If this pushes the page count past 2, the existing
@@ -9161,11 +9165,11 @@ class ResumeEngine:
             )
             from rich.text import Text
 
-            for f in pdf_fatal:
+            for fatal in pdf_fatal:
                 # Print raw to stdout so the exact exception text appears
                 # unwrapped and unstyled for tests that assert on the
                 # literal substring.
-                print(f"    - {f}")
+                print(f"    - {fatal}")
             return {}
         if pdf_text_warnings:
             cli_art.console.print(

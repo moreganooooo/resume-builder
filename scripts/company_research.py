@@ -24,6 +24,7 @@ import os
 import re
 import subprocess
 import sys
+from typing import cast
 from urllib.parse import urlparse
 
 import profile_paths
@@ -414,7 +415,7 @@ def _find_website_via_search_engine(company_name: str) -> str | None:
     return None
 
 
-def find_company_website(company_name: str) -> str | None:
+def find_company_website(company_name: str | None) -> str | None:
     """
     Fallback lookup for a JD source that never surfaced a company_website
     (e.g. scan_linkedin.py's JDs today -- see ResumeEngine.research_company()'s
@@ -464,7 +465,7 @@ def find_company_website(company_name: str) -> str | None:
 
 
 def research_company_via_search(
-    company_name: str, context_hint: str = ""
+    company_name: str | None, context_hint: str = ""
 ) -> str | None:
     """
     Tier 2 of ResumeEngine.research_company()'s fallback chain: when no
@@ -651,7 +652,7 @@ def _cache_disabled() -> bool:
         return "unittest" in sys.modules
 
 
-def _company_key(company_name: str) -> str:
+def _company_key(company_name: str | None) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", (company_name or "").lower()).split())
 
 
@@ -674,7 +675,9 @@ def _read_cache() -> dict:
         return {}
 
 
-def load_cached_research(company_name: str, company_website: str = "") -> dict | None:
+def load_cached_research(
+    company_name: str | None, company_website: str = ""
+) -> dict | None:
     """Fresh cached research for this company, or None. A known, usable
     website whose host differs from the cached one counts as a miss: two
     different companies can share a name, and the site is the better
@@ -697,10 +700,12 @@ def load_cached_research(company_name: str, company_website: str = "") -> dict |
     cached_host = entry.get("website_host") or ""
     if known_host and cached_host and known_host != cached_host:
         return None
-    return entry["research"]
+    return cast("dict | None", entry["research"])
 
 
-def save_cached_research(company_name: str, research: dict, website: str = "") -> None:
+def save_cached_research(
+    company_name: str | None, research: dict, website: str = ""
+) -> None:
     """Best-effort -- a failed cache write never fails research itself."""
     key = _company_key(company_name)
     if not key or not isinstance(research, dict) or _cache_disabled():

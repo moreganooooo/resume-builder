@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import re
 from functools import lru_cache
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, cast
 
 import yaml
 
@@ -76,7 +76,7 @@ def load_title_aliases(custom_path: Optional[str] = None) -> Dict[str, dict]:
     """Returns the role_families dictionary from the aliases YAML file."""
     path = custom_path or DEFAULT_ALIASES_PATH
     data = _load_yaml_cached(path)
-    return data.get("role_families", {})
+    return cast("dict[str, dict]", data.get("role_families", {}))
 
 
 def _tokenize(text: str) -> set[str]:

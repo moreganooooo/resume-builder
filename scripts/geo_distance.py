@@ -25,6 +25,7 @@ import json
 import math
 import os
 import re
+from typing import cast
 
 ASSETS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "geodata"
@@ -212,7 +213,7 @@ def _load_index(filename: str) -> dict:
     path = os.path.join(ASSETS_DIR, filename)
     try:
         with gzip.open(path, "rt", encoding="utf-8") as handle:
-            return json.load(handle)
+            return cast("dict", json.load(handle))
     except (OSError, ValueError):
         # Missing or corrupt bundled data degrades to "cannot resolve"
         # rather than crashing a scan. Callers already handle None, and a

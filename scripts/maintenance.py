@@ -10,6 +10,7 @@ everywhere else (checkpoint.json, jd_tracker_log.csv, etc.).
 import datetime
 import json
 import os
+from typing import cast
 
 import profile_paths
 from atomic_write import atomic_write
@@ -46,4 +47,4 @@ def get_last_run(task_name: str) -> str | None:
             log = json.load(f)
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return None
-    return log.get(task_name)
+    return cast("str | None", log.get(task_name))

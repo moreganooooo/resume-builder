@@ -32,6 +32,7 @@ import datetime
 import os
 import shutil
 import sys
+from typing import cast
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
@@ -118,7 +119,7 @@ def backfill_candidates() -> list:
     )
     if not n_new:
         return []
-    return merged.tail(n_new).fillna("").to_dict("records")
+    return cast("list", merged.tail(n_new).fillna("").to_dict("records"))
 
 
 def since_backup_candidates(backup_path) -> list:

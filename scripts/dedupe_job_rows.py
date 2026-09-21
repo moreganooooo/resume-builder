@@ -46,6 +46,7 @@ import os
 import shutil
 import sys
 from datetime import datetime
+from typing import cast
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -73,7 +74,7 @@ def _keeper(rows_oldest_first: list) -> dict:
             -index,
         )
 
-    return sorted(enumerate(rows_oldest_first), key=sort_key)[0][1]
+    return cast("dict", sorted(enumerate(rows_oldest_first), key=sort_key)[0][1])
 
 
 def find_duplicate_groups(conn) -> list:

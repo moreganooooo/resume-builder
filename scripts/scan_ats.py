@@ -48,6 +48,7 @@ import re
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import cast
 
 import cli_art
 import profile_paths
@@ -183,7 +184,7 @@ def _resolve_provider_id(entry: dict) -> str:
     provider ids -- that's fetch_ats_jobs()'s job (see its docstring) --
     this function just answers "what would this entry resolve to."""
     if entry.get("provider"):
-        return entry["provider"]
+        return cast("str", entry["provider"])
     haystack = f"{entry.get('careers_url', '')} {entry.get('api', '')}".lower()
     for provider_id, host_fragment in _ATS_HOST_PATTERNS:
         if host_fragment in haystack:
@@ -194,13 +195,13 @@ def _resolve_provider_id(entry: dict) -> str:
 def _load_tracked_companies() -> list:
     path = os.path.join(profile_paths.board_scanner_dir(), "tracked_companies.yml")
     with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f).get("tracked_companies", [])
+        return cast("list", yaml.safe_load(f).get("tracked_companies", []))
 
 
 def _load_search_queries() -> list:
     path = os.path.join(profile_paths.board_scanner_dir(), "search_queries.yml")
     with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f).get("search_queries", [])
+        return cast("list", yaml.safe_load(f).get("search_queries", []))
 
 
 _ASHBY_URL_RE = re.compile(r"jobs\.ashbyhq\.com/([^/]+)/([0-9a-f-]{36})", re.IGNORECASE)

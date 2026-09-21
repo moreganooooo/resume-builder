@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+from typing import cast
 
 import numpy as np
 
@@ -31,7 +32,7 @@ def cosine_similarity_matrix(query_vec: np.ndarray, matrix: np.ndarray) -> np.nd
     m_norms[m_norms == 0] = 1.0
 
     dot_products = np.dot(matrix, query_vec)
-    return dot_products / (m_norms * q_norm)
+    return cast("np.ndarray", dot_products / (m_norms * q_norm))
 
 
 def needs_reembed(profile: str | None = None) -> tuple[bool, str]:

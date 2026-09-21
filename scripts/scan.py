@@ -14,6 +14,7 @@ import datetime
 import json
 import logging
 import os
+from typing import Any, Callable
 
 import cli_art
 import jd_manager
@@ -80,7 +81,7 @@ _SCAN_LIVENESS_REASON = "confirmed to exist by scan"
 # answer), cap automatically rather than hang unbounded.
 VERIFY_CONFIRM_THRESHOLD = 25
 
-SOURCE_FETCHERS = {
+SOURCE_FETCHERS: dict[str, Callable[..., Any]] = {
     "jobright": scan_jobright.fetch_jobright_jobs,
     "linkedin": scan_linkedin.fetch_linkedin_jobs,
     # Indeed via JobSpy -- the largest US board and, so far, the only
