@@ -3,6 +3,7 @@ package data
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -83,5 +84,28 @@ func TestLoadKBItems(t *testing.T) {
 
 	if !foundTool || !foundMetric || !foundFact {
 		t.Errorf("missing expected category items: tool=%v, metric=%v, fact=%v", foundTool, foundMetric, foundFact)
+	}
+}
+
+// Real profiles write label/claim/caveat; reading only "statement" rendered
+// every fact with an empty title.
+func TestLoadKBItemsFactsUseLabelAndClaim(t *testing.T) {
+	dir := t.TempDir()
+	facts := `{"facts": [{"id": "f1", "label": "Team size", "claim": "Managed 4 reps", "caveat": "Contractors", "confidence": "High"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "verified_facts.json"), []byte(facts), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	items := LoadKBItems(dir)
+	if len(items) != 1 {
+		t.Fatalf("got %d items, want 1", len(items))
+	}
+	got := items[0]
+	if got.Title != "Team size" {
+		t.Errorf("Title = %q, want label", got.Title)
+	}
+	for _, want := range []string{"Managed 4 reps", "Contractors"} {
+		if !strings.Contains(got.Content, want) {
+			t.Errorf("Content missing %q:\n%s", want, got.Content)
+		}
 	}
 }
