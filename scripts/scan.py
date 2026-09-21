@@ -154,6 +154,115 @@ def _write_jd_file(job: dict) -> str:
     return dest
 
 
+def _verify_written_jds(written_paths: dict, written: int) -> int:
+    """Liveness-checks the JDs this scan just wrote, dropping expired ones.
+
+    Returns the new-file count with any confirmed-expired posting removed,
+    so the report never presents a dead posting as a hit.
+    """
+    paths_to_verify = list(written_paths.keys())
+    if len(paths_to_verify) > VERIFY_CONFIRM_THRESHOLD:
+        proceed = True
+        if cli_art.console.is_terminal:
+            proceed = cli_art.confirm(
+                f"{len(paths_to_verify)} new postings found -- verify all of them with a "
+                f"real browser check (~{len(paths_to_verify) * 5 // 60} min)? "
+                f"(No verifies just the first {VERIFY_CONFIRM_THRESHOLD}.)",
+                default=False,
+            )
+        if not proceed:
+            paths_to_verify = paths_to_verify[:VERIFY_CONFIRM_THRESHOLD]
+    with cli_art.new_scan_activity() as verify_activity:
+        verify_result = liveness.verify_jd_paths(
+            paths_to_verify, activity=verify_activity
+        )
+    for path in verify_result.get("expired_source_paths", []):
+        entry = written_paths.get(path)
+        if not entry:
+            continue
+        result, new_job_entry = entry
+        result["written"] -= 1
+        result["dropped_expired"] += 1
+        # By identity, not list.remove()'s by-value match -- two
+        # postings can share the same company+title (a real posting
+        # cross-listed, or just coincidence), and .remove() would drop
+        # whichever one happens to come first in the list regardless
+        # of which path this expired_source_paths entry is actually about
+        # (B42).
+        for i, candidate in enumerate(result["new_jobs"]):
+            if candidate is new_job_entry:
+                del result["new_jobs"][i]
+                break
+        written -= 1
+    return written
+
+
+def _should_skip_job(job: dict, job_key: str, tracker, known_jobs_index) -> bool:
+    """Whether this fetched posting should be skipped instead of written.
+
+    Three reasons, in the order they were always checked: already known,
+    no description text at all, or a remote posting whose body names
+    international-only eligibility.
+    """
+    company = job.get("company_name", "unknown")
+    title = job.get("job_title", "unknown")
+    source_url = job.get("source_url")
+
+    if job_key and jd_manager.job_key_known(
+        job_key,
+        tracker=tracker,
+        source_url=source_url,
+        company_name=job.get("company_name"),
+        job_title=job.get("job_title"),
+        index=known_jobs_index,
+    ):
+        return True
+
+    # A posting with no body text at all is not a lead, it is a permanent
+    # dead end: nothing downstream can evaluate or tailor against it, and
+    # writing it makes the emptiness STICKY -- job_key_known() will skip
+    # the same posting on every future scan, so the good version never
+    # lands. Better to miss it this run and catch it next one.
+    #
+    # Only workday produces these in practice (27 of 615 on the 2026-08-21
+    # scan): its listing endpoint never carries body text, its posting page
+    # is a JS SPA so _fetch_posting_text cannot scrape one either, and a
+    # large board can exhaust its detail-fetch budget.
+    if not (job.get("description") or "").strip():
+        logging.warning(
+            "scan: skipping %s @ %s -- no description available from %s",
+            title,
+            company,
+            job.get("source_platform") or "?",
+        )
+        return True
+
+    # A last, cross-source safety net for a remote posting whose structured
+    # location field is a bare "Remote" (no country info) but whose own body
+    # text names international-only eligibility -- catches sources with no
+    # structured multi-location field to fold in (aggregator boards, Indeed,
+    # JobRight, LinkedIn all land here with description text already present,
+    # as do the ATS providers as a backstop). This runs after
+    # _passes_location_filter (checked per-source, location field only)
+    # specifically because it needs the full description text, which
+    # per-source location gates run before fetching.
+    location_str = job.get("location") or ""
+    if location_filter.classify_workplace(
+        location_str
+    ) == location_filter.REMOTE and location_filter.looks_international_in_text(
+        job.get("description") or ""
+    ):
+        logging.info(
+            "scan: skipping %s @ %s -- description names international-only "
+            "eligibility for a remote role",
+            title,
+            company,
+        )
+        return True
+
+    return False
+
+
 def run_scan(sources: list | None = None, verify: bool = True) -> int:
     """Runs each requested source's fetcher, writes new jobs into jds/
     (skipping anything already known), then -- unless verify=False --
@@ -221,66 +330,8 @@ def run_scan(sources: list | None = None, verify: bool = True) -> int:
                     # None whenever source_job_id was absent, and the caller only
                     # dedups when job_key is truthy).
                     job_key = str(job_id) if job_id else (source_url or "")
-                    if job_key and jd_manager.job_key_known(
-                        job_key,
-                        tracker=tracker,
-                        source_url=source_url,
-                        company_name=job.get("company_name"),
-                        job_title=job.get("job_title"),
-                        index=known_jobs_index,
-                    ):
+                    if _should_skip_job(job, job_key, tracker, known_jobs_index):
                         result["skipped"] += 1
-                        continue
-
-                    # A posting with no body text at all is not a lead,
-                    # it is a permanent dead end: nothing downstream can
-                    # evaluate or tailor against it, and writing it makes
-                    # the emptiness STICKY -- job_key_known() will skip
-                    # the same posting on every future scan, so the good
-                    # version never lands. Better to miss it this run and
-                    # catch it next one.
-                    #
-                    # Only workday produces these in practice (27 of 615
-                    # on the 2026-08-21 scan): its listing endpoint never
-                    # carries body text, its posting page is a JS SPA so
-                    # _fetch_posting_text cannot scrape one either, and a
-                    # large board can exhaust its detail-fetch budget.
-                    if not (job.get("description") or "").strip():
-                        result["skipped"] += 1
-                        logging.warning(
-                            "scan: skipping %s @ %s -- no description available "
-                            "from %s",
-                            title,
-                            company,
-                            job.get("source_platform") or "?",
-                        )
-                        continue
-
-                    # A last, cross-source safety net for a remote posting
-                    # whose structured location field is a bare "Remote"
-                    # (no country info) but whose own body text names
-                    # international-only eligibility -- catches sources
-                    # with no structured multi-location field to fold in
-                    # (aggregator boards, Indeed, JobRight, LinkedIn all
-                    # land here with description text already present, as
-                    # do the ATS providers as a backstop). This runs after
-                    # _passes_location_filter (checked per-source, location
-                    # field only) specifically because it needs the full
-                    # description text, which per-source location gates run
-                    # before fetching.
-                    location_str = job.get("location") or ""
-                    if location_filter.classify_workplace(
-                        location_str
-                    ) == location_filter.REMOTE and location_filter.looks_international_in_text(
-                        job.get("description") or ""
-                    ):
-                        result["skipped"] += 1
-                        logging.info(
-                            "scan: skipping %s @ %s -- description names "
-                            "international-only eligibility for a remote role",
-                            title,
-                            company,
-                        )
                         continue
 
                     dest = _write_jd_file(job)
@@ -307,40 +358,7 @@ def run_scan(sources: list | None = None, verify: bool = True) -> int:
         root_logger.removeHandler(collector)
 
     if verify and written_paths:
-        paths_to_verify = list(written_paths.keys())
-        if len(paths_to_verify) > VERIFY_CONFIRM_THRESHOLD:
-            proceed = True
-            if cli_art.console.is_terminal:
-                proceed = cli_art.confirm(
-                    f"{len(paths_to_verify)} new postings found -- verify all of them with a "
-                    f"real browser check (~{len(paths_to_verify) * 5 // 60} min)? "
-                    f"(No verifies just the first {VERIFY_CONFIRM_THRESHOLD}.)",
-                    default=False,
-                )
-            if not proceed:
-                paths_to_verify = paths_to_verify[:VERIFY_CONFIRM_THRESHOLD]
-        with cli_art.new_scan_activity() as verify_activity:
-            verify_result = liveness.verify_jd_paths(
-                paths_to_verify, activity=verify_activity
-            )
-        for path in verify_result.get("expired_source_paths", []):
-            entry = written_paths.get(path)
-            if not entry:
-                continue
-            result, new_job_entry = entry
-            result["written"] -= 1
-            result["dropped_expired"] += 1
-            # By identity, not list.remove()'s by-value match -- two
-            # postings can share the same company+title (a real posting
-            # cross-listed, or just coincidence), and .remove() would drop
-            # whichever one happens to come first in the list regardless
-            # of which path this expired_source_paths entry is actually about
-            # (B42).
-            for i, candidate in enumerate(result["new_jobs"]):
-                if candidate is new_job_entry:
-                    del result["new_jobs"][i]
-                    break
-            written -= 1
+        written = _verify_written_jds(written_paths, written)
 
     # Duplicates each cost an evaluation call and clutter every list, so they
     # are archived right after the scan that brought them in, using the same

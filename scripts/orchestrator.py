@@ -6769,7 +6769,6 @@ class ResumeEngine:
             jd_data.get("is_remote"),
             jd_data.get("work_model", ""),
         )
-        loc_dist = None
         try:
             import location_settings
 
@@ -6780,39 +6779,9 @@ class ResumeEngine:
         radius_miles = loc_settings.get("radius_miles")
         workplace_mode = loc_settings.get("workplace_mode", "any")
 
-        enrichment = jd_data.get("_location_enrichment")
-        if (
-            isinstance(enrichment, dict)
-            and enrichment.get("distance_miles") is not None
-        ):
-            loc_dist = enrichment.get("distance_miles")
-        elif radius_miles and (jd_data.get("location") or jd_text):
-            try:
-                import location_enricher
-
-                job_data = {
-                    "id": os.path.basename(jd_path),
-                    "title": jd_data.get("job_title", ""),
-                    "company": jd_data.get("company_name", ""),
-                    "location": jd_data.get("location", ""),
-                    "raw_text": jd_text,
-                    "company_website": jd_data.get("company_website", ""),
-                    "is_remote": jd_data.get("is_remote"),
-                    "work_model": jd_data.get("work_model"),
-                }
-                cache = location_enricher.load_locations_cache()
-                enr = location_enricher.enrich_job_location(
-                    job_data,
-                    settings=loc_settings,
-                    allow_search_backup=False,
-                    cache=cache,
-                )
-                if enr.get("distance_miles") is not None:
-                    loc_dist = enr.get("distance_miles")
-            except Exception:
-                pass
-        if loc_dist is None and radius_miles:
-            loc_dist = city_level_distance(jd_data.get("location"), loc_settings)
+        loc_dist = _resolve_commute_distance(
+            jd_path, jd_data, jd_text, loc_settings, radius_miles
+        )
 
         # 1. Prepare evaluation context
         fit_context = self.build_fit_evaluation_context(
@@ -6848,51 +6817,12 @@ class ResumeEngine:
         recruiter_data = GeminiClient.parse_json(rec_text or "") or {}
 
         # 4. Synthesize Split Results into the unified FitEvaluationSchema format
-        evaluation = {
-            "archetype": capability_data.get("archetype", "Unknown"),
-            "hard_blockers": recruiter_data.get("hard_blockers", []),
-            "fit_subscores": capability_data.get("fit_subscores", {}),
-            "interview_odds_subscores": recruiter_data.get(
-                "interview_odds_subscores", {}
-            ),
-            "practical_pursue_subscores": recruiter_data.get(
-                "practical_pursue_subscores", {}
-            ),
-            "recommendation": recruiter_data.get("recommendation", "Selective pursue"),
-            "why": recruiter_data.get("why", ""),
-            "recruiter_read": recruiter_data.get("recruiter_read", ""),
-            "posting_legitimacy": recruiter_data.get(
-                "posting_legitimacy", "Proceed with Caution"
-            ),
-            "posting_legitimacy_notes": recruiter_data.get(
-                "posting_legitimacy_notes", ""
-            ),
-            # Advanced Metadata injection
-            "capability_gaps": capability_data.get("capability_gaps", []),
-            "role_track": capability_data.get("role_track", "unknown"),
-            "role_track_confidence": capability_data.get(
-                "role_track_confidence", "low"
-            ),
-            "role_track_evidence": capability_data.get("role_track_evidence", ""),
-            "stretch_evidence": capability_data.get("stretch_evidence", ""),
-            "ghost_job_red_flags": recruiter_data.get("ghost_job_red_flags", []),
-            "prestige_tier": recruiter_data.get("prestige_tier", "Tier-2"),
-        }
+        evaluation = _synthesize_evaluation(capability_data, recruiter_data)
 
-        # 5. Prestige-Tier Funnel Friction Calibration
-        prestige_tier = evaluation["prestige_tier"]
-        funnel_friction_score = evaluation["interview_odds_subscores"].get(
-            "funnel_friction", 3
-        )
-        if prestige_tier == "Tier-1":
-            funnel_friction_score = min(funnel_friction_score, 2)
-        elif prestige_tier == "Tier-3":
-            funnel_friction_score = min(funnel_friction_score + 1, 5)
-
-        # Read once, used by both the 5b nudge below and the composite-
-        # score rescoring at the end of this function -- same
+        # Read once, used by the funnel-friction calibration below and by
+        # the composite-score rescoring at the end of this function -- same
         # try/except-with-fallback pattern the location_settings read
-        # just below already uses, so a missing/broken scan_filters.yml
+        # above already uses, so a missing/broken scan_filters.yml
         # degrades to today's hardcoded defaults rather than raising.
         try:
             import content_settings
@@ -6905,25 +6835,8 @@ class ResumeEngine:
             role_track_settings = {}
             work_constraints_settings = {}
 
-        # 5b. Remote-vs-Local Candidate Pool Calibration. A remote posting
-        # competes against a national/global applicant pool; an onsite
-        # posting is filtered down to whoever can commute to it. Same
-        # magnitude and pattern as the prestige-tier nudge above, and
-        # applied after it so both adjustments compound rather than race.
-        # Nudge magnitude is Settings-configurable (funnel_friction_nudge,
-        # default 1) via scripts/content_settings.py.
-        funnel_friction_nudge = scoring_weights.get("funnel_friction_nudge", 1)
-        if workplace == location_filter.REMOTE:
-            funnel_friction_score = max(
-                funnel_friction_score - funnel_friction_nudge, 1
-            )
-        elif workplace == location_filter.ONSITE:
-            funnel_friction_score = min(
-                funnel_friction_score + funnel_friction_nudge, 5
-            )
-        evaluation["interview_odds_subscores"][
-            "funnel_friction"
-        ] = funnel_friction_score
+        # 5 / 5b. Prestige-tier and remote-vs-local funnel-friction calibration.
+        _calibrate_funnel_friction(evaluation, workplace, scoring_weights)
 
         # 6. (Commute distance was resolved in step 0, before the model calls.)
         posting_age_days = jd_manager.compute_posting_age_days(jd_path)
@@ -6946,15 +6859,9 @@ class ResumeEngine:
         )
 
         # 8. Heuristic Ghost Job Probability Calculator
-        red_flags_count = len(evaluation.get("ghost_job_red_flags", []))
-        ghost_score = 0.0
-        if posting_age_days is not None:
-            if posting_age_days > 30:
-                ghost_score += 0.40
-            elif posting_age_days > 14:
-                ghost_score += 0.20
-        ghost_score += min(red_flags_count * 0.20, 0.50)
-        evaluation["ghost_job_probability"] = round(min(ghost_score * 100.0, 95.0), 1)
+        evaluation["ghost_job_probability"] = _ghost_job_probability(
+            posting_age_days, len(evaluation.get("ghost_job_red_flags", []))
+        )
 
         # 9. Skills Gap Matrix -- computed automatically now that
         # warm_jd_keyword_cache() above guarantees the JD's tools/skills
@@ -7216,6 +7123,37 @@ class ResumeEngine:
         )
         return text.strip() if text else None
 
+    def _coverletter_grounding(self):
+        """Loads keeper bullets and their embeddings for the semantic grounding check.
+
+        Returns (keeper_bullets, keeper_embs, keeper_embs_backup) -- empty/None
+        when the bank or its index is missing, which just skips that check.
+        """
+        keeper_bullets: list = []
+        keeper_embs = None
+        keeper_embs_backup = None
+        bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
+        emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
+        if os.path.exists(bank_csv) and os.path.exists(emb_npy):
+            try:
+                # Lazy pandas/numpy -- see _LAZY_HEAVY_DEPS at the top of this module.
+                import numpy as np
+                import pandas as pd
+
+                df = pd.read_csv(bank_csv)
+                keeper_bullets = df["Bullet Point"].fillna("").tolist()
+                keeper_embs = np.load(emb_npy)
+                import embed_bullet_bank
+
+                # Used only when the primary model can't embed a sentence;
+                # None unless it matches this exact bank.
+                keeper_embs_backup = embed_bullet_bank.backup_index_for(
+                    self.kb_dir, bullets_sha(keeper_bullets), len(keeper_bullets)
+                )
+            except Exception:
+                pass
+        return keeper_bullets, keeper_embs, keeper_embs_backup
+
     def build_tailored_coverletter(self, jd_path: str) -> dict:
         """
         Standalone cover letter generation -- independent of
@@ -7229,10 +7167,6 @@ class ResumeEngine:
         otherwise. Returns the filled cover letter dict plus _output_paths
         (json/html/pdf), or {} on failure.
         """
-        # Lazy pandas/numpy -- see _LAZY_HEAVY_DEPS at the top of this module.
-        import numpy as np
-        import pandas as pd
-
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
@@ -7333,44 +7267,25 @@ class ResumeEngine:
             return {}
 
         style_rules = self.load_yaml(self.rules_dir, "style_rules.yaml")
-        # Load keeper bullets and embeddings for advanced semantic grounding check
-        keeper_bullets = []
-        keeper_embs = None
-        keeper_embs_backup = None
-        bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
-        emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
-        if os.path.exists(bank_csv) and os.path.exists(emb_npy):
-            try:
-                import numpy as np
-                import pandas as pd
+        keeper_bullets, keeper_embs, keeper_embs_backup = self._coverletter_grounding()
 
-                df = pd.read_csv(bank_csv)
-                keeper_bullets = df["Bullet Point"].fillna("").tolist()
-                keeper_embs = np.load(emb_npy)
-                import embed_bullet_bank
+        def _validate(data):
+            # kb_corpus=background_context: the same grounding corpus the model
+            # was given in system_instruction, reused here so validate() can
+            # check that specific factual claims (metrics, years-of-experience,
+            # date ranges) in the letter actually trace back to it -- see B14.
+            return validate_coverletter.validate(
+                data,
+                style_rules,
+                kb_corpus=background_context,
+                keeper_bullets=keeper_bullets,
+                keeper_embs=keeper_embs,
+                keeper_embs_backup=keeper_embs_backup,
+                voice_rules=self.voice_rules,
+                role_title=role_title,
+            )
 
-                # Used only when the primary model can't embed a sentence;
-                # None unless it matches this exact bank.
-                keeper_embs_backup = embed_bullet_bank.backup_index_for(
-                    self.kb_dir, bullets_sha(keeper_bullets), len(keeper_bullets)
-                )
-            except Exception:
-                pass
-
-        # kb_corpus=background_context: the same grounding corpus the model
-        # was given in system_instruction, reused here so validate() can
-        # check that specific factual claims (metrics, years-of-experience,
-        # date ranges) in the letter actually trace back to it -- see B14.
-        violations = validate_coverletter.validate(
-            letter_data,
-            style_rules,
-            kb_corpus=background_context,
-            keeper_bullets=keeper_bullets,
-            keeper_embs=keeper_embs,
-            keeper_embs_backup=keeper_embs_backup,
-            voice_rules=self.voice_rules,
-            role_title=role_title,
-        )
+        violations = _validate(letter_data)
 
         max_coverletter_attempts = 3
         attempt = 1
@@ -7400,16 +7315,7 @@ class ResumeEngine:
             fixed_data = GeminiClient.parse_json(fix_text or "")
             if fixed_data:
                 letter_data = fixed_data
-                violations = validate_coverletter.validate(
-                    letter_data,
-                    style_rules,
-                    kb_corpus=background_context,
-                    keeper_bullets=keeper_bullets,
-                    keeper_embs=keeper_embs,
-                    keeper_embs_backup=keeper_embs_backup,
-                    voice_rules=self.voice_rules,
-                    role_title=role_title,
-                )
+                violations = _validate(letter_data)
             attempt += 1
 
         if violations:
@@ -7425,6 +7331,19 @@ class ResumeEngine:
         _resolve_contact_fallback(letter_data, jd_data)
         letter_data["company_location"] = _resolve_company_location(research, jd_data)
 
+        if not self._write_coverletter_outputs(
+            letter_data, jd_path, role_title, jd_keywords
+        ):
+            return {}
+        return letter_data
+
+    def _write_coverletter_outputs(
+        self, letter_data: dict, jd_path: str, role_title, jd_keywords
+    ) -> bool:
+        """Writes the cover letter's JSON/HTML/PDF/DOCX and stamps _output_paths.
+
+        Returns False if any render step failed, so the caller reports failure.
+        """
         stem = _build_output_stem(jd_path)
         letter_data["tagline"] = _read_matching_resume_tagline(stem)
         letter_data["role_title"] = role_title
@@ -7496,7 +7415,7 @@ class ResumeEngine:
             level=cli_art.NORMAL,
         )
         os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
-        return letter_data
+        return True
 
     def build_tailored_resume(
         self,
@@ -9596,6 +9515,230 @@ def append_console_transcript(log_path: str) -> None:
         pass
 
 
+def _resolve_commute_distance(jd_path, jd_data, jd_text, loc_settings, radius_miles):
+    """Miles from the configured origin to this posting's office, or None.
+
+    Prefers an enrichment already stored on the JD, then a fresh (search-free)
+    enrichment, then a city-level lookup. Returns None when no radius is
+    configured or nothing resolves -- unresolvable is never treated as far.
+    """
+    enrichment = jd_data.get("_location_enrichment")
+    if isinstance(enrichment, dict) and enrichment.get("distance_miles") is not None:
+        return enrichment.get("distance_miles")
+
+    if radius_miles and (jd_data.get("location") or jd_text):
+        try:
+            import location_enricher
+
+            job_data = {
+                "id": os.path.basename(jd_path),
+                "title": jd_data.get("job_title", ""),
+                "company": jd_data.get("company_name", ""),
+                "location": jd_data.get("location", ""),
+                "raw_text": jd_text,
+                "company_website": jd_data.get("company_website", ""),
+                "is_remote": jd_data.get("is_remote"),
+                "work_model": jd_data.get("work_model"),
+            }
+            cache = location_enricher.load_locations_cache()
+            enr = location_enricher.enrich_job_location(
+                job_data,
+                settings=loc_settings,
+                allow_search_backup=False,
+                cache=cache,
+            )
+            if enr.get("distance_miles") is not None:
+                return enr.get("distance_miles")
+        except Exception:
+            pass
+
+    if radius_miles:
+        return city_level_distance(jd_data.get("location"), loc_settings)
+    return None
+
+
+def _synthesize_evaluation(capability_data: dict, recruiter_data: dict) -> dict:
+    """Merges the capability and recruiter stages into one FitEvaluationSchema-shaped dict."""
+    return {
+        "archetype": capability_data.get("archetype", "Unknown"),
+        "hard_blockers": recruiter_data.get("hard_blockers", []),
+        "fit_subscores": capability_data.get("fit_subscores", {}),
+        "interview_odds_subscores": recruiter_data.get("interview_odds_subscores", {}),
+        "practical_pursue_subscores": recruiter_data.get(
+            "practical_pursue_subscores", {}
+        ),
+        "recommendation": recruiter_data.get("recommendation", "Selective pursue"),
+        "why": recruiter_data.get("why", ""),
+        "recruiter_read": recruiter_data.get("recruiter_read", ""),
+        "posting_legitimacy": recruiter_data.get(
+            "posting_legitimacy", "Proceed with Caution"
+        ),
+        "posting_legitimacy_notes": recruiter_data.get("posting_legitimacy_notes", ""),
+        # Advanced Metadata injection
+        "capability_gaps": capability_data.get("capability_gaps", []),
+        "role_track": capability_data.get("role_track", "unknown"),
+        "role_track_confidence": capability_data.get("role_track_confidence", "low"),
+        "role_track_evidence": capability_data.get("role_track_evidence", ""),
+        "stretch_evidence": capability_data.get("stretch_evidence", ""),
+        "ghost_job_red_flags": recruiter_data.get("ghost_job_red_flags", []),
+        "prestige_tier": recruiter_data.get("prestige_tier", "Tier-2"),
+    }
+
+
+def _calibrate_funnel_friction(
+    evaluation: dict, workplace, scoring_weights: dict
+) -> None:
+    """Applies the prestige-tier and remote-vs-local nudges to funnel_friction, in place."""
+    # 5. Prestige-Tier Funnel Friction Calibration
+    prestige_tier = evaluation["prestige_tier"]
+    funnel_friction_score = evaluation["interview_odds_subscores"].get(
+        "funnel_friction", 3
+    )
+    if prestige_tier == "Tier-1":
+        funnel_friction_score = min(funnel_friction_score, 2)
+    elif prestige_tier == "Tier-3":
+        funnel_friction_score = min(funnel_friction_score + 1, 5)
+
+    # 5b. Remote-vs-Local Candidate Pool Calibration. A remote posting
+    # competes against a national/global applicant pool; an onsite
+    # posting is filtered down to whoever can commute to it. Same
+    # magnitude and pattern as the prestige-tier nudge above, and
+    # applied after it so both adjustments compound rather than race.
+    # Nudge magnitude is Settings-configurable (funnel_friction_nudge,
+    # default 1) via scripts/content_settings.py.
+    funnel_friction_nudge = scoring_weights.get("funnel_friction_nudge", 1)
+    if workplace == location_filter.REMOTE:
+        funnel_friction_score = max(funnel_friction_score - funnel_friction_nudge, 1)
+    elif workplace == location_filter.ONSITE:
+        funnel_friction_score = min(funnel_friction_score + funnel_friction_nudge, 5)
+    evaluation["interview_odds_subscores"]["funnel_friction"] = funnel_friction_score
+
+
+def _ghost_job_probability(posting_age_days, red_flags_count: int) -> float:
+    """Heuristic ghost-job percentage from the posting's age and its red flags."""
+    ghost_score = 0.0
+    if posting_age_days is not None:
+        if posting_age_days > 30:
+            ghost_score += 0.40
+        elif posting_age_days > 14:
+            ghost_score += 0.20
+    ghost_score += min(red_flags_count * 0.20, 0.50)
+    return round(min(ghost_score * 100.0, 95.0), 1)
+
+
+def _init_pipeline_logger():
+    """Opens a per-run pipeline log file. Returns (logger, log_path).
+
+    Both are None when logging is skipped (an unisolated test write) or
+    could not be set up -- callers guard on the logger before using it.
+    """
+    import db as _db  # local import: avoids a module-level cycle, matches
+
+    # the existing lazy `import db` pattern used later in this function
+    if _db._is_unisolated_test_write():
+        return None, None
+    try:
+        log_root = profile_paths.logs_dir()
+        os.makedirs(log_root, exist_ok=True)
+        timestamp = datetime.datetime.now().isoformat().replace(":", "-")
+        log_path = os.path.join(log_root, f"pipeline_run_{timestamp}.log")
+        logger = logging.getLogger("resume_pipeline")
+        if logger.handlers:
+            logger.handlers.clear()
+        handler = logging.FileHandler(log_path, encoding="utf-8")
+        formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        logger.info("Pipeline run started")
+        cli_art.console.export_text(clear=True)  # discard stale transcript
+        return logger, log_path
+    except Exception as e:
+        cli_art.detail(f"Could not initialize logging: {e}", level=cli_art.NORMAL)
+        return None, None
+
+
+def _load_master_resume(master_resume_path):
+    """Loads an optional master resume JSON, warning and returning {} on failure."""
+    if not master_resume_path:
+        return {}
+    try:
+        with open(master_resume_path, "r", encoding="utf-8") as f:
+            master_resume = json.load(f)
+        cli_art.print_literal(
+            f"Loaded master resume from: {cli_art._escape_markup(master_resume_path)}"
+        )
+        return master_resume
+    except Exception as e:
+        cli_art.console.print(
+            f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.",
+            soft_wrap=True,
+        )
+        return {}
+
+
+def _record_build_outcome(
+    result,
+    path,
+    job_key,
+    job_title,
+    company_name,
+    source_url,
+    evaluation,
+    tracker,
+    logger,
+):
+    """Files one JD's build result -- tracker row, move, application row.
+
+    Returns True when the build succeeded, so the caller can count it.
+    """
+    if result:
+        output_paths = result.get("_output_paths", {})
+        # move_jd_to, not shutil.move: it never clobbers a same-named
+        # file already in completed/ and re-syncs data.db's status from
+        # the new path, which a bare move left stale.
+        jd_manager.move_jd_to(path, jd_manager.COMPLETED_DIR)
+        tracker.mark_completed(
+            job_key=job_key,
+            job_title=job_title,
+            company_name=company_name,
+            source_file=os.path.basename(path),
+            output_json=output_paths.get("json", ""),
+            output_pdf=output_paths.get("pdf", ""),
+        )
+        jd_manager.append_application_row(
+            company_name=company_name,
+            job_title=job_title,
+            has_pdf=os.path.exists(output_paths.get("pdf", "")),
+            source_url=source_url,
+            evaluation=evaluation,
+        )
+        if logger:
+            logger.info(f"Successfully completed: {job_key}")
+        cli_art.print_literal(
+            f"\nDone! Resume built successfully for {cli_art._escape_markup(path)}"
+        )
+        return True
+
+    if logger:
+        logger.warning(f"Failed to build: {job_key}")
+    tracker.mark_failed(
+        job_key=job_key,
+        job_title=job_title,
+        company_name=company_name,
+        source_file=os.path.basename(path),
+        error_message="Resume build failed. Check output above for details.",
+    )
+    cli_art.console.print(
+        f"\n{cli_art.ERROR} Resume build failed for {path}. It stays pending and will be retried next run.",
+        soft_wrap=True,
+    )
+    return False
+
+
 def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     """Runs the tailor+render pipeline.
 
@@ -9605,48 +9748,8 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
     """
     kb_snapshot.snapshot_kb()
 
-    logger = None
-    log_path = None
-    import db as _db  # local import: avoids a module-level cycle, matches
-
-    # the existing lazy `import db` pattern used later in this function
-    if not _db._is_unisolated_test_write():
-        try:
-            log_root = profile_paths.logs_dir()
-            os.makedirs(log_root, exist_ok=True)
-            timestamp = datetime.datetime.now().isoformat().replace(":", "-")
-            log_path = os.path.join(log_root, f"pipeline_run_{timestamp}.log")
-            logger = logging.getLogger("resume_pipeline")
-            if logger.handlers:
-                logger.handlers.clear()
-            handler = logging.FileHandler(log_path, encoding="utf-8")
-            formatter = logging.Formatter(
-                "%(asctime)s - %(levelname)s - %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-            handler.setFormatter(formatter)
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-            logger.info("Pipeline run started")
-            cli_art.console.export_text(clear=True)  # discard stale transcript
-        except Exception as e:
-            cli_art.detail(f"Could not initialize logging: {e}", level=cli_art.NORMAL)
-            logger = None
-            log_path = None
-
-    master_resume = {}
-    if master_resume_path:
-        try:
-            with open(master_resume_path, "r", encoding="utf-8") as f:
-                master_resume = json.load(f)
-            cli_art.print_literal(
-                f"Loaded master resume from: {cli_art._escape_markup(master_resume_path)}"
-            )
-        except Exception as e:
-            cli_art.console.print(
-                f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.",
-                soft_wrap=True,
-            )
+    logger, log_path = _init_pipeline_logger()
+    master_resume = _load_master_resume(master_resume_path)
 
     engine = ResumeEngine()
     tracker = jd_manager.JDTracker()
@@ -9749,48 +9852,20 @@ def run_pipeline(jd_path=None, master_resume_path=None, output_filename=None):
                 soft_wrap=True,
             )
 
-        if result:
-            output_paths = result.get("_output_paths", {})
-            # move_jd_to, not shutil.move: it never clobbers a same-named
-            # file already in completed/ and re-syncs data.db's status from
-            # the new path, which a bare move left stale.
-            jd_manager.move_jd_to(path, jd_manager.COMPLETED_DIR)
-            tracker.mark_completed(
-                job_key=job_key,
-                job_title=job_title,
-                company_name=company_name,
-                source_file=os.path.basename(path),
-                output_json=output_paths.get("json", ""),
-                output_pdf=output_paths.get("pdf", ""),
-            )
-            jd_manager.append_application_row(
-                company_name=company_name,
-                job_title=job_title,
-                has_pdf=os.path.exists(output_paths.get("pdf", "")),
-                source_url=source_url,
-                evaluation=evaluation,
-            )
+        if _record_build_outcome(
+            result,
+            path,
+            job_key,
+            job_title,
+            company_name,
+            source_url,
+            evaluation,
+            tracker,
+            logger,
+        ):
             completed_count += 1
-            if logger:
-                logger.info(f"Successfully completed: {job_key}")
-            cli_art.print_literal(
-                f"\nDone! Resume built successfully for {cli_art._escape_markup(path)}"
-            )
         else:
-            if logger:
-                logger.warning(f"Failed to build: {job_key}")
-            tracker.mark_failed(
-                job_key=job_key,
-                job_title=job_title,
-                company_name=company_name,
-                source_file=os.path.basename(path),
-                error_message="Resume build failed. Check output above for details.",
-            )
             failed_count += 1
-            cli_art.console.print(
-                f"\n{cli_art.ERROR} Resume build failed for {path}. It stays pending and will be retried next run.",
-                soft_wrap=True,
-            )
 
     from rich.text import Text
 
@@ -9843,19 +9918,7 @@ def run_application_package(
     """
     kb_snapshot.snapshot_kb()
 
-    master_resume = {}
-    if master_resume_path:
-        try:
-            with open(master_resume_path, "r", encoding="utf-8") as f:
-                master_resume = json.load(f)
-            cli_art.print_literal(
-                f"Loaded master resume from: {cli_art._escape_markup(master_resume_path)}"
-            )
-        except Exception as e:
-            cli_art.console.print(
-                f"{cli_art.WARNING} Could not load master resume: {e}. Proceeding with empty dict.",
-                soft_wrap=True,
-            )
+    master_resume = _load_master_resume(master_resume_path)
 
     engine = ResumeEngine()
 

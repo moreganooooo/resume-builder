@@ -99,50 +99,51 @@ def _confusion_matrix(rows: list[dict]) -> None:
         print(f"{p:<18} {cells}")
 
 
+def _pr_counts(rows: list[dict]) -> tuple[float, float, int, int, int]:
+    """Manager-class precision/recall over one slice of scoreable rows.
+
+    Returns (precision, recall, true_positives, flagged, actual), with a
+    ratio of NaN where its denominator is empty.
+    """
+    flagged = [r for r in rows if r["predicted"] in MANAGER_VERDICTS]
+    true_positives = [r for r in flagged if r["label"] == "manager"]
+    actual = [r for r in rows if r["label"] == "manager"]
+    precision = len(true_positives) / len(flagged) if flagged else float("nan")
+    recall = len(true_positives) / len(actual) if actual else float("nan")
+    return precision, recall, len(true_positives), len(flagged), len(actual)
+
+
+def _print_breakdown(scoreable: list[dict], key: str, levels, width: int) -> None:
+    """Prints precision/recall for each value of `key` present in the rows."""
+    for level in levels:
+        sub = [r for r in scoreable if r[key] == level]
+        if not sub:
+            continue
+        precision, recall, _, _, _ = _pr_counts(sub)
+        print(
+            f"  {level:<{width}} precision={precision:>6.1%}  "
+            f"recall={recall:>6.1%}  n={len(sub)}"
+        )
+
+
 def _precision_recall(rows: list[dict]) -> None:
     # Excluded-class bar: of postings the model flags manager/player_coach,
     # how many a human actually labeled "manager"? Rows the human called
     # "n/a" (not a real job) or "unclear" (human couldn't tell either) are
     # excluded from this ratio -- neither is evidence the model was wrong.
     scoreable = [r for r in rows if r["label"] in ("ic", "manager")]
-    flagged = [r for r in scoreable if r["predicted"] in MANAGER_VERDICTS]
-    true_positives = [r for r in flagged if r["label"] == "manager"]
-    actual_managers = [r for r in scoreable if r["label"] == "manager"]
-
-    precision = len(true_positives) / len(flagged) if flagged else float("nan")
-    recall = (
-        len(true_positives) / len(actual_managers) if actual_managers else float("nan")
-    )
-    print(
-        f"\nManager-class precision: {precision:.1%} ({len(true_positives)}/{len(flagged)} flagged)"
-    )
-    print(
-        f"Manager-class recall:    {recall:.1%} ({len(true_positives)}/{len(actual_managers)} actual)"
-    )
+    precision, recall, tp, flagged, actual = _pr_counts(scoreable)
+    print(f"\nManager-class precision: {precision:.1%} ({tp}/{flagged} flagged)")
+    print(f"Manager-class recall:    {recall:.1%} ({tp}/{actual} actual)")
     print(f"(excludes {len(rows) - len(scoreable)} row(s) labeled unclear/n/a)")
 
     print("\nPer stratum (scoreable rows only):")
-    strata = sorted({r["stratum"] for r in scoreable})
-    for stratum in strata:
-        sub = [r for r in scoreable if r["stratum"] == stratum]
-        sub_flagged = [r for r in sub if r["predicted"] in MANAGER_VERDICTS]
-        sub_tp = [r for r in sub_flagged if r["label"] == "manager"]
-        sub_actual = [r for r in sub if r["label"] == "manager"]
-        p = len(sub_tp) / len(sub_flagged) if sub_flagged else float("nan")
-        r_ = len(sub_tp) / len(sub_actual) if sub_actual else float("nan")
-        print(f"  {stratum:<12} precision={p:>6.1%}  recall={r_:>6.1%}  n={len(sub)}")
+    _print_breakdown(
+        scoreable, "stratum", sorted({r["stratum"] for r in scoreable}), 12
+    )
 
     print("\nPer confidence level (scoreable rows only):")
-    for level in ("high", "medium", "low"):
-        sub = [r for r in scoreable if r["confidence"] == level]
-        if not sub:
-            continue
-        sub_flagged = [r for r in sub if r["predicted"] in MANAGER_VERDICTS]
-        sub_tp = [r for r in sub_flagged if r["label"] == "manager"]
-        sub_actual = [r for r in sub if r["label"] == "manager"]
-        p = len(sub_tp) / len(sub_flagged) if sub_flagged else float("nan")
-        r_ = len(sub_tp) / len(sub_actual) if sub_actual else float("nan")
-        print(f"  {level:<8} precision={p:>6.1%}  recall={r_:>6.1%}  n={len(sub)}")
+    _print_breakdown(scoreable, "confidence", ("high", "medium", "low"), 8)
 
 
 def main() -> int:

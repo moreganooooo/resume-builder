@@ -122,7 +122,7 @@ class TestExtractAchievements(unittest.TestCase):
     def test_upload_path_calls_generate_from_upload(self, mock_upload):
         mock_upload.return_value = '{"achievements": []}'
         result = bootstrap_extractors.extract_achievements(
-            "recommendation_letter", upload_path="/tmp/fake.pdf"
+            "recommendation_letter", upload_path="/nonexistent/fake.pdf"
         )
         self.assertEqual(result, [])
         mock_upload.assert_called_once()
@@ -249,11 +249,13 @@ class TestGenerateFromUpload(unittest.TestCase):
         )
 
         result = bootstrap_extractors._generate_from_upload(
-            "/tmp/fake.pdf", "system prompt", bootstrap_extractors.RawAchievementList
+            "/nonexistent/fake.pdf",
+            "system prompt",
+            bootstrap_extractors.RawAchievementList,
         )
 
         self.assertEqual(result, '{"achievements": []}')
-        mock_client.files.upload.assert_called_once_with(file="/tmp/fake.pdf")
+        mock_client.files.upload.assert_called_once_with(file="/nonexistent/fake.pdf")
         mock_client.models.generate_content.assert_called_once()
 
     @patch("bootstrap_extractors.genai.Client")
@@ -278,7 +280,9 @@ class TestGenerateFromUpload(unittest.TestCase):
         )
 
         bootstrap_extractors._generate_from_upload(
-            "/tmp/fake.pdf", "system prompt", bootstrap_extractors.RawAchievementList
+            "/nonexistent/fake.pdf",
+            "system prompt",
+            bootstrap_extractors.RawAchievementList,
         )
 
         _, kwargs = mock_client.models.generate_content.call_args
@@ -305,7 +309,9 @@ class TestGenerateFromUpload(unittest.TestCase):
         ]
 
         result = bootstrap_extractors._generate_from_upload(
-            "/tmp/fake.pdf", "system prompt", bootstrap_extractors.RawAchievementList
+            "/nonexistent/fake.pdf",
+            "system prompt",
+            bootstrap_extractors.RawAchievementList,
         )
 
         self.assertEqual(result, '{"achievements": []}')
@@ -326,7 +332,7 @@ class TestGenerateFromUpload(unittest.TestCase):
 
         with self.assertRaises(bootstrap_extractors.IngestionAPIError):
             bootstrap_extractors._generate_from_upload(
-                "/tmp/fake.pdf",
+                "/nonexistent/fake.pdf",
                 "system prompt",
                 bootstrap_extractors.RawAchievementList,
             )
@@ -363,7 +369,7 @@ class TestSplitPdfForExtraction(unittest.TestCase):
         self.assertEqual(bootstrap_extractors._split_pdf_for_extraction(path), [path])
 
     def test_non_pdf_is_never_split(self):
-        path = "/tmp/some_notes.txt"
+        path = "/nonexistent/some_notes.txt"
         self.assertEqual(bootstrap_extractors._split_pdf_for_extraction(path), [path])
 
     def test_unopenable_pdf_falls_back_to_original_path(self):

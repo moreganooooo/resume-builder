@@ -117,34 +117,39 @@ def _confusion_matrix(rows: list[dict], label_key: str, predicted_key: str) -> N
         print(f"{p:<18} {cells}")
 
 
+def _pr_counts(
+    scoreable: list[dict], label_key: str, predicted_key: str
+) -> tuple[float, float, int, int, int]:
+    """Blocker-class precision/recall over one slice of scoreable rows.
+
+    Returns (precision, recall, true_positives, flagged, actual), with a
+    ratio of NaN where its denominator is empty.
+    """
+    flagged = [r for r in scoreable if r[predicted_key] == "flagged"]
+    true_positives = [r for r in flagged if r[label_key] == "blocks"]
+    actual_blocks = [r for r in scoreable if r[label_key] == "blocks"]
+    precision = len(true_positives) / len(flagged) if flagged else float("nan")
+    recall = len(true_positives) / len(actual_blocks) if actual_blocks else float("nan")
+    return precision, recall, len(true_positives), len(flagged), len(actual_blocks)
+
+
 def _precision_recall(rows: list[dict], label_key: str, predicted_key: str) -> None:
     # Excluded-class bar, mirroring eval_role_track.py: of postings the
     # model flags with a blocker in this category, how many did a human
     # actually confirm as blocking? Rows labeled unclear/n/a are excluded
     # -- neither is evidence the model was right or wrong.
     scoreable = [r for r in rows if r[label_key] in ("blocks", "does_not_block")]
-    flagged = [r for r in scoreable if r[predicted_key] == "flagged"]
-    true_positives = [r for r in flagged if r[label_key] == "blocks"]
-    actual_blocks = [r for r in scoreable if r[label_key] == "blocks"]
-
-    precision = len(true_positives) / len(flagged) if flagged else float("nan")
-    recall = len(true_positives) / len(actual_blocks) if actual_blocks else float("nan")
-    print(
-        f"\nBlocker-class precision: {precision:.1%} ({len(true_positives)}/{len(flagged)} flagged)"
+    precision, recall, tp, flagged, actual = _pr_counts(
+        scoreable, label_key, predicted_key
     )
-    print(
-        f"Blocker-class recall:    {recall:.1%} ({len(true_positives)}/{len(actual_blocks)} actual)"
-    )
+    print(f"\nBlocker-class precision: {precision:.1%} ({tp}/{flagged} flagged)")
+    print(f"Blocker-class recall:    {recall:.1%} ({tp}/{actual} actual)")
     print(f"(excludes {len(rows) - len(scoreable)} row(s) labeled unclear/n/a)")
 
     print("\nPer stratum (scoreable rows only):")
     for stratum in sorted({r["stratum"] for r in scoreable}):
         sub = [r for r in scoreable if r["stratum"] == stratum]
-        sub_flagged = [r for r in sub if r[predicted_key] == "flagged"]
-        sub_tp = [r for r in sub_flagged if r[label_key] == "blocks"]
-        sub_actual = [r for r in sub if r[label_key] == "blocks"]
-        p = len(sub_tp) / len(sub_flagged) if sub_flagged else float("nan")
-        r_ = len(sub_tp) / len(sub_actual) if sub_actual else float("nan")
+        p, r_, _tp, _f, _a = _pr_counts(sub, label_key, predicted_key)
         print(f"  {stratum:<14} precision={p:>6.1%}  recall={r_:>6.1%}  n={len(sub)}")
 
 

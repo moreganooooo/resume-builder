@@ -96,26 +96,30 @@ class TestBuildSample(unittest.TestCase):
         mock_jd_manager.compute_job_key.return_value = "sample_key_123"
         mock_engine = MagicMock()
         mock_engine.build_tailored_resume.return_value = {
-            "_output_paths": {"pdf": "/tmp/resume.pdf"}
+            "_output_paths": {"pdf": "/nonexistent/resume.pdf"}
         }
         mock_engine.build_tailored_coverletter.return_value = {
-            "_output_paths": {"pdf": "/tmp/cl.pdf"}
+            "_output_paths": {"pdf": "/nonexistent/cl.pdf"}
         }
         mock_engine_cls.return_value = mock_engine
 
         res = build_sample.build_sample()
         self.assertIn("resume", res)
         self.assertIn("coverletter", res)
-        self.assertEqual(res["resume"]["_output_paths"]["pdf"], "/tmp/resume.pdf")
-        self.assertEqual(res["coverletter"]["_output_paths"]["pdf"], "/tmp/cl.pdf")
+        self.assertEqual(
+            res["resume"]["_output_paths"]["pdf"], "/nonexistent/resume.pdf"
+        )
+        self.assertEqual(
+            res["coverletter"]["_output_paths"]["pdf"], "/nonexistent/cl.pdf"
+        )
         mock_jd_manager.delete_checkpoint.assert_called_once_with("sample_key_123")
 
     @patch("build_sample.build_sample")
     def test_main_success(self, mock_build_sample):
         """Test main when both resume and coverletter builds succeed."""
         mock_build_sample.return_value = {
-            "resume": {"_output_paths": {"pdf": "/tmp/resume.pdf"}},
-            "coverletter": {"_output_paths": {"pdf": "/tmp/cl.pdf"}},
+            "resume": {"_output_paths": {"pdf": "/nonexistent/resume.pdf"}},
+            "coverletter": {"_output_paths": {"pdf": "/nonexistent/cl.pdf"}},
         }
         build_sample.main()
 

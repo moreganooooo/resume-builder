@@ -538,6 +538,55 @@ def _location_fields(data: dict, settings: dict) -> dict:
     }
 
 
+def _file_row(path: str, status: str, location_settings_block: dict) -> dict | None:
+    """One list_all_evaluated_jds() row from a JD file on disk.
+
+    Returns None when the JD carries no usable evaluation, or one the user
+    has already said to skip.
+    """
+    evaluation = jd_manager.read_evaluation(path)
+    if (
+        evaluation is None
+        or not isinstance(evaluation, dict)
+        or evaluation.get("recommendation") == "Skip"
+    ):
+        return None
+    title, company = jd_manager.extract_job_meta(path)
+    try:
+        with open(path, "r", encoding="utf-8") as _f:
+            jd_data = json.load(_f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        jd_data = {}
+    return {
+        "path": path,
+        "status": status,
+        "evaluation": evaluation,
+        "liveness": jd_manager.read_liveness(path),
+        "application": jd_manager.read_application_status(path),
+        "title": title,
+        "company": company,
+        "description": jd_data.get("description", "") or "",
+        "source_platform": jd_data.get("source_platform", "") or "",
+        "added_manually": bool(
+            jd_data.get("added_manually")
+            or jd_data.get("source_platform") in {"manual", "manual-screenshot"}
+        ),
+        "source_url": jd_data.get("source_url")
+        or jd_data.get("application_url", "")
+        or "",
+        "company_website": jd_data.get("company_website", "") or "",
+        "skills": jd_data.get("skills") or [],
+        "research": jd_manager.read_research(path),
+        "coverage": jd_manager.read_coverage(path),
+        "location_enrichment": jd_manager.read_location_enrichment(path),
+        "posted_date": jd_manager.compute_posting_date(path),
+        **_location_fields(jd_data, location_settings_block),
+        **_employment_fields(jd_data),
+        **_compensation_fields(jd_data),
+        **_stress_fields(jd_data),
+    }
+
+
 def list_all_evaluated_jds(statuses: list | None = None) -> list:
     """Every JD (pending or completed) carrying a persisted _evaluation,
     each as {"path", "status" ("Pending"/"Completed"), "evaluation",
@@ -556,96 +605,14 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
     rows = []
     if "Pending" in statuses:
         for path in jd_manager.get_pending_jds():
-            evaluation = jd_manager.read_evaluation(path)
-            if (
-                evaluation is None
-                or not isinstance(evaluation, dict)
-                or evaluation.get("recommendation") == "Skip"
-            ):
-                continue
-            title, company = jd_manager.extract_job_meta(path)
-            try:
-                with open(path, "r", encoding="utf-8") as _f:
-                    jd_data = json.load(_f)
-            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-                jd_data = {}
-            rows.append(
-                {
-                    "path": path,
-                    "status": "Pending",
-                    "evaluation": evaluation,
-                    "liveness": jd_manager.read_liveness(path),
-                    "application": jd_manager.read_application_status(path),
-                    "title": title,
-                    "company": company,
-                    "description": jd_data.get("description", "") or "",
-                    "source_platform": jd_data.get("source_platform", "") or "",
-                    "added_manually": bool(
-                        jd_data.get("added_manually")
-                        or jd_data.get("source_platform")
-                        in {"manual", "manual-screenshot"}
-                    ),
-                    "source_url": jd_data.get("source_url")
-                    or jd_data.get("application_url", "")
-                    or "",
-                    "company_website": jd_data.get("company_website", "") or "",
-                    "skills": jd_data.get("skills") or [],
-                    "research": jd_manager.read_research(path),
-                    "coverage": jd_manager.read_coverage(path),
-                    "location_enrichment": jd_manager.read_location_enrichment(path),
-                    "posted_date": jd_manager.compute_posting_date(path),
-                    **_location_fields(jd_data, location_settings_block),
-                    **_employment_fields(jd_data),
-                    **_compensation_fields(jd_data),
-                    **_stress_fields(jd_data),
-                }
-            )
+            row = _file_row(path, "Pending", location_settings_block)
+            if row:
+                rows.append(row)
     if "Completed" in statuses:
         for path in jd_manager.get_completed_jds():
-            evaluation = jd_manager.read_evaluation(path)
-            if (
-                evaluation is None
-                or not isinstance(evaluation, dict)
-                or evaluation.get("recommendation") == "Skip"
-            ):
-                continue
-            title, company = jd_manager.extract_job_meta(path)
-            try:
-                with open(path, "r", encoding="utf-8") as _f:
-                    jd_data = json.load(_f)
-            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-                jd_data = {}
-            rows.append(
-                {
-                    "path": path,
-                    "status": "Completed",
-                    "evaluation": evaluation,
-                    "liveness": jd_manager.read_liveness(path),
-                    "application": jd_manager.read_application_status(path),
-                    "title": title,
-                    "company": company,
-                    "description": jd_data.get("description", "") or "",
-                    "source_platform": jd_data.get("source_platform", "") or "",
-                    "added_manually": bool(
-                        jd_data.get("added_manually")
-                        or jd_data.get("source_platform")
-                        in {"manual", "manual-screenshot"}
-                    ),
-                    "source_url": jd_data.get("source_url")
-                    or jd_data.get("application_url", "")
-                    or "",
-                    "company_website": jd_data.get("company_website", "") or "",
-                    "skills": jd_data.get("skills") or [],
-                    "research": jd_manager.read_research(path),
-                    "coverage": jd_manager.read_coverage(path),
-                    "location_enrichment": jd_manager.read_location_enrichment(path),
-                    "posted_date": jd_manager.compute_posting_date(path),
-                    **_location_fields(jd_data, location_settings_block),
-                    **_employment_fields(jd_data),
-                    **_compensation_fields(jd_data),
-                    **_stress_fields(jd_data),
-                }
-            )
+            row = _file_row(path, "Completed", location_settings_block)
+            if row:
+                rows.append(row)
     if "Pending" in statuses:
         rows.extend(_database_only_rows(rows, location_settings_block))
 
@@ -661,25 +628,13 @@ def _normalize_posting_text(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
 
 
-def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
-    """Evaluated jobs that live only in data.db, in the same dict shape.
+def _file_row_identities(file_rows: list, db) -> tuple[set, set, set]:
+    """Identity keys for postings that already have a JD file on disk.
 
-    Most pending jobs have no JD file -- the filesystem-to-database
-    migration keyed them by content hash and never wrote one -- so a
-    filesystem-only scan showed a few hundred jobs while thousands sat
-    invisible, including the majority of the highest-scoring ones.
-
-    Their "path" is the job id rather than a real path. That is what
-    jd_source.resolved_jd() consumes, so every dashboard action keeps
-    working on them without a file ever being written.
+    Returns (ids, dedup_hashes, (company, title) pairs) -- the three
+    rules a database row is matched against to decide whether it is a
+    duplicate of a file we already listed.
     """
-    if settings is None:
-        settings = {}
-    try:
-        import db
-    except ImportError:
-        return []
-
     seen = set()
     # A file's own row is NOT always keyed by compute_job_key. upsert_job
     # merges into an existing row with the same dedup_hash rather than
@@ -713,6 +668,60 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
                 )
             except Exception:  # noqa: BLE001 -- identity is a best-effort match
                 pass
+
+    return seen, seen_hashes, seen_company_title
+
+
+def _db_row_entry(record, data: dict, evaluation, job_id: str, settings: dict) -> dict:
+    """Shapes one database-only job row like a filesystem JD entry."""
+    return {
+        "path": job_id,
+        "status": "Pending",
+        "evaluation": evaluation,
+        "liveness": data.get("_liveness"),
+        "application": data.get("_application"),
+        "title": record["title"] or data.get("job_title") or "",
+        "company": record["company"] or data.get("company_name") or "",
+        "description": data.get("description", "") or "",
+        "source_platform": data.get("source_platform", "") or "",
+        "added_manually": bool(
+            data.get("added_manually")
+            or data.get("source_platform") in {"manual", "manual-screenshot"}
+        ),
+        "source_url": data.get("source_url") or data.get("application_url", "") or "",
+        "company_website": data.get("company_website", "") or "",
+        "skills": data.get("skills") or [],
+        "research": data.get("_research"),
+        "coverage": data.get("_coverage"),
+        "location_enrichment": data.get("_location_enrichment"),
+        "posted_date": jd_manager.compute_posting_date(job_id),
+        **_location_fields(data, settings or {}),
+        **_employment_fields(data),
+        **_compensation_fields(data),
+        **_stress_fields(data),
+    }
+
+
+def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
+    """Evaluated jobs that live only in data.db, in the same dict shape.
+
+    Most pending jobs have no JD file -- the filesystem-to-database
+    migration keyed them by content hash and never wrote one -- so a
+    filesystem-only scan showed a few hundred jobs while thousands sat
+    invisible, including the majority of the highest-scoring ones.
+
+    Their "path" is the job id rather than a real path. That is what
+    jd_source.resolved_jd() consumes, so every dashboard action keeps
+    working on them without a file ever being written.
+    """
+    if settings is None:
+        settings = {}
+    try:
+        import db
+    except ImportError:
+        return []
+
+    seen, seen_hashes, seen_company_title = _file_row_identities(file_rows, db)
 
     try:
         conn = db.get_db()
@@ -760,36 +769,7 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
         if record["location"] and not data.get("location"):
             data["location"] = record["location"]
 
-        extra.append(
-            {
-                "path": job_id,
-                "status": "Pending",
-                "evaluation": evaluation,
-                "liveness": data.get("_liveness"),
-                "application": data.get("_application"),
-                "title": record["title"] or data.get("job_title") or "",
-                "company": record["company"] or data.get("company_name") or "",
-                "description": data.get("description", "") or "",
-                "source_platform": data.get("source_platform", "") or "",
-                "added_manually": bool(
-                    data.get("added_manually")
-                    or data.get("source_platform") in {"manual", "manual-screenshot"}
-                ),
-                "source_url": data.get("source_url")
-                or data.get("application_url", "")
-                or "",
-                "company_website": data.get("company_website", "") or "",
-                "skills": data.get("skills") or [],
-                "research": data.get("_research"),
-                "coverage": data.get("_coverage"),
-                "location_enrichment": data.get("_location_enrichment"),
-                "posted_date": jd_manager.compute_posting_date(job_id),
-                **_location_fields(data, settings or {}),
-                **_employment_fields(data),
-                **_compensation_fields(data),
-                **_stress_fields(data),
-            }
-        )
+        extra.append(_db_row_entry(record, data, evaluation, job_id, settings))
     return extra
 
 

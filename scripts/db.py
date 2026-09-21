@@ -218,51 +218,49 @@ def init_db(conn: sqlite3.Connection | str) -> None:
         )
 
 
-def upsert_job(
-    job_data: Dict[str, Any],
-    profile: Optional[str] = None,
-    conn: Optional[sqlite3.Connection] = None,
-) -> None:
-    """Inserts or updates a job posting record in the database."""
-    job_id = (
-        job_data.get("id")
-        or job_data.get("filename")
-        or f"{job_data.get('company', 'Unknown')}_{job_data.get('title', 'Role')}"
-    )
-    if conn is None and _is_unisolated_test_write(profile):
-        return
+# Substring fragments mapped to the canonical status they imply, in
+# priority order. Order is load-bearing: it is the original if/elif chain,
+# so a raw status containing two fragments resolves the same way it always
+# did.
+_STATUS_FRAGMENTS = (
+    ("expire", "expired"),
+    ("interview", "interview"),
+    ("offer", "offer"),
+    ("reject", "rejected"),
+    ("discard", "discarded"),
+    ("skip", "skip"),
+    ("respond", "responded"),
+)
 
-    close_conn = False
-    if conn is None:
-        conn = get_db(profile)
-        close_conn = True
+# Exact matches, checked after the fragments above.
+_STATUS_EXACT = {
+    "completed": "completed",
+    "tailored": "completed",
+    "applied": "applied",
+}
 
-    raw_status = (job_data.get("status") or "pending").lower()
-    if "expire" in raw_status:
-        status = "expired"
-    elif "interview" in raw_status:
-        status = "interview"
-    elif "offer" in raw_status:
-        status = "offer"
-    elif "reject" in raw_status:
-        status = "rejected"
-    elif "discard" in raw_status:
-        status = "discarded"
-    elif "skip" in raw_status:
-        status = "skip"
-    elif "respond" in raw_status:
-        status = "responded"
-    elif raw_status in ("completed", "tailored"):
-        status = "completed"
-    elif raw_status == "applied":
-        status = "applied"
-    elif "archive" in raw_status:
-        status = "archived"
-    elif "evaluat" in raw_status:
-        status = "evaluating"
-    else:
-        status = "pending"
+_STATUS_LATE_FRAGMENTS = (
+    ("archive", "archived"),
+    ("evaluat", "evaluating"),
+)
 
+
+def _canonical_status(raw: Optional[str]) -> str:
+    """Maps a free-form status string onto the canonical set of job statuses."""
+    raw_status = (raw or "pending").lower()
+    for fragment, canonical in _STATUS_FRAGMENTS:
+        if fragment in raw_status:
+            return canonical
+    if raw_status in _STATUS_EXACT:
+        return _STATUS_EXACT[raw_status]
+    for fragment, canonical in _STATUS_LATE_FRAGMENTS:
+        if fragment in raw_status:
+            return canonical
+    return "pending"
+
+
+def _job_identity_and_scores(job_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Pulls the job's display columns and scores out of a raw JD payload."""
     # Accept both spellings. Scraped JD JSON files use the source
     # platform's own keys (job_title/company_name) -- only rows that came
     # through jd_manager.list_* have already been normalized to
@@ -295,6 +293,47 @@ def upsert_job(
         or job_data.get("score")
         or evaluation.get("composite_score")
     )
+
+    return {
+        "title": title,
+        "company": company,
+        "location": location,
+        "raw_text": raw_text,
+        "cap_score": cap_score,
+        "rec_score": rec_score,
+        "final_score": final_score,
+    }
+
+
+def upsert_job(
+    job_data: Dict[str, Any],
+    profile: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> None:
+    """Inserts or updates a job posting record in the database."""
+    job_id = (
+        job_data.get("id")
+        or job_data.get("filename")
+        or f"{job_data.get('company', 'Unknown')}_{job_data.get('title', 'Role')}"
+    )
+    if conn is None and _is_unisolated_test_write(profile):
+        return
+
+    close_conn = False
+    if conn is None:
+        conn = get_db(profile)
+        close_conn = True
+
+    status = _canonical_status(job_data.get("status"))
+
+    fields = _job_identity_and_scores(job_data)
+    title = fields["title"]
+    company = fields["company"]
+    location = fields["location"]
+    raw_text = fields["raw_text"]
+    cap_score = fields["cap_score"]
+    rec_score = fields["rec_score"]
+    final_score = fields["final_score"]
 
     dedup_hash = job_data.get("dedup_hash") or compute_job_dedup_hash(
         title, company, location

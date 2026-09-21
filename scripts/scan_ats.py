@@ -260,31 +260,13 @@ def _fetch_ashby_structured_posting(url: str) -> dict | None:
     }
 
 
-def _normalize_raw_job(
-    raw: dict, provider_id: str, entry_name: str | None
-) -> dict | None:
-    """Same normalization scan_boards.py's fetch_board_jobs() does
-    (title/company cleanup, HTML-entity decoding, title/location
-    prefilter, prefer a provider-supplied description over a page
-    fetch) -- pulled out here so both the tracked_companies and
-    search_queries loops in fetch_ats_jobs() share exactly one copy of
-    it."""
-    title = html.unescape((raw.get("title") or "").strip())
-    raw_url = raw.get("url") or ""
-    url = canonicalize_job_url(raw_url)
-    if not title or not url or title.startswith(("http://", "https://")):
-        return None
-    if not scan_boards._passes_title_filter(title):
-        return None
-    if not scan_boards._passes_location_filter(raw.get("location")):
-        return None
-    # Before the description work below, which for ashby can mean a whole
-    # extra structured-posting fetch -- the type is already in hand.
-    if not scan_boards._passes_employment_filter(
-        raw.get("employment_type"), provider_id
-    ):
-        return None
+def _resolve_description(raw: dict, url: str, provider_id: str) -> tuple[str, str]:
+    """Best available description text and location for one raw posting.
 
+    Prefers a provider-supplied description, falls back to Ashby's
+    structured API or a page fetch, and upgrades a websearch snippet when
+    the posting page itself holds more text. Returns (description, location).
+    """
     raw_description = raw.get("description") or ""
     location = raw.get("location") or ""
 
@@ -318,20 +300,36 @@ def _normalize_raw_job(
         page_text = scan_boards._fetch_posting_text(url, provider_id)
         if len(page_text) > len(description):
             description = page_text
+    return description, location
 
+
+def _passes_description_gates(description: str, location: str, raw: dict) -> bool:
+    """The gates that can only run once the description text exists."""
     if not scan_boards._passes_location_filter(location):
-        return None
+        return False
     if not scan_boards._passes_content_filters(description):
-        return None
+        return False
     if not scan_boards._passes_compensation_filter(
         description, raw.get("compensation")
     ):
-        return None
+        return False
     if not scan_boards._passes_hours_filter(description):
-        return None
+        return False
     if not scan_boards._passes_hybrid_preference_filter(location, description):
-        return None
+        return False
+    return True
 
+
+def _build_ats_job(
+    raw: dict,
+    title: str,
+    url: str,
+    location: str,
+    description: str,
+    provider_id: str,
+    entry_name: str | None,
+) -> dict:
+    """Assembles the saved JD dict from an accepted raw posting."""
     job = {
         "job_title": title,
         "company_name": html.unescape(
@@ -352,6 +350,41 @@ def _normalize_raw_job(
     # declares its text a teaser must not lose that across the rebuild.
     if raw.get("description_is_teaser"):
         job["description_is_teaser"] = True
+    return job
+
+
+def _normalize_raw_job(
+    raw: dict, provider_id: str, entry_name: str | None
+) -> dict | None:
+    """Same normalization scan_boards.py's fetch_board_jobs() does
+    (title/company cleanup, HTML-entity decoding, title/location
+    prefilter, prefer a provider-supplied description over a page
+    fetch) -- pulled out here so both the tracked_companies and
+    search_queries loops in fetch_ats_jobs() share exactly one copy of
+    it."""
+    title = html.unescape((raw.get("title") or "").strip())
+    raw_url = raw.get("url") or ""
+    url = canonicalize_job_url(raw_url)
+    if not title or not url or title.startswith(("http://", "https://")):
+        return None
+    if not scan_boards._passes_title_filter(title):
+        return None
+    if not scan_boards._passes_location_filter(raw.get("location")):
+        return None
+    # Before the description work below, which for ashby can mean a whole
+    # extra structured-posting fetch -- the type is already in hand.
+    if not scan_boards._passes_employment_filter(
+        raw.get("employment_type"), provider_id
+    ):
+        return None
+
+    description, location = _resolve_description(raw, url, provider_id)
+    if not _passes_description_gates(description, location, raw):
+        return None
+
+    job = _build_ats_job(
+        raw, title, url, location, description, provider_id, entry_name
+    )
     scan_boards._flag_thin_description(job, provider_id, url)
     return job
 

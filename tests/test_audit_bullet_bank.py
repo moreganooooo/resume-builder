@@ -38,7 +38,7 @@ class TestAuditBulletBank(unittest.TestCase):
     def test_run_audit_missing_input(self):
         """Test run_audit when input CSV does not exist."""
         results = audit_bullet_bank.run_audit(
-            csv_path="/nonexistent/clean.csv", out_path="/tmp/out.csv"
+            csv_path="/nonexistent/clean.csv", out_path="/nonexistent/out.csv"
         )
         self.assertEqual(results, [])
 
@@ -52,8 +52,8 @@ class TestAuditBulletBank(unittest.TestCase):
         mock_engine = MagicMock()
         mock_engine.load_prompt.return_value = "Critique Prompt"
         mock_engine.load_yaml.return_value = {"rules": "mock"}
-        mock_engine.scoring_dir = "/tmp"
-        mock_engine.rules_dir = "/tmp"
+        mock_engine.scoring_dir = "/nonexistent"
+        mock_engine.rules_dir = "/nonexistent"
         mock_engine_cls.return_value = mock_engine
 
         mock_generate.return_value = ("{}", MagicMock())
@@ -104,8 +104,8 @@ class TestAuditBulletBank(unittest.TestCase):
         mock_engine = MagicMock()
         mock_engine.load_prompt.return_value = "Critique Prompt"
         mock_engine.load_yaml.return_value = {}
-        mock_engine.scoring_dir = "/tmp"
-        mock_engine.rules_dir = "/tmp"
+        mock_engine.scoring_dir = "/nonexistent"
+        mock_engine.rules_dir = "/nonexistent"
         mock_engine_cls.return_value = mock_engine
 
         mock_generate.side_effect = RuntimeError("API Rate Limit")
@@ -140,8 +140,8 @@ class TestAuditBulletBank(unittest.TestCase):
         mock_engine = MagicMock()
         mock_engine.load_prompt.return_value = "Critique Prompt"
         mock_engine.load_yaml.return_value = {}
-        mock_engine.scoring_dir = "/tmp"
-        mock_engine.rules_dir = "/tmp"
+        mock_engine.scoring_dir = "/nonexistent"
+        mock_engine.rules_dir = "/nonexistent"
         mock_engine_cls.return_value = mock_engine
 
         mock_generate.return_value = (
@@ -171,8 +171,8 @@ class TestAuditBulletBank(unittest.TestCase):
         mock_engine = MagicMock()
         mock_engine.load_prompt.return_value = "Critique Prompt"
         mock_engine.load_yaml.return_value = {}
-        mock_engine.scoring_dir = "/tmp"
-        mock_engine.rules_dir = "/tmp"
+        mock_engine.scoring_dir = "/nonexistent"
+        mock_engine.rules_dir = "/nonexistent"
         mock_engine_cls.return_value = mock_engine
 
         mock_generate.return_value = ('{"manager_test": "PASS"}', MagicMock())

@@ -1993,6 +1993,89 @@ def load_already_processed(
 # ---------------------------------------------------------------------------
 
 
+def _after_parse_failure(
+    error: Exception, attempt: int, failures: int, active_model: str
+) -> str:
+    """Reports an unparseable rewrite and returns the model to try next.
+
+    Switches to the fallback model once a run of parse failures says the
+    current one is not producing usable JSON.
+    """
+    cli_art.console.print(
+        f"   {theme.colorize_icon('warning')} Rewrite parse error (attempt {attempt}): {error}",
+        soft_wrap=True,
+    )
+    if (
+        failures >= MAX_REWRITE_PARSE_FAILURES
+        and active_model != REWRITE_FALLBACK_MODEL
+    ):
+        cli_art.console.print(
+            f"   {theme.colorize_icon('warning')} Switching to fallback model: {REWRITE_FALLBACK_MODEL}",
+            soft_wrap=True,
+        )
+        return REWRITE_FALLBACK_MODEL
+    return active_model
+
+
+def _rejection_reason(
+    rewritten: str,
+    evidence: str,
+    role_company: str,
+    kb: KnowledgeBase,
+) -> tuple[str, str] | None:
+    """Why a rewrite must be thrown away unscored, if it must be.
+
+    Returns (console message, weaknesses text for the next attempt), or
+    None when the rewrite is clean. Checked in the original order --
+    foreign numbers, then borrowed tools, then calendar anchors -- so a
+    rewrite failing more than one is reported the same way it always was.
+    """
+    stray = foreign_numbers(rewritten, evidence)
+    if stray:
+        # Never scored, never kept: a number this employer's evidence
+        # can't account for is invented or borrowed from another job.
+        # The next attempt is told why via the weaknesses it's shown.
+        return (
+            "Rejected: rewrite introduced number(s) not in this role's "
+            f"evidence ({', '.join(sorted(stray))}).",
+            f"The previous rewrite introduced numbers ({', '.join(sorted(stray))}) "
+            f"that are not in this bullet or in {role_company}'s own evidence. Use "
+            "only numbers already present there; never borrow metrics from another role.",
+        )
+
+    borrowed = foreign_tools(
+        rewritten,
+        evidence,
+        role_company,
+        getattr(kb, "tool_employers", {}) or {},
+    )
+    if borrowed:
+        return (
+            "Rejected: rewrite introduced tool(s) this role's bullets never "
+            f"use ({', '.join(sorted(borrowed))}).",
+            f"The previous rewrite introduced tools ({', '.join(sorted(borrowed))}) "
+            f"that belong to another role's work, not {role_company}'s. Use only "
+            f"tools already in this bullet or in {role_company}'s own evidence.",
+        )
+
+    anchors = date_anchors(rewritten)
+    if anchors:
+        # Same shape as the foreign_numbers rejection: the rewrite goals
+        # already ban school-year/calendar anchors ("...in the 2020-21
+        # school year") -- the role's period line dates the work. A rewrite
+        # that keeps one is told why and asked to drop the qualifier.
+        return (
+            "Rejected: rewrite keeps a calendar/school-year anchor "
+            f"({', '.join(anchors)}).",
+            f"The previous rewrite kept a calendar/school-year anchor "
+            f"({', '.join(anchors)}). The role's period line already dates the "
+            f"work -- DROP the qualifier entirely (do not reword it) and state "
+            f"the achievement timelessly.",
+        )
+
+    return None
+
+
 def process_bullet(
     row: "pd.Series",
     kb: KnowledgeBase,
@@ -2116,82 +2199,25 @@ def process_bullet(
                 raise
             except Exception as e:
                 rewrite_parse_failures += 1
-                cli_art.console.print(
-                    f"   {theme.colorize_icon('warning')} Rewrite parse error (attempt {attempt}): {e}",
-                    soft_wrap=True,
+                active_rewrite_model = _after_parse_failure(
+                    e, attempt, rewrite_parse_failures, active_rewrite_model
                 )
-                if (
-                    rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
-                    and active_rewrite_model != REWRITE_FALLBACK_MODEL
-                ):
-                    cli_art.console.print(
-                        f"   {theme.colorize_icon('warning')} Switching to fallback model: {REWRITE_FALLBACK_MODEL}",
-                        soft_wrap=True,
-                    )
-                    active_rewrite_model = REWRITE_FALLBACK_MODEL
                 time.sleep(SLEEP_ON_RETRY)
                 continue
 
-        stray = foreign_numbers(
-            rewritten, f"{original_bullet}\n{current_bullet}\n{scoped_context}"
-        )
-        if stray:
-            # Never scored, never kept: a number this employer's evidence
-            # can't account for is invented or borrowed from another job.
-            # The next attempt is told why via the weaknesses it's shown.
-            cli_art.console.print(
-                f"   {theme.colorize_icon('warning')} Rejected: rewrite introduced "
-                f"number(s) not in this role's evidence ({', '.join(sorted(stray))}).",
-                soft_wrap=True,
-            )
-            current_scores["weaknesses"] = (
-                f"The previous rewrite introduced numbers ({', '.join(sorted(stray))}) "
-                f"that are not in this bullet or in {role_company}'s own evidence. Use "
-                f"only numbers already present there; never borrow metrics from another role."
-            )
-            if attempt < MAX_ATTEMPTS:
-                time.sleep(SLEEP_ON_RETRY)
-            continue
-
-        borrowed = foreign_tools(
+        rejection = _rejection_reason(
             rewritten,
             f"{original_bullet}\n{current_bullet}\n{scoped_context}",
             role_company,
-            getattr(kb, "tool_employers", {}) or {},
+            kb,
         )
-        if borrowed:
+        if rejection:
+            message, weaknesses_note = rejection
             cli_art.console.print(
-                f"   {theme.colorize_icon('warning')} Rejected: rewrite introduced "
-                f"tool(s) this role's bullets never use ({', '.join(sorted(borrowed))}).",
+                f"   {theme.colorize_icon('warning')} {message}",
                 soft_wrap=True,
             )
-            current_scores["weaknesses"] = (
-                f"The previous rewrite introduced tools ({', '.join(sorted(borrowed))}) "
-                f"that belong to another role's work, not {role_company}'s. Use only "
-                f"tools already in this bullet or in {role_company}'s own evidence."
-            )
-            if attempt < MAX_ATTEMPTS:
-                time.sleep(SLEEP_ON_RETRY)
-            continue
-
-        anchors = date_anchors(rewritten)
-        if anchors:
-            # Never scored, never kept, same shape as the foreign_numbers
-            # rejection: the rewrite goals already ban school-year/calendar
-            # anchors ("...in the 2020-21 school year") -- the role's period
-            # line dates the work. A rewrite that keeps one is told why and
-            # asked to drop the qualifier outright.
-            cli_art.console.print(
-                f"   {theme.colorize_icon('warning')} Rejected: rewrite keeps a "
-                f"calendar/school-year anchor ({', '.join(anchors)}).",
-                soft_wrap=True,
-            )
-            current_scores["weaknesses"] = (
-                f"The previous rewrite kept a calendar/school-year anchor "
-                f"({', '.join(anchors)}). The role's period line already dates the "
-                f"work -- DROP the qualifier entirely (do not reword it) and state "
-                f"the achievement timelessly."
-            )
+            current_scores["weaknesses"] = weaknesses_note
             if attempt < MAX_ATTEMPTS:
                 time.sleep(SLEEP_ON_RETRY)
             continue

@@ -250,6 +250,53 @@ def _confirm_roles(label: str, guessed: list) -> list:
     return kept
 
 
+def _identity_dry_run(guessed, primary_guess: list) -> dict:
+    """Prints the identity fields a real run would confirm, and returns them."""
+    cli_art.cli_info("[DRY RUN] would confirm identity fields:")
+    cli_art.console.print()
+    cli_art.cli_info(f"Full name: {guessed.full_name or ''}")
+    cli_art.cli_info(f"Email: {guessed.email or ''}")
+    cli_art.cli_info(f"Phone: {guessed.phone or ''}")
+    cli_art.cli_info(f"Location: {guessed.location or ''}")
+    cli_art.cli_info(f"LinkedIn URL: {guessed.linkedin_url or ''}")
+    cli_art.cli_info(f"Primary target roles: {', '.join(primary_guess)}")
+    cli_art.console.print()
+    return {
+        "full_name": guessed.full_name or "",
+        "email": guessed.email or "",
+        "phone": guessed.phone or "",
+        "location": guessed.location or "",
+        "linkedin_url": guessed.linkedin_url or "",
+        "portfolio_url": guessed.portfolio_url or "",
+        "extra_link": "",
+        "primary_roles": primary_guess,
+        "secondary_roles": [],
+        "remote_preference": False,
+    }
+
+
+def _review_identity(result: dict) -> None:
+    """Shows every collected identity field back for a final yes/no."""
+    cli_art.console.rule("Review your answers", style="dim")
+    cli_art.cli_info(f"Full name:       {result['full_name'] or '(blank)'}")
+    cli_art.cli_info(f"Email:           {result['email'] or '(blank)'}")
+    cli_art.cli_info(f"Phone:           {result['phone'] or '(blank)'}")
+    cli_art.cli_info(f"Location:        {result['location'] or '(blank)'}")
+    cli_art.cli_info(f"LinkedIn URL:    {result['linkedin_url'] or '(blank)'}")
+    cli_art.cli_info(f"Portfolio URL:   {result['portfolio_url'] or '(blank)'}")
+    cli_art.cli_info(f"Other link:      {result['extra_link'] or '(blank)'}")
+    cli_art.cli_info(
+        f"Primary roles:   {', '.join(result['primary_roles']) or '(none)'}"  # type: ignore[arg-type]
+    )
+    cli_art.cli_info(
+        f"Secondary roles: {', '.join(result['secondary_roles']) or '(none)'}"  # type: ignore[arg-type]
+    )
+    cli_art.cli_info(
+        f"Remote-only:     {'Yes' if result['remote_preference'] else 'No'}"
+    )
+    cli_art.console.print()
+
+
 def collect_identity(dry_run: bool = False) -> dict:
     checkpoint = _load_checkpoint()
     timeline = _load_timeline()
@@ -276,27 +323,7 @@ def collect_identity(dry_run: bool = False) -> dict:
         primary_guess = existing["primary_roles"]
 
     if dry_run:
-        cli_art.cli_info("[DRY RUN] would confirm identity fields:")
-        cli_art.console.print()
-        cli_art.cli_info(f"Full name: {guessed.full_name or ''}")
-        cli_art.cli_info(f"Email: {guessed.email or ''}")
-        cli_art.cli_info(f"Phone: {guessed.phone or ''}")
-        cli_art.cli_info(f"Location: {guessed.location or ''}")
-        cli_art.cli_info(f"LinkedIn URL: {guessed.linkedin_url or ''}")
-        cli_art.cli_info(f"Primary target roles: {', '.join(primary_guess)}")
-        cli_art.console.print()
-        return {
-            "full_name": guessed.full_name or "",
-            "email": guessed.email or "",
-            "phone": guessed.phone or "",
-            "location": guessed.location or "",
-            "linkedin_url": guessed.linkedin_url or "",
-            "portfolio_url": guessed.portfolio_url or "",
-            "extra_link": "",
-            "primary_roles": primary_guess,
-            "secondary_roles": [],
-            "remote_preference": False,
-        }
+        return _identity_dry_run(guessed, primary_guess)
 
     # This is the single densest sequential-entry point in the whole wizard
     # (9 fields/prompts in a row) with no way to correct an earlier answer
@@ -394,24 +421,7 @@ def collect_identity(dry_run: bool = False) -> dict:
         }
 
         cli_art.console.print()
-        cli_art.console.rule("Review your answers", style="dim")
-        cli_art.cli_info(f"Full name:       {result['full_name'] or '(blank)'}")
-        cli_art.cli_info(f"Email:           {result['email'] or '(blank)'}")
-        cli_art.cli_info(f"Phone:           {result['phone'] or '(blank)'}")
-        cli_art.cli_info(f"Location:        {result['location'] or '(blank)'}")
-        cli_art.cli_info(f"LinkedIn URL:    {result['linkedin_url'] or '(blank)'}")
-        cli_art.cli_info(f"Portfolio URL:   {result['portfolio_url'] or '(blank)'}")
-        cli_art.cli_info(f"Other link:      {result['extra_link'] or '(blank)'}")
-        cli_art.cli_info(
-            f"Primary roles:   {', '.join(result['primary_roles']) or '(none)'}"  # type: ignore[arg-type]
-        )
-        cli_art.cli_info(
-            f"Secondary roles: {', '.join(result['secondary_roles']) or '(none)'}"  # type: ignore[arg-type]
-        )
-        cli_art.cli_info(
-            f"Remote-only:     {'Yes' if result['remote_preference'] else 'No'}"
-        )
-        cli_art.console.print()
+        _review_identity(result)
 
         if cli_art.confirm("Everything look right?", default=True):
             return result

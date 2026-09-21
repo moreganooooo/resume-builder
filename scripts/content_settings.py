@@ -200,6 +200,13 @@ def scan_filters_path(profile: str | None = None) -> str:
     return os.path.join(root, "board_scanner", "scan_filters.yml")
 
 
+def _kept_keys(block, allowed) -> dict:
+    """The allowlisted, non-empty keys of one settings block, or {}."""
+    if not isinstance(block, dict):
+        return {}
+    return {k: block[k] for k in allowed if block.get(k) not in (None, "")}
+
+
 def read_settings(path: str | None = None) -> dict:
     """Returns {"languages": [...], "max_travel_percent": N}, keys absent when unset."""
     path = path or scan_filters_path()
@@ -225,42 +232,19 @@ def read_settings(path: str | None = None) -> dict:
         settings["linkedin_experience_levels"] = [
             str(value).strip().lower() for value in linkedin_experience
         ]
-    pay = data.get("compensation")
-    if isinstance(pay, dict):
-        # Only the keys the gates actually read, so a stray key in the
-        # file cannot round-trip through the editor and look supported.
-        kept = {k: pay[k] for k in _COMPENSATION_KEYS if pay.get(k) not in (None, "")}
-        if kept:
-            settings["compensation"] = kept
-    constraints = data.get("work_constraints")
-    if isinstance(constraints, dict):
-        import work_constraints
+    import work_constraints
 
-        kept = {
-            k: constraints[k]
-            for k in work_constraints.DEFAULTS
-            if constraints.get(k) not in (None, "")
-        }
+    # Only the keys the gates actually read, so a stray key in the file
+    # cannot round-trip through the editor and look supported.
+    for block, allowed in (
+        ("compensation", _COMPENSATION_KEYS),
+        ("work_constraints", work_constraints.DEFAULTS),
+        ("scoring_weights", _SCORING_WEIGHTS_KEYS),
+        ("role_track", _ROLE_TRACK_KEYS),
+    ):
+        kept = _kept_keys(data.get(block), allowed)
         if kept:
-            settings["work_constraints"] = kept
-    weights = data.get("scoring_weights")
-    if isinstance(weights, dict):
-        kept = {
-            k: weights[k]
-            for k in _SCORING_WEIGHTS_KEYS
-            if weights.get(k) not in (None, "")
-        }
-        if kept:
-            settings["scoring_weights"] = kept
-    role_track = data.get("role_track")
-    if isinstance(role_track, dict):
-        kept = {
-            k: role_track[k]
-            for k in _ROLE_TRACK_KEYS
-            if role_track.get(k) not in (None, "")
-        }
-        if kept:
-            settings["role_track"] = kept
+            settings[block] = kept
     return settings
 
 
@@ -423,18 +407,41 @@ def _yaml_scalar(value) -> str:
     return str(value)
 
 
+def _write_list_block(text: str, name: str, pattern, values) -> str:
+    """Replaces (or drops) a `name:` list block in the raw YAML text."""
+    if not values:
+        return pattern.sub("", text, count=1)
+    block = f"{name}:\n" + "".join(f"- {value}\n" for value in values)
+    return _replace_or_append(text, pattern, block)
+
+
+def _write_mapping_block(text: str, name: str, pattern, values, allowed) -> str:
+    """Replaces (or drops) a `name:` mapping block in the raw YAML text.
+
+    Only `allowed` keys are written, and only when non-empty -- the same
+    allowlist read_settings() applies on the way back in.
+    """
+    kept = _kept_keys(values or {}, allowed)
+    if not kept:
+        return pattern.sub("", text, count=1)
+    block = f"{name}:\n" + "".join(
+        f"  {key}: {_yaml_scalar(kept[key])}\n" for key in allowed if key in kept
+    )
+    return _replace_or_append(text, pattern, block)
+
+
 def write_settings(settings: dict, path: str | None = None) -> None:
-    """Writes all three keys, removing any whose value is absent or empty."""
+    """Writes every supported key, removing any whose value is absent or empty."""
     path = path or scan_filters_path()
     with open(path, "r", encoding="utf-8") as handle:
         updated = handle.read()
 
-    languages = settings.get("languages")
-    if languages:
-        block = "languages:\n" + "".join(f"- {code}\n" for code in languages)
-        updated = _replace_or_append(updated, _LANGUAGES_RE, block)
-    else:
-        updated = _LANGUAGES_RE.sub("", updated, count=1)
+    for name, pattern in (
+        ("languages", _LANGUAGES_RE),
+        ("employment_type", _EMPLOYMENT_RE),
+        ("linkedin_experience_levels", _LINKEDIN_EXPERIENCE_RE),
+    ):
+        updated = _write_list_block(updated, name, pattern, settings.get(name))
 
     ceiling = settings.get("max_travel_percent")
     if ceiling is not None:
@@ -444,63 +451,14 @@ def write_settings(settings: dict, path: str | None = None) -> None:
     else:
         updated = _TRAVEL_RE.sub("", updated, count=1)
 
-    employment = settings.get("employment_type")
-    if employment:
-        block = "employment_type:\n" + "".join(f"- {value}\n" for value in employment)
-        updated = _replace_or_append(updated, _EMPLOYMENT_RE, block)
-    else:
-        updated = _EMPLOYMENT_RE.sub("", updated, count=1)
-
-    linkedin_experience = settings.get("linkedin_experience_levels")
-    if linkedin_experience:
-        block = "linkedin_experience_levels:\n" + "".join(
-            f"- {value}\n" for value in linkedin_experience
+    for name, pattern, allowed in (
+        ("compensation", _COMPENSATION_RE, _COMPENSATION_KEYS),
+        ("scoring_weights", _SCORING_WEIGHTS_RE, _SCORING_WEIGHTS_KEYS),
+        ("role_track", _ROLE_TRACK_RE, _ROLE_TRACK_KEYS),
+    ):
+        updated = _write_mapping_block(
+            updated, name, pattern, settings.get(name), allowed
         )
-        updated = _replace_or_append(updated, _LINKEDIN_EXPERIENCE_RE, block)
-    else:
-        updated = _LINKEDIN_EXPERIENCE_RE.sub("", updated, count=1)
-
-    pay = settings.get("compensation") or {}
-    pay = {k: pay[k] for k in _COMPENSATION_KEYS if pay.get(k) not in (None, "")}
-    if pay:
-        block = "compensation:\n" + "".join(
-            f"  {key}: {_yaml_scalar(pay[key])}\n"
-            for key in _COMPENSATION_KEYS
-            if key in pay
-        )
-        updated = _replace_or_append(updated, _COMPENSATION_RE, block)
-    else:
-        updated = _COMPENSATION_RE.sub("", updated, count=1)
-
-    weights = settings.get("scoring_weights") or {}
-    weights = {
-        k: weights[k] for k in _SCORING_WEIGHTS_KEYS if weights.get(k) not in (None, "")
-    }
-    if weights:
-        block = "scoring_weights:\n" + "".join(
-            f"  {key}: {_yaml_scalar(weights[key])}\n"
-            for key in _SCORING_WEIGHTS_KEYS
-            if key in weights
-        )
-        updated = _replace_or_append(updated, _SCORING_WEIGHTS_RE, block)
-    else:
-        updated = _SCORING_WEIGHTS_RE.sub("", updated, count=1)
-
-    role_track = settings.get("role_track") or {}
-    role_track = {
-        k: role_track[k]
-        for k in _ROLE_TRACK_KEYS
-        if role_track.get(k) not in (None, "")
-    }
-    if role_track:
-        block = "role_track:\n" + "".join(
-            f"  {key}: {_yaml_scalar(role_track[key])}\n"
-            for key in _ROLE_TRACK_KEYS
-            if key in role_track
-        )
-        updated = _replace_or_append(updated, _ROLE_TRACK_RE, block)
-    else:
-        updated = _ROLE_TRACK_RE.sub("", updated, count=1)
 
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(updated)

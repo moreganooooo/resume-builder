@@ -55,8 +55,9 @@ class TestArchiveCopies(unittest.TestCase):
             "'b'" if c == "id" else "'legacy-copy'" if c == "dedup_hash" else c
             for c in cols
         )
-        conn.execute(
-            f"INSERT INTO jobs ({', '.join(cols)}) SELECT {select} FROM jobs WHERE id = 'a'"
+        # Interpolated from PRAGMA table_info, never from input: nosec B608.
+        conn.execute(  # nosec B608
+            f"INSERT INTO jobs ({', '.join(cols)}) SELECT {select} FROM jobs WHERE id = 'a'"  # nosec B608
         )
         conn.commit()
         conn.close()
