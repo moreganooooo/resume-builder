@@ -18,17 +18,21 @@ class TestVocabularyWiringContract(unittest.TestCase):
     the fresh-build branch."""
 
     def test_substitution_reads_from_checkpoint_not_research_variable(self):
-        source = orchestrator.inspect.getsource(
-            orchestrator.ResumeEngine.build_tailored_resume
-        )
-        self.assertIn('checkpoint["vocabulary_substitutions"]', source)
-        self.assertIn("apply_vocabulary_substitutions_to_resume", source)
+        engine = orchestrator.ResumeEngine
+        # Step 2b persists the substitutions to the checkpoint...
+        mining = orchestrator.inspect.getsource(engine._mine_and_research)
+        self.assertIn('checkpoint["vocabulary_substitutions"]', mining)
+        # ...and the finalize step reads them back from the checkpoint.
+        finalize = orchestrator.inspect.getsource(engine._finalize_resume_text)
+        self.assertIn("apply_vocabulary_substitutions_to_resume", finalize)
+        self.assertIn('checkpoint.get("vocabulary_substitutions"', finalize)
+        self.assertNotIn("research", finalize.split("def ", 2)[1].split(")")[0])
 
     def test_substitution_runs_before_the_save_step(self):
         source = orchestrator.inspect.getsource(
             orchestrator.ResumeEngine.build_tailored_resume
         )
-        subst_at = source.index("apply_vocabulary_substitutions_to_resume(")
+        subst_at = source.index("self._finalize_resume_text(")
         save_at = source.index("# --- Step 6: Save output ---")
         self.assertLess(subst_at, save_at)
 

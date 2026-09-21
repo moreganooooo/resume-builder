@@ -617,6 +617,137 @@ def save_locations_cache(cache: Dict[str, Any], profile: str | None = None) -> N
         logger.debug("Failed to write company locations cache: %s", exc)
 
 
+def _discover_company_location(
+    company: str,
+    website: str,
+    target_city: str,
+    target_state: str,
+    origin: Any,
+    cache: Dict[str, Any],
+    clean_company_key: str,
+    profile: str | None,
+) -> tuple[Optional[Dict[str, Any]], str]:
+    """Step 1: Discovery (Cache -> OSM -> Website).
+
+    Returns (discovery_result, website) -- website may have been filled in
+    by the free search fallback, and the Maps backup reuses it.
+    """
+    discovery_result = None
+    cached_entry = cache.get(clean_company_key)
+    if maps_data_expired(cached_entry):
+        # Google Maps terms: a Maps address older than 30 days is
+        # re-fetched, never served from cache.
+        cached_entry = None
+    cached_failure = (
+        bool(cached_entry)
+        and cached_entry is not None
+        and cached_entry.get("failed") is True
+    )
+    if cached_entry and not cached_failure:
+        discovery_result = dict(cached_entry)
+    elif (
+        cached_entry is not None
+        and cached_failure
+        and not _negative_cache_expired(cached_entry)
+    ):
+        # A prior run already spent an OSM + free-search + scrape
+        # attempt on this exact company and came up empty -- retrying
+        # it on every subsequent job posting for the same employer
+        # (batches routinely carry several) was the actual source of
+        # the repeated "No results found" DDG errors: one real
+        # unresolvable company, retried dozens of times per run.
+        discovery_result = None
+    else:
+        # Try OSM
+        discovery_result = lookup_osm_nominatim(company, target_city, target_state)
+        if not discovery_result:
+            if not website:
+                # Free fallback -- finds a homepage to scrape without
+                # spending a Gemini call (see lookup_website_via_search).
+                website = lookup_website_via_search(company) or ""
+            if website:
+                # Try Website Scraping
+                branches = scrape_company_locations(website, target_state)
+                if branches:
+                    discovery_result = select_closest_branch(branches, origin)
+
+        if discovery_result:
+            cache[clean_company_key] = {
+                "address": discovery_result.get("address"),
+                "zip": discovery_result.get("zip"),
+                "lat": discovery_result.get("lat"),
+                "lon": discovery_result.get("lon"),
+                "source": discovery_result.get("source"),
+            }
+        else:
+            cache[clean_company_key] = {
+                "failed": True,
+                "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+        save_locations_cache(cache, profile)
+    return discovery_result, website
+
+
+def _apply_maps_backup(
+    company: str,
+    target_city: str,
+    target_state: str,
+    maps_site: str,
+    gemini_client: Any,
+    cache: Dict[str, Any],
+    clean_company_key: str,
+    company_cache_entry: Dict[str, Any],
+    corroboration: Dict[str, Any],
+    profile: str | None,
+) -> Optional[Dict[str, Any]]:
+    """Step 3 Maps call; records the outcome in the cache and returns the result."""
+    gemini_result = lookup_google_maps_backup(
+        company,
+        target_city,
+        target_state,
+        client=gemini_client,
+        company_site=maps_site,
+    )
+    if gemini_result:
+        corroboration["discovery_source"] = "google_maps"
+        corroboration["discovery_zip"] = gemini_result.get("zip")
+        cache[clean_company_key] = {
+            "address": gemini_result.get("address"),
+            "zip": gemini_result.get("zip"),
+            "lat": gemini_result.get("lat"),
+            "lon": gemini_result.get("lon"),
+            "source": "google_maps",
+            "maps_uri": gemini_result.get("maps_uri"),
+            "fetched_at": gemini_result.get("fetched_at"),
+        }
+    else:
+        cache[clean_company_key] = {
+            **company_cache_entry,
+            "maps_failed": True,
+            "maps_checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+    save_locations_cache(cache, profile)
+    return gemini_result
+
+
+def _distance_from_origin(
+    winning: Optional[Dict[str, Any]], origin_point: Any
+) -> Optional[float]:
+    """Step 4: haversine miles from the origin, or None when either end is unknown."""
+    if not winning or not origin_point:
+        return None
+    dest_lat = winning.get("lat")
+    dest_lon = winning.get("lon")
+    if dest_lat is None or dest_lon is None:
+        return None
+    return cast(
+        float,
+        geo_distance.haversine_distance_miles(
+            origin_point[0], origin_point[1], dest_lat, dest_lon
+        ),
+    )
+
+
 def enrich_job_location(
     job_data: Dict[str, Any],
     profile: str | None = None,
@@ -672,58 +803,16 @@ def enrich_job_location(
     # Step 1: Discovery (Cache -> OSM -> Website)
     discovery_result = None
     if not agency and company:
-        cached_entry = cache.get(clean_company_key)
-        if maps_data_expired(cached_entry):
-            # Google Maps terms: a Maps address older than 30 days is
-            # re-fetched, never served from cache.
-            cached_entry = None
-        cached_failure = (
-            bool(cached_entry)
-            and cached_entry is not None
-            and cached_entry.get("failed") is True
+        discovery_result, website = _discover_company_location(
+            company,
+            website,
+            target_city,
+            target_state,
+            origin,
+            cache,
+            clean_company_key,
+            profile,
         )
-        if cached_entry and not cached_failure:
-            discovery_result = dict(cached_entry)
-        elif (
-            cached_entry is not None
-            and cached_failure
-            and not _negative_cache_expired(cached_entry)
-        ):
-            # A prior run already spent an OSM + free-search + scrape
-            # attempt on this exact company and came up empty -- retrying
-            # it on every subsequent job posting for the same employer
-            # (batches routinely carry several) was the actual source of
-            # the repeated "No results found" DDG errors: one real
-            # unresolvable company, retried dozens of times per run.
-            discovery_result = None
-        else:
-            # Try OSM
-            discovery_result = lookup_osm_nominatim(company, target_city, target_state)
-            if not discovery_result:
-                if not website:
-                    # Free fallback -- finds a homepage to scrape without
-                    # spending a Gemini call (see lookup_website_via_search).
-                    website = lookup_website_via_search(company) or ""
-                if website:
-                    # Try Website Scraping
-                    branches = scrape_company_locations(website, target_state)
-                    if branches:
-                        discovery_result = select_closest_branch(branches, origin)
-
-            if discovery_result:
-                cache[clean_company_key] = {
-                    "address": discovery_result.get("address"),
-                    "zip": discovery_result.get("zip"),
-                    "lat": discovery_result.get("lat"),
-                    "lon": discovery_result.get("lon"),
-                    "source": discovery_result.get("source"),
-                }
-            else:
-                cache[clean_company_key] = {
-                    "failed": True,
-                    "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                }
-            save_locations_cache(cache, profile)
 
     # Step 2: JD Text Extraction & Precedence
     jd_result = extract_jd_address(raw_text, target_state)
@@ -768,60 +857,41 @@ def enrich_job_location(
         )
     if maps_site:
         search_call_attempted = True
-        gemini_result = lookup_google_maps_backup(
+        gemini_result = _apply_maps_backup(
             company,
             target_city,
             target_state,
-            client=gemini_client,
-            company_site=maps_site,
+            maps_site,
+            gemini_client,
+            cache,
+            clean_company_key,
+            company_cache_entry,
+            corroboration,
+            profile,
         )
         if gemini_result:
             winning = gemini_result
             status = "resolved"
-            corroboration["discovery_source"] = "google_maps"
-            corroboration["discovery_zip"] = gemini_result.get("zip")
-            cache[clean_company_key] = {
-                "address": gemini_result.get("address"),
-                "zip": gemini_result.get("zip"),
-                "lat": gemini_result.get("lat"),
-                "lon": gemini_result.get("lon"),
-                "source": "google_maps",
-                "maps_uri": gemini_result.get("maps_uri"),
-                "fetched_at": gemini_result.get("fetched_at"),
-            }
-        else:
-            cache[clean_company_key] = {
-                **company_cache_entry,
-                "maps_failed": True,
-                "maps_checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            }
-        save_locations_cache(cache, profile)
 
     # Step 4: Dynamic Distance Math
-    distance_miles = None
-    if winning and origin_point:
-        dest_lat = winning.get("lat")
-        dest_lon = winning.get("lon")
-        if dest_lat is not None and dest_lon is not None:
-            distance_miles = geo_distance.haversine_distance_miles(
-                origin_point[0], origin_point[1], dest_lat, dest_lon
-            )
+    distance_miles = _distance_from_origin(winning, origin_point)
 
     radius_miles = float(settings.get("radius_miles") or 25.0)
+    w = winning or {}
     is_within = (distance_miles <= radius_miles) if distance_miles is not None else None
 
     return {
         "status": status,
-        "source": winning.get("source") if winning else None,
+        "source": w.get("source"),
         "original_location": location_str,
         "company": company,
-        "resolved_address": winning.get("address") if winning else None,
-        "resolved_zip": winning.get("zip") if winning else None,
-        "lat": winning.get("lat") if winning else None,
-        "lon": winning.get("lon") if winning else None,
+        "resolved_address": w.get("address"),
+        "resolved_zip": w.get("zip"),
+        "lat": w.get("lat"),
+        "lon": w.get("lon"),
         # The Google Maps source link: attribution for a Maps address, and
         # the place reference kept past the 30-day address expiry.
-        "maps_uri": winning.get("maps_uri") if winning else None,
+        "maps_uri": w.get("maps_uri"),
         "distance_miles": distance_miles,
         "is_within_radius": is_within,
         "is_agency": agency,
@@ -831,30 +901,10 @@ def enrich_job_location(
     }
 
 
-def enrich_profile_locations(
-    profile: str | None = None,
-    statuses: Optional[List[str]] = None,
-    allow_search_backup: bool = False,
-    max_search_calls: int = 10,
-    limit: Optional[int] = None,
-) -> Dict[str, Any]:
-    """Batch enriches company locations for a profile's pending/active database jobs and file-based JDs.
-    Respects Gemini search quota caps (counts all attempts, not just successes) and persists cache incrementally.
-    """
-    import db
+def _collect_enrichment_files(statuses: List[str]) -> tuple[list, set]:
+    """1. Collect file-based JDs for the requested statuses."""
     import jd_manager
 
-    profile = profile or profile_paths.active_profile()
-    settings_path = location_settings.scan_filters_path(profile)
-    settings = location_settings.read_settings(settings_path)
-
-    cache = load_locations_cache(profile)
-    conn = db.get_db(profile)
-
-    statuses = [s.lower() for s in (statuses or ["pending"])]
-    placeholders = ", ".join("?" for _ in statuses)
-
-    # 1. Collect file-based JDs
     file_items = []
     seen_paths = set()
     if "pending" in statuses:
@@ -869,95 +919,179 @@ def enrich_profile_locations(
             if path not in seen_paths and os.path.isfile(path):
                 seen_paths.add(path)
                 file_items.append(path)
+    return file_items, seen_paths
+
+
+def _search_backup_client() -> Any:
+    """A GeminiClient for the Maps backup, or None if one cannot be built."""
+    try:
+        from gemini_client import GeminiClient
+
+        return GeminiClient()
+    except Exception:
+        return None
+
+
+def _file_enrichment_task(path: str) -> Optional[Dict[str, Any]]:
+    """Queue entry for a file-backed JD, or None if unreadable or already terminal."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return None
+        if data.get("_location_enrichment", {}).get(
+            "status"
+        ) in _TERMINAL_ENRICHMENT_STATUSES and not maps_data_expired(
+            data.get("_location_enrichment")
+        ):
+            # Terminal -- except a Google Maps address past its 30-day
+            # cache limit, which must be re-fetched.
+            return None
+        return {
+            "type": "file",
+            "path": path,
+            "id": data.get("id") or path,
+            "title": data.get("title") or data.get("job_title") or "",
+            "company": data.get("company") or data.get("company_name") or "",
+            "location": data.get("location") or "",
+            "raw_text": data.get("raw_text") or data.get("jd_text") or "",
+            "company_website": data.get("company_website", ""),
+            "is_remote": data.get("is_remote"),
+            "work_model": data.get("work_model"),
+            "data": data,
+        }
+    except Exception:
+        return None
+
+
+def _db_enrichment_task(
+    row: Any, seen_db_keys: set, seen_paths: set
+) -> Optional[Dict[str, Any]]:
+    """Queue entry for a database row not already represented by a file."""
+    if row["id"] in seen_db_keys:
+        return None
+    meta = json.loads(row["metadata_json"] or "{}")
+    row_path = meta.get("path") or meta.get("jd_path")
+    if row_path and row_path in seen_paths:
+        return None
+    if (
+        meta.get("_location_enrichment")
+        and meta["_location_enrichment"].get("status") in _TERMINAL_ENRICHMENT_STATUSES
+        and not maps_data_expired(meta["_location_enrichment"])
+    ):
+        return None
+    return {
+        "type": "db",
+        "path": row_path,
+        "id": row["id"],
+        "title": row["title"],
+        "company": row["company"],
+        "location": row["location"],
+        "raw_text": row["raw_text"],
+        "company_website": meta.get("company_website", ""),
+        "is_remote": meta.get("is_remote"),
+        "work_model": meta.get("work_model"),
+        "meta": meta,
+    }
+
+
+def _persist_enrichment(
+    item: Dict[str, Any], enrichment: Dict[str, Any], conn: Any
+) -> None:
+    """Write one enrichment back to its JD file and/or database row."""
+    import jd_manager
+
+    # Persist to file if file-backed
+    if item["type"] == "file" or (item.get("path") and os.path.isfile(item["path"])):
+        fpath = item.get("path")
+        if fpath and os.path.isfile(fpath):
+            jd_manager.save_location_enrichment(fpath, enrichment)
+
+    # Persist to database if db-backed
+    if item["type"] == "db":
+        meta = item.get("meta", {})
+        meta["_location_enrichment"] = enrichment
+        conn.execute(
+            "UPDATE jobs SET metadata_json = ? WHERE id = ?",
+            (json.dumps(meta), item["id"]),
+        )
+
+
+def _report_enrichment(
+    idx: int, total: int, item: Dict[str, Any], enrichment: Dict[str, Any]
+) -> str:
+    """Print one progress line and return which summary counter it belongs to."""
+    status = enrichment.get("status", "unknown")
+    source = enrichment.get("source", "none")
+    resolved_office = str(enrichment.get("resolved_address") or "")
+    company_display = item.get("company") or "Unknown"
+    if status == "resolved":
+        loc_display_str = f" → {resolved_office}" if resolved_office else ""
+        print(
+            f"  [{idx}/{total}] ✓ {company_display}: resolved via {source}{loc_display_str}"
+        )
+        return "resolved"
+    if status.startswith("bypassed"):
+        print(
+            f"  [{idx}/{total}] ✦ {company_display}: bypassed ({enrichment.get('reason', 'remote')})"
+        )
+        return "bypassed_remote"
+    print(f"  [{idx}/{total}] ▤ {company_display}: unresolved ({status})")
+    return "unresolved"
+
+
+def enrich_profile_locations(
+    profile: str | None = None,
+    statuses: Optional[List[str]] = None,
+    allow_search_backup: bool = False,
+    max_search_calls: int = 10,
+    limit: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Batch enriches company locations for a profile's pending/active database jobs and file-based JDs.
+    Respects Gemini search quota caps (counts all attempts, not just successes) and persists cache incrementally.
+    """
+    import db
+
+    profile = profile or profile_paths.active_profile()
+    settings_path = location_settings.scan_filters_path(profile)
+    settings = location_settings.read_settings(settings_path)
+
+    cache = load_locations_cache(profile)
+    conn = db.get_db(profile)
+
+    statuses = [s.lower() for s in (statuses or ["pending"])]
+    placeholders = ", ".join("?" for _ in statuses)
+
+    # 1. Collect file-based JDs
+    file_items, seen_paths = _collect_enrichment_files(statuses)
 
     # 2. Collect database jobs
     query_sql = f"SELECT id, title, company, location, raw_text, metadata_json FROM jobs WHERE lower(status) IN ({placeholders})"  # nosec B608
     rows = conn.execute(query_sql, statuses).fetchall()
 
     enriched_count = 0
-    resolved_count = 0
-    bypassed_count = 0
-    unresolved_count = 0
+    counts = {"resolved": 0, "bypassed_remote": 0, "unresolved": 0}
     search_calls_made = 0
 
-    gemini_client = None
-    if allow_search_backup:
-        try:
-            from gemini_client import GeminiClient
-
-            gemini_client = GeminiClient()
-        except Exception:
-            gemini_client = None
+    gemini_client = _search_backup_client() if allow_search_backup else None
 
     # Merge into a unified queue of tasks
     tasks = []
 
     # First add file-based JDs
     for path in file_items:
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if not isinstance(data, dict):
-                continue
-            if data.get("_location_enrichment", {}).get(
-                "status"
-            ) in _TERMINAL_ENRICHMENT_STATUSES and not maps_data_expired(
-                data.get("_location_enrichment")
-            ):
-                # Terminal -- except a Google Maps address past its 30-day
-                # cache limit, which must be re-fetched.
-                continue
-            tasks.append(
-                {
-                    "type": "file",
-                    "path": path,
-                    "id": data.get("id") or path,
-                    "title": data.get("title") or data.get("job_title") or "",
-                    "company": data.get("company") or data.get("company_name") or "",
-                    "location": data.get("location") or "",
-                    "raw_text": data.get("raw_text") or data.get("jd_text") or "",
-                    "company_website": data.get("company_website", ""),
-                    "is_remote": data.get("is_remote"),
-                    "work_model": data.get("work_model"),
-                    "data": data,
-                }
-            )
-        except Exception:
-            continue
+        task = _file_enrichment_task(path)
+        if task is not None:
+            tasks.append(task)
 
     # Next add database rows that aren't already represented
     seen_db_keys = {t["id"] for t in tasks}
     seen_db_keys.update(seen_paths)
 
     for row in rows:
-        if row["id"] in seen_db_keys:
-            continue
-        meta = json.loads(row["metadata_json"] or "{}")
-        row_path = meta.get("path") or meta.get("jd_path")
-        if row_path and row_path in seen_paths:
-            continue
-        if (
-            meta.get("_location_enrichment")
-            and meta["_location_enrichment"].get("status")
-            in _TERMINAL_ENRICHMENT_STATUSES
-            and not maps_data_expired(meta["_location_enrichment"])
-        ):
-            continue
-        tasks.append(
-            {
-                "type": "db",
-                "path": row_path,
-                "id": row["id"],
-                "title": row["title"],
-                "company": row["company"],
-                "location": row["location"],
-                "raw_text": row["raw_text"],
-                "company_website": meta.get("company_website", ""),
-                "is_remote": meta.get("is_remote"),
-                "work_model": meta.get("work_model"),
-                "meta": meta,
-            }
-        )
+        task = _db_enrichment_task(row, seen_db_keys, seen_paths)
+        if task is not None:
+            tasks.append(task)
 
     if limit is not None and limit > 0:
         tasks = tasks[:limit]
@@ -982,45 +1116,11 @@ def enrich_profile_locations(
             if enrichment.get("search_call_attempted"):
                 search_calls_made += 1
 
-            # Persist to file if file-backed
-            if item["type"] == "file" or (
-                item.get("path") and os.path.isfile(item["path"])
-            ):
-                fpath = item.get("path")
-                if fpath and os.path.isfile(fpath):
-                    jd_manager.save_location_enrichment(fpath, enrichment)
-
-            # Persist to database if db-backed
-            if item["type"] == "db":
-                meta = item.get("meta", {})
-                meta["_location_enrichment"] = enrichment
-                conn.execute(
-                    "UPDATE jobs SET metadata_json = ? WHERE id = ?",
-                    (json.dumps(meta), item["id"]),
-                )
+            _persist_enrichment(item, enrichment, conn)
 
             enriched_count += 1
 
-            status = enrichment.get("status", "unknown")
-            source = enrichment.get("source", "none")
-            resolved_office = str(enrichment.get("resolved_address") or "")
-            company_display = item.get("company") or "Unknown"
-            if status == "resolved":
-                resolved_count += 1
-                loc_display_str = f" → {resolved_office}" if resolved_office else ""
-                print(
-                    f"  [{idx}/{total_to_process}] ✓ {company_display}: resolved via {source}{loc_display_str}"
-                )
-            elif status.startswith("bypassed"):
-                bypassed_count += 1
-                print(
-                    f"  [{idx}/{total_to_process}] ✦ {company_display}: bypassed ({enrichment.get('reason', 'remote')})"
-                )
-            else:
-                unresolved_count += 1
-                print(
-                    f"  [{idx}/{total_to_process}] ▤ {company_display}: unresolved ({status})"
-                )
+            counts[_report_enrichment(idx, total_to_process, item, enrichment)] += 1
 
             # Incrementally save cache and commit DB every 5 jobs
             if enriched_count % 5 == 0:
@@ -1038,8 +1138,6 @@ def enrich_profile_locations(
     return {
         "profile": profile,
         "total_processed": enriched_count,
-        "resolved": resolved_count,
-        "bypassed_remote": bypassed_count,
-        "unresolved": unresolved_count,
+        **counts,
         "search_calls_used": search_calls_made,
     }

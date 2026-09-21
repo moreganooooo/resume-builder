@@ -1931,6 +1931,128 @@ def verified_jd_skills(jd_keywords, verified_names: list) -> list:
     return out
 
 
+def _assign_ungrouped_skills(missing, ledger, cv_groups, lines, assign_groups):
+    """Asks `assign_groups` for a home row for verified skills cv.md doesn't group."""
+    ungrouped = [
+        k
+        for k in missing
+        if _ledger_verifies(k, ledger)
+        and not _resolve_verified_skill(k, ledger, cv_groups)
+    ]
+    labels = [
+        _skill_line_items(line)[0] for line in lines if _skill_line_items(line)[0]
+    ]
+    if ungrouped and labels:
+        try:
+            assigned = assign_groups(ungrouped, labels) or {}
+        except Exception:
+            assigned = {}
+        cv_groups = dict(cv_groups)
+        for keyword, label in assigned.items():
+            if label in labels and keyword in ungrouped:
+                cv_groups.setdefault(str(keyword).casefold(), label)
+    return cv_groups
+
+
+def _skill_home_rows(lines, label, cv_groups) -> list:
+    """Indices of the SKILLS rows that could hold a skill of cv.md group `label`."""
+    wanted = _label_tokens(label)
+    # The row already holding this group's own skills is its home, even
+    # when the model renamed the row ("CRM & RevOps" lists Data Hygiene,
+    # which cv.md files under "CRM & Marketing Operations") -- a shared
+    # word like "Marketing" would otherwise point at the wrong row.
+    kin = {
+        i: sum(
+            1
+            for item in _skill_line_items(line)[1]
+            if cv_groups.get(item.casefold()) == label
+        )
+        for i, line in enumerate(lines)
+    }
+    # One stray item is a misplacement to move, not a home; two is a home.
+    best_kin = max(kin.values(), default=0)
+    if best_kin >= 2:
+        targets = [i for i in kin if kin[i] == best_kin]
+    else:
+        targets = [
+            i
+            for i, line in enumerate(lines)
+            if wanted & _label_tokens(_skill_line_items(line)[0])
+        ]
+    # A shared word ("Marketing" in both "Email & Lifecycle Marketing" and
+    # "CRM & Marketing Operations") is not a tie when one label matches
+    # far better; keep only the strongest overlap before judging.
+    if len(targets) > 1:
+        overlap = {
+            i: len(wanted & _label_tokens(_skill_line_items(lines[i])[0]))
+            for i in targets
+        }
+        best = max(overlap.values())
+        targets = [i for i in targets if overlap[i] == best]
+    return targets
+
+
+def _first_credited_placement(
+    lines,
+    forms,
+    label,
+    targets,
+    cv_groups,
+    max_chars,
+    wrap_min,
+    resume_data,
+    jd_keywords,
+    keyword,
+):
+    """First form that places legally and earns coverage credit, as (lines, form)."""
+    for form in forms:
+        trial = _place_verified_skill(
+            lines, form, label, targets, cv_groups, max_chars, wrap_min
+        )
+        if trial is None:
+            continue
+        if _skills_add_hallucinated_tool(lines, trial):
+            continue
+        if not _keyword_now_credited(resume_data, trial, jd_keywords, keyword):
+            continue
+        return trial, form
+    return None, None
+
+
+def _wrap_deferred_skills(
+    lines, deferred, max_chars, wrap_min, resume_data, jd_keywords
+):
+    """Appends deferred items that together fill a legal second line."""
+    added: list = []
+    wrapped = 0
+    by_row: dict[int, list[tuple[str, str]]] = {}
+    for index, keyword, form in deferred:
+        by_row.setdefault(index, []).append((keyword, form))
+    for index, items in sorted(by_row.items(), key=lambda kv: -len(kv[1])):
+        if wrapped >= MAX_SKILLS_ROWS_NEWLY_WRAPPED:
+            break
+        base = lines[index]
+        if len(_plain_skills_line(base)) > max_chars:
+            continue
+        kept, trial = [], list(lines)
+        for keyword, form in items:
+            attempt = list(trial)
+            attempt[index] = f"{attempt[index].rstrip().rstrip(',')}, {form}"
+            if len(_plain_skills_line(attempt[index])) > 2 * max_chars:
+                break
+            if _skills_add_hallucinated_tool(trial, attempt):
+                continue
+            if not _keyword_now_credited(resume_data, attempt, jd_keywords, keyword):
+                continue
+            trial = attempt
+            kept.append(form)
+        if kept and _skills_line_legal(trial[index], max_chars, wrap_min):
+            lines = trial
+            added.extend(kept)
+            wrapped += 1
+    return lines, added
+
+
 def _top_up_verified_skills(
     resume_data: dict,
     jd_keywords: dict,
@@ -1991,24 +2113,9 @@ def _top_up_verified_skills(
     # only supplies a LOCATION -- the ledger still has to verify the skill,
     # and the coverage check still has to credit the edit.
     if assign_groups:
-        ungrouped = [
-            k
-            for k in missing
-            if _ledger_verifies(k, ledger)
-            and not _resolve_verified_skill(k, ledger, cv_groups)
-        ]
-        labels = [
-            _skill_line_items(line)[0] for line in lines if _skill_line_items(line)[0]
-        ]
-        if ungrouped and labels:
-            try:
-                assigned = assign_groups(ungrouped, labels) or {}
-            except Exception:
-                assigned = {}
-            cv_groups = dict(cv_groups)
-            for keyword, label in assigned.items():
-                if label in labels and keyword in ungrouped:
-                    cv_groups.setdefault(str(keyword).casefold(), label)
+        cv_groups = _assign_ungrouped_skills(
+            missing, ledger, cv_groups, lines, assign_groups
+        )
 
     added = []
     deferred = []
@@ -2017,60 +2124,29 @@ def _top_up_verified_skills(
         if not resolved:
             continue
         forms, label = resolved
-        wanted = _label_tokens(label)
-        # The row already holding this group's own skills is its home, even
-        # when the model renamed the row ("CRM & RevOps" lists Data Hygiene,
-        # which cv.md files under "CRM & Marketing Operations") -- a shared
-        # word like "Marketing" would otherwise point at the wrong row.
-        kin = {
-            i: sum(
-                1
-                for item in _skill_line_items(line)[1]
-                if cv_groups.get(item.casefold()) == label
-            )
-            for i, line in enumerate(lines)
-        }
-        # One stray item is a misplacement to move, not a home; two is a home.
-        best_kin = max(kin.values(), default=0)
-        if best_kin >= 2:
-            targets = [i for i in kin if kin[i] == best_kin]
-        else:
-            targets = [
-                i
-                for i, line in enumerate(lines)
-                if wanted & _label_tokens(_skill_line_items(line)[0])
-            ]
-        # A shared word ("Marketing" in both "Email & Lifecycle Marketing" and
-        # "CRM & Marketing Operations") is not a tie when one label matches
-        # far better; keep only the strongest overlap before judging.
-        if len(targets) > 1:
-            overlap = {
-                i: len(wanted & _label_tokens(_skill_line_items(lines[i])[0]))
-                for i in targets
-            }
-            best = max(overlap.values())
-            targets = [i for i in targets if overlap[i] == best]
+        targets = _skill_home_rows(lines, label, cv_groups)
         # Two plausible homes is not a placement.
         if len(targets) > 1:
             continue
         # Forms run most-specific first (the ledger's own name), falling back
         # to the keyword's concise form when the ledger spells it as a
         # sentence. The first one that places legally and earns credit wins.
-        placed = False
-        for form in forms:
-            trial = _place_verified_skill(
-                lines, form, label, targets, cv_groups, max_chars, wrap_min
-            )
-            if trial is None:
-                continue
-            if _skills_add_hallucinated_tool(lines, trial):
-                continue
-            if not _keyword_now_credited(resume_data, trial, jd_keywords, keyword):
-                continue
+        trial, form = _first_credited_placement(
+            lines,
+            forms,
+            label,
+            targets,
+            cv_groups,
+            max_chars,
+            wrap_min,
+            resume_data,
+            jd_keywords,
+            keyword,
+        )
+        placed = trial is not None
+        if trial is not None:
             lines = trial
             added.append(form)
-            placed = True
-            break
         if not placed and len(targets) == 1:
             deferred.append((targets[0], keyword, forms[-1]))
 
@@ -2078,32 +2154,10 @@ def _top_up_verified_skills(
     # Several together can FILL a second line, which is legal. Only
     # MAX_SKILLS_ROWS_NEWLY_WRAPPED rows may grow this way, so a keyword-heavy
     # posting cannot turn every row into two.
-    wrapped = 0
-    by_row: dict[int, list[tuple[str, str]]] = {}
-    for index, keyword, form in deferred:
-        by_row.setdefault(index, []).append((keyword, form))
-    for index, items in sorted(by_row.items(), key=lambda kv: -len(kv[1])):
-        if wrapped >= MAX_SKILLS_ROWS_NEWLY_WRAPPED:
-            break
-        base = lines[index]
-        if len(_plain_skills_line(base)) > max_chars:
-            continue
-        kept, trial = [], list(lines)
-        for keyword, form in items:
-            attempt = list(trial)
-            attempt[index] = f"{attempt[index].rstrip().rstrip(',')}, {form}"
-            if len(_plain_skills_line(attempt[index])) > 2 * max_chars:
-                break
-            if _skills_add_hallucinated_tool(trial, attempt):
-                continue
-            if not _keyword_now_credited(resume_data, attempt, jd_keywords, keyword):
-                continue
-            trial = attempt
-            kept.append(form)
-        if kept and _skills_line_legal(trial[index], max_chars, wrap_min):
-            lines = trial
-            added.extend(kept)
-            wrapped += 1
+    lines, wrapped_added = _wrap_deferred_skills(
+        lines, deferred, max_chars, wrap_min, resume_data, jd_keywords
+    )
+    added.extend(wrapped_added)
 
     if not added:
         return resume_data, []
@@ -2397,28 +2451,8 @@ def partition_violations(violations: list[str]) -> tuple[list[str], list[str]]:
     return fatal, soft
 
 
-def repair_violations_surgically(
-    resume_data: dict,
-    violations: list[str],
-    style_rules: dict,
-    role_roster: list[str] | None = None,
-    role_bullet_minimums: dict[str, int] | None = None,
-    bullet_tuples: list[tuple[str, str, str]] | None = None,
-    role_bullet_maximums: dict[str, int] | None = None,
-    role_metadata: dict | None = None,
-) -> tuple[dict, list[str]]:
-    """Mutates only the specific violating fields in-place, avoiding full-document resynthesis."""
-    current_data = copy.deepcopy(resume_data)
-
-    # 1. Deterministic Swaps First (0ms, zero tokens)
-    current_data, verb_modified = auto_fix_duplicate_opening_verbs(
-        current_data, style_rules
-    )
-    current_data, order_modified = auto_fix_experience_order(current_data, role_roster)
-    current_data, opener_modified = auto_fix_forbidden_openers(
-        current_data, style_rules
-    )
-
+def _repair_strip_trailing_punctuation(current_data: dict, violations) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 1b. Deterministic Trailing-Punctuation Strip (0ms, zero tokens).
     # _check_bullet_trailing_punctuation's fix -- a 2026-09-17 sample build
     # shipped "Coached a remote pod of SDRs ... benchmarks." -- is pure
@@ -2445,7 +2479,11 @@ def repair_violations_surgically(
                         if new_text and new_text != bullet:
                             entry[list_key][idx] = new_text
                             punct_modified = True
+    return current_data, punct_modified
 
+
+def _repair_drop_skills_fragments(current_data: dict, violations) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 1c. Surgical Skills Fragment Removal (0ms, zero tokens). "Assets"
     # alone as a skills item is truncated filler, not a skill -- the
     # hallucinated-tool check passes it because the verified ledger has
@@ -2478,7 +2516,11 @@ def repair_violations_surgically(
                     f"**{match.group('label')}:** " + ", ".join(kept)
                 )
                 fragment_modified = True
+    return current_data, fragment_modified
 
+
+def _repair_widows(current_data: dict, violations, style_rules) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 2. Surgical Bullet Widow Repair
     widow_violations = [
         v for v in violations if "wraps to a 2nd line" in v or "short widow" in v
@@ -2493,7 +2535,11 @@ def repair_violations_surgically(
                     if repaired != bullet:
                         job["achievements"][idx] = repaired
                         widow_modified = True
+    return current_data, widow_modified
 
+
+def _repair_skills_dead_band(current_data: dict, violations, style_rules) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 3. Surgical Skills Line Dead-Band Repair
     skills_violations = [
         v for v in violations if "dead band" in v or "wrap to a 3rd line" in v
@@ -2509,7 +2555,11 @@ def repair_violations_surgically(
                 if repaired_line != line:
                     skills[idx] = repaired_line
                     skills_modified = True
+    return current_data, skills_modified
 
+
+def _repair_hallucinated_skills(current_data: dict, violations) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 4. Surgical Hallucinated Skill Removal from SKILLS
     hallucinated_skill_violations = [
         v
@@ -2559,7 +2609,18 @@ def repair_violations_surgically(
                 if new_line != line:
                     skills[idx] = new_line
                     hallucination_modified = True
+    return current_data, hallucination_modified
 
+
+def _repair_role_roster(
+    current_data: dict,
+    violations,
+    role_roster,
+    bullet_tuples,
+    role_bullet_maximums,
+    role_metadata,
+) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 5. Deterministic Role Roster Repair
     # The LLM retry loop (build_tailored_resume's "MISSING EMPLOYERS -- ADD
     # THESE ENTRIES" block) restates the same instruction on every attempt --
@@ -2617,7 +2678,11 @@ def repair_violations_surgically(
             roster_modified = True
         if roster_modified:
             current_data, _ = auto_fix_experience_order(current_data, role_roster)
+    return current_data, roster_modified
 
+
+def _repair_metric_duplicates(current_data: dict, violations) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 6. Targeted Metric Deduplication Repair
     # Same rationale as step 5: the LLM full-resume retry loop returned the
     # exact same "Metric '100+' should appear only once ... Summary and a
@@ -2665,7 +2730,11 @@ def repair_violations_surgically(
             if new_bullet != old_bullet:
                 current_data["EXPERIENCE"][j_idx]["achievements"][b_idx] = new_bullet
                 metric_modified = True
+    return current_data, metric_modified
 
+
+def _repair_keyword_density(current_data: dict, violations) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 7. Targeted ATS Keyword Density Repair
     # Same real-build stall as step 6, different violation: "Keyword
     # 'content' appears 16 times (3.8%)" survived all 4 fix attempts
@@ -2697,7 +2766,13 @@ def repair_violations_surgically(
                 current_data, word, reduce_by
             )
             density_modified = density_modified or changed
+    return current_data, density_modified
 
+
+def _repair_bullet_counts(
+    current_data: dict, violations, bullet_tuples, role_bullet_maximums
+) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 8. Deterministic Bullet Count Repair
     # _check_bullet_counts()'s own docstring names this exact failure --
     # VML and Callahan Creek shipping 2 bullets against a declared
@@ -2759,7 +2834,11 @@ def repair_violations_surgically(
                     existing.add(candidate)
                     bullet_count_modified = True
                 break
+    return current_data, bullet_count_modified
 
+
+def _repair_pronouns(current_data: dict, violations) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 9. Targeted Pronoun Removal Repair
     # Same gap as step 8: _check_pronouns_outside_why() had no repair path
     # at all until now, and a real 2026-09-04 build reduced every other
@@ -2831,7 +2910,11 @@ def repair_violations_surgically(
                         break
                 if found:
                     break
+    return current_data, pronoun_modified
 
+
+def _repair_metric_provenance(current_data: dict, violations, bullet_tuples) -> tuple:
+    """Surgical repair step; returns (resume_data, modified)."""
     # 10. Targeted Metric Provenance Repair
     # Same gap class as steps 8/9: validate_resume._check_metric_provenance()
     # had no repair path at all until now. Parses company + bullet text out
@@ -2873,6 +2956,61 @@ def repair_violations_surgically(
                             metric_provenance_modified = True
                         break
                 break
+    return current_data, metric_provenance_modified
+
+
+def repair_violations_surgically(
+    resume_data: dict,
+    violations: list[str],
+    style_rules: dict,
+    role_roster: list[str] | None = None,
+    role_bullet_minimums: dict[str, int] | None = None,
+    bullet_tuples: list[tuple[str, str, str]] | None = None,
+    role_bullet_maximums: dict[str, int] | None = None,
+    role_metadata: dict | None = None,
+) -> tuple[dict, list[str]]:
+    """Mutates only the specific violating fields in-place, avoiding full-document resynthesis."""
+    current_data = copy.deepcopy(resume_data)
+
+    # 1. Deterministic Swaps First (0ms, zero tokens)
+    current_data, verb_modified = auto_fix_duplicate_opening_verbs(
+        current_data, style_rules
+    )
+    current_data, order_modified = auto_fix_experience_order(current_data, role_roster)
+    current_data, opener_modified = auto_fix_forbidden_openers(
+        current_data, style_rules
+    )
+
+    current_data, punct_modified = _repair_strip_trailing_punctuation(
+        current_data, violations
+    )
+    current_data, fragment_modified = _repair_drop_skills_fragments(
+        current_data, violations
+    )
+    current_data, widow_modified = _repair_widows(current_data, violations, style_rules)
+    current_data, skills_modified = _repair_skills_dead_band(
+        current_data, violations, style_rules
+    )
+    current_data, hallucination_modified = _repair_hallucinated_skills(
+        current_data, violations
+    )
+    current_data, roster_modified = _repair_role_roster(
+        current_data,
+        violations,
+        role_roster,
+        bullet_tuples,
+        role_bullet_maximums,
+        role_metadata,
+    )
+    current_data, metric_modified = _repair_metric_duplicates(current_data, violations)
+    current_data, density_modified = _repair_keyword_density(current_data, violations)
+    current_data, bullet_count_modified = _repair_bullet_counts(
+        current_data, violations, bullet_tuples, role_bullet_maximums
+    )
+    current_data, pronoun_modified = _repair_pronouns(current_data, violations)
+    current_data, metric_provenance_modified = _repair_metric_provenance(
+        current_data, violations, bullet_tuples
+    )
 
     # Only re-evaluate if we actually modified something
     if (
@@ -4765,6 +4903,287 @@ def _bullet_sort_key(bullet_result: dict) -> tuple:
 # ---------------------------------------------------------------------------
 
 
+def _role_target_lines(roles) -> list:
+    """Per-role bullet-count table, page-1 and trim-priority lines."""
+    lines: list = []
+    if roles:
+        lines.append("Per-Role Bullet Count Targets:")
+        lines.append("| Company | Min | Target | Max | Page |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        for role in roles:
+            name = role.get("name") or role.get("company", "")
+            min_b = role.get("min_bullets", 1)
+            tgt_b = role.get("target_bullets", min_b)
+            max_b = role.get("max_bullets")
+            max_display = max_b if max_b is not None else "-"
+            pg = role.get("page", 1)
+            lines.append(f"| {name} | {min_b} | {tgt_b} | {max_display} | {pg} |")
+
+        must_fit_page_1 = [
+            (r.get("name") or r.get("company", ""))
+            for r in roles
+            if r.get("must_fit_page_1")
+        ]
+        must_fit_page_1 = [name for name in must_fit_page_1 if name]
+        if must_fit_page_1:
+            lines.append(
+                f"\nThe following roles must fit entirely on page 1: {', '.join(must_fit_page_1)}."
+            )
+
+        flex_order = sorted(roles, key=lambda r: r.get("flex_priority", 999))
+        flex_names = [(r.get("name") or r.get("company", "")) for r in flex_order]
+        flex_names = [name for name in flex_names if name]
+        if flex_names:
+            lines.append(
+                "\nTrim priority (lowest-priority roles trimmed toward their Min first, before any "
+                f"higher-priority role loses a bullet): {', '.join(flex_names)}."
+            )
+    return lines
+
+
+def _education_rule_lines(education) -> list:
+    """Fixed-order education lines plus achievement-key choices."""
+    lines: list = []
+    if education:
+        lines.append("\nEducation -- Fixed Order and Bullet Counts:")
+        for i, ed in enumerate(education, 1):
+            # bullet_count missing (not just falsy) used to raise
+            # KeyError here and abort EVERY resume build for the whole
+            # profile -- a hand-written profile.yml with education
+            # entries that only set institution/credential is an easy,
+            # unenforced-until-now mistake to make (see
+            # test_profile_yml_schema.py's own
+            # test_education_entries_declare_an_institution_and_bullet_count,
+            # which now actually asserts presence rather than
+            # type-checking a defaulted 0). 1 is a safe minimum, not a
+            # guess at the "right" number -- profile.yml is still the
+            # place to set the real intended count.
+            bullet_count = ed.get("bullet_count", 1)
+            # Same defense for institution/credential: a partial entry
+            # renders what it has rather than aborting the build.
+            label = (
+                " -- ".join(
+                    p for p in (ed.get("institution"), ed.get("credential")) if p
+                )
+                or "Unnamed education entry"
+            )
+            lines.append(f"{i}. {label}: exactly {bullet_count} bullet(s)")
+
+        edu_slots = profile_paths.education_achievement_slots()
+        if edu_slots:
+            lines.append(
+                "\nEducation Achievement Bullet Choices -- for each entry below, set the "
+                "matching EDU_ACHIEVEMENT_KEY_<n> field (numbered in this same order) to "
+                "whichever key's framing best fits the archetype you detected:"
+            )
+            for i, (institution, options) in enumerate(edu_slots, 1):
+                lines.append(f"EDU_ACHIEVEMENT_KEY_{i} ({institution}):")
+                for key, framing in options.items():
+                    lines.append(f"  - `{key}`: {framing}")
+    return lines
+
+
+def _design_only_lines(certs, education) -> list:
+    """Gate text for design_only credentials, when any exist."""
+    lines: list = []
+    design_only_names = [
+        entry.get("name")
+        or entry.get("credential")
+        or entry.get("institution")
+        or "Unnamed credential"
+        for entry in (certs + education)
+        if entry.get("design_only")
+    ]
+    if design_only_names:
+        lines.append(
+            "\nDesign-Only Credentials -- "
+            + ", ".join(design_only_names)
+            + " only belong on this resume when INCLUDE_DESIGN_CREDENTIALS is true. "
+            "Set it true ONLY if the JD has explicit graphic/visual design responsibilities "
+            "as an actual job requirement (producing layouts, brand assets, or UI/UX work; "
+            "naming tools like Illustrator, Photoshop, InDesign, or Figma) -- not merely "
+            "'creative' or 'visual communication' as a soft nice-to-have. False for every "
+            "other archetype, including content/copy/marketing roles. normalize_resume.py "
+            "drops these credentials when the field is false, so leave them out of your own "
+            "drafted Certifications/Education content regardless of what you set that field to."
+        )
+    return lines
+
+
+def _section_order_lines(roles) -> list:
+    """Page 1 / page 2 work-experience order line."""
+    lines: list = []
+    if roles:
+        page_1_roles = [r["name"] for r in roles if r.get("page") == 1]
+        page_2_roles = [r["name"] for r in roles if r.get("page") == 2]
+        if page_1_roles or page_2_roles:
+            lines.append(
+                f"\nSection Order (Page 1 -> Page 2): Page 1 Work Experience: {', '.join(page_1_roles)}. "
+                f"Page 2 Work Experience: {', '.join(page_2_roles)}."
+            )
+    return lines
+
+
+def _audit_rewrite_contents(
+    is_gemma_attempt,
+    static_prefix,
+    static_prefix_gemma,
+    segment_bundle,
+    segment_bundle_gemma,
+    refined_bullets,
+    bullet_tuples,
+    company,
+    bullet,
+    tags,
+    critique_data,
+    use_minimal,
+    vocabulary_substitutions,
+) -> tuple:
+    """(context_block, rewrite_contents) for one audit-loop rewrite attempt."""
+    active_static_prefix = static_prefix_gemma if is_gemma_attempt else static_prefix
+    active_segment_bundle = segment_bundle_gemma if is_gemma_attempt else segment_bundle
+    context_block = (
+        f"{active_static_prefix}\n{active_segment_bundle}"
+        if active_segment_bundle
+        else active_static_prefix
+    )
+
+    already_written = [
+        refined_bullets[idx]
+        for idx, (_, c, _) in enumerate(bullet_tuples[: len(refined_bullets)])
+        if c == company
+    ]
+    other_cv_bullets = [
+        refined_bullets[idx]
+        for idx, (_, c, _) in enumerate(bullet_tuples[: len(refined_bullets)])
+        if c != company
+    ]
+
+    rewrite_contents = build_rewrite_prompt(
+        bullet=bullet,
+        tags=tags,
+        weaknesses=critique_data.get("weaknesses", ""),
+        kb_context=context_block,
+        minimal_schema=use_minimal,
+        vocabulary_substitutions=vocabulary_substitutions,
+        already_written_bullets=already_written,
+        other_cv_bullets=other_cv_bullets,
+    )
+    return context_block, rewrite_contents
+
+
+def _log_hidden_gem(critique_data: dict) -> None:
+    """Notes a hidden-gem or strong critique score in the audit log."""
+    gem_score = critique_data.get("hidden_gem_score", 0)
+    gem_flag = critique_data.get("hidden_gem_flag", False)
+    gem_reason = critique_data.get("hidden_gem_reason", "")
+    if gem_flag:
+        cli_art.detail(
+            f"   {theme.colorize_icon('success')} GEM: Hidden Gem! score={gem_score} — {gem_reason}"
+        )
+    elif gem_score >= 75:
+        cli_art.detail(
+            f"   {theme.colorize_icon('success')} STRONG: gem_score={gem_score} — {gem_reason}"
+        )
+
+
+def _next_audit_rewrite_model(
+    active_rewrite_model, is_gemma_attempt, rewrite_text, rewrite_parse_failures
+) -> str:
+    """Model for the next audit rewrite attempt after a failed one."""
+    # No text back means Gemma itself failed (a parse
+    # error on real text keeps its second try).
+    gemma_unavailable = is_gemma_attempt and not rewrite_text
+    if gemma_unavailable:
+        gemini_client.bench_model(active_rewrite_model)
+    if (
+        rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES or gemma_unavailable
+    ) and active_rewrite_model != REWRITE_FALLBACK_MODEL:
+        cli_art.console.print(
+            f"   {theme.colorize_icon('warning')} FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}",
+            soft_wrap=True,
+        )
+        active_rewrite_model = REWRITE_FALLBACK_MODEL
+    return cast(str, active_rewrite_model)
+
+
+def _bank_rows_as_tuples(frame) -> list:
+    """(bullet_text, company, tags) tuples from a bullet-bank DataFrame slice."""
+    bullets_out = frame["Bullet Point"].fillna("").tolist()
+    company_out = (
+        frame["Role / Company"].fillna("").tolist()
+        if "Role / Company" in frame.columns
+        else [""] * len(frame)
+    )
+    tags_out = (
+        frame["Tags"].fillna("").tolist()
+        if "Tags" in frame.columns
+        else [""] * len(frame)
+    )
+    return list(zip(bullets_out, company_out, tags_out))
+
+
+def _rank_bank_for_jd(df, embs, jd_emb):
+    """(normalized embeddings, full-bank ranking best first) for one JD vector."""
+    import numpy as np
+    import pandas as pd
+
+    jd_vec = np.array(jd_emb, dtype=np.float32)
+    jd_norm = np.linalg.norm(jd_vec)
+    if jd_norm > 0:
+        jd_vec = jd_vec / jd_norm
+
+    embs_norm = embs / (np.linalg.norm(embs, axis=1, keepdims=True) + 1e-9)
+    sims = embs_norm @ jd_vec
+
+    if "hidden_gem_score" in df.columns:
+        gem_scores = (
+            pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0).values
+        )
+        boosted = sims + GEM_BOOST_WEIGHT * gem_scores
+    else:
+        boosted = sims
+
+    if "strength_category" in df.columns:
+        tier_rank = df["strength_category"].map(STRENGTH_ORDER).fillna(99).values
+    else:
+        tier_rank = np.zeros(len(df))
+
+    # Full-bank ranking, best first: lower tier_rank wins, then higher boosted score.
+    ranked_idx = np.lexsort((-boosted, tier_rank))
+    return embs_norm, ranked_idx
+
+
+def _fill_ranked(ranked_idx, selected_idx, take, skip) -> None:
+    """Takes ranked bank rows until TOP_K_BULLETS, skipping where `skip(i)`."""
+    for i in ranked_idx:
+        if len(selected_idx) >= TOP_K_BULLETS:
+            break
+        i = int(i)
+        if skip(i):
+            continue
+        take(i)
+
+
+def _needs_why_backfill(
+    page_count, overflow_roles, research, research_block, resume_data, exhausted
+):
+    """True when the page fits but the Why section is still empty and retryable."""
+    return (
+        page_count <= 2
+        and not overflow_roles
+        and bool(research)
+        and bool(research_block)
+        and not (resume_data.get("WHY_TEXT") or "").strip()
+        and not exhausted
+    )
+
+
+# Returned by an extracted build_tailored_resume step to mean "stop the
+# build and return None" -- distinct from any real step result.
+_ABORT_BUILD = object()
+
+
 class ResumeEngine:
 
     def __init__(self):
@@ -4868,38 +5287,7 @@ class ResumeEngine:
 
         lines = ["\n\n=== ROLE RULES ==="]
 
-        if roles:
-            lines.append("Per-Role Bullet Count Targets:")
-            lines.append("| Company | Min | Target | Max | Page |")
-            lines.append("| --- | --- | --- | --- | --- |")
-            for role in roles:
-                name = role.get("name") or role.get("company", "")
-                min_b = role.get("min_bullets", 1)
-                tgt_b = role.get("target_bullets", min_b)
-                max_b = role.get("max_bullets")
-                max_display = max_b if max_b is not None else "-"
-                pg = role.get("page", 1)
-                lines.append(f"| {name} | {min_b} | {tgt_b} | {max_display} | {pg} |")
-
-            must_fit_page_1 = [
-                (r.get("name") or r.get("company", ""))
-                for r in roles
-                if r.get("must_fit_page_1")
-            ]
-            must_fit_page_1 = [name for name in must_fit_page_1 if name]
-            if must_fit_page_1:
-                lines.append(
-                    f"\nThe following roles must fit entirely on page 1: {', '.join(must_fit_page_1)}."
-                )
-
-            flex_order = sorted(roles, key=lambda r: r.get("flex_priority", 999))
-            flex_names = [(r.get("name") or r.get("company", "")) for r in flex_order]
-            flex_names = [name for name in flex_names if name]
-            if flex_names:
-                lines.append(
-                    "\nTrim priority (lowest-priority roles trimmed toward their Min first, before any "
-                    f"higher-priority role loses a bullet): {', '.join(flex_names)}."
-                )
+        lines.extend(_role_target_lines(roles))
 
         if protected:
             lines.append("\nProtected Bullets -- Do Not Aggressively Shorten:")
@@ -4911,73 +5299,11 @@ class ResumeEngine:
             for i, cert in enumerate(certs, 1):
                 lines.append(f"{i}. {cert['name']} | {cert['issuer']} | {cert['year']}")
 
-        if education:
-            lines.append("\nEducation -- Fixed Order and Bullet Counts:")
-            for i, ed in enumerate(education, 1):
-                # bullet_count missing (not just falsy) used to raise
-                # KeyError here and abort EVERY resume build for the whole
-                # profile -- a hand-written profile.yml with education
-                # entries that only set institution/credential is an easy,
-                # unenforced-until-now mistake to make (see
-                # test_profile_yml_schema.py's own
-                # test_education_entries_declare_an_institution_and_bullet_count,
-                # which now actually asserts presence rather than
-                # type-checking a defaulted 0). 1 is a safe minimum, not a
-                # guess at the "right" number -- profile.yml is still the
-                # place to set the real intended count.
-                bullet_count = ed.get("bullet_count", 1)
-                # Same defense for institution/credential: a partial entry
-                # renders what it has rather than aborting the build.
-                label = (
-                    " -- ".join(
-                        p for p in (ed.get("institution"), ed.get("credential")) if p
-                    )
-                    or "Unnamed education entry"
-                )
-                lines.append(f"{i}. {label}: exactly {bullet_count} bullet(s)")
+        lines.extend(_education_rule_lines(education))
 
-            edu_slots = profile_paths.education_achievement_slots()
-            if edu_slots:
-                lines.append(
-                    "\nEducation Achievement Bullet Choices -- for each entry below, set the "
-                    "matching EDU_ACHIEVEMENT_KEY_<n> field (numbered in this same order) to "
-                    "whichever key's framing best fits the archetype you detected:"
-                )
-                for i, (institution, options) in enumerate(edu_slots, 1):
-                    lines.append(f"EDU_ACHIEVEMENT_KEY_{i} ({institution}):")
-                    for key, framing in options.items():
-                        lines.append(f"  - `{key}`: {framing}")
+        lines.extend(_design_only_lines(certs, education))
 
-        design_only_names = [
-            entry.get("name")
-            or entry.get("credential")
-            or entry.get("institution")
-            or "Unnamed credential"
-            for entry in (certs + education)
-            if entry.get("design_only")
-        ]
-        if design_only_names:
-            lines.append(
-                "\nDesign-Only Credentials -- "
-                + ", ".join(design_only_names)
-                + " only belong on this resume when INCLUDE_DESIGN_CREDENTIALS is true. "
-                "Set it true ONLY if the JD has explicit graphic/visual design responsibilities "
-                "as an actual job requirement (producing layouts, brand assets, or UI/UX work; "
-                "naming tools like Illustrator, Photoshop, InDesign, or Figma) -- not merely "
-                "'creative' or 'visual communication' as a soft nice-to-have. False for every "
-                "other archetype, including content/copy/marketing roles. normalize_resume.py "
-                "drops these credentials when the field is false, so leave them out of your own "
-                "drafted Certifications/Education content regardless of what you set that field to."
-            )
-
-        if roles:
-            page_1_roles = [r["name"] for r in roles if r.get("page") == 1]
-            page_2_roles = [r["name"] for r in roles if r.get("page") == 2]
-            if page_1_roles or page_2_roles:
-                lines.append(
-                    f"\nSection Order (Page 1 -> Page 2): Page 1 Work Experience: {', '.join(page_1_roles)}. "
-                    f"Page 2 Work Experience: {', '.join(page_2_roles)}."
-                )
+        lines.extend(_section_order_lines(roles))
 
         if voice_example:
             lines.append(
@@ -5690,63 +6016,8 @@ class ResumeEngine:
         mgr_bonus = 10 if str(scores.get("manager_test", "")).upper() == "PASS" else 0
         return numeric + mgr_bonus
 
-    def audit_and_refine_bullets(
-        self,
-        bullet_tuples: List[Tuple[str, str, str]],
-        static_prefix: str,
-        resume_from: List[str] | None = None,
-        on_bullet_complete=None,
-        vocabulary_substitutions: list | None = None,
-        order_out: list | None = None,
-    ) -> List[str]:
-        """
-        Skeptical Editor audit loop.
-        Accepts List[Tuple[str, str, str]] -- (bullet_text, company, tags).
-        Critiques on slim static_prefix (Tier 1+2 cache architecture).
-        Rewrites get segment bundle prepended (Gap 3) but critiques do not.
-        """
-        cli_art.detail(
-            f"{theme.colorize_icon('hint')} Loading rules bundle...",
-            level=cli_art.NORMAL,
-        )
-        cli_art.detail(
-            f"{theme.colorize_icon('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets",
-            level=cli_art.NORMAL,
-        )
-        cli_art.detail("", level=cli_art.NORMAL)
-
-        if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
-            cli_art.detail(
-                "  No bullets to audit -- empty or invalid input. Skipping audit loop.",
-                level=cli_art.NORMAL,
-            )
-            return []
-
-        refined_bullets = list(resume_from) if resume_from else []
-        if len(refined_bullets) >= len(bullet_tuples):
-            cli_art.detail(
-                f"  Resuming: all {len(bullet_tuples)} bullets already refined in a prior run. Skipping audit loop.",
-                level=cli_art.NORMAL,
-            )
-            return refined_bullets
-
-        critique_system = self.build_bullet_critique_system()
-        cli_art.detail(
-            f"   {theme.colorize_icon('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules",
-            level=cli_art.NORMAL,
-        )
-        cli_art.detail("", level=cli_art.NORMAL)
-
-        # Gemma-slim Tier 1 -- see build_audit_static_prefix_gemma(). Cheap
-        # to build (2 small JSON files + voice-anchors.md), so it's built
-        # here rather than threaded through as another caller-supplied
-        # parameter the way static_prefix is.
-        static_prefix_gemma = self.build_audit_static_prefix_gemma()
-        cli_art.detail(
-            f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier",
-            level=cli_art.NORMAL,
-        )
-
+    def _audit_rewrite_systems(self) -> tuple:
+        """Full and Gemma-slim rewrite system prompts (and their rules blocks)."""
         # Load rules needed for rewrite prompt
         verb_intent_mapping = self.load_yaml(self.rules_dir, "verb_intent_mapping.yaml")
         verb_taxonomy = self.load_yaml(self.rules_dir, "verb_taxonomy.yaml")
@@ -5900,6 +6171,140 @@ class ResumeEngine:
         rewrite_system_gemma = REWRITE_SYSTEM_BASE.replace(
             "{rules_block}", rewrite_rules_block_gemma
         )
+        return (
+            rewrite_system,
+            rewrite_system_gemma,
+            rewrite_rules_block,
+            rewrite_rules_block_gemma,
+        )
+
+    @staticmethod
+    def _choose_audited_rewrite(
+        bullet, candidate_bullet, critique_data, rescore_data, company, tags
+    ) -> tuple:
+        """Picks original vs rewrite; returns (bullet_text, critique_to_record)."""
+        original_composite = ResumeEngine.critique_composite(critique_data)
+        rewrite_composite = ResumeEngine.critique_composite(rescore_data)
+
+        # Date-anchor rule, decided BEFORE the composite
+        # comparison (mirrors rewrite_bullets.best_version's
+        # margin bypass and process_bullet's rejection): a
+        # rewrite that KEEPS a school-year/calendar anchor
+        # loses outright, and a rewrite that DROPS one wins
+        # outright -- the composite can't see this failure
+        # mode, and the margin/criteria would otherwise let
+        # the anchored original survive a marginal rewrite
+        # (observed live 2026-09-17, "in the 2020-21 season").
+        original_anchors = date_anchors(bullet)
+        rewrite_anchors = date_anchors(candidate_bullet)
+
+        if rewrite_anchors:
+            rewritten_bullet = bullet
+            critique_to_record = critique_data
+            cli_art.detail(
+                f"   {theme.colorize_icon('hint')} KEPT original (rewrite kept a calendar anchor: {', '.join(rewrite_anchors)})"
+            )
+        elif original_anchors:
+            rewritten_bullet = candidate_bullet
+            critique_to_record = rescore_data
+            cli_art.detail(
+                f"   {theme.colorize_icon('success')} ACCEPTED rewrite (dropped calendar anchor {', '.join(original_anchors)})"
+            )
+        elif rewrite_composite >= original_composite:
+            rewritten_bullet = candidate_bullet
+            cli_art.detail(
+                f"   {theme.colorize_icon('success')} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})"
+            )
+            # Use the rescore data for the rewritten bullet
+            critique_to_record = rescore_data
+            try:
+                if bullet_feedback.queue_accepted_rewrite(
+                    bullet,
+                    rewritten_bullet,
+                    company,
+                    tags,
+                    critique_to_record,
+                ):
+                    cli_art.detail(
+                        f"   {theme.colorize_icon('hint')} Queued for bank review (needs-review.csv)"
+                    )
+            except Exception as feedback_err:
+                cli_art.console.print(
+                    f"   {theme.colorize_icon('warning')}  Could not queue bullet for bank review: {feedback_err}",
+                    soft_wrap=True,
+                )
+        else:
+            rewritten_bullet = bullet
+            cli_art.detail(
+                f"   {theme.colorize_icon('hint')} KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})"
+            )
+            # Use the original critique data
+            critique_to_record = critique_data
+        return rewritten_bullet, critique_to_record
+
+    def audit_and_refine_bullets(
+        self,
+        bullet_tuples: List[Tuple[str, str, str]],
+        static_prefix: str,
+        resume_from: List[str] | None = None,
+        on_bullet_complete=None,
+        vocabulary_substitutions: list | None = None,
+        order_out: list | None = None,
+    ) -> List[str]:
+        """
+        Skeptical Editor audit loop.
+        Accepts List[Tuple[str, str, str]] -- (bullet_text, company, tags).
+        Critiques on slim static_prefix (Tier 1+2 cache architecture).
+        Rewrites get segment bundle prepended (Gap 3) but critiques do not.
+        """
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')} Loading rules bundle...",
+            level=cli_art.NORMAL,
+        )
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')} Static prefix (Tier 1): {len(static_prefix):,} chars — shared across ALL bullets",
+            level=cli_art.NORMAL,
+        )
+        cli_art.detail("", level=cli_art.NORMAL)
+
+        if not isinstance(bullet_tuples, list) or len(bullet_tuples) == 0:
+            cli_art.detail(
+                "  No bullets to audit -- empty or invalid input. Skipping audit loop.",
+                level=cli_art.NORMAL,
+            )
+            return []
+
+        refined_bullets = list(resume_from) if resume_from else []
+        if len(refined_bullets) >= len(bullet_tuples):
+            cli_art.detail(
+                f"  Resuming: all {len(bullet_tuples)} bullets already refined in a prior run. Skipping audit loop.",
+                level=cli_art.NORMAL,
+            )
+            return refined_bullets
+
+        critique_system = self.build_bullet_critique_system()
+        cli_art.detail(
+            f"   {theme.colorize_icon('success')} Rules loaded: manager_test, believability, style_rules, language_quality, verb_taxonomy, verb_intent_mapping, hard_failures, truthfulness_rules",
+            level=cli_art.NORMAL,
+        )
+        cli_art.detail("", level=cli_art.NORMAL)
+
+        # Gemma-slim Tier 1 -- see build_audit_static_prefix_gemma(). Cheap
+        # to build (2 small JSON files + voice-anchors.md), so it's built
+        # here rather than threaded through as another caller-supplied
+        # parameter the way static_prefix is.
+        static_prefix_gemma = self.build_audit_static_prefix_gemma()
+        cli_art.detail(
+            f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier",
+            level=cli_art.NORMAL,
+        )
+
+        (
+            rewrite_system,
+            rewrite_system_gemma,
+            rewrite_rules_block,
+            rewrite_rules_block_gemma,
+        ) = self._audit_rewrite_systems()
 
         cli_art.detail(
             f"{theme.colorize_icon('hint')} Rewrite rules block:   {len(rewrite_rules_block):,} chars",
@@ -5983,17 +6388,7 @@ class ResumeEngine:
 
                 critique_data = GeminiClient.parse_json(critique_text)
 
-                gem_score = critique_data.get("hidden_gem_score", 0)
-                gem_flag = critique_data.get("hidden_gem_flag", False)
-                gem_reason = critique_data.get("hidden_gem_reason", "")
-                if gem_flag:
-                    cli_art.detail(
-                        f"   {theme.colorize_icon('success')} GEM: Hidden Gem! score={gem_score} — {gem_reason}"
-                    )
-                elif gem_score >= 75:
-                    cli_art.detail(
-                        f"   {theme.colorize_icon('success')} STRONG: gem_score={gem_score} — {gem_reason}"
-                    )
+                _log_hidden_gem(critique_data)
 
                 if (
                     critique_data.get("manager_test") == "FAIL"
@@ -6033,42 +6428,20 @@ class ResumeEngine:
                         # exactly like rewrite_bullets.py's process_bullet() does. Gemma
                         # gets the slim static prefix + slim segment bundle (2026-07-16
                         # fix for its 16k TPM cap); flash-lite keeps the full tier.
-                        active_static_prefix = (
-                            static_prefix_gemma if is_gemma_attempt else static_prefix
-                        )
-                        active_segment_bundle = (
-                            segment_bundle_gemma if is_gemma_attempt else segment_bundle
-                        )
-                        context_block = (
-                            f"{active_static_prefix}\n{active_segment_bundle}"
-                            if active_segment_bundle
-                            else active_static_prefix
-                        )
-
-                        already_written = [
-                            refined_bullets[idx]
-                            for idx, (_, c, _) in enumerate(
-                                bullet_tuples[: len(refined_bullets)]
-                            )
-                            if c == company
-                        ]
-                        other_cv_bullets = [
-                            refined_bullets[idx]
-                            for idx, (_, c, _) in enumerate(
-                                bullet_tuples[: len(refined_bullets)]
-                            )
-                            if c != company
-                        ]
-
-                        rewrite_contents = build_rewrite_prompt(
-                            bullet=bullet,
-                            tags=tags,
-                            weaknesses=critique_data.get("weaknesses", ""),
-                            kb_context=context_block,
-                            minimal_schema=use_minimal,
-                            vocabulary_substitutions=vocabulary_substitutions,
-                            already_written_bullets=already_written,
-                            other_cv_bullets=other_cv_bullets,
+                        context_block, rewrite_contents = _audit_rewrite_contents(
+                            is_gemma_attempt,
+                            static_prefix,
+                            static_prefix_gemma,
+                            segment_bundle,
+                            segment_bundle_gemma,
+                            refined_bullets,
+                            bullet_tuples,
+                            company,
+                            bullet,
+                            tags,
+                            critique_data,
+                            use_minimal,
+                            vocabulary_substitutions,
                         )
 
                         try:
@@ -6124,67 +6497,16 @@ class ResumeEngine:
                                 max_output_tokens=280,
                             )
                             rescore_data = GeminiClient.parse_json(rescore_text or "")
-                            original_composite = ResumeEngine.critique_composite(
-                                critique_data
+                            rewritten_bullet, critique_to_record = (
+                                ResumeEngine._choose_audited_rewrite(
+                                    bullet,
+                                    candidate_bullet,
+                                    critique_data,
+                                    rescore_data,
+                                    company,
+                                    tags,
+                                )
                             )
-                            rewrite_composite = ResumeEngine.critique_composite(
-                                rescore_data
-                            )
-
-                            # Date-anchor rule, decided BEFORE the composite
-                            # comparison (mirrors rewrite_bullets.best_version's
-                            # margin bypass and process_bullet's rejection): a
-                            # rewrite that KEEPS a school-year/calendar anchor
-                            # loses outright, and a rewrite that DROPS one wins
-                            # outright -- the composite can't see this failure
-                            # mode, and the margin/criteria would otherwise let
-                            # the anchored original survive a marginal rewrite
-                            # (observed live 2026-09-17, "in the 2020-21 season").
-                            original_anchors = date_anchors(bullet)
-                            rewrite_anchors = date_anchors(candidate_bullet)
-
-                            if rewrite_anchors:
-                                rewritten_bullet = bullet
-                                critique_to_record = critique_data
-                                cli_art.detail(
-                                    f"   {theme.colorize_icon('hint')} KEPT original (rewrite kept a calendar anchor: {', '.join(rewrite_anchors)})"
-                                )
-                            elif original_anchors:
-                                rewritten_bullet = candidate_bullet
-                                critique_to_record = rescore_data
-                                cli_art.detail(
-                                    f"   {theme.colorize_icon('success')} ACCEPTED rewrite (dropped calendar anchor {', '.join(original_anchors)})"
-                                )
-                            elif rewrite_composite >= original_composite:
-                                rewritten_bullet = candidate_bullet
-                                cli_art.detail(
-                                    f"   {theme.colorize_icon('success')} ACCEPTED rewrite (composite {rewrite_composite:.0f} >= {original_composite:.0f})"
-                                )
-                                # Use the rescore data for the rewritten bullet
-                                critique_to_record = rescore_data
-                                try:
-                                    if bullet_feedback.queue_accepted_rewrite(
-                                        bullet,
-                                        rewritten_bullet,
-                                        company,
-                                        tags,
-                                        critique_to_record,
-                                    ):
-                                        cli_art.detail(
-                                            f"   {theme.colorize_icon('hint')} Queued for bank review (needs-review.csv)"
-                                        )
-                                except Exception as feedback_err:
-                                    cli_art.console.print(
-                                        f"   {theme.colorize_icon('warning')}  Could not queue bullet for bank review: {feedback_err}",
-                                        soft_wrap=True,
-                                    )
-                            else:
-                                rewritten_bullet = bullet
-                                cli_art.detail(
-                                    f"   {theme.colorize_icon('hint')} KEPT original (composite {original_composite:.0f} > {rewrite_composite:.0f})"
-                                )
-                                # Use the original critique data
-                                critique_to_record = critique_data
                             break
 
                         except Exception as rw_err:
@@ -6193,20 +6515,12 @@ class ResumeEngine:
                                 f"   {theme.colorize_icon('warning')}  Rewrite parse error (attempt {rw_attempt+1}): {rw_err}",
                                 soft_wrap=True,
                             )
-                            # No text back means Gemma itself failed (a parse
-                            # error on real text keeps its second try).
-                            gemma_unavailable = is_gemma_attempt and not rewrite_text
-                            if gemma_unavailable:
-                                gemini_client.bench_model(active_rewrite_model)
-                            if (
-                                rewrite_parse_failures >= MAX_REWRITE_PARSE_FAILURES
-                                or gemma_unavailable
-                            ) and active_rewrite_model != REWRITE_FALLBACK_MODEL:
-                                cli_art.console.print(
-                                    f"   {theme.colorize_icon('warning')} FALLBACK: Switching rewrite to {REWRITE_FALLBACK_MODEL}",
-                                    soft_wrap=True,
-                                )
-                                active_rewrite_model = REWRITE_FALLBACK_MODEL
+                            active_rewrite_model = _next_audit_rewrite_model(
+                                active_rewrite_model,
+                                is_gemma_attempt,
+                                rewrite_text,
+                                rewrite_parse_failures,
+                            )
                             time.sleep(REWRITE_SLEEP)
 
                     _record(rewritten_bullet, critique_to_record)
@@ -6243,6 +6557,170 @@ class ResumeEngine:
 
         return refined_bullets
 
+    def _load_mining_bank(self):
+        """(df, embs, bullets_sha) for the audited bank, or None when unusable."""
+        import numpy as np
+        import pandas as pd
+
+        bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
+        emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
+        emb_meta = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.meta")
+
+        if not os.path.exists(bank_csv):
+            cli_art.console.print(
+                f"  {cli_art.WARNING} bullet-bank-keepers-audited.csv not found. Skipping mine.",
+                soft_wrap=True,
+            )
+            return None
+        if not os.path.exists(emb_npy):
+            cli_art.console.print(
+                f"  {cli_art.WARNING} bullet_vectors_ge2_d768.npy not found. Run embed_bullet_bank.py first. Skipping mine.",
+                soft_wrap=True,
+            )
+            return None
+
+        try:
+            df = pd.read_csv(bank_csv)
+            embs = np.load(emb_npy)
+        except Exception as e:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Could not load bullet bank: {e}",
+                soft_wrap=True,
+            )
+            return None
+
+        if "Bullet Point" not in df.columns:
+            cli_art.console.print(
+                f"  {cli_art.WARNING} 'Bullet Point' column not found in bullet bank CSV.",
+                soft_wrap=True,
+            )
+            return None
+
+        if len(df) != len(embs):
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Row count mismatch -- CSV {len(df)} rows vs embeddings {len(embs)} rows. Skipping mine.",
+                soft_wrap=True,
+            )
+            return None
+
+        # H26/B20 (phase-9-backlog.md): the row-count check above can't catch
+        # a same-length bank whose content silently changed since embedding
+        # (e.g. a bullet edited during a rate-limit pause) -- only a content
+        # hash can. embed_bullet_bank.py writes this same hash into the
+        # .meta sidecar it's always written alongside the .npy; enforced
+        # here at read time, not only at write time, since a stale .npy
+        # from before this check existed is exactly the case it must catch.
+        try:
+            with open(emb_meta, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+        except Exception as e:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Could not read {emb_meta}: {e}. Skipping mine.",
+                soft_wrap=True,
+            )
+            return None
+        current_sha = bullets_sha(df["Bullet Point"].fillna("").tolist())
+        if meta.get("bullets_sha") != current_sha:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} bullet_vectors_ge2_d768.npy is stale (bullet bank content "
+                "changed since it was built) -- run embed_bullet_bank.py again. Skipping mine.",
+                soft_wrap=True,
+            )
+            return None
+        return df, embs, current_sha
+
+    def _backup_jd_embedding(self, jd_text: str, bank_len: int, current_sha: str):
+        """(jd_vec, backup_embs) from the backup model's own matching index, or None."""
+        import numpy as np
+
+        result = None
+        try:
+            from embed_bullet_bank import (
+                BACKUP_EMBED_MODEL,
+                embed_batch,
+                index_paths,
+            )
+
+            b_npy, b_meta, _ = index_paths(self.kb_dir, BACKUP_EMBED_MODEL)
+            if os.path.exists(b_npy) and os.path.exists(b_meta):
+                with open(b_meta, "r", encoding="utf-8") as f:
+                    b_sha = json.load(f).get("bullets_sha")
+                b_embs = np.load(b_npy)
+                if b_sha == current_sha and len(b_embs) == bank_len:
+                    vec = embed_batch(
+                        [jd_text[:8000]], model=BACKUP_EMBED_MODEL, max_retries=2
+                    )[0]
+                    if b_embs.ndim == 2 and len(vec) == b_embs.shape[1]:
+                        result = (vec, b_embs)
+                        cli_art.console.print(
+                            f"  {theme.colorize_icon('hint')} Primary embedding unavailable -- "
+                            f"matched against the {BACKUP_EMBED_MODEL} backup index.",
+                            soft_wrap=True,
+                        )
+        except Exception:
+            pass
+        return result
+
+    def _mining_excluded_companies(self, df, extra_company_minimums) -> set:
+        """Bank companies that can never land in EXPERIENCE for this build."""
+        try:
+            situational_tags = {
+                str(cfg.get("bank_tag", "")).strip()
+                for cfg in situational_roles.load_situational_roles()["roles"].values()
+            } - {""}
+        except Exception:
+            situational_tags = set()
+        excluded_companies = situational_tags - set(extra_company_minimums or {})
+        # Same waste, wider net: once a profile has a roster, any bank company
+        # on neither the roster nor this JD's situational candidates -- an
+        # education institution, a retired job, a section label like
+        # "Additional Experience" -- can never land in EXPERIENCE either.
+        try:
+            roster_roles = (self.load_yaml(self.kb_dir, "profile.yml") or {}).get(
+                "roles"
+            ) or []
+        except Exception:
+            roster_roles = []
+        roster_names = {
+            str(r.get(key) or "").strip()
+            for r in roster_roles
+            if isinstance(r, dict)
+            for key in ("company", "name")
+        } - {""}
+        if roster_names and "Role / Company" in df.columns:
+            allowed = roster_names | set(extra_company_minimums or {})
+            excluded_companies |= {
+                c
+                for c in set(df["Role / Company"].fillna(""))
+                if c and c not in allowed
+            }
+        return excluded_companies
+
+    def _mining_company_minimums(self, extra_company_minimums) -> dict:
+        """Per-company guaranteed bullet minimums (roster plus situational extras)."""
+        try:
+            profile_roles = (self.load_yaml(self.kb_dir, "profile.yml") or {}).get(
+                "roles"
+            ) or []
+        except Exception:
+            profile_roles = profile_paths.profile_yaml().get("roles") or []
+        company_min_bullets = {
+            r["company"]: r["min_bullets"]
+            for r in profile_roles
+            if "min_bullets" in r and "company" in r
+        }
+        if not company_min_bullets:
+            company_min_bullets = {
+                r["name"]: r["min_bullets"]
+                for r in profile_roles
+                if "min_bullets" in r and "name" in r
+            }
+        combined_minimums = {
+            **company_min_bullets,
+            **(extra_company_minimums or {}),
+        }
+        return combined_minimums
+
     def mine_bullet_bank(
         self,
         jd_text: str,
@@ -6275,71 +6753,10 @@ class ResumeEngine:
         import pandas as pd
 
         cli_art.detail("\nMining bullet bank...", level=cli_art.NORMAL)
-        bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
-        emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
-        emb_meta = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.meta")
-
-        if not os.path.exists(bank_csv):
-            cli_art.console.print(
-                f"  {cli_art.WARNING} bullet-bank-keepers-audited.csv not found. Skipping mine.",
-                soft_wrap=True,
-            )
+        loaded = self._load_mining_bank()
+        if loaded is None:
             return []
-        if not os.path.exists(emb_npy):
-            cli_art.console.print(
-                f"  {cli_art.WARNING} bullet_vectors_ge2_d768.npy not found. Run embed_bullet_bank.py first. Skipping mine.",
-                soft_wrap=True,
-            )
-            return []
-
-        try:
-            df = pd.read_csv(bank_csv)
-            embs = np.load(emb_npy)
-        except Exception as e:
-            cli_art.console.print(
-                f"  {theme.colorize_icon('warning')} Could not load bullet bank: {e}",
-                soft_wrap=True,
-            )
-            return []
-
-        if "Bullet Point" not in df.columns:
-            cli_art.console.print(
-                f"  {cli_art.WARNING} 'Bullet Point' column not found in bullet bank CSV.",
-                soft_wrap=True,
-            )
-            return []
-
-        if len(df) != len(embs):
-            cli_art.console.print(
-                f"  {theme.colorize_icon('warning')} Row count mismatch -- CSV {len(df)} rows vs embeddings {len(embs)} rows. Skipping mine.",
-                soft_wrap=True,
-            )
-            return []
-
-        # H26/B20 (phase-9-backlog.md): the row-count check above can't catch
-        # a same-length bank whose content silently changed since embedding
-        # (e.g. a bullet edited during a rate-limit pause) -- only a content
-        # hash can. embed_bullet_bank.py writes this same hash into the
-        # .meta sidecar it's always written alongside the .npy; enforced
-        # here at read time, not only at write time, since a stale .npy
-        # from before this check existed is exactly the case it must catch.
-        try:
-            with open(emb_meta, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-        except Exception as e:
-            cli_art.console.print(
-                f"  {theme.colorize_icon('warning')} Could not read {emb_meta}: {e}. Skipping mine.",
-                soft_wrap=True,
-            )
-            return []
-        current_sha = bullets_sha(df["Bullet Point"].fillna("").tolist())
-        if meta.get("bullets_sha") != current_sha:
-            cli_art.console.print(
-                f"  {theme.colorize_icon('warning')} bullet_vectors_ge2_d768.npy is stale (bullet bank content "
-                "changed since it was built) -- run embed_bullet_bank.py again. Skipping mine.",
-                soft_wrap=True,
-            )
-            return []
+        df, embs, current_sha = loaded
 
         jd_emb = GeminiClient.embed(jd_text[:8000])
         # A dimension mismatch (embedding model changed since the bank was
@@ -6358,78 +6775,17 @@ class ResumeEngine:
             # against its OWN index, and only when that index was built from
             # this exact bank (same content hash) -- otherwise fall through to
             # the unranked fallback below, as before.
-            try:
-                from embed_bullet_bank import (
-                    BACKUP_EMBED_MODEL,
-                    embed_batch,
-                    index_paths,
-                )
-
-                b_npy, b_meta, _ = index_paths(self.kb_dir, BACKUP_EMBED_MODEL)
-                if os.path.exists(b_npy) and os.path.exists(b_meta):
-                    with open(b_meta, "r", encoding="utf-8") as f:
-                        b_sha = json.load(f).get("bullets_sha")
-                    b_embs = np.load(b_npy)
-                    if b_sha == current_sha and len(b_embs) == len(df):
-                        vec = embed_batch(
-                            [jd_text[:8000]], model=BACKUP_EMBED_MODEL, max_retries=2
-                        )[0]
-                        if b_embs.ndim == 2 and len(vec) == b_embs.shape[1]:
-                            jd_emb, embs = vec, b_embs
-                            cli_art.console.print(
-                                f"  {theme.colorize_icon('hint')} Primary embedding unavailable -- "
-                                f"matched against the {BACKUP_EMBED_MODEL} backup index.",
-                                soft_wrap=True,
-                            )
-            except Exception:
-                pass
+            backup = self._backup_jd_embedding(jd_text, len(df), current_sha)
+            if backup is not None:
+                jd_emb, embs = backup
         if jd_emb is None:
             cli_art.console.print(
                 f"  {cli_art.WARNING} JD embedding failed. Falling back to first TOP_K_BULLETS rows.",
                 soft_wrap=True,
             )
-            bullets_col = df["Bullet Point"].fillna("").tolist()
-            company_col = (
-                df["Role / Company"].fillna("").tolist()
-                if "Role / Company" in df.columns
-                else [""] * len(df)
-            )
-            tags_col = (
-                df["Tags"].fillna("").tolist()
-                if "Tags" in df.columns
-                else [""] * len(df)
-            )
-            return list(
-                zip(
-                    bullets_col[:TOP_K_BULLETS],
-                    company_col[:TOP_K_BULLETS],
-                    tags_col[:TOP_K_BULLETS],
-                )
-            )
+            return _bank_rows_as_tuples(df.iloc[:TOP_K_BULLETS])
 
-        jd_vec = np.array(jd_emb, dtype=np.float32)
-        jd_norm = np.linalg.norm(jd_vec)
-        if jd_norm > 0:
-            jd_vec = jd_vec / jd_norm
-
-        embs_norm = embs / (np.linalg.norm(embs, axis=1, keepdims=True) + 1e-9)
-        sims = embs_norm @ jd_vec
-
-        if "hidden_gem_score" in df.columns:
-            gem_scores = (
-                pd.to_numeric(df["hidden_gem_score"], errors="coerce").fillna(0).values
-            )
-            boosted = sims + GEM_BOOST_WEIGHT * gem_scores
-        else:
-            boosted = sims
-
-        if "strength_category" in df.columns:
-            tier_rank = df["strength_category"].map(STRENGTH_ORDER).fillna(99).values
-        else:
-            tier_rank = np.zeros(len(df))
-
-        # Full-bank ranking, best first: lower tier_rank wins, then higher boosted score.
-        ranked_idx = np.lexsort((-boosted, tier_rank))
+        embs_norm, ranked_idx = _rank_bank_for_jd(df, embs, jd_emb)
 
         selected_idx: list = []
         selected_set: set = set()
@@ -6476,37 +6832,7 @@ class ResumeEngine:
         # situational role is kept out of the general fill: the roster drops
         # that company later anyway, so each slot spent on it was a slot lost
         # (a 2026-09-13 build spent 3 of 21 on Men's Wearhouse this way).
-        try:
-            situational_tags = {
-                str(cfg.get("bank_tag", "")).strip()
-                for cfg in situational_roles.load_situational_roles()["roles"].values()
-            } - {""}
-        except Exception:
-            situational_tags = set()
-        excluded_companies = situational_tags - set(extra_company_minimums or {})
-        # Same waste, wider net: once a profile has a roster, any bank company
-        # on neither the roster nor this JD's situational candidates -- an
-        # education institution, a retired job, a section label like
-        # "Additional Experience" -- can never land in EXPERIENCE either.
-        try:
-            roster_roles = (self.load_yaml(self.kb_dir, "profile.yml") or {}).get(
-                "roles"
-            ) or []
-        except Exception:
-            roster_roles = []
-        roster_names = {
-            str(r.get(key) or "").strip()
-            for r in roster_roles
-            if isinstance(r, dict)
-            for key in ("company", "name")
-        } - {""}
-        if roster_names and "Role / Company" in df.columns:
-            allowed = roster_names | set(extra_company_minimums or {})
-            excluded_companies |= {
-                c
-                for c in set(df["Role / Company"].fillna(""))
-                if c and c not in allowed
-            }
+        excluded_companies = self._mining_excluded_companies(df, extra_company_minimums)
         excluded_values = (
             df["Role / Company"].fillna("").values
             if excluded_companies and "Role / Company" in df.columns
@@ -6521,27 +6847,7 @@ class ResumeEngine:
 
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
-            try:
-                profile_roles = (self.load_yaml(self.kb_dir, "profile.yml") or {}).get(
-                    "roles"
-                ) or []
-            except Exception:
-                profile_roles = profile_paths.profile_yaml().get("roles") or []
-            company_min_bullets = {
-                r["company"]: r["min_bullets"]
-                for r in profile_roles
-                if "min_bullets" in r and "company" in r
-            }
-            if not company_min_bullets:
-                company_min_bullets = {
-                    r["name"]: r["min_bullets"]
-                    for r in profile_roles
-                    if "min_bullets" in r and "name" in r
-                }
-            combined_minimums = {
-                **company_min_bullets,
-                **(extra_company_minimums or {}),
-            }
+            combined_minimums = self._mining_company_minimums(extra_company_minimums)
 
             def _scarcity(item):
                 # Scarcest role first: whoever has the least room to be picky
@@ -6579,47 +6885,31 @@ class ResumeEngine:
                     guaranteed_count += 1
                     taken += 1
 
-        for i in ranked_idx:
-            if len(selected_idx) >= TOP_K_BULLETS:
-                break
-            i = int(i)
-            if (
-                i in selected_set
-                or _excluded(i)
-                or _is_near_duplicate(i)
-                or _collides(i)
-            ):
-                continue
-            _take(i)
-
+        _fill_ranked(
+            ranked_idx,
+            selected_idx,
+            _take,
+            lambda i: i in selected_set
+            or _excluded(i)
+            or _is_near_duplicate(i)
+            or _collides(i),
+        )
         # Same fallback for the general fill: a short pool starves the builder
         # of material, so prefer a collision over an undersized pool.
-        for i in ranked_idx:
-            if len(selected_idx) >= TOP_K_BULLETS:
-                break
-            i = int(i)
-            if i in selected_set or _excluded(i) or _is_near_duplicate(i):
-                continue
-            _take(i)
+        _fill_ranked(
+            ranked_idx,
+            selected_idx,
+            _take,
+            lambda i: i in selected_set or _excluded(i) or _is_near_duplicate(i),
+        )
 
-        top_df = df.iloc[selected_idx]
-        bullets_out = top_df["Bullet Point"].fillna("").tolist()
-        company_out = (
-            top_df["Role / Company"].fillna("").tolist()
-            if "Role / Company" in top_df.columns
-            else [""] * len(top_df)
-        )
-        tags_out = (
-            top_df["Tags"].fillna("").tolist()
-            if "Tags" in top_df.columns
-            else [""] * len(top_df)
-        )
+        mined = _bank_rows_as_tuples(df.iloc[selected_idx])
 
         cli_art.detail(
-            f"  Mined {len(bullets_out)} bullets from bank ({guaranteed_count} from guaranteed per-company minimums, top_k={TOP_K_BULLETS}).",
+            f"  Mined {len(mined)} bullets from bank ({guaranteed_count} from guaranteed per-company minimums, top_k={TOP_K_BULLETS}).",
             level=cli_art.NORMAL,
         )
-        return list(zip(bullets_out, company_out, tags_out))
+        return mined
 
     def _role_dna_dir(self) -> str:
         """Where role_dna.yaml comes from: the profile's own knowledge base
@@ -7421,6 +7711,1503 @@ class ResumeEngine:
         os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
         return True
 
+    def _apply_critique_recommendations(
+        self,
+        build_prompt,
+        bullet_tuples,
+        checkpoint,
+        edu_schema_properties,
+        edu_schema_required,
+        job_key,
+        protected_block,
+        question_recs,
+        recs,
+        resume_data,
+        role_bullet_maximums,
+        role_bullet_minimums,
+        role_roster,
+        static_prefix,
+        style_rules_for_validation,
+    ):
+        """Extracted step of build_tailored_resume."""
+        state = checkpoint.get("recommendation_actions") or {
+            # Seeded, not appended later: question_recs must survive even
+            # when they were the *only* recommendations, in which case the
+            # apply loop below never runs.
+            "resume_data": resume_data,
+            "applied": [],
+            "skipped": [],
+            "needs_polish": list(question_recs),
+            "next_index": 0,
+        }
+        start_index = state["next_index"]
+        if not recs:
+            pass
+        elif start_index >= len(recs):
+            cli_art.console.rule(
+                "Step 5.5: Resuming: recommendation pass already complete from checkpoint.",
+                style="dim",
+                align="left",
+            )
+        else:
+            cli_art.console.rule(
+                f"Step 5.5: Applying actionable recommendations one at a time ({start_index}/{len(recs)} already done)...",
+                style="dim",
+                align="left",
+            )
+        resume_data = state["resume_data"]
+        applied, skipped = state["applied"], state["skipped"]
+        needs_polish = state.get("needs_polish", [])
+
+        # A recommendation is judged on what IT introduced, never on what
+        # the resume already carried. Step 4 legitimately leaves soft
+        # violations standing -- partition_violations makes vague
+        # magnitudes and filler lines non-fatal, so the build ships with
+        # them -- and comparing each candidate against zero meant a single
+        # leftover discarded EVERY later recommendation as if it had caused
+        # it. Measured on a real build: one stray "significantly" in the
+        # Summary threw away both actionable recommendations, neither of
+        # which touched that sentence. Same baseline subtraction the
+        # Why-section backfill below already does.
+        baseline_violations = validate_resume.validate(
+            resume_data,
+            style_rules_for_validation,
+            role_roster,
+            role_bullet_minimums,
+            role_bullet_maximums=role_bullet_maximums,
+            bullet_tuples=bullet_tuples,
+        )
+
+        for i in range(start_index, len(recs)):
+            rec = recs[i]
+            if i > 0:
+                time.sleep(RECOMMENDATION_SLEEP)
+            cli_art.print_literal(
+                f"\n  [{i + 1}/{len(recs)}] {cli_art._escape_markup(rec[:70])}..."
+            )
+            rec_contents = (
+                f"=== CURRENT RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
+                f"{protected_block}"
+                f"=== RECOMMENDATION TO CONSIDER ===\n{rec}\n\n"
+                f"=== INSTRUCTIONS ===\n"
+                f"Decide whether the recommendation above is a concrete, actionable edit to "
+                f"THIS resume's own content (e.g. naming a specific tool, rewording a title/"
+                f"summary/skills phrase to mirror the JD). If so, apply ONLY this one "
+                f"recommendation and put its exact original text in applied_recommendations. "
+                f"When applying edits to summary/skills/bullets, prioritize using verbatim terminology "
+                f"from the JD keywords and recommendation (e.g. use 'Cybersecurity' instead of generic "
+                f"'Technical SaaS') when truthful to maximize ATS exact-match density. "
+                f"If it describes something outside the document itself -- networking, "
+                f"referrals, applying elsewhere, or any action a person would take rather than "
+                f"an edit to this resume's text -- change nothing and put its exact original "
+                f"text in skipped_recommendations instead. If the recommendation asks you to "
+                f"reveal something personal (e.g. why a project mattered, what felt "
+                f"satisfying) and the provided background context does NOT already contain a "
+                f"grounded, verified answer, do not invent one -- change nothing and put its "
+                f"exact original text in needs_personal_input instead. Return the complete "
+                f"resume JSON with every field -- change only what this one recommendation "
+                f"asked for, if anything; leave everything else untouched."
+            )
+            rec_text, rec_usage = GeminiClient.generate(
+                model=BUILDER_MODEL,
+                # Unlike the fix/trim loops above (deliberately bare
+                # build_prompt, no KB, to stay cheap on structural
+                # fixes), these calls make content-quality edits --
+                # e.g. rewording the Summary -- so they need the same
+                # voice-anchors.md grounding the critique that produced
+                # this recommendation already had (B29,
+                # phase-9-backlog.md). static_prefix is small (~5-10k
+                # tokens, already built above for the audit loop), not
+                # the full ~105k-token kb_context.
+                system_instruction=f"{build_prompt}\n\n{static_prefix}",
+                contents=rec_contents,
+                response_schema=RecommendationApplySchema,
+                # B40: without these, EDU_ACHIEVEMENT_KEY_<n> isn't part
+                # of this call's schema, so the model never echoes back
+                # resume_data's existing choice -- normalize_resume.py
+                # then defaults to "", and fixed_content.build_education()
+                # silently reverts KU/KCKCC to each school's first option
+                # (plus a spurious warning) on every single recommendation
+                # applied, not just ones that touch Education.
+                extra_schema_properties=edu_schema_properties,
+                extra_required=edu_schema_required,
+                temperature=0.0,
+            )
+            _log_cache_stats(rec_usage, 0, 0)
+            rec_result = GeminiClient.parse_json(rec_text or "")
+            if not rec_result:
+                cli_art.console.print(
+                    f"    {cli_art.WARNING} unparseable JSON; leaving resume as-is for this recommendation.",
+                    soft_wrap=True,
+                )
+            else:
+                this_applied = rec_result.pop("applied_recommendations", [])
+                this_skipped = rec_result.pop("skipped_recommendations", [])
+                this_needs_input = rec_result.pop("needs_personal_input", [])
+                candidate_resume_data = normalize_resume.normalize(rec_result)
+                rec_violations_all = validate_resume.validate(
+                    candidate_resume_data,
+                    style_rules_for_validation,
+                    role_roster,
+                    role_bullet_minimums,
+                    role_bullet_maximums=role_bullet_maximums,
+                    bullet_tuples=bullet_tuples,
+                )
+                rec_violations = [
+                    v for v in rec_violations_all if v not in baseline_violations
+                ]
+                if rec_violations:
+                    cli_art.console.print(
+                        f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
+                        f"discarding just this recommendation:",
+                        soft_wrap=True,
+                    )
+                    for v in rec_violations:
+                        cli_art.print_literal(f"      - {cli_art._escape_markup(v)}")
+                    skipped.append(
+                        f"{rec} (attempted, discarded: introduced a validator violation)"
+                    )
+                elif this_applied:
+                    resume_data = candidate_resume_data
+                    # The accepted edit becomes the new baseline: it may
+                    # have cleared a pre-existing violation (good) or left
+                    # one standing, and the NEXT recommendation must be
+                    # judged against what the resume actually looks like
+                    # now, not against what Step 4 produced.
+                    baseline_violations = rec_violations_all
+                    applied.append(rec)
+                    cli_art.print_literal("    Applied.")
+                elif this_needs_input:
+                    needs_polish.append(rec)
+                    cli_art.print_literal(
+                        "    Needs your input -- left unchanged (try `resume polish`)."
+                    )
+                else:
+                    skipped.append(rec)
+                    cli_art.print_literal("    Skipped (not a resume-content edit).")
+
+            checkpoint["recommendation_actions"] = {
+                "resume_data": resume_data,
+                "applied": applied,
+                "skipped": skipped,
+                "needs_polish": needs_polish,
+                "next_index": i + 1,
+            }
+            jd_manager.save_checkpoint(job_key, checkpoint)
+
+        checkpoint["recommendation_actions"] = {
+            "resume_data": resume_data,
+            "applied": applied,
+            "skipped": skipped,
+            "needs_polish": needs_polish,
+            "next_index": len(recs),
+        }
+        jd_manager.save_checkpoint(job_key, checkpoint)
+
+        resume_data["_recommendation_actions"] = {
+            "applied": applied,
+            "skipped": skipped,
+            "needs_polish": needs_polish,
+        }
+        if applied:
+            cli_art.print_literal("\n  Applied:")
+            for a in applied:
+                cli_art.print_literal(f"    - {cli_art._escape_markup(a)}")
+        if skipped:
+            cli_art.print_literal("  Skipped:")
+            for s in skipped:
+                cli_art.print_literal(f"    - {cli_art._escape_markup(s)}")
+        if needs_polish:
+            cli_art.print_literal(
+                "  Needs your input -- good candidates for `resume polish`:"
+            )
+            for n in needs_polish:
+                cli_art.print_literal(f"    - {cli_art._escape_markup(n)}")
+
+        return resume_data
+
+    def _run_holistic_critique(
+        self, checkpoint, jd_text, job_key, resume_data, static_prefix
+    ):
+        """Extracted step of build_tailored_resume."""
+        critique_prompt = self.load_prompt("critique_resume.md")
+        # B49 (phase-9-backlog.md): critique_resume.md's "Load and Apply"
+        # list names 18 files; only summary_score.yaml/top_third_score.yaml
+        # were ever attached, so its own evaluation Steps 1-6 had no
+        # rubric to score against. `static_prefix` (already built above
+        # for the bullet audit loop) covers item 1 -- profile.yml,
+        # trimmed -- plus voice-anchors.md as a bonus. The remaining 16
+        # named files are attached raw below, not hand-curated per file
+        # the way audit_and_refine_bullets curates its rules bundle:
+        # this call fires once per resume build, not once per bullet, so
+        # the extra ~80KB doesn't multiply the way a per-bullet cost would.
+        rubric_files = [
+            (self.rules_dir, "style_rules.yaml", "STYLE RULES"),
+            (
+                self.scoring_dir,
+                "professional_identity_score.yaml",
+                "PROFESSIONAL IDENTITY SCORING RUBRIC",
+            ),
+            (
+                self.scoring_dir,
+                "resume_cohesion_score.yaml",
+                "RESUME COHESION SCORING RUBRIC",
+            ),
+            (
+                self.scoring_dir,
+                "believability.yaml",
+                "BELIEVABILITY SCORING RUBRIC",
+            ),
+            (
+                self.scoring_dir,
+                "experience_structure_score.yaml",
+                "EXPERIENCE STRUCTURE SCORING RUBRIC",
+            ),
+            (self.scoring_dir, "manager_test.yaml", "MANAGER TEST SCORING RUBRIC"),
+            (self.scoring_dir, "skills_scoring.yaml", "SKILLS SCORING RUBRIC"),
+            (self._role_dna_dir(), "role_dna.yaml", "ROLE DNA SCORING RUBRIC"),
+            (self.scoring_dir, "ats_match.yaml", "ATS MATCH SCORING RUBRIC"),
+            (self.scoring_dir, "ai_risk.yaml", "AI RISK SCORING RUBRIC"),
+            (
+                self.scoring_dir,
+                "evidence_alignment.yaml",
+                "EVIDENCE ALIGNMENT SCORING RUBRIC",
+            ),
+            (
+                self.scoring_dir,
+                "summary_patterns.yaml",
+                "SUMMARY PATTERNS SCORING RUBRIC",
+            ),
+            (
+                self.scoring_dir,
+                "certifications_score.yaml",
+                "CERTIFICATIONS SCORING RUBRIC",
+            ),
+            (
+                self.scoring_dir,
+                "recruiter_score.yaml",
+                "RECRUITER SCORE SCORING RUBRIC",
+            ),
+            (self.scoring_dir, "specificity.yaml", "SPECIFICITY SCORING RUBRIC"),
+            (self.scoring_dir, "summary_score.yaml", "SUMMARY SCORING RUBRIC"),
+            (
+                self.scoring_dir,
+                "top_third_score.yaml",
+                "TOP-THIRD-OF-PAGE-ONE SCORING RUBRIC",
+            ),
+        ]
+        rubric_blocks = "".join(
+            f"\n\n{label}:\n{json.dumps(self.load_yaml(dir_path, filename))}"
+            for dir_path, filename, label in rubric_files
+        )
+        critique_system = (
+            f"{critique_prompt}"
+            f"\n\n=== CANDIDATE PROFILE & VOICE (from knowledge base) ===\n{static_prefix}"
+            f"{rubric_blocks}"
+        )
+        critique_contents = (
+            f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
+            f"=== RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}"
+        )
+        with cli_art.thinking_status("Auditing CV fit and quality with Gemini..."):
+            critique_text, _ = GeminiClient.generate(
+                model=CRITIQUE_MODEL,
+                system_instruction=critique_system,
+                contents=critique_contents,
+                response_schema=ResumeCritiqueSchema,
+                temperature=0.0,
+            )
+        if critique_text:
+            critique_data = GeminiClient.parse_json(critique_text)
+
+            # B51 (phase-9-backlog.md): fold any rubric hard-failure/
+            # threshold trip into recommendations so it re-enters the
+            # pipeline through the same apply-and-validate loop Step 5.5
+            # already runs on every other recommendation. Previously
+            # only `recommendations` and `distinctive_moments` re-entered
+            # the pipeline -- a resume tripping a rubric's own stated bar
+            # shipped unchanged.
+            hard_failures = critique_data.get("hard_failures_triggered", []) or []
+            if hard_failures:
+                critique_data["recommendations"] = list(
+                    critique_data.get("recommendations", []) or []
+                ) + [f"Fix rubric hard failure -- {hf}" for hf in hard_failures]
+
+            cli_art.console.rule("Holistic critique scores", style="dim", align="left")
+            cli_art.print_literal(
+                f"summary_alignment : {critique_data.get('summary_alignment_score', '?')}"
+            )
+            cli_art.print_literal(
+                f"skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}"
+            )
+            cli_art.print_literal(
+                f"top_third         : {critique_data.get('top_third_score',         '?')}"
+            )
+            cli_art.print_literal(
+                f"overall_fit       : {critique_data.get('overall_fit_score',        '?')}"
+            )
+            identity_line = critique_data.get("primary_identity", "?")
+            if critique_data.get("secondary_identity"):
+                identity_line += f" / {critique_data['secondary_identity']}"
+            cli_art.print_literal(f"identity          : {identity_line}")
+            cli_art.print_literal(
+                f"weakest ATS       : {critique_data.get('weakest_ats_platform', '?')}"
+            )
+            cli_art.print_literal()
+            if hard_failures:
+                cli_art.console.print(
+                    f"{theme.colorize_icon('error')} Hard rubric failures (added to recommendations):",
+                    soft_wrap=True,
+                )
+                for hf in hard_failures:
+                    cli_art.print_literal(f"- {hf}")
+                cli_art.print_literal()
+            flags = critique_data.get("flags", [])
+            if flags:
+                cli_art.print_literal("Flags:")
+                for flag in flags:
+                    cli_art.print_literal(f"- {flag}")
+                cli_art.print_literal()
+            recs = critique_data.get("recommendations", [])
+            if recs:
+                cli_art.print_literal("Recommendations:")
+                for rec in recs:
+                    cli_art.print_literal(f"- {rec}")
+                cli_art.print_literal()
+            moments = critique_data.get("distinctive_moments", [])
+            if moments:
+                cli_art.print_literal("Distinctive moments (protected):")
+                for m in moments:
+                    cli_art.print_literal(f"- {m}")
+                cli_art.print_literal()
+            flat = critique_data.get("flat_sections", [])
+            if flat:
+                cli_art.print_literal("Flat sections:")
+                for f in flat:
+                    cli_art.print_literal(f"- {f}")
+                cli_art.print_literal()
+            platform_risks = critique_data.get("platform_parsing_risks", [])
+            if platform_risks:
+                cli_art.print_literal("Platform parsing risks:")
+                for risk in platform_risks:
+                    cli_art.print_literal(f"- {risk}")
+                cli_art.print_literal()
+            resume_data["_critique"] = critique_data
+            checkpoint["critique_data"] = critique_data
+            jd_manager.save_checkpoint(job_key, checkpoint)
+        else:
+            cli_art.console.print(
+                f"  {cli_art.WARNING} Holistic critique returned empty.",
+                soft_wrap=True,
+            )
+
+    def _build_initial_resume(
+        self,
+        _p_yaml,
+        build_prompt,
+        bullet_companies,
+        bullet_tuples,
+        checkpoint,
+        edu_schema_properties,
+        edu_schema_required,
+        jd_keywords,
+        jd_text,
+        job_key,
+        master_resume,
+        refined_bullets,
+        research,
+        research_block,
+        role_bullet_maximums,
+        role_bullet_minimums,
+        role_metadata,
+        role_roster,
+        situational_candidates,
+        style_rules_for_validation,
+    ):
+        """Extracted step of build_tailored_resume."""
+        builder_system, bullets_block, combined_contents = (
+            self._assemble_builder_prompt(
+                _p_yaml=_p_yaml,
+                build_prompt=build_prompt,
+                bullet_companies=bullet_companies,
+                jd_keywords=jd_keywords,
+                jd_text=jd_text,
+                master_resume=master_resume,
+                refined_bullets=refined_bullets,
+                research_block=research_block,
+                situational_candidates=situational_candidates,
+                style_rules_for_validation=style_rules_for_validation,
+            )
+        )
+        # tier's rolling per-minute token window a moment to recover
+        # before this ~105k-token call (see PRE_BUILDER_SLEEP above).
+        cli_art.detail(
+            f"  Pausing {PRE_BUILDER_SLEEP}s before the builder call to avoid tripping the per-minute token cap...",
+            level=cli_art.NORMAL,
+        )
+        time.sleep(PRE_BUILDER_SLEEP)
+
+        with cli_art.thinking_status("Building custom resume with Gemini..."):
+            resume_text, usage = GeminiClient.generate(
+                model=BUILDER_MODEL,
+                system_instruction=builder_system,
+                contents=combined_contents,
+                response_schema=TemplateSchema,
+                extra_schema_properties=edu_schema_properties,
+                extra_required=edu_schema_required,
+                temperature=0.0,
+            )
+        _log_cache_stats(usage, 0, 0)
+
+        if not resume_text:
+            cli_art.console.print(
+                f"  {cli_art.ERROR} Builder returned empty response.",
+                soft_wrap=True,
+            )
+            return None
+
+        resume_data = GeminiClient.parse_json(resume_text)
+        if not resume_data:
+            cli_art.console.print(
+                f"  {cli_art.ERROR} Could not parse builder JSON.", soft_wrap=True
+            )
+            cli_art.console.rule(
+                "Raw builder response (truncated)", style="dim", align="left"
+            )
+            # Preserve exact text for debugging assertions/tests.
+            cli_art.print_literal(resume_text[:500])
+            return None
+
+        resume_data = normalize_resume.normalize(resume_data)
+
+        violations = validate_resume.validate(
+            resume_data,
+            style_rules_for_validation,
+            role_roster,
+            role_bullet_minimums,
+            role_bullet_maximums=role_bullet_maximums,
+            bullet_tuples=bullet_tuples,
+        )
+        if violations:
+            cli_art.print_literal(
+                f"  Validator found {len(violations)} issue(s), attempting surgical zero-token & micro-repairs..."
+            )
+            resume_data, violations = repair_violations_surgically(
+                resume_data,
+                violations,
+                style_rules_for_validation,
+                role_roster,
+                role_bullet_minimums,
+                bullet_tuples,
+                role_bullet_maximums=role_bullet_maximums,
+                role_metadata=role_metadata,
+            )
+
+        max_fix_attempts = 4
+        fix_attempt = 0
+        # Hill-climb rather than random-walk. Each retry re-generates the
+        # WHOLE resume (response_schema=TemplateSchema below), so despite
+        # "change nothing else" an attempt is free to regress anything:
+        # observed live 2026-08-12, attempt 2 got within 2 violations of
+        # clean and attempt 3 came back with 5 new bullet widows and 4
+        # roles pushed below their bullet minimums, because it had
+        # silently deleted bullets. Anchoring each attempt (and the final
+        # result) on the best state reached so far makes a bad attempt
+        # cost one turn instead of destroying all prior progress.
+        best_resume_data = resume_data
+        best_violations = violations
+        # Tracks consecutive fix attempts that failed to beat best_violations.
+        # When best never advances, the next attempt re-sends the identical
+        # fix_contents (same resume_data, same violations) -- so at
+        # temperature=0.0 it is GUARANTEED to reproduce the exact same
+        # failed output, burning the remaining attempts on repeats of one
+        # failure rather than distinct tries. Escalating temperature on a
+        # stall breaks the determinism trap without touching the first,
+        # most-likely-to-succeed attempt.
+        #
+        # A modest linear bump (0.2/0.4/0.6) was tried first and observed
+        # live 2026-08-22 NOT to be enough on its own: for a bullet/skills
+        # line the model has decided is "already fine" (usually because it
+        # can't reliably count characters the way the validator does), the
+        # next-token probabilities for reproducing that exact text are so
+        # close to 1.0 that a small temperature increase barely perturbs
+        # them -- 4 attempts came back byte-identical even as temperature
+        # rose from 0.0 to 0.4. Real fix has two parts: escalate harder
+        # once a stall is confirmed (not gradually), and explicitly tell
+        # the model its last output was unchanged -- the arithmetic hint
+        # alone wasn't enough to make it realize it hadn't acted on it.
+        stall_streak = 0
+        prev_round_violations = None
+        while violations and fix_attempt < max_fix_attempts:
+            fix_attempt += 1
+            resume_data, violations = best_resume_data, best_violations
+            exact_repeat = (
+                prev_round_violations is not None
+                and violations == prev_round_violations
+            )
+            fix_temperature = (
+                0.0 if stall_streak == 0 else min(0.4 + 0.2 * (stall_streak - 1), 0.9)
+            )
+            if exact_repeat:
+                # Full detail was already printed once for this exact
+                # set of violations -- reprinting it verbatim on every
+                # stalled retry is exactly the noise that made this
+                # section unreadable live. One compact line instead.
+                cli_art.print_literal(
+                    f"  Validator: same {len(violations)} issue(s) as last attempt "
+                    f"(unresolved), attempt {fix_attempt}/{max_fix_attempts}, "
+                    f"retrying at temperature {fix_temperature:.1f}."
+                )
+            else:
+                cli_art.print_literal(
+                    f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:"
+                )
+                for v in violations:
+                    cli_art.print_literal(f"    - {_condensed_violation(v)}")
+            fix_contents = (
+                f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
+                f"=== REFINED BULLETS (source material if an issue requires populating "
+                f"or fixing Experience/achievements) ===\n{bullets_block}\n\n"
+            )
+            fix_contents = self._augment_fix_contents(
+                bullet_tuples=bullet_tuples,
+                fix_contents=fix_contents,
+                resume_data=resume_data,
+                style_rules_for_validation=style_rules_for_validation,
+                violations=violations,
+            )
+            if exact_repeat:
+                # The arithmetic hints above (exact char counts, the
+                # illegal dead-band) were already present last round and
+                # weren't enough on their own -- the model's most common
+                # failure mode here isn't ignoring the rule, it's judging
+                # the existing text as already compliant and passing it
+                # through unedited. Name that explicitly, since "here's
+                # the same math again" doesn't fix a problem that was
+                # never a math problem in the first place.
+                fix_contents += (
+                    f"=== YOUR LAST ATTEMPT DID NOT CHANGE THIS TEXT ===\n"
+                    f"The issue(s) below are byte-for-byte identical to what you returned "
+                    f"last attempt -- the text was not edited at all. Whatever you believe "
+                    f"about its current length, it still measures as a violation. You must "
+                    f"produce genuinely different wording for every line listed below, not "
+                    f"re-affirm the same text.\n\n"
+                )
+            fix_contents += (
+                f"=== ISSUES TO FIX (change nothing else) ===\n"
+                + "\n".join(f"- {v}" for v in violations)
+            )
+            fix_text, fix_usage = GeminiClient.generate(
+                model=BUILDER_MODEL,
+                system_instruction=build_prompt,
+                contents=fix_contents,
+                response_schema=TemplateSchema,
+                extra_schema_properties=edu_schema_properties,
+                extra_required=edu_schema_required,
+                temperature=fix_temperature,
+            )
+            _log_cache_stats(fix_usage, 0, 0)
+            fixed = GeminiClient.parse_json(fix_text or "")
+            if not fixed:
+                # A transient failure here (e.g. all of GeminiClient.generate()'s
+                # own inner retries/fallback exhausted) shouldn't burn the whole
+                # outer fix loop -- fix_attempt was already incremented above, so
+                # continuing just moves on to the next outer attempt with the
+                # same (unchanged) violations, rather than giving up after one
+                # network hiccup with attempts still remaining.
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.",
+                    soft_wrap=True,
+                )
+                # Counts as a stall: otherwise the next attempt re-sends
+                # the identical call at the same temperature, and a
+                # deterministic parse failure repeats until attempts run out.
+                stall_streak += 1
+                continue
+            resume_data = normalize_resume.normalize(fixed)
+            violations = validate_resume.validate(
+                resume_data,
+                style_rules_for_validation,
+                role_roster,
+                role_bullet_minimums,
+                role_bullet_maximums=role_bullet_maximums,
+                bullet_tuples=bullet_tuples,
+            )
+            if violations:
+                resume_data, violations = repair_violations_surgically(
+                    resume_data,
+                    violations,
+                    style_rules_for_validation,
+                    role_roster,
+                    role_bullet_minimums,
+                    bullet_tuples,
+                    role_bullet_maximums=role_bullet_maximums,
+                    role_metadata=role_metadata,
+                )
+            if len(violations) < len(best_violations):
+                best_resume_data, best_violations = resume_data, violations
+                stall_streak = 0
+            else:
+                stall_streak += 1
+            prev_round_violations = violations
+
+        resume_data, violations = best_resume_data, best_violations
+
+        # Last deterministic pass before giving up. An unverified tool in
+        # SKILLS is removable without a model call, yet a data-science
+        # sample failed twice on 2026-09-14 with only such violations left
+        # (Snowflake/Redshift/Docker, then Spark/Snowflake/Prototyping) --
+        # the retry loop kept re-adding them and the build returned {}.
+        if violations and any("Hallucinated skill or tool" in v for v in violations):
+            resume_data, violations = repair_violations_surgically(
+                resume_data,
+                violations,
+                style_rules_for_validation,
+                role_roster,
+                role_bullet_minimums,
+                bullet_tuples,
+                role_bullet_maximums=role_bullet_maximums,
+                role_metadata=role_metadata,
+            )
+
+        if violations:
+            fatal_violations, soft_warnings = partition_violations(violations)
+            if fatal_violations:
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('error')} Validator still found {len(fatal_violations)} fatal issue(s) after {max_fix_attempts} attempts:",
+                    soft_wrap=True,
+                )
+                for v in fatal_violations:
+                    cli_art.print_literal(f"    - {v}")
+                return None
+            else:
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('warning')} {len(soft_warnings)} non-fatal warning(s) remain after {max_fix_attempts} attempts; proceeding with build:",
+                    soft_wrap=True,
+                )
+                for v in soft_warnings:
+                    cli_art.print_literal(f"    - {v}")
+
+        checkpoint["resume_data"] = resume_data
+        # Persisted (rather than read off `research` at the Step 6 call
+        # site) because `research` only exists in this fresh-build
+        # branch -- a resumed run enters at the `resume_data is not
+        # None` branch above and would otherwise both NameError and
+        # silently lose the substitution.
+        checkpoint["vocabulary_substitutions"] = (research or {}).get(
+            "vocabulary_substitutions", []
+        )
+        jd_manager.save_checkpoint(job_key, checkpoint)
+
+        return resume_data
+
+    def _assemble_builder_prompt(
+        self,
+        _p_yaml,
+        build_prompt,
+        bullet_companies,
+        jd_keywords,
+        jd_text,
+        master_resume,
+        refined_bullets,
+        research_block,
+        situational_candidates,
+        style_rules_for_validation,
+    ):
+        """Extracted step of build_tailored_resume."""
+        kb_context = self.load_knowledge_base()
+
+        # `research` and `research_block` come from Step 2b. Re-running
+        # research_company() here when it came back empty just paid for
+        # the same scrape + grounded-search tiers a second time.
+
+        situational_block = ""
+        if situational_candidates:
+            situational_block = (
+                "\n\n=== SITUATIONAL ROLE CANDIDATES ===\n"
+                f"The JD's language matched a deterministic keyword gate for: "
+                f"{', '.join(situational_candidates)}. These are NOT automatically "
+                "included -- use your own judgment on whether including one of them, or "
+                "at most two (each a small, 2-bullet supporting entry), would genuinely "
+                "help this specific JD, per the Situational/Optional Work History Entries rules. "
+                "If none would genuinely help, don't include any of them -- this "
+                "should be rare by construction, not a default."
+            )
+
+        role_rules_block = self.build_role_rules_block(_p_yaml)
+
+        # style_rules.yaml/ai_risk.yaml used to be attached only to the
+        # post-build critique call (Step 5) and polish.py's cover-letter
+        # edit call -- the builder itself relied on tailor_resume.md's own
+        # hard-coded banned-word list, which had already drifted out of
+        # sync with the real ones (see that file's own note). Attaching
+        # the real rubrics here lets the builder avoid these terms at
+        # generation time instead of only getting flagged for them after
+        # the fact. style_rules_for_validation is already loaded above
+        # (unconditionally, for the post-trim gate) -- reused here rather
+        # than loading style_rules.yaml a second time.
+        banned_language_block = (
+            "\n\n=== STYLE RULES (avoid every term in forbidden_phrases below "
+            "-- this is the tested master banned-phrase list) ===\n"
+            f"{json.dumps(style_rules_for_validation)}"
+            "\n\n=== AI RISK SCORING RUBRIC (avoid every term in buzzwords, "
+            "adjective_padding, banned_openers, and banned_phrases below) ===\n"
+            f"{json.dumps(self.load_yaml(self.scoring_dir, 'ai_risk.yaml'))}"
+        )
+
+        # Gap 1: KB goes into system_instruction, not contents, so the
+        # ~105k-token kb_context forms a stable, cacheable prefix if
+        # Gemini's automatic caching kicks in across nearby calls (e.g.
+        # consecutive JDs in batch mode reusing the same kb_context
+        # bytes) -- NOT within this one call, and NOT reused by the
+        # retry/fix loop or trim loop below, both of which deliberately
+        # use build_prompt alone (no kb_context) to keep those calls
+        # cheap. The variable tail (JD + bullets) sits alone in
+        # combined_contents. research_block/situational_block are
+        # appended after kb_context for the same reason -- they're
+        # per-JD variable content, but small enough that keeping them
+        # out of the cacheable prefix costs little and keeps the
+        # prefix identical across JDs targeting different companies.
+        builder_system = (
+            f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}"
+            f"{role_rules_block}{banned_language_block}\n\n"
+            "=== ATS KEYWORD DENSITY INSTRUCTION ===\n"
+            "When crafting SUMMARY_TEXT and selecting verified SKILLS, prioritize verbatim phrases "
+            "from JD KEYWORDS (e.g. use exact domain titles like 'Cybersecurity' or verbatim tool names) "
+            "whenever truthful, maximizing exact ATS keyword density."
+        )
+
+        bullets_block = "\n".join(
+            f"- [{company or 'unknown company'}] {b}"
+            for b, company in zip(refined_bullets, bullet_companies)
+        )
+        try:
+            import skills_menu
+
+            _priority_skills = verified_jd_skills(
+                jd_keywords,
+                [
+                    (t.get("name") or "").strip()
+                    for t in (skills_menu._load_verified_tools() or {}).get("tools", [])
+                ],
+            )
+        except Exception:
+            _priority_skills = []
+        _priority_block = (
+            (
+                "=== VERIFIED SKILLS THIS JD ASKS FOR ===\n"
+                "The candidate is verified for every skill below AND the job asks for it. "
+                "Give each a place in SKILLS before any generic item the JD never names "
+                '(e.g. drop "Dashboards" to make room for "Report & Dashboard Building"). '
+                "Keep line-length rules; shorten or cut non-JD items rather than skipping these.\n"
+                + "\n".join(f"- {k}" for k in _priority_skills)
+                + "\n\n"
+            )
+            if _priority_skills
+            else ""
+        )
+        combined_contents = (
+            _priority_block + f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
+            f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
+            f"=== MASTER RESUME ===\n{json.dumps(master_resume, indent=2)}\n\n"
+            f"=== REFINED BULLETS ===\n{bullets_block}"
+        )
+
+        cli_art.detail(
+            f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens"
+        )
+        cli_art.detail(
+            f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens"
+        )
+
+        # Step 3's audit loop just made up to 30 calls; give the free
+        return (builder_system, bullets_block, combined_contents)
+
+    def _augment_fix_contents(
+        self,
+        bullet_tuples,
+        fix_contents,
+        resume_data,
+        style_rules_for_validation,
+        violations,
+    ):
+        """Extracted step of build_tailored_resume."""
+        if any(v.startswith("Opening verb") for v in violations):
+            # Naming only the 2 colliding bullets per violation risks
+            # whack-a-mole: a replacement verb picked to fix one pair
+            # can collide with some other, unflagged bullet, since
+            # uniqueness is a whole-CV constraint, not a pairwise one.
+            current_verbs = validate_resume.get_opening_verbs(resume_data)
+            fix_contents += (
+                f"=== ALL OPENING VERBS CURRENTLY USED ACROSS THE CV ===\n"
+                f"{', '.join(current_verbs)}\n"
+                f"When fixing a duplicate-opening-verb issue, the replacement verb must not "
+                f"appear anywhere in this full list -- not just avoid the two bullets named "
+                f"in the issue below.\n\n"
+            )
+        if any(v.startswith("Role roster") for v in violations):
+            # An absent employer is the one violation the model can't
+            # fix from the resume JSON alone: the entry it needs to add
+            # isn't in the document to be edited, and the refined-bullets
+            # block alone doesn't tell it what title or period to use.
+            # Observed live -- the roster rule in tailor_resume.md
+            # restored VML and Callahan Creek across attempts but never
+            # Element 8 / Strategy LLC, and the loop then exhausted.
+            # Same idiom as the two blocks around this one: when a
+            # violation keeps surviving retries, restate what fixing it
+            # actually requires, here rather than in a huge prompt.
+            missing = [
+                v.split("'")[1]
+                for v in violations
+                if v.startswith("Role roster") and "'" in v
+            ]
+            roster_lines = []
+            for company in missing:
+                available = [b for b, c, _t in bullet_tuples if c == company]
+                roster_lines.append(
+                    f"- {company}: {len(available)} refined bullet(s) already available "
+                    f"for it in the block above. Add the EXPERIENCE entry using them."
+                )
+            fix_contents += (
+                "=== MISSING EMPLOYERS -- ADD THESE ENTRIES ===\n"
+                "These companies are in the candidate's declared work history but have no\n"
+                "EXPERIENCE entry in the JSON above. This is not a relevance judgment and\n"
+                "not a way to save space: omitting a real employer leaves an unexplained\n"
+                "gap in the work history. Add a complete entry for each, with its title,\n"
+                "period and bullets, in correct reverse-chronological position. Keep every\n"
+                "entry that is already present.\n" + "\n".join(roster_lines) + "\n\n"
+            )
+        if any(_is_skills_line_violation(v) for v in violations):
+            # Repeated Skills-widow violations across retry attempts
+            # suggest the model needs the fix options spelled out
+            # again here, not just relying on tailor_resume.md's
+            # Skills Section Rules buried earlier in a huge prompt.
+            fix_contents += (
+                f"=== FIXING A SKILLS LINE WIDOW ===\n"
+                f"In order of preference: (1) add or remove an item within the category; "
+                f"(2) shorten or lengthen the category label itself, as long as it still "
+                f"fairly describes the items (e.g. 'CRM Strategy & Operations' -> 'CRM & "
+                f"Operations'); (3) pull in 1-2 more genuinely-held skills from "
+                f"summaries-and-skills-clean.csv or verified_tools.json, even if the JD "
+                f"didn't ask for them, as long as they fit the category and archetype.\n\n"
+            )
+        if any(_is_bullet_widow_violation(v) for v in violations):
+            # Mirrors the Skills-widow block above: repeated bullet-widow
+            # violations across retry attempts mean the model can't
+            # reliably count characters from prose alone, so restate the
+            # exact arithmetic here instead of a vague "tighten it".
+            limits = style_rules_for_validation.get("bullet_structure", {})
+            one_liner_max = limits.get("one_liner_max_chars", 108)
+            widow_min_words = limits.get("widow_min_words", 5)
+            exp_bullets = [
+                b
+                for job in resume_data.get("EXPERIENCE", [])
+                for b in job.get("achievements", [])
+            ]
+            widow_details = [
+                f"- {len(b)} chars, {wc}-word widow: {b!r}"
+                for b, wc in validate_resume.bullets_with_short_widow(
+                    exp_bullets, style_rules_for_validation
+                )
+            ]
+            fix_contents += (
+                f"=== FIXING A BULLET WIDOW ===\n"
+                f"Each bullet below wraps to a 2nd line at the {one_liner_max}-char mark but "
+                f"leaves fewer than {widow_min_words} words there. Either (1) trim it to "
+                f"{one_liner_max} chars or fewer so it fits on one line, or (2) lengthen it "
+                f"well past {one_liner_max} chars so the 2nd line carries at least "
+                f"{widow_min_words} words -- don't leave it in the narrow band between those "
+                f"two targets.\n" + "\n".join(widow_details) + "\n\n"
+            )
+        if _needs_metric_inventory(violations):
+            # Same whack-a-mole risk as the Opening Verb block above,
+            # and the reason it's needed here too: observed live --
+            # lengthening a bullet to fix the widow violation above
+            # pulled in "100+" as filler, colliding with a "100+"
+            # already used in an unrelated bullet.
+            current_metrics = validate_resume.get_all_metrics(resume_data)
+            fix_contents += (
+                f"=== ALL METRICS CURRENTLY USED ACROSS THE CV ===\n"
+                f"{', '.join(current_metrics)}\n"
+                f"When fixing a duplicate-metric issue, or adding filler content to "
+                f"lengthen a bullet for the widow fix above, the number used must not "
+                f"already appear anywhere in this list.\n\n"
+            )
+        if any("Hallucinated skill or tool" in v for v in violations):
+            fix_contents += (
+                f"=== FIXING A HALLUCINATED TOOL OR SKILL ===\n"
+                f"Every tool and skill in the SKILLS section and EXPERIENCE bullets MUST come strictly "
+                f"from verified_tools.json or profile.yml. Remove any unverified, invented, or generic "
+                f"phrases not explicitly grounded in the candidate's verified profile.\n\n"
+            )
+        return fix_contents
+
+    def _render_with_page_fit(
+        self,
+        _p_yaml,
+        build_prompt,
+        bullet_tuples,
+        edu_schema_properties,
+        edu_schema_required,
+        html_out,
+        pdf_out,
+        pdf_script,
+        research,
+        research_block,
+        resume_data,
+        role_bullet_maximums,
+        role_bullet_minimums,
+        role_roster,
+        style_rules_for_validation,
+    ):
+        """Extracted step of build_tailored_resume."""
+        trim_instructions = [
+            lambda rd: "Trim the Summary to its 5-line limit.",
+            lambda rd: _widow_trim_instruction(rd, style_rules_for_validation),
+            lambda rd: _bullet_removal_trim_instruction(_p_yaml),
+        ]
+        max_trim_attempts = len(trim_instructions)
+        trim_attempt = 0
+        page_count = None
+        dropped_optional_clients = False
+        dropped_why = False
+        page1_condense_attempt = 0
+        page1_condense_last_violations: list[str] = []
+        MAX_PAGE1_CONDENSE_ATTEMPTS = 5
+        why_backfill_attempt = 0
+        why_backfill_last_violations: list[str] = []
+        MAX_WHY_BACKFILL_ATTEMPTS = 3
+
+        while True:
+            _step = self._run_pdf_render(
+                html_out=html_out, pdf_out=pdf_out, pdf_script=pdf_script
+            )
+            if _step is None:
+                return None
+            page_count, pdf_result, size_str = _step
+            overflow_roles = (
+                _page1_overflow_roles(pdf_out, _p_yaml) if page_count <= 2 else []
+            )
+            page1_condense_exhausted = (
+                page1_condense_attempt >= MAX_PAGE1_CONDENSE_ATTEMPTS
+            )
+            needs_why_backfill = _needs_why_backfill(
+                page_count,
+                overflow_roles,
+                research,
+                research_block,
+                resume_data,
+                why_backfill_attempt >= MAX_WHY_BACKFILL_ATTEMPTS,
+            )
+            is_final = (
+                page_count <= 2
+                and (not overflow_roles or page1_condense_exhausted)
+                and not needs_why_backfill
+            ) or trim_attempt >= max_trim_attempts
+            if is_final:
+                if overflow_roles:
+                    cli_art.console.print(
+                        f"  {theme.colorize_icon('warning')} {', '.join(overflow_roles)} still "
+                        f"spilled onto page 2 after {MAX_PAGE1_CONDENSE_ATTEMPTS} condense "
+                        "attempt(s); keeping this build rather than looping indefinitely.",
+                        soft_wrap=True,
+                    )
+                cli_art.print_subprocess_output(pdf_result.stdout)
+                break
+
+            if page_count <= 2 and overflow_roles and page1_condense_attempt >= 1:
+                page1_trim = _page1_overflow_trim(resume_data, _p_yaml)
+                if page1_trim:
+                    resume_data, removed_bullet = page1_trim
+                    cli_art.print_literal(
+                        f"  Condensing wording was not enough; dropped a "
+                        f"{_p_yaml.get('page1_overflow_trim_role')} bullet so "
+                        f"{', '.join(overflow_roles)} can fit on page 1: {removed_bullet}"
+                    )
+                    render_html(resume_data, html_out)
+                    continue
+
+            if page_count <= 2 and overflow_roles:
+                page1_condense_attempt, page1_condense_last_violations, resume_data = (
+                    self._condense_page1_overflow(
+                        MAX_PAGE1_CONDENSE_ATTEMPTS=MAX_PAGE1_CONDENSE_ATTEMPTS,
+                        _p_yaml=_p_yaml,
+                        build_prompt=build_prompt,
+                        bullet_tuples=bullet_tuples,
+                        edu_schema_properties=edu_schema_properties,
+                        edu_schema_required=edu_schema_required,
+                        html_out=html_out,
+                        overflow_roles=overflow_roles,
+                        page1_condense_attempt=page1_condense_attempt,
+                        page1_condense_last_violations=page1_condense_last_violations,
+                        resume_data=resume_data,
+                        role_bullet_maximums=role_bullet_maximums,
+                        role_bullet_minimums=role_bullet_minimums,
+                        role_roster=role_roster,
+                        style_rules_for_validation=style_rules_for_validation,
+                    )
+                )
+                continue
+
+            if needs_why_backfill:
+                resume_data, why_backfill_attempt, why_backfill_last_violations = (
+                    self._backfill_why_section(
+                        MAX_WHY_BACKFILL_ATTEMPTS=MAX_WHY_BACKFILL_ATTEMPTS,
+                        build_prompt=build_prompt,
+                        bullet_tuples=bullet_tuples,
+                        html_out=html_out,
+                        page_count=page_count,
+                        research_block=research_block,
+                        resume_data=resume_data,
+                        role_bullet_maximums=role_bullet_maximums,
+                        role_bullet_minimums=role_bullet_minimums,
+                        role_roster=role_roster,
+                        style_rules_for_validation=style_rules_for_validation,
+                        why_backfill_attempt=why_backfill_attempt,
+                        why_backfill_last_violations=why_backfill_last_violations,
+                    )
+                )
+                continue
+
+            if not dropped_optional_clients:
+                dropped_optional_clients = True
+                fixed_content = profile_paths.fixed_content_module()
+                has_optional_clients = any(
+                    fixed_content.CLIENTS.get(job.get("company"), {}).get("essential")
+                    is False
+                    and job.get("clients")
+                    for job in resume_data.get("EXPERIENCE", [])
+                )
+                if has_optional_clients:
+                    # Free, non-LLM trim step: drop the Inside Sales Team
+                    # client roster (fixed_content.CLIENTS marks it
+                    # non-essential) before spending an LLM-driven
+                    # trim_instructions attempt.
+                    cli_art.print_literal(
+                        f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping optional client rosters..."
+                    )
+                    resume_data = normalize_resume.normalize(
+                        resume_data, include_optional_clients=False
+                    )
+                    render_html(resume_data, html_out)
+                    continue
+
+            if not dropped_why:
+                dropped_why = True
+                if resume_data.get("SECTION_WHY") or resume_data.get("WHY_TEXT"):
+                    # Free, non-LLM trim step, same reasoning as the client-
+                    # roster drop above: Why only belongs on the resume if it
+                    # fits without pushing the page count past 2, and dropping
+                    # it is just blanking two fields -- routing it through the
+                    # LLM used to let the model bundle unrelated edits into
+                    # the same response, so a validator violation *anywhere*
+                    # in that response discarded the one edit that actually
+                    # freed a page, and Why silently stuck around for every
+                    # remaining trim attempt.
+                    cli_art.print_literal(
+                        f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping the Why section (first thing to go when space is tight)..."
+                    )
+                    resume_data = dict(resume_data)
+                    resume_data["SECTION_WHY"] = ""
+                    resume_data["WHY_TEXT"] = ""
+                    render_html(resume_data, html_out)
+                    continue
+
+            # Deterministic, non-LLM trim step: drop a surplus bullet from the
+            # lowest-flex_priority role (respecting min_bullets floors and
+            # protected_bullets) before spending an LLM-driven trim_instructions attempt.
+            resume_data_trimmed, trimmed_bullet = trim_surplus_bullet_deterministically(
+                resume_data, _p_yaml, role_bullet_minimums
+            )
+            if trimmed_bullet:
+                resume_data = resume_data_trimmed
+                render_html(resume_data, html_out)
+                continue
+
+            resume_data, trim_attempt = self._apply_llm_trim_step(
+                build_prompt=build_prompt,
+                bullet_tuples=bullet_tuples,
+                edu_schema_properties=edu_schema_properties,
+                edu_schema_required=edu_schema_required,
+                html_out=html_out,
+                max_trim_attempts=max_trim_attempts,
+                page_count=page_count,
+                resume_data=resume_data,
+                role_bullet_maximums=role_bullet_maximums,
+                role_bullet_minimums=role_bullet_minimums,
+                role_roster=role_roster,
+                size_str=size_str,
+                style_rules_for_validation=style_rules_for_validation,
+                trim_attempt=trim_attempt,
+                trim_instructions=trim_instructions,
+            )
+
+        return (max_trim_attempts, page_count, resume_data)
+
+    def _run_pdf_render(self, html_out, pdf_out, pdf_script):
+        """Extracted step of build_tailored_resume."""
+        try:
+            pdf_result = subprocess.run(
+                [
+                    "node",
+                    pdf_script,
+                    html_out,
+                    pdf_out,
+                    "--format=letter",
+                    "--max-pages=2",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=PDF_GENERATION_TIMEOUT_SECONDS,
+                env={**os.environ, "RESUME_BUILDER_ICONS": theme.icon_set_name()},
+            )
+        except subprocess.TimeoutExpired:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')}  PDF generation timed out after "
+                f"{PDF_GENERATION_TIMEOUT_SECONDS}s.",
+                soft_wrap=True,
+            )
+            return None
+        if pdf_result.returncode != 0:
+            cli_art.friendly_subprocess_error(
+                pdf_result.stderr, "creating the PDF for this resume"
+            )
+            return None
+
+        page_count, size_str = _parse_pdf_result(pdf_result.stdout, pdf_out)
+        if page_count is None:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} Could not verify PDF page count via pypdf -- "
+                "treating as a failure rather than silently passing the 2-page rule.",
+                soft_wrap=True,
+            )
+            return None
+        return (page_count, pdf_result, size_str)
+
+    def _apply_llm_trim_step(
+        self,
+        build_prompt,
+        bullet_tuples,
+        edu_schema_properties,
+        edu_schema_required,
+        html_out,
+        max_trim_attempts,
+        page_count,
+        resume_data,
+        role_bullet_maximums,
+        role_bullet_minimums,
+        role_roster,
+        size_str,
+        style_rules_for_validation,
+        trim_attempt,
+        trim_instructions,
+    ):
+        """Extracted step of build_tailored_resume."""
+        cli_art.print_literal(
+            f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), applying trim step {trim_attempt + 1}/{max_trim_attempts}..."
+        )
+        trim_contents = (
+            f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
+            f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt](resume_data)}"
+        )
+        trim_text, trim_usage = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=build_prompt,
+            contents=trim_contents,
+            response_schema=TemplateSchema,
+            extra_schema_properties=edu_schema_properties,
+            extra_required=edu_schema_required,
+            temperature=0.0,
+        )
+        _log_cache_stats(trim_usage, 0, 0)
+        trimmed = GeminiClient.parse_json(trim_text or "")
+        if not trimmed:
+            # A transient failure here (e.g. all of GeminiClient.generate()'s
+            # own inner retries/fallback exhausted) shouldn't burn the whole
+            # trim loop -- unlike the violations-found branch below, this
+            # point is reached before trim_attempt is incremented, so it
+            # must be bumped here too or `continue` would spin on the same
+            # index forever.
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Trim attempt {trim_attempt + 1}/{max_trim_attempts} returned unparseable JSON; "
+                f"keeping prior resume_data and retrying if attempts remain.",
+                soft_wrap=True,
+            )
+            trim_attempt += 1
+            return resume_data, trim_attempt
+
+        trimmed_resume_data = normalize_resume.normalize(trimmed)
+        trim_violations = validate_resume.validate(
+            trimmed_resume_data,
+            style_rules_for_validation,
+            role_roster,
+            role_bullet_minimums,
+            role_bullet_maximums=role_bullet_maximums,
+            bullet_tuples=bullet_tuples,
+        )
+        if trim_violations:
+            cli_art.console.print(
+                f"  {cli_art.WARNING} Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
+                f"validator violation(s); discarding this trim and keeping the prior resume_data:",
+                soft_wrap=True,
+            )
+            for v in trim_violations:
+                cli_art.print_literal(f"    - {cli_art._escape_markup(v)}")
+            trim_attempt += 1
+            return resume_data, trim_attempt
+
+        resume_data = trimmed_resume_data
+        render_html(resume_data, html_out)
+        trim_attempt += 1
+        return (resume_data, trim_attempt)
+
+    def _condense_page1_overflow(
+        self,
+        MAX_PAGE1_CONDENSE_ATTEMPTS,
+        _p_yaml,
+        build_prompt,
+        bullet_tuples,
+        edu_schema_properties,
+        edu_schema_required,
+        html_out,
+        overflow_roles,
+        page1_condense_attempt,
+        page1_condense_last_violations,
+        resume_data,
+        role_bullet_maximums,
+        role_bullet_minimums,
+        role_roster,
+        style_rules_for_validation,
+    ):
+        """Extracted step of build_tailored_resume."""
+        page1_condense_attempt += 1
+        cli_art.print_literal(
+            f"  {', '.join(overflow_roles)} spilled onto page 2 with room to spare on "
+            f"page 1 (job entries never split across pages); condensing wording to "
+            f"reclaim space (attempt {page1_condense_attempt}/{MAX_PAGE1_CONDENSE_ATTEMPTS})..."
+        )
+        condense_instruction = _page1_condense_instruction(
+            resume_data, _p_yaml, overflow_roles
+        )
+        if page1_condense_last_violations:
+            condense_instruction += (
+                "\n\nThe previous attempt at this same instruction was discarded for "
+                "introducing these validator violation(s) -- do not repeat them, and "
+                "do not touch SKILLS or any section not named above:\n"
+                + "\n".join(f"- {v}" for v in page1_condense_last_violations)
+            )
+        condense_contents = (
+            f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
+            f"=== TRIM INSTRUCTION (apply only this step) ===\n{condense_instruction}"
+        )
+        # Escalate off temperature=0.0 on a repeat attempt -- a
+        # deterministic call given the identical prompt otherwise
+        # returns the identical (already-discarded) response.
+        condense_temperature = (
+            0.0
+            if page1_condense_attempt == 1
+            else min(0.2 + 0.15 * (page1_condense_attempt - 2), 0.8)
+        )
+        condense_text, condense_usage = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=build_prompt,
+            contents=condense_contents,
+            response_schema=TemplateSchema,
+            extra_schema_properties=edu_schema_properties,
+            extra_required=edu_schema_required,
+            temperature=condense_temperature,
+        )
+        _log_cache_stats(condense_usage, 0, 0)
+        condensed = GeminiClient.parse_json(condense_text or "")
+        if condensed:
+            # The condense instruction only asks for wording changes to
+            # specific EXPERIENCE bullets, but SKILLS kept drifting
+            # anyway (e.g. adding "AI-Driven Ideation"), repeatedly
+            # tripping the same dead-band/hallucinated-skill violation
+            # across attempts despite being told not to touch it.
+            # Enforce the scope instead of relying on instruction-
+            # following alone.
+            condensed["SKILLS"] = resume_data.get("SKILLS")
+            condense_targets = {
+                b for _, _, b in _page1_condense_targets(resume_data, _p_yaml)
+            }
+            condensed_resume_data = _merge_condensed_bullets(
+                resume_data,
+                normalize_resume.normalize(condensed),
+                condense_targets,
+            )
+            _validate_kwargs: dict[str, Any] = {
+                "role_bullet_maximums": role_bullet_maximums,
+                "bullet_tuples": bullet_tuples,
+            }
+            baseline_violations = validate_resume.validate(
+                resume_data,
+                style_rules_for_validation,
+                role_roster,
+                role_bullet_minimums,
+                **_validate_kwargs,
+            )
+            condense_violations = _newly_introduced(
+                validate_resume.validate(
+                    condensed_resume_data,
+                    style_rules_for_validation,
+                    role_roster,
+                    role_bullet_minimums,
+                    **_validate_kwargs,
+                ),
+                baseline_violations,
+            )
+            if condensed_resume_data == resume_data:
+                condense_violations = condense_violations or [
+                    "No targeted bullet was shortened -- rewrite at least one listed bullet to 108 characters or fewer."
+                ]
+            if condense_violations and condensed_resume_data != resume_data:
+                # One widow among four shortened bullets used to throw
+                # away all four, so every attempt of a 2026-09-16
+                # build was discarded. Keep each edit that is clean
+                # on its own.
+                partial = _keep_clean_bullet_edits(
+                    resume_data,
+                    condensed_resume_data,
+                    lambda data: _newly_introduced(
+                        validate_resume.validate(
+                            data,
+                            style_rules_for_validation,
+                            role_roster,
+                            role_bullet_minimums,
+                            **_validate_kwargs,
+                        ),
+                        baseline_violations,
+                    ),
+                )
+                if partial != resume_data:
+                    cli_art.print_literal(
+                        f"  Kept the condensed bullets that passed validation; "
+                        f"{len(condense_violations)} violating edit(s) reverted."
+                    )
+                    condensed_resume_data, condense_violations = partial, []
+            if not condense_violations:
+                resume_data = condensed_resume_data
+                render_html(resume_data, html_out)
+                page1_condense_last_violations = []
+                return (
+                    page1_condense_attempt,
+                    page1_condense_last_violations,
+                    resume_data,
+                )
+            cli_art.console.print(
+                f"  {cli_art.WARNING} Condense attempt introduced "
+                f"{len(condense_violations)} validator violation(s); discarding and "
+                "retrying if attempts remain:",
+                soft_wrap=True,
+            )
+            for v in condense_violations:
+                cli_art.print_literal(f"    - {cli_art._escape_markup(v)}")
+            page1_condense_last_violations = condense_violations
+        return (page1_condense_attempt, page1_condense_last_violations, resume_data)
+
+    def _backfill_why_section(
+        self,
+        MAX_WHY_BACKFILL_ATTEMPTS,
+        build_prompt,
+        bullet_tuples,
+        html_out,
+        page_count,
+        research_block,
+        resume_data,
+        role_bullet_maximums,
+        role_bullet_minimums,
+        role_roster,
+        style_rules_for_validation,
+        why_backfill_attempt,
+        why_backfill_last_violations,
+    ):
+        """Extracted step of build_tailored_resume."""
+        why_backfill_attempt += 1
+        cli_art.print_literal(
+            f"  PDF is {page_count} page(s) with room to spare and company research "
+            f"is available; backfilling the omitted Why section "
+            f"(attempt {why_backfill_attempt}/{MAX_WHY_BACKFILL_ATTEMPTS})..."
+        )
+        why_instruction = _why_backfill_instruction(resume_data, research_block)
+        if why_backfill_last_violations:
+            why_instruction += (
+                "\n\nThe previous attempt at this same instruction was discarded for "
+                "introducing these validator violation(s) -- do not repeat them, and "
+                "do not touch any field other than SECTION_WHY/WHY_TEXT:\n"
+                + "\n".join(f"- {v}" for v in why_backfill_last_violations)
+            )
+        why_contents = (
+            f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
+            f"=== TASK ===\n{why_instruction}"
+        )
+        # Escalate off temperature=0.0 on a repeat attempt -- a
+        # deterministic call given the identical prompt otherwise
+        # returns the identical (already-discarded) response.
+        why_temperature = (
+            0.0
+            if why_backfill_attempt == 1
+            else min(0.2 + 0.15 * (why_backfill_attempt - 2), 0.8)
+        )
+        why_text_resp, why_usage = GeminiClient.generate(
+            model=BUILDER_MODEL,
+            system_instruction=build_prompt,
+            contents=why_contents,
+            response_schema=WhyBackfillSchema,
+            temperature=why_temperature,
+        )
+        _log_cache_stats(why_usage, 0, 0)
+        why_fields = GeminiClient.parse_json(why_text_resp or "")
+        if why_fields and why_fields.get("WHY_TEXT"):
+            # Compare against the resume's own pre-backfill violations,
+            # not an absolute zero -- resume_data can already carry
+            # latent violations unrelated to Why (e.g. a bullet widow
+            # that slipped through an earlier step), and treating
+            # those as "introduced by this backfill" would wrongly
+            # discard a perfectly good Why section forever.
+            why_baseline_violations = set(
+                validate_resume.validate(
+                    resume_data,
+                    style_rules_for_validation,
+                    role_roster,
+                    role_bullet_minimums,
+                    role_bullet_maximums=role_bullet_maximums,
+                    bullet_tuples=bullet_tuples,
+                )
+            )
+            candidate_resume_data = dict(resume_data)
+            candidate_resume_data["SECTION_WHY"] = why_fields.get("SECTION_WHY", "")
+            candidate_resume_data["WHY_TEXT"] = why_fields.get("WHY_TEXT", "")
+            all_violations = validate_resume.validate(
+                candidate_resume_data,
+                style_rules_for_validation,
+                role_roster,
+                role_bullet_minimums,
+                role_bullet_maximums=role_bullet_maximums,
+                bullet_tuples=bullet_tuples,
+            )
+            why_violations = [
+                v for v in all_violations if v not in why_baseline_violations
+            ]
+            if not why_violations:
+                # If this pushes the page count past 2, the existing
+                # dropped_why trim step below removes it again on a
+                # later iteration -- no separate revert path needed.
+                resume_data = candidate_resume_data
+                render_html(resume_data, html_out)
+                why_backfill_last_violations = []
+                return (resume_data, why_backfill_attempt, why_backfill_last_violations)
+            cli_art.console.print(
+                f"  {cli_art.WARNING} Why-section backfill introduced "
+                f"{len(why_violations)} validator violation(s); discarding and "
+                "retrying if attempts remain:",
+                soft_wrap=True,
+            )
+            for v in why_violations:
+                cli_art.print_literal(f"    - {cli_art._escape_markup(v)}")
+            why_backfill_last_violations = why_violations
+        return (resume_data, why_backfill_attempt, why_backfill_last_violations)
+
     def build_tailored_resume(
         self,
         jd_path: str,
@@ -7492,101 +9279,26 @@ class ResumeEngine:
         cli_art.console.rule(
             "Step 1: Extracting JD keywords...", style="dim", align="left"
         )
-        jd_keywords = checkpoint.get("jd_keywords")
-        if jd_keywords is not None:
-            cli_art.print_literal("  Resuming: using JD keywords from checkpoint.")
-        else:
-            extract_prompt = self.load_prompt("extract_keywords.md")
-            with cli_art.thinking_status("Extracting keywords with Gemini..."):
-                keyword_text, _ = GeminiClient.generate(
-                    model=BUILDER_MODEL,
-                    system_instruction=extract_prompt,
-                    contents=f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===",
-                    response_schema=JDKeywordSchema,
-                    temperature=0.0,
-                )
-            jd_keywords = GeminiClient.parse_json(keyword_text or "")
-            if not jd_keywords:
-                # Stop here, deliberately. Empty keyword extraction is a strong,
-                # already-paid-for signal that this file isn't a job description
-                # -- and the very next step is a 30-bullet Gemma audit gated at
-                # GEMMA_MIN_INTERVAL_SECS, i.e. half an hour of wall clock and
-                # real spend before anything JD-specific happens. Pointing the
-                # tool at the wrong file is an ordinary mistake; it shouldn't
-                # cost that. Interactive callers may override; batch marks the
-                # JD failed and moves to the next one.
-                cli_art.console.print(
-                    f"  {theme.colorize_icon('error')} JD keyword extraction returned nothing.",
-                    soft_wrap=True,
-                )
-                cli_art.print_literal(
-                    "    This usually means the file isn't a job description "
-                    "(wrong path, an empty export, or a login/error page saved as text)."
-                )
-                if not (interactive and _confirm_continue_without_keywords()):
-                    cli_art.print_literal(
-                        "    Stopping before the bullet audit. Nothing was spent on this file beyond Step 1."
-                    )
-                    return None
-                cli_art.print_literal(
-                    "    Continuing at your request, with empty keywords."
-                )
-            checkpoint["jd_keywords"] = jd_keywords
-            jd_manager.save_checkpoint(job_key, checkpoint)
-        jd_keywords = _drop_target_role_titles(
-            jd_keywords, profile_paths.profile_yaml() or {}
+        jd_keywords = self._extract_jd_keywords_step(
+            checkpoint=checkpoint,
+            interactive=interactive,
+            jd_text=jd_text,
+            job_key=job_key,
         )
-        cli_art.print_literal(
-            f"  Keywords extracted: {_summarize_keywords(jd_keywords)}"
-        )
-        cli_art.print_literal()
-
-        if interactive and jd_keywords:
-            confirm_jd_skill_gaps_interactively(jd_keywords, checkpoint, job_key)
-
-        # --- Step 2: Mine bullet bank ---
+        if jd_keywords is _ABORT_BUILD:
+            return None
         cli_art.console.rule("Step 2: Mining bullet bank...", style="dim", align="left")
-        bullet_tuples = checkpoint.get("bullet_tuples")
-        if bullet_tuples is not None:
-            cli_art.print_literal(
-                f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint."
+        bullet_tuples, research, research_block, vocabulary_substitutions = (
+            self._mine_and_research(
+                checkpoint=checkpoint,
+                jd_path=jd_path,
+                jd_text=jd_text,
+                job_key=job_key,
+                master_resume=master_resume,
+                situational_candidates=situational_candidates,
+                skip_company_research=skip_company_research,
             )
-        else:
-            bullet_tuples = self.mine_bullet_bank(
-                jd_text,
-                master_resume,
-                extra_company_minimums=situational_roles.bank_minimums_for(
-                    situational_candidates
-                ),
-            )
-            checkpoint["bullet_tuples"] = bullet_tuples
-            jd_manager.save_checkpoint(job_key, checkpoint)
-        cli_art.print_literal(f"  {len(bullet_tuples)} bullet tuples retrieved.")
-        # --- Step 2b: Load company research and vocabulary substitutions early ---
-        research = None if skip_company_research else jd_manager.read_research(jd_path)
-        if skip_company_research:
-            cli_art.print_literal(
-                "  No employer on this build -- skipping company research and the Why section."
-            )
-        elif research:
-            cli_art.console.print(
-                f"  {theme.colorize_icon('success')} Loaded saved company research from JD.",
-                soft_wrap=True,
-            )
-        else:
-            jd_data = _parse_jd_data(jd_text)
-            research = self.research_company(jd_data, jd_text)
-            if research:
-                jd_manager.save_research(jd_path, research)
-
-        vocabulary_substitutions = (research or {}).get("vocabulary_substitutions", [])
-        checkpoint["vocabulary_substitutions"] = vocabulary_substitutions
-        jd_manager.save_checkpoint(job_key, checkpoint)
-        # Built here, not in Step 4's fresh-build branch: Step 7's Why
-        # backfill reads it too, and a checkpoint-resumed run skips that
-        # branch -- a NameError on exactly the runs closest to finishing.
-        research_block = format_company_research_block(research) if research else ""
-
+        )
         # --- Step 3: Audit and refine bullets ---
         cli_art.console.rule("Step 3: Auditing bullets...", style="dim", align="left")
         static_prefix = self.build_audit_static_prefix()
@@ -7634,6 +9346,334 @@ class ResumeEngine:
         bullet_companies = [company for _, company in paired]
 
         # --- Step 4: Build resume ---
+        (
+            _p_yaml,
+            build_prompt,
+            edu_schema_properties,
+            edu_schema_required,
+            role_bullet_maximums,
+            role_bullet_minimums,
+            role_metadata,
+            role_roster,
+            style_rules_for_validation,
+        ) = self._prepare_build_inputs()
+        resume_data = checkpoint.get("resume_data")
+        if resume_data is not None:
+            cli_art.print_literal("  Resuming: using resume JSON from checkpoint.")
+        else:
+            _step = self._build_initial_resume(
+                _p_yaml=_p_yaml,
+                build_prompt=build_prompt,
+                bullet_companies=bullet_companies,
+                bullet_tuples=bullet_tuples,
+                checkpoint=checkpoint,
+                edu_schema_properties=edu_schema_properties,
+                edu_schema_required=edu_schema_required,
+                jd_keywords=jd_keywords,
+                jd_text=jd_text,
+                job_key=job_key,
+                master_resume=master_resume,
+                refined_bullets=refined_bullets,
+                research=research,
+                research_block=research_block,
+                role_bullet_maximums=role_bullet_maximums,
+                role_bullet_minimums=role_bullet_minimums,
+                role_metadata=role_metadata,
+                role_roster=role_roster,
+                situational_candidates=situational_candidates,
+                style_rules_for_validation=style_rules_for_validation,
+            )
+            if _step is None:
+                return {}
+            resume_data = _step
+        # --- Step 5: Post-build holistic critique ---
+        cli_art.console.rule(
+            "Step 5: Running holistic resume critique...", style="dim", align="left"
+        )
+        critique_data = checkpoint.get("critique_data")
+        if critique_data is not None:
+            cli_art.print_literal(
+                "  Resuming: using holistic critique from checkpoint."
+            )
+            resume_data["_critique"] = critique_data
+        else:
+            self._run_holistic_critique(
+                checkpoint=checkpoint,
+                jd_text=jd_text,
+                job_key=job_key,
+                resume_data=resume_data,
+                static_prefix=static_prefix,
+            )
+
+        # --- Step 5.5: Apply actionable recommendations, one at a time ---
+        # Only recommendations that are concrete edits to this resume's own
+        # content get applied (e.g. "name the specific AI tools used" or
+        # "emphasize the target title in the summary") -- anything the
+        # holistic critique recommended that describes an action outside the
+        # document itself (networking, referrals, applying elsewhere) is left
+        # alone. Each recommendation gets its own call and its own
+        # validate-or-discard check (same safety net as the trim loop below)
+        # -- a violation introduced by one recommendation only throws away
+        # that one attempt, not the other recommendations already applied
+        # earlier in the same run.
+        resume_data = self._review_and_apply_critique(
+            build_prompt=build_prompt,
+            bullet_tuples=bullet_tuples,
+            checkpoint=checkpoint,
+            edu_schema_properties=edu_schema_properties,
+            edu_schema_required=edu_schema_required,
+            interactive=interactive,
+            job_key=job_key,
+            resume_data=resume_data,
+            role_bullet_maximums=role_bullet_maximums,
+            role_bullet_minimums=role_bullet_minimums,
+            role_roster=role_roster,
+            static_prefix=static_prefix,
+            style_rules_for_validation=style_rules_for_validation,
+        )
+        resume_data = self._finalize_resume_text(
+            checkpoint=checkpoint,
+            jd_keywords=jd_keywords,
+            resume_data=resume_data,
+            style_rules_for_validation=style_rules_for_validation,
+        )
+
+        # --- Step 6: Save output ---
+        output_path = os.path.join(self.output_json_dir, output_filename)
+        try:
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(resume_data, f, indent=2, ensure_ascii=False)
+            cli_art.print_literal(
+                f"\n  Resume saved to: {cli_art._escape_markup(output_path)}"
+            )
+        except Exception as e:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Could not save resume JSON: {e}",
+                soft_wrap=True,
+            )
+
+        # --- Step 7: Render HTML + Generate PDF ---
+        cli_art.console.rule(
+            "Step 7: Rendering HTML and generating PDF...", style="dim", align="left"
+        )
+        # The JSON honors an explicit output_filename but the HTML/PDF/DOCX
+        # used to re-derive their own stem from jd_path, so a caller that
+        # named its JSON got differently-named siblings -- the recruiter
+        # build wrote Recruiter_Resume.json beside a DominickColosimo_Resume.pdf
+        # that overwrote an unrelated build. Deriving the stem from the
+        # filename actually used keeps all four in step. No-op for normal
+        # runs: output_filename defaults to this same stem above.
+        if output_filename and output_filename.endswith("_Resume.json"):
+            stem = output_filename[: -len("_Resume.json")]
+        else:
+            stem = _build_output_stem(jd_path)
+        html_out = os.path.join(self.output_html_dir, f"{stem}_Resume.html")
+        pdf_out = os.path.join(self.output_pdf_dir, f"{stem}_Resume.pdf")
+        pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
+
+        os.makedirs(os.path.dirname(html_out), exist_ok=True)
+        os.makedirs(os.path.dirname(pdf_out), exist_ok=True)
+
+        render_html(resume_data, html_out)
+
+        _step = self._render_with_page_fit(
+            _p_yaml=_p_yaml,
+            build_prompt=build_prompt,
+            bullet_tuples=bullet_tuples,
+            edu_schema_properties=edu_schema_properties,
+            edu_schema_required=edu_schema_required,
+            html_out=html_out,
+            pdf_out=pdf_out,
+            pdf_script=pdf_script,
+            research=research,
+            research_block=research_block,
+            resume_data=resume_data,
+            role_bullet_maximums=role_bullet_maximums,
+            role_bullet_minimums=role_bullet_minimums,
+            role_roster=role_roster,
+            style_rules_for_validation=style_rules_for_validation,
+        )
+        if _step is None:
+            return {}
+        max_trim_attempts, page_count, resume_data = _step
+        _step = self._validate_rendered_outputs(
+            jd_keywords=jd_keywords,
+            max_trim_attempts=max_trim_attempts,
+            output_path=output_path,
+            page_count=page_count,
+            pdf_out=pdf_out,
+            resume_data=resume_data,
+            stem=stem,
+        )
+        if _step is None:
+            return {}
+        docx_out = _step
+        coverage = self._report_keyword_coverage(
+            jd_keywords=jd_keywords, jd_path=jd_path, resume_data=resume_data
+        )
+        if not os.path.exists(pdf_out):
+            cli_art.console.print(
+                f"  {theme.colorize_icon('error')} Pipeline did not complete -- expected PDF not found on disk: {pdf_out}",
+                soft_wrap=True,
+            )
+            return {}
+
+        cli_art.console.print(
+            f"  {theme.colorize_icon('success')} Pipeline complete! PDF → {pdf_out}",
+            soft_wrap=True,
+        )
+        jd_manager.delete_checkpoint(job_key)
+        resume_data["_output_paths"] = {
+            "json": output_path,
+            "html": html_out,
+            "pdf": pdf_out,
+            "docx": docx_out,
+        }
+        resume_data["_page_count"] = page_count
+        os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
+
+        logger.info(f"build_tailored_resume completed successfully: {job_key}")
+
+        # Record any still-missing keywords to the verified skills ledger for
+        # NEXT time, without offering to rebuild THIS run. Previously this
+        # auto-offered (and defaulted to yes on) a full from-scratch rebuild
+        # -- re-mining the bank and re-running the builder, a second real
+        # API cost -- every time the finished-resume coverage check found
+        # something Step 1.5's confirm_jd_skill_gaps_interactively() (the
+        # pre-build prompt) hadn't already asked about. Since
+        # find_unverified_jd_skill_gaps() now checks the same
+        # tools/hard_skills/core_functions universe check_keyword_coverage()
+        # does (2026-09-06 fix), this list should usually already be empty
+        # by the time we get here; confirming here is a safety net for the
+        # cases it doesn't catch (e.g. ATS text-matching quirks), not a
+        # second full prompt-and-rebuild cycle.
+        if interactive and coverage["missing"]:
+            confirmed_skills = confirm_missing_coverage_keywords_interactively(
+                coverage["missing"]
+            )
+            if confirmed_skills:
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('hint')} Saved for next build -- "
+                    f"run `resume run {jd_path}` again if you want this resume "
+                    f"to reflect {'them' if len(confirmed_skills) > 1 else 'it'}.",
+                    soft_wrap=True,
+                )
+
+        return cast(dict, resume_data)
+
+    def _extract_jd_keywords_step(self, checkpoint, interactive, jd_text, job_key):
+        """Extracted step of build_tailored_resume."""
+        jd_keywords = checkpoint.get("jd_keywords")
+        if jd_keywords is not None:
+            cli_art.print_literal("  Resuming: using JD keywords from checkpoint.")
+        else:
+            extract_prompt = self.load_prompt("extract_keywords.md")
+            with cli_art.thinking_status("Extracting keywords with Gemini..."):
+                keyword_text, _ = GeminiClient.generate(
+                    model=BUILDER_MODEL,
+                    system_instruction=extract_prompt,
+                    contents=f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===",
+                    response_schema=JDKeywordSchema,
+                    temperature=0.0,
+                )
+            jd_keywords = GeminiClient.parse_json(keyword_text or "")
+            if not jd_keywords:
+                # Stop here, deliberately. Empty keyword extraction is a strong,
+                # already-paid-for signal that this file isn't a job description
+                # -- and the very next step is a 30-bullet Gemma audit gated at
+                # GEMMA_MIN_INTERVAL_SECS, i.e. half an hour of wall clock and
+                # real spend before anything JD-specific happens. Pointing the
+                # tool at the wrong file is an ordinary mistake; it shouldn't
+                # cost that. Interactive callers may override; batch marks the
+                # JD failed and moves to the next one.
+                cli_art.console.print(
+                    f"  {theme.colorize_icon('error')} JD keyword extraction returned nothing.",
+                    soft_wrap=True,
+                )
+                cli_art.print_literal(
+                    "    This usually means the file isn't a job description "
+                    "(wrong path, an empty export, or a login/error page saved as text)."
+                )
+                if not (interactive and _confirm_continue_without_keywords()):
+                    cli_art.print_literal(
+                        "    Stopping before the bullet audit. Nothing was spent on this file beyond Step 1."
+                    )
+                    return _ABORT_BUILD
+                cli_art.print_literal(
+                    "    Continuing at your request, with empty keywords."
+                )
+            checkpoint["jd_keywords"] = jd_keywords
+            jd_manager.save_checkpoint(job_key, checkpoint)
+        jd_keywords = _drop_target_role_titles(
+            jd_keywords, profile_paths.profile_yaml() or {}
+        )
+        cli_art.print_literal(
+            f"  Keywords extracted: {_summarize_keywords(jd_keywords)}"
+        )
+        cli_art.print_literal()
+
+        if interactive and jd_keywords:
+            confirm_jd_skill_gaps_interactively(jd_keywords, checkpoint, job_key)
+
+        # --- Step 2: Mine bullet bank ---
+        return jd_keywords
+
+    def _mine_and_research(
+        self,
+        checkpoint,
+        jd_path,
+        jd_text,
+        job_key,
+        master_resume,
+        situational_candidates,
+        skip_company_research,
+    ):
+        """Extracted step of build_tailored_resume."""
+        bullet_tuples = checkpoint.get("bullet_tuples")
+        if bullet_tuples is not None:
+            cli_art.print_literal(
+                f"  Resuming: using {len(bullet_tuples)} bullet tuples from checkpoint."
+            )
+        else:
+            bullet_tuples = self.mine_bullet_bank(
+                jd_text,
+                master_resume,
+                extra_company_minimums=situational_roles.bank_minimums_for(
+                    situational_candidates
+                ),
+            )
+            checkpoint["bullet_tuples"] = bullet_tuples
+            jd_manager.save_checkpoint(job_key, checkpoint)
+        cli_art.print_literal(f"  {len(bullet_tuples)} bullet tuples retrieved.")
+        # --- Step 2b: Load company research and vocabulary substitutions early ---
+        research = None if skip_company_research else jd_manager.read_research(jd_path)
+        if skip_company_research:
+            cli_art.print_literal(
+                "  No employer on this build -- skipping company research and the Why section."
+            )
+        elif research:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('success')} Loaded saved company research from JD.",
+                soft_wrap=True,
+            )
+        else:
+            jd_data = _parse_jd_data(jd_text)
+            research = self.research_company(jd_data, jd_text)
+            if research:
+                jd_manager.save_research(jd_path, research)
+
+        vocabulary_substitutions = (research or {}).get("vocabulary_substitutions", [])
+        checkpoint["vocabulary_substitutions"] = vocabulary_substitutions
+        jd_manager.save_checkpoint(job_key, checkpoint)
+        # Built here, not in Step 4's fresh-build branch: Step 7's Why
+        # backfill reads it too, and a checkpoint-resumed run skips that
+        # branch -- a NameError on exactly the runs closest to finishing.
+        research_block = format_company_research_block(research) if research else ""
+
+        return (bullet_tuples, research, research_block, vocabulary_substitutions)
+
+    def _prepare_build_inputs(self):
+        """Extracted step of build_tailored_resume."""
         cli_art.console.rule("Step 4: Building resume...", style="dim", align="left")
         # BUG: this was loading "build_resume.md", which does not exist in
         # resume-engine/prompts/ -- load_prompt() was silently falling back
@@ -7709,680 +9749,35 @@ class ResumeEngine:
         except Exception:
             role_metadata = {}
 
-        resume_data = checkpoint.get("resume_data")
-        if resume_data is not None:
-            cli_art.print_literal("  Resuming: using resume JSON from checkpoint.")
-        else:
-            kb_context = self.load_knowledge_base()
-
-            # `research` and `research_block` come from Step 2b. Re-running
-            # research_company() here when it came back empty just paid for
-            # the same scrape + grounded-search tiers a second time.
-
-            situational_block = ""
-            if situational_candidates:
-                situational_block = (
-                    "\n\n=== SITUATIONAL ROLE CANDIDATES ===\n"
-                    f"The JD's language matched a deterministic keyword gate for: "
-                    f"{', '.join(situational_candidates)}. These are NOT automatically "
-                    "included -- use your own judgment on whether including one of them, or "
-                    "at most two (each a small, 2-bullet supporting entry), would genuinely "
-                    "help this specific JD, per the Situational/Optional Work History Entries rules. "
-                    "If none would genuinely help, don't include any of them -- this "
-                    "should be rare by construction, not a default."
-                )
-
-            role_rules_block = self.build_role_rules_block(_p_yaml)
-
-            # style_rules.yaml/ai_risk.yaml used to be attached only to the
-            # post-build critique call (Step 5) and polish.py's cover-letter
-            # edit call -- the builder itself relied on tailor_resume.md's own
-            # hard-coded banned-word list, which had already drifted out of
-            # sync with the real ones (see that file's own note). Attaching
-            # the real rubrics here lets the builder avoid these terms at
-            # generation time instead of only getting flagged for them after
-            # the fact. style_rules_for_validation is already loaded above
-            # (unconditionally, for the post-trim gate) -- reused here rather
-            # than loading style_rules.yaml a second time.
-            banned_language_block = (
-                "\n\n=== STYLE RULES (avoid every term in forbidden_phrases below "
-                "-- this is the tested master banned-phrase list) ===\n"
-                f"{json.dumps(style_rules_for_validation)}"
-                "\n\n=== AI RISK SCORING RUBRIC (avoid every term in buzzwords, "
-                "adjective_padding, banned_openers, and banned_phrases below) ===\n"
-                f"{json.dumps(self.load_yaml(self.scoring_dir, 'ai_risk.yaml'))}"
-            )
-
-            # Gap 1: KB goes into system_instruction, not contents, so the
-            # ~105k-token kb_context forms a stable, cacheable prefix if
-            # Gemini's automatic caching kicks in across nearby calls (e.g.
-            # consecutive JDs in batch mode reusing the same kb_context
-            # bytes) -- NOT within this one call, and NOT reused by the
-            # retry/fix loop or trim loop below, both of which deliberately
-            # use build_prompt alone (no kb_context) to keep those calls
-            # cheap. The variable tail (JD + bullets) sits alone in
-            # combined_contents. research_block/situational_block are
-            # appended after kb_context for the same reason -- they're
-            # per-JD variable content, but small enough that keeping them
-            # out of the cacheable prefix costs little and keeps the
-            # prefix identical across JDs targeting different companies.
-            builder_system = (
-                f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}"
-                f"{role_rules_block}{banned_language_block}\n\n"
-                "=== ATS KEYWORD DENSITY INSTRUCTION ===\n"
-                "When crafting SUMMARY_TEXT and selecting verified SKILLS, prioritize verbatim phrases "
-                "from JD KEYWORDS (e.g. use exact domain titles like 'Cybersecurity' or verbatim tool names) "
-                "whenever truthful, maximizing exact ATS keyword density."
-            )
-
-            bullets_block = "\n".join(
-                f"- [{company or 'unknown company'}] {b}"
-                for b, company in zip(refined_bullets, bullet_companies)
-            )
-            try:
-                import skills_menu
-
-                _priority_skills = verified_jd_skills(
-                    jd_keywords,
-                    [
-                        (t.get("name") or "").strip()
-                        for t in (skills_menu._load_verified_tools() or {}).get(
-                            "tools", []
-                        )
-                    ],
-                )
-            except Exception:
-                _priority_skills = []
-            _priority_block = (
-                (
-                    "=== VERIFIED SKILLS THIS JD ASKS FOR ===\n"
-                    "The candidate is verified for every skill below AND the job asks for it. "
-                    "Give each a place in SKILLS before any generic item the JD never names "
-                    '(e.g. drop "Dashboards" to make room for "Report & Dashboard Building"). '
-                    "Keep line-length rules; shorten or cut non-JD items rather than skipping these.\n"
-                    + "\n".join(f"- {k}" for k in _priority_skills)
-                    + "\n\n"
-                )
-                if _priority_skills
-                else ""
-            )
-            combined_contents = (
-                _priority_block + f"=== JD KEYWORDS ===\n{json.dumps(jd_keywords)}\n\n"
-                f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
-                f"=== MASTER RESUME ===\n{json.dumps(master_resume, indent=2)}\n\n"
-                f"=== REFINED BULLETS ===\n{bullets_block}"
-            )
-
-            cli_art.detail(
-                f"  builder_system size: {len(builder_system)} chars / ~{len(builder_system)//4} tokens"
-            )
-            cli_art.detail(
-                f"  combined_contents size: {len(combined_contents)} chars / ~{len(combined_contents)//4} tokens"
-            )
-
-            # Step 3's audit loop just made up to 30 calls; give the free
-            # tier's rolling per-minute token window a moment to recover
-            # before this ~105k-token call (see PRE_BUILDER_SLEEP above).
-            cli_art.detail(
-                f"  Pausing {PRE_BUILDER_SLEEP}s before the builder call to avoid tripping the per-minute token cap...",
-                level=cli_art.NORMAL,
-            )
-            time.sleep(PRE_BUILDER_SLEEP)
-
-            with cli_art.thinking_status("Building custom resume with Gemini..."):
-                resume_text, usage = GeminiClient.generate(
-                    model=BUILDER_MODEL,
-                    system_instruction=builder_system,
-                    contents=combined_contents,
-                    response_schema=TemplateSchema,
-                    extra_schema_properties=edu_schema_properties,
-                    extra_required=edu_schema_required,
-                    temperature=0.0,
-                )
-            _log_cache_stats(usage, 0, 0)
-
-            if not resume_text:
-                cli_art.console.print(
-                    f"  {cli_art.ERROR} Builder returned empty response.",
-                    soft_wrap=True,
-                )
-                return {}
-
-            resume_data = GeminiClient.parse_json(resume_text)
-            if not resume_data:
-                cli_art.console.print(
-                    f"  {cli_art.ERROR} Could not parse builder JSON.", soft_wrap=True
-                )
-                cli_art.console.rule(
-                    "Raw builder response (truncated)", style="dim", align="left"
-                )
-                # Preserve exact text for debugging assertions/tests.
-                cli_art.print_literal(resume_text[:500])
-                return {}
-
-            resume_data = normalize_resume.normalize(resume_data)
-
-            violations = validate_resume.validate(
-                resume_data,
-                style_rules_for_validation,
-                role_roster,
-                role_bullet_minimums,
-                role_bullet_maximums=role_bullet_maximums,
-                bullet_tuples=bullet_tuples,
-            )
-            if violations:
-                cli_art.print_literal(
-                    f"  Validator found {len(violations)} issue(s), attempting surgical zero-token & micro-repairs..."
-                )
-                resume_data, violations = repair_violations_surgically(
-                    resume_data,
-                    violations,
-                    style_rules_for_validation,
-                    role_roster,
-                    role_bullet_minimums,
-                    bullet_tuples,
-                    role_bullet_maximums=role_bullet_maximums,
-                    role_metadata=role_metadata,
-                )
-
-            max_fix_attempts = 4
-            fix_attempt = 0
-            # Hill-climb rather than random-walk. Each retry re-generates the
-            # WHOLE resume (response_schema=TemplateSchema below), so despite
-            # "change nothing else" an attempt is free to regress anything:
-            # observed live 2026-08-12, attempt 2 got within 2 violations of
-            # clean and attempt 3 came back with 5 new bullet widows and 4
-            # roles pushed below their bullet minimums, because it had
-            # silently deleted bullets. Anchoring each attempt (and the final
-            # result) on the best state reached so far makes a bad attempt
-            # cost one turn instead of destroying all prior progress.
-            best_resume_data = resume_data
-            best_violations = violations
-            # Tracks consecutive fix attempts that failed to beat best_violations.
-            # When best never advances, the next attempt re-sends the identical
-            # fix_contents (same resume_data, same violations) -- so at
-            # temperature=0.0 it is GUARANTEED to reproduce the exact same
-            # failed output, burning the remaining attempts on repeats of one
-            # failure rather than distinct tries. Escalating temperature on a
-            # stall breaks the determinism trap without touching the first,
-            # most-likely-to-succeed attempt.
-            #
-            # A modest linear bump (0.2/0.4/0.6) was tried first and observed
-            # live 2026-08-22 NOT to be enough on its own: for a bullet/skills
-            # line the model has decided is "already fine" (usually because it
-            # can't reliably count characters the way the validator does), the
-            # next-token probabilities for reproducing that exact text are so
-            # close to 1.0 that a small temperature increase barely perturbs
-            # them -- 4 attempts came back byte-identical even as temperature
-            # rose from 0.0 to 0.4. Real fix has two parts: escalate harder
-            # once a stall is confirmed (not gradually), and explicitly tell
-            # the model its last output was unchanged -- the arithmetic hint
-            # alone wasn't enough to make it realize it hadn't acted on it.
-            stall_streak = 0
-            prev_round_violations = None
-            while violations and fix_attempt < max_fix_attempts:
-                fix_attempt += 1
-                resume_data, violations = best_resume_data, best_violations
-                exact_repeat = (
-                    prev_round_violations is not None
-                    and violations == prev_round_violations
-                )
-                fix_temperature = (
-                    0.0
-                    if stall_streak == 0
-                    else min(0.4 + 0.2 * (stall_streak - 1), 0.9)
-                )
-                if exact_repeat:
-                    # Full detail was already printed once for this exact
-                    # set of violations -- reprinting it verbatim on every
-                    # stalled retry is exactly the noise that made this
-                    # section unreadable live. One compact line instead.
-                    cli_art.print_literal(
-                        f"  Validator: same {len(violations)} issue(s) as last attempt "
-                        f"(unresolved), attempt {fix_attempt}/{max_fix_attempts}, "
-                        f"retrying at temperature {fix_temperature:.1f}."
-                    )
-                else:
-                    cli_art.print_literal(
-                        f"  Validator found {len(violations)} issue(s), attempt {fix_attempt}/{max_fix_attempts}:"
-                    )
-                    for v in violations:
-                        cli_art.print_literal(f"    - {_condensed_violation(v)}")
-                fix_contents = (
-                    f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
-                    f"=== REFINED BULLETS (source material if an issue requires populating "
-                    f"or fixing Experience/achievements) ===\n{bullets_block}\n\n"
-                )
-                if any(v.startswith("Opening verb") for v in violations):
-                    # Naming only the 2 colliding bullets per violation risks
-                    # whack-a-mole: a replacement verb picked to fix one pair
-                    # can collide with some other, unflagged bullet, since
-                    # uniqueness is a whole-CV constraint, not a pairwise one.
-                    current_verbs = validate_resume.get_opening_verbs(resume_data)
-                    fix_contents += (
-                        f"=== ALL OPENING VERBS CURRENTLY USED ACROSS THE CV ===\n"
-                        f"{', '.join(current_verbs)}\n"
-                        f"When fixing a duplicate-opening-verb issue, the replacement verb must not "
-                        f"appear anywhere in this full list -- not just avoid the two bullets named "
-                        f"in the issue below.\n\n"
-                    )
-                if any(v.startswith("Role roster") for v in violations):
-                    # An absent employer is the one violation the model can't
-                    # fix from the resume JSON alone: the entry it needs to add
-                    # isn't in the document to be edited, and the refined-bullets
-                    # block alone doesn't tell it what title or period to use.
-                    # Observed live -- the roster rule in tailor_resume.md
-                    # restored VML and Callahan Creek across attempts but never
-                    # Element 8 / Strategy LLC, and the loop then exhausted.
-                    # Same idiom as the two blocks around this one: when a
-                    # violation keeps surviving retries, restate what fixing it
-                    # actually requires, here rather than in a huge prompt.
-                    missing = [
-                        v.split("'")[1]
-                        for v in violations
-                        if v.startswith("Role roster") and "'" in v
-                    ]
-                    roster_lines = []
-                    for company in missing:
-                        available = [b for b, c, _t in bullet_tuples if c == company]
-                        roster_lines.append(
-                            f"- {company}: {len(available)} refined bullet(s) already available "
-                            f"for it in the block above. Add the EXPERIENCE entry using them."
-                        )
-                    fix_contents += (
-                        "=== MISSING EMPLOYERS -- ADD THESE ENTRIES ===\n"
-                        "These companies are in the candidate's declared work history but have no\n"
-                        "EXPERIENCE entry in the JSON above. This is not a relevance judgment and\n"
-                        "not a way to save space: omitting a real employer leaves an unexplained\n"
-                        "gap in the work history. Add a complete entry for each, with its title,\n"
-                        "period and bullets, in correct reverse-chronological position. Keep every\n"
-                        "entry that is already present.\n"
-                        + "\n".join(roster_lines)
-                        + "\n\n"
-                    )
-                if any(_is_skills_line_violation(v) for v in violations):
-                    # Repeated Skills-widow violations across retry attempts
-                    # suggest the model needs the fix options spelled out
-                    # again here, not just relying on tailor_resume.md's
-                    # Skills Section Rules buried earlier in a huge prompt.
-                    fix_contents += (
-                        f"=== FIXING A SKILLS LINE WIDOW ===\n"
-                        f"In order of preference: (1) add or remove an item within the category; "
-                        f"(2) shorten or lengthen the category label itself, as long as it still "
-                        f"fairly describes the items (e.g. 'CRM Strategy & Operations' -> 'CRM & "
-                        f"Operations'); (3) pull in 1-2 more genuinely-held skills from "
-                        f"summaries-and-skills-clean.csv or verified_tools.json, even if the JD "
-                        f"didn't ask for them, as long as they fit the category and archetype.\n\n"
-                    )
-                if any(_is_bullet_widow_violation(v) for v in violations):
-                    # Mirrors the Skills-widow block above: repeated bullet-widow
-                    # violations across retry attempts mean the model can't
-                    # reliably count characters from prose alone, so restate the
-                    # exact arithmetic here instead of a vague "tighten it".
-                    limits = style_rules_for_validation.get("bullet_structure", {})
-                    one_liner_max = limits.get("one_liner_max_chars", 108)
-                    widow_min_words = limits.get("widow_min_words", 5)
-                    exp_bullets = [
-                        b
-                        for job in resume_data.get("EXPERIENCE", [])
-                        for b in job.get("achievements", [])
-                    ]
-                    widow_details = [
-                        f"- {len(b)} chars, {wc}-word widow: {b!r}"
-                        for b, wc in validate_resume.bullets_with_short_widow(
-                            exp_bullets, style_rules_for_validation
-                        )
-                    ]
-                    fix_contents += (
-                        f"=== FIXING A BULLET WIDOW ===\n"
-                        f"Each bullet below wraps to a 2nd line at the {one_liner_max}-char mark but "
-                        f"leaves fewer than {widow_min_words} words there. Either (1) trim it to "
-                        f"{one_liner_max} chars or fewer so it fits on one line, or (2) lengthen it "
-                        f"well past {one_liner_max} chars so the 2nd line carries at least "
-                        f"{widow_min_words} words -- don't leave it in the narrow band between those "
-                        f"two targets.\n" + "\n".join(widow_details) + "\n\n"
-                    )
-                if _needs_metric_inventory(violations):
-                    # Same whack-a-mole risk as the Opening Verb block above,
-                    # and the reason it's needed here too: observed live --
-                    # lengthening a bullet to fix the widow violation above
-                    # pulled in "100+" as filler, colliding with a "100+"
-                    # already used in an unrelated bullet.
-                    current_metrics = validate_resume.get_all_metrics(resume_data)
-                    fix_contents += (
-                        f"=== ALL METRICS CURRENTLY USED ACROSS THE CV ===\n"
-                        f"{', '.join(current_metrics)}\n"
-                        f"When fixing a duplicate-metric issue, or adding filler content to "
-                        f"lengthen a bullet for the widow fix above, the number used must not "
-                        f"already appear anywhere in this list.\n\n"
-                    )
-                if any("Hallucinated skill or tool" in v for v in violations):
-                    fix_contents += (
-                        f"=== FIXING A HALLUCINATED TOOL OR SKILL ===\n"
-                        f"Every tool and skill in the SKILLS section and EXPERIENCE bullets MUST come strictly "
-                        f"from verified_tools.json or profile.yml. Remove any unverified, invented, or generic "
-                        f"phrases not explicitly grounded in the candidate's verified profile.\n\n"
-                    )
-                if exact_repeat:
-                    # The arithmetic hints above (exact char counts, the
-                    # illegal dead-band) were already present last round and
-                    # weren't enough on their own -- the model's most common
-                    # failure mode here isn't ignoring the rule, it's judging
-                    # the existing text as already compliant and passing it
-                    # through unedited. Name that explicitly, since "here's
-                    # the same math again" doesn't fix a problem that was
-                    # never a math problem in the first place.
-                    fix_contents += (
-                        f"=== YOUR LAST ATTEMPT DID NOT CHANGE THIS TEXT ===\n"
-                        f"The issue(s) below are byte-for-byte identical to what you returned "
-                        f"last attempt -- the text was not edited at all. Whatever you believe "
-                        f"about its current length, it still measures as a violation. You must "
-                        f"produce genuinely different wording for every line listed below, not "
-                        f"re-affirm the same text.\n\n"
-                    )
-                fix_contents += (
-                    f"=== ISSUES TO FIX (change nothing else) ===\n"
-                    + "\n".join(f"- {v}" for v in violations)
-                )
-                fix_text, fix_usage = GeminiClient.generate(
-                    model=BUILDER_MODEL,
-                    system_instruction=build_prompt,
-                    contents=fix_contents,
-                    response_schema=TemplateSchema,
-                    extra_schema_properties=edu_schema_properties,
-                    extra_required=edu_schema_required,
-                    temperature=fix_temperature,
-                )
-                _log_cache_stats(fix_usage, 0, 0)
-                fixed = GeminiClient.parse_json(fix_text or "")
-                if not fixed:
-                    # A transient failure here (e.g. all of GeminiClient.generate()'s
-                    # own inner retries/fallback exhausted) shouldn't burn the whole
-                    # outer fix loop -- fix_attempt was already incremented above, so
-                    # continuing just moves on to the next outer attempt with the
-                    # same (unchanged) violations, rather than giving up after one
-                    # network hiccup with attempts still remaining.
-                    cli_art.console.print(
-                        f"  {theme.colorize_icon('warning')} Fix attempt {fix_attempt}/{max_fix_attempts} returned unparseable JSON; keeping prior resume_data and retrying if attempts remain.",
-                        soft_wrap=True,
-                    )
-                    # Counts as a stall: otherwise the next attempt re-sends
-                    # the identical call at the same temperature, and a
-                    # deterministic parse failure repeats until attempts run out.
-                    stall_streak += 1
-                    continue
-                resume_data = normalize_resume.normalize(fixed)
-                violations = validate_resume.validate(
-                    resume_data,
-                    style_rules_for_validation,
-                    role_roster,
-                    role_bullet_minimums,
-                    role_bullet_maximums=role_bullet_maximums,
-                    bullet_tuples=bullet_tuples,
-                )
-                if violations:
-                    resume_data, violations = repair_violations_surgically(
-                        resume_data,
-                        violations,
-                        style_rules_for_validation,
-                        role_roster,
-                        role_bullet_minimums,
-                        bullet_tuples,
-                        role_bullet_maximums=role_bullet_maximums,
-                        role_metadata=role_metadata,
-                    )
-                if len(violations) < len(best_violations):
-                    best_resume_data, best_violations = resume_data, violations
-                    stall_streak = 0
-                else:
-                    stall_streak += 1
-                prev_round_violations = violations
-
-            resume_data, violations = best_resume_data, best_violations
-
-            # Last deterministic pass before giving up. An unverified tool in
-            # SKILLS is removable without a model call, yet a data-science
-            # sample failed twice on 2026-09-14 with only such violations left
-            # (Snowflake/Redshift/Docker, then Spark/Snowflake/Prototyping) --
-            # the retry loop kept re-adding them and the build returned {}.
-            if violations and any(
-                "Hallucinated skill or tool" in v for v in violations
-            ):
-                resume_data, violations = repair_violations_surgically(
-                    resume_data,
-                    violations,
-                    style_rules_for_validation,
-                    role_roster,
-                    role_bullet_minimums,
-                    bullet_tuples,
-                    role_bullet_maximums=role_bullet_maximums,
-                    role_metadata=role_metadata,
-                )
-
-            if violations:
-                fatal_violations, soft_warnings = partition_violations(violations)
-                if fatal_violations:
-                    cli_art.console.print(
-                        f"  {theme.colorize_icon('error')} Validator still found {len(fatal_violations)} fatal issue(s) after {max_fix_attempts} attempts:",
-                        soft_wrap=True,
-                    )
-                    for v in fatal_violations:
-                        cli_art.print_literal(f"    - {v}")
-                    return {}
-                else:
-                    cli_art.console.print(
-                        f"  {theme.colorize_icon('warning')} {len(soft_warnings)} non-fatal warning(s) remain after {max_fix_attempts} attempts; proceeding with build:",
-                        soft_wrap=True,
-                    )
-                    for v in soft_warnings:
-                        cli_art.print_literal(f"    - {v}")
-
-            checkpoint["resume_data"] = resume_data
-            # Persisted (rather than read off `research` at the Step 6 call
-            # site) because `research` only exists in this fresh-build
-            # branch -- a resumed run enters at the `resume_data is not
-            # None` branch above and would otherwise both NameError and
-            # silently lose the substitution.
-            checkpoint["vocabulary_substitutions"] = (research or {}).get(
-                "vocabulary_substitutions", []
-            )
-            jd_manager.save_checkpoint(job_key, checkpoint)
-
-        # --- Step 5: Post-build holistic critique ---
-        cli_art.console.rule(
-            "Step 5: Running holistic resume critique...", style="dim", align="left"
+        return (
+            _p_yaml,
+            build_prompt,
+            edu_schema_properties,
+            edu_schema_required,
+            role_bullet_maximums,
+            role_bullet_minimums,
+            role_metadata,
+            role_roster,
+            style_rules_for_validation,
         )
-        critique_data = checkpoint.get("critique_data")
-        if critique_data is not None:
-            cli_art.print_literal(
-                "  Resuming: using holistic critique from checkpoint."
-            )
-            resume_data["_critique"] = critique_data
-        else:
-            critique_prompt = self.load_prompt("critique_resume.md")
-            # B49 (phase-9-backlog.md): critique_resume.md's "Load and Apply"
-            # list names 18 files; only summary_score.yaml/top_third_score.yaml
-            # were ever attached, so its own evaluation Steps 1-6 had no
-            # rubric to score against. `static_prefix` (already built above
-            # for the bullet audit loop) covers item 1 -- profile.yml,
-            # trimmed -- plus voice-anchors.md as a bonus. The remaining 16
-            # named files are attached raw below, not hand-curated per file
-            # the way audit_and_refine_bullets curates its rules bundle:
-            # this call fires once per resume build, not once per bullet, so
-            # the extra ~80KB doesn't multiply the way a per-bullet cost would.
-            rubric_files = [
-                (self.rules_dir, "style_rules.yaml", "STYLE RULES"),
-                (
-                    self.scoring_dir,
-                    "professional_identity_score.yaml",
-                    "PROFESSIONAL IDENTITY SCORING RUBRIC",
-                ),
-                (
-                    self.scoring_dir,
-                    "resume_cohesion_score.yaml",
-                    "RESUME COHESION SCORING RUBRIC",
-                ),
-                (
-                    self.scoring_dir,
-                    "believability.yaml",
-                    "BELIEVABILITY SCORING RUBRIC",
-                ),
-                (
-                    self.scoring_dir,
-                    "experience_structure_score.yaml",
-                    "EXPERIENCE STRUCTURE SCORING RUBRIC",
-                ),
-                (self.scoring_dir, "manager_test.yaml", "MANAGER TEST SCORING RUBRIC"),
-                (self.scoring_dir, "skills_scoring.yaml", "SKILLS SCORING RUBRIC"),
-                (self._role_dna_dir(), "role_dna.yaml", "ROLE DNA SCORING RUBRIC"),
-                (self.scoring_dir, "ats_match.yaml", "ATS MATCH SCORING RUBRIC"),
-                (self.scoring_dir, "ai_risk.yaml", "AI RISK SCORING RUBRIC"),
-                (
-                    self.scoring_dir,
-                    "evidence_alignment.yaml",
-                    "EVIDENCE ALIGNMENT SCORING RUBRIC",
-                ),
-                (
-                    self.scoring_dir,
-                    "summary_patterns.yaml",
-                    "SUMMARY PATTERNS SCORING RUBRIC",
-                ),
-                (
-                    self.scoring_dir,
-                    "certifications_score.yaml",
-                    "CERTIFICATIONS SCORING RUBRIC",
-                ),
-                (
-                    self.scoring_dir,
-                    "recruiter_score.yaml",
-                    "RECRUITER SCORE SCORING RUBRIC",
-                ),
-                (self.scoring_dir, "specificity.yaml", "SPECIFICITY SCORING RUBRIC"),
-                (self.scoring_dir, "summary_score.yaml", "SUMMARY SCORING RUBRIC"),
-                (
-                    self.scoring_dir,
-                    "top_third_score.yaml",
-                    "TOP-THIRD-OF-PAGE-ONE SCORING RUBRIC",
-                ),
-            ]
-            rubric_blocks = "".join(
-                f"\n\n{label}:\n{json.dumps(self.load_yaml(dir_path, filename))}"
-                for dir_path, filename, label in rubric_files
-            )
-            critique_system = (
-                f"{critique_prompt}"
-                f"\n\n=== CANDIDATE PROFILE & VOICE (from knowledge base) ===\n{static_prefix}"
-                f"{rubric_blocks}"
-            )
-            critique_contents = (
-                f"=== JOB DESCRIPTION ===\n{jd_text}\n=== END JOB DESCRIPTION ===\n\n"
-                f"=== RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}"
-            )
-            with cli_art.thinking_status("Auditing CV fit and quality with Gemini..."):
-                critique_text, _ = GeminiClient.generate(
-                    model=CRITIQUE_MODEL,
-                    system_instruction=critique_system,
-                    contents=critique_contents,
-                    response_schema=ResumeCritiqueSchema,
-                    temperature=0.0,
-                )
-            if critique_text:
-                critique_data = GeminiClient.parse_json(critique_text)
 
-                # B51 (phase-9-backlog.md): fold any rubric hard-failure/
-                # threshold trip into recommendations so it re-enters the
-                # pipeline through the same apply-and-validate loop Step 5.5
-                # already runs on every other recommendation. Previously
-                # only `recommendations` and `distinctive_moments` re-entered
-                # the pipeline -- a resume tripping a rubric's own stated bar
-                # shipped unchanged.
-                hard_failures = critique_data.get("hard_failures_triggered", []) or []
-                if hard_failures:
-                    critique_data["recommendations"] = list(
-                        critique_data.get("recommendations", []) or []
-                    ) + [f"Fix rubric hard failure -- {hf}" for hf in hard_failures]
-
-                cli_art.console.rule(
-                    "Holistic critique scores", style="dim", align="left"
-                )
-                cli_art.print_literal(
-                    f"summary_alignment : {critique_data.get('summary_alignment_score', '?')}"
-                )
-                cli_art.print_literal(
-                    f"skills_relevance  : {critique_data.get('skills_relevance_score',  '?')}"
-                )
-                cli_art.print_literal(
-                    f"top_third         : {critique_data.get('top_third_score',         '?')}"
-                )
-                cli_art.print_literal(
-                    f"overall_fit       : {critique_data.get('overall_fit_score',        '?')}"
-                )
-                identity_line = critique_data.get("primary_identity", "?")
-                if critique_data.get("secondary_identity"):
-                    identity_line += f" / {critique_data['secondary_identity']}"
-                cli_art.print_literal(f"identity          : {identity_line}")
-                cli_art.print_literal(
-                    f"weakest ATS       : {critique_data.get('weakest_ats_platform', '?')}"
-                )
-                cli_art.print_literal()
-                if hard_failures:
-                    cli_art.console.print(
-                        f"{theme.colorize_icon('error')} Hard rubric failures (added to recommendations):",
-                        soft_wrap=True,
-                    )
-                    for hf in hard_failures:
-                        cli_art.print_literal(f"- {hf}")
-                    cli_art.print_literal()
-                flags = critique_data.get("flags", [])
-                if flags:
-                    cli_art.print_literal("Flags:")
-                    for flag in flags:
-                        cli_art.print_literal(f"- {flag}")
-                    cli_art.print_literal()
-                recs = critique_data.get("recommendations", [])
-                if recs:
-                    cli_art.print_literal("Recommendations:")
-                    for rec in recs:
-                        cli_art.print_literal(f"- {rec}")
-                    cli_art.print_literal()
-                moments = critique_data.get("distinctive_moments", [])
-                if moments:
-                    cli_art.print_literal("Distinctive moments (protected):")
-                    for m in moments:
-                        cli_art.print_literal(f"- {m}")
-                    cli_art.print_literal()
-                flat = critique_data.get("flat_sections", [])
-                if flat:
-                    cli_art.print_literal("Flat sections:")
-                    for f in flat:
-                        cli_art.print_literal(f"- {f}")
-                    cli_art.print_literal()
-                platform_risks = critique_data.get("platform_parsing_risks", [])
-                if platform_risks:
-                    cli_art.print_literal("Platform parsing risks:")
-                    for risk in platform_risks:
-                        cli_art.print_literal(f"- {risk}")
-                    cli_art.print_literal()
-                resume_data["_critique"] = critique_data
-                checkpoint["critique_data"] = critique_data
-                jd_manager.save_checkpoint(job_key, checkpoint)
-            else:
-                cli_art.console.print(
-                    f"  {cli_art.WARNING} Holistic critique returned empty.",
-                    soft_wrap=True,
-                )
-
-        # --- Step 5.5: Apply actionable recommendations, one at a time ---
-        # Only recommendations that are concrete edits to this resume's own
-        # content get applied (e.g. "name the specific AI tools used" or
-        # "emphasize the target title in the summary") -- anything the
-        # holistic critique recommended that describes an action outside the
-        # document itself (networking, referrals, applying elsewhere) is left
-        # alone. Each recommendation gets its own call and its own
-        # validate-or-discard check (same safety net as the trim loop below)
-        # -- a violation introduced by one recommendation only throws away
-        # that one attempt, not the other recommendations already applied
-        # earlier in the same run.
+    def _review_and_apply_critique(
+        self,
+        build_prompt,
+        bullet_tuples,
+        checkpoint,
+        edu_schema_properties,
+        edu_schema_required,
+        interactive,
+        job_key,
+        resume_data,
+        role_bullet_maximums,
+        role_bullet_minimums,
+        role_roster,
+        static_prefix,
+        style_rules_for_validation,
+    ):
+        """Extracted step of build_tailored_resume."""
         recs = (resume_data.get("_critique") or {}).get("recommendations", [])
         # Questions are never edits. critique_resume.md deliberately phrases its
         # voice recommendations as questions aimed at Morgan ("What did you
@@ -8419,210 +9814,35 @@ class ResumeEngine:
             recs = _review_recommendations_interactively(recs, checkpoint, job_key)
 
         if recs or question_recs:
-            state = checkpoint.get("recommendation_actions") or {
-                # Seeded, not appended later: question_recs must survive even
-                # when they were the *only* recommendations, in which case the
-                # apply loop below never runs.
-                "resume_data": resume_data,
-                "applied": [],
-                "skipped": [],
-                "needs_polish": list(question_recs),
-                "next_index": 0,
-            }
-            start_index = state["next_index"]
-            if not recs:
-                pass
-            elif start_index >= len(recs):
-                cli_art.console.rule(
-                    "Step 5.5: Resuming: recommendation pass already complete from checkpoint.",
-                    style="dim",
-                    align="left",
-                )
-            else:
-                cli_art.console.rule(
-                    f"Step 5.5: Applying actionable recommendations one at a time ({start_index}/{len(recs)} already done)...",
-                    style="dim",
-                    align="left",
-                )
-            resume_data = state["resume_data"]
-            applied, skipped = state["applied"], state["skipped"]
-            needs_polish = state.get("needs_polish", [])
-
-            # A recommendation is judged on what IT introduced, never on what
-            # the resume already carried. Step 4 legitimately leaves soft
-            # violations standing -- partition_violations makes vague
-            # magnitudes and filler lines non-fatal, so the build ships with
-            # them -- and comparing each candidate against zero meant a single
-            # leftover discarded EVERY later recommendation as if it had caused
-            # it. Measured on a real build: one stray "significantly" in the
-            # Summary threw away both actionable recommendations, neither of
-            # which touched that sentence. Same baseline subtraction the
-            # Why-section backfill below already does.
-            baseline_violations = validate_resume.validate(
-                resume_data,
-                style_rules_for_validation,
-                role_roster,
-                role_bullet_minimums,
-                role_bullet_maximums=role_bullet_maximums,
+            resume_data = self._apply_critique_recommendations(
+                build_prompt=build_prompt,
                 bullet_tuples=bullet_tuples,
+                checkpoint=checkpoint,
+                edu_schema_properties=edu_schema_properties,
+                edu_schema_required=edu_schema_required,
+                job_key=job_key,
+                protected_block=protected_block,
+                question_recs=question_recs,
+                recs=recs,
+                resume_data=resume_data,
+                role_bullet_maximums=role_bullet_maximums,
+                role_bullet_minimums=role_bullet_minimums,
+                role_roster=role_roster,
+                static_prefix=static_prefix,
+                style_rules_for_validation=style_rules_for_validation,
             )
-
-            for i in range(start_index, len(recs)):
-                rec = recs[i]
-                if i > 0:
-                    time.sleep(RECOMMENDATION_SLEEP)
-                cli_art.print_literal(
-                    f"\n  [{i + 1}/{len(recs)}] {cli_art._escape_markup(rec[:70])}..."
-                )
-                rec_contents = (
-                    f"=== CURRENT RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
-                    f"{protected_block}"
-                    f"=== RECOMMENDATION TO CONSIDER ===\n{rec}\n\n"
-                    f"=== INSTRUCTIONS ===\n"
-                    f"Decide whether the recommendation above is a concrete, actionable edit to "
-                    f"THIS resume's own content (e.g. naming a specific tool, rewording a title/"
-                    f"summary/skills phrase to mirror the JD). If so, apply ONLY this one "
-                    f"recommendation and put its exact original text in applied_recommendations. "
-                    f"When applying edits to summary/skills/bullets, prioritize using verbatim terminology "
-                    f"from the JD keywords and recommendation (e.g. use 'Cybersecurity' instead of generic "
-                    f"'Technical SaaS') when truthful to maximize ATS exact-match density. "
-                    f"If it describes something outside the document itself -- networking, "
-                    f"referrals, applying elsewhere, or any action a person would take rather than "
-                    f"an edit to this resume's text -- change nothing and put its exact original "
-                    f"text in skipped_recommendations instead. If the recommendation asks you to "
-                    f"reveal something personal (e.g. why a project mattered, what felt "
-                    f"satisfying) and the provided background context does NOT already contain a "
-                    f"grounded, verified answer, do not invent one -- change nothing and put its "
-                    f"exact original text in needs_personal_input instead. Return the complete "
-                    f"resume JSON with every field -- change only what this one recommendation "
-                    f"asked for, if anything; leave everything else untouched."
-                )
-                rec_text, rec_usage = GeminiClient.generate(
-                    model=BUILDER_MODEL,
-                    # Unlike the fix/trim loops above (deliberately bare
-                    # build_prompt, no KB, to stay cheap on structural
-                    # fixes), these calls make content-quality edits --
-                    # e.g. rewording the Summary -- so they need the same
-                    # voice-anchors.md grounding the critique that produced
-                    # this recommendation already had (B29,
-                    # phase-9-backlog.md). static_prefix is small (~5-10k
-                    # tokens, already built above for the audit loop), not
-                    # the full ~105k-token kb_context.
-                    system_instruction=f"{build_prompt}\n\n{static_prefix}",
-                    contents=rec_contents,
-                    response_schema=RecommendationApplySchema,
-                    # B40: without these, EDU_ACHIEVEMENT_KEY_<n> isn't part
-                    # of this call's schema, so the model never echoes back
-                    # resume_data's existing choice -- normalize_resume.py
-                    # then defaults to "", and fixed_content.build_education()
-                    # silently reverts KU/KCKCC to each school's first option
-                    # (plus a spurious warning) on every single recommendation
-                    # applied, not just ones that touch Education.
-                    extra_schema_properties=edu_schema_properties,
-                    extra_required=edu_schema_required,
-                    temperature=0.0,
-                )
-                _log_cache_stats(rec_usage, 0, 0)
-                rec_result = GeminiClient.parse_json(rec_text or "")
-                if not rec_result:
-                    cli_art.console.print(
-                        f"    {cli_art.WARNING} unparseable JSON; leaving resume as-is for this recommendation.",
-                        soft_wrap=True,
-                    )
-                else:
-                    this_applied = rec_result.pop("applied_recommendations", [])
-                    this_skipped = rec_result.pop("skipped_recommendations", [])
-                    this_needs_input = rec_result.pop("needs_personal_input", [])
-                    candidate_resume_data = normalize_resume.normalize(rec_result)
-                    rec_violations_all = validate_resume.validate(
-                        candidate_resume_data,
-                        style_rules_for_validation,
-                        role_roster,
-                        role_bullet_minimums,
-                        role_bullet_maximums=role_bullet_maximums,
-                        bullet_tuples=bullet_tuples,
-                    )
-                    rec_violations = [
-                        v for v in rec_violations_all if v not in baseline_violations
-                    ]
-                    if rec_violations:
-                        cli_art.console.print(
-                            f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
-                            f"discarding just this recommendation:",
-                            soft_wrap=True,
-                        )
-                        for v in rec_violations:
-                            cli_art.print_literal(
-                                f"      - {cli_art._escape_markup(v)}"
-                            )
-                        skipped.append(
-                            f"{rec} (attempted, discarded: introduced a validator violation)"
-                        )
-                    elif this_applied:
-                        resume_data = candidate_resume_data
-                        # The accepted edit becomes the new baseline: it may
-                        # have cleared a pre-existing violation (good) or left
-                        # one standing, and the NEXT recommendation must be
-                        # judged against what the resume actually looks like
-                        # now, not against what Step 4 produced.
-                        baseline_violations = rec_violations_all
-                        applied.append(rec)
-                        cli_art.print_literal("    Applied.")
-                    elif this_needs_input:
-                        needs_polish.append(rec)
-                        cli_art.print_literal(
-                            "    Needs your input -- left unchanged (try `resume polish`)."
-                        )
-                    else:
-                        skipped.append(rec)
-                        cli_art.print_literal(
-                            "    Skipped (not a resume-content edit)."
-                        )
-
-                checkpoint["recommendation_actions"] = {
-                    "resume_data": resume_data,
-                    "applied": applied,
-                    "skipped": skipped,
-                    "needs_polish": needs_polish,
-                    "next_index": i + 1,
-                }
-                jd_manager.save_checkpoint(job_key, checkpoint)
-
-            checkpoint["recommendation_actions"] = {
-                "resume_data": resume_data,
-                "applied": applied,
-                "skipped": skipped,
-                "needs_polish": needs_polish,
-                "next_index": len(recs),
-            }
-            jd_manager.save_checkpoint(job_key, checkpoint)
-
-            resume_data["_recommendation_actions"] = {
-                "applied": applied,
-                "skipped": skipped,
-                "needs_polish": needs_polish,
-            }
-            if applied:
-                cli_art.print_literal("\n  Applied:")
-                for a in applied:
-                    cli_art.print_literal(f"    - {cli_art._escape_markup(a)}")
-            if skipped:
-                cli_art.print_literal("  Skipped:")
-                for s in skipped:
-                    cli_art.print_literal(f"    - {cli_art._escape_markup(s)}")
-            if needs_polish:
-                cli_art.print_literal(
-                    "  Needs your input -- good candidates for `resume polish`:"
-                )
-                for n in needs_polish:
-                    cli_art.print_literal(f"    - {cli_art._escape_markup(n)}")
-
         # Mirror the company's own vocabulary into bullet text (e.g.
         # "customers" -> "guests"). Deliberately last, after Step 5.5's
         # recommendation pass: running it here means no later step can
         # reword a bullet back out of the company's language, and it's a
         # deterministic regex swap rather than an LLM edit, so it cannot
         # touch a metric, verb, or claim.
+        return resume_data
+
+    def _finalize_resume_text(
+        self, checkpoint, jd_keywords, resume_data, style_rules_for_validation
+    ):
+        """Extracted step of build_tailored_resume."""
         resume_data = company_research.apply_vocabulary_substitutions_to_resume(
             resume_data, checkpoint.get("vocabulary_substitutions", [])
         )
@@ -8663,470 +9883,25 @@ class ResumeEngine:
                     + cli_art._escape_markup(", ".join(_topped_up))
                 )
 
-        # --- Step 6: Save output ---
-        output_path = os.path.join(self.output_json_dir, output_filename)
-        try:
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(resume_data, f, indent=2, ensure_ascii=False)
-            cli_art.print_literal(
-                f"\n  Resume saved to: {cli_art._escape_markup(output_path)}"
-            )
-        except Exception as e:
-            cli_art.console.print(
-                f"  {theme.colorize_icon('warning')} Could not save resume JSON: {e}",
-                soft_wrap=True,
-            )
+        return resume_data
 
-        # --- Step 7: Render HTML + Generate PDF ---
-        cli_art.console.rule(
-            "Step 7: Rendering HTML and generating PDF...", style="dim", align="left"
-        )
-        # The JSON honors an explicit output_filename but the HTML/PDF/DOCX
-        # used to re-derive their own stem from jd_path, so a caller that
-        # named its JSON got differently-named siblings -- the recruiter
-        # build wrote Recruiter_Resume.json beside a DominickColosimo_Resume.pdf
-        # that overwrote an unrelated build. Deriving the stem from the
-        # filename actually used keeps all four in step. No-op for normal
-        # runs: output_filename defaults to this same stem above.
-        if output_filename and output_filename.endswith("_Resume.json"):
-            stem = output_filename[: -len("_Resume.json")]
-        else:
-            stem = _build_output_stem(jd_path)
-        html_out = os.path.join(self.output_html_dir, f"{stem}_Resume.html")
-        pdf_out = os.path.join(self.output_pdf_dir, f"{stem}_Resume.pdf")
-        pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
-
-        os.makedirs(os.path.dirname(html_out), exist_ok=True)
-        os.makedirs(os.path.dirname(pdf_out), exist_ok=True)
-
-        render_html(resume_data, html_out)
-
-        trim_instructions = [
-            lambda rd: "Trim the Summary to its 5-line limit.",
-            lambda rd: _widow_trim_instruction(rd, style_rules_for_validation),
-            lambda rd: _bullet_removal_trim_instruction(_p_yaml),
-        ]
-        max_trim_attempts = len(trim_instructions)
-        trim_attempt = 0
-        page_count = None
-        dropped_optional_clients = False
-        dropped_why = False
-        page1_condense_attempt = 0
-        page1_condense_last_violations: list[str] = []
-        MAX_PAGE1_CONDENSE_ATTEMPTS = 5
-        why_backfill_attempt = 0
-        why_backfill_last_violations: list[str] = []
-        MAX_WHY_BACKFILL_ATTEMPTS = 3
-
-        while True:
-            try:
-                pdf_result = subprocess.run(
-                    [
-                        "node",
-                        pdf_script,
-                        html_out,
-                        pdf_out,
-                        "--format=letter",
-                        "--max-pages=2",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=PDF_GENERATION_TIMEOUT_SECONDS,
-                    env={**os.environ, "RESUME_BUILDER_ICONS": theme.icon_set_name()},
-                )
-            except subprocess.TimeoutExpired:
-                cli_art.console.print(
-                    f"  {theme.colorize_icon('warning')}  PDF generation timed out after "
-                    f"{PDF_GENERATION_TIMEOUT_SECONDS}s.",
-                    soft_wrap=True,
-                )
-                return {}
-            if pdf_result.returncode != 0:
-                cli_art.friendly_subprocess_error(
-                    pdf_result.stderr, "creating the PDF for this resume"
-                )
-                return {}
-
-            page_count, size_str = _parse_pdf_result(pdf_result.stdout, pdf_out)
-            if page_count is None:
-                cli_art.console.print(
-                    f"  {theme.colorize_icon('error')} Could not verify PDF page count via pypdf -- "
-                    "treating as a failure rather than silently passing the 2-page rule.",
-                    soft_wrap=True,
-                )
-                return {}
-            overflow_roles = (
-                _page1_overflow_roles(pdf_out, _p_yaml) if page_count <= 2 else []
-            )
-            page1_condense_exhausted = (
-                page1_condense_attempt >= MAX_PAGE1_CONDENSE_ATTEMPTS
-            )
-            why_backfill_exhausted = why_backfill_attempt >= MAX_WHY_BACKFILL_ATTEMPTS
-            needs_why_backfill = (
-                page_count <= 2
-                and not overflow_roles
-                and bool(research)
-                and bool(research_block)
-                and not (resume_data.get("WHY_TEXT") or "").strip()
-                and not why_backfill_exhausted
-            )
-            is_final = (
-                page_count <= 2
-                and (not overflow_roles or page1_condense_exhausted)
-                and not needs_why_backfill
-            ) or trim_attempt >= max_trim_attempts
-            if is_final:
-                if overflow_roles:
-                    cli_art.console.print(
-                        f"  {theme.colorize_icon('warning')} {', '.join(overflow_roles)} still "
-                        f"spilled onto page 2 after {MAX_PAGE1_CONDENSE_ATTEMPTS} condense "
-                        "attempt(s); keeping this build rather than looping indefinitely.",
-                        soft_wrap=True,
-                    )
-                cli_art.print_subprocess_output(pdf_result.stdout)
-                break
-
-            if page_count <= 2 and overflow_roles and page1_condense_attempt >= 1:
-                page1_trim = _page1_overflow_trim(resume_data, _p_yaml)
-                if page1_trim:
-                    resume_data, removed_bullet = page1_trim
-                    cli_art.print_literal(
-                        f"  Condensing wording was not enough; dropped a "
-                        f"{_p_yaml.get('page1_overflow_trim_role')} bullet so "
-                        f"{', '.join(overflow_roles)} can fit on page 1: {removed_bullet}"
-                    )
-                    render_html(resume_data, html_out)
-                    continue
-
-            if page_count <= 2 and overflow_roles:
-                page1_condense_attempt += 1
-                cli_art.print_literal(
-                    f"  {', '.join(overflow_roles)} spilled onto page 2 with room to spare on "
-                    f"page 1 (job entries never split across pages); condensing wording to "
-                    f"reclaim space (attempt {page1_condense_attempt}/{MAX_PAGE1_CONDENSE_ATTEMPTS})..."
-                )
-                condense_instruction = _page1_condense_instruction(
-                    resume_data, _p_yaml, overflow_roles
-                )
-                if page1_condense_last_violations:
-                    condense_instruction += (
-                        "\n\nThe previous attempt at this same instruction was discarded for "
-                        "introducing these validator violation(s) -- do not repeat them, and "
-                        "do not touch SKILLS or any section not named above:\n"
-                        + "\n".join(f"- {v}" for v in page1_condense_last_violations)
-                    )
-                condense_contents = (
-                    f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
-                    f"=== TRIM INSTRUCTION (apply only this step) ===\n{condense_instruction}"
-                )
-                # Escalate off temperature=0.0 on a repeat attempt -- a
-                # deterministic call given the identical prompt otherwise
-                # returns the identical (already-discarded) response.
-                condense_temperature = (
-                    0.0
-                    if page1_condense_attempt == 1
-                    else min(0.2 + 0.15 * (page1_condense_attempt - 2), 0.8)
-                )
-                condense_text, condense_usage = GeminiClient.generate(
-                    model=BUILDER_MODEL,
-                    system_instruction=build_prompt,
-                    contents=condense_contents,
-                    response_schema=TemplateSchema,
-                    extra_schema_properties=edu_schema_properties,
-                    extra_required=edu_schema_required,
-                    temperature=condense_temperature,
-                )
-                _log_cache_stats(condense_usage, 0, 0)
-                condensed = GeminiClient.parse_json(condense_text or "")
-                if condensed:
-                    # The condense instruction only asks for wording changes to
-                    # specific EXPERIENCE bullets, but SKILLS kept drifting
-                    # anyway (e.g. adding "AI-Driven Ideation"), repeatedly
-                    # tripping the same dead-band/hallucinated-skill violation
-                    # across attempts despite being told not to touch it.
-                    # Enforce the scope instead of relying on instruction-
-                    # following alone.
-                    condensed["SKILLS"] = resume_data.get("SKILLS")
-                    condense_targets = {
-                        b for _, _, b in _page1_condense_targets(resume_data, _p_yaml)
-                    }
-                    condensed_resume_data = _merge_condensed_bullets(
-                        resume_data,
-                        normalize_resume.normalize(condensed),
-                        condense_targets,
-                    )
-                    _validate_kwargs: dict[str, Any] = {
-                        "role_bullet_maximums": role_bullet_maximums,
-                        "bullet_tuples": bullet_tuples,
-                    }
-                    baseline_violations = validate_resume.validate(
-                        resume_data,
-                        style_rules_for_validation,
-                        role_roster,
-                        role_bullet_minimums,
-                        **_validate_kwargs,
-                    )
-                    condense_violations = _newly_introduced(
-                        validate_resume.validate(
-                            condensed_resume_data,
-                            style_rules_for_validation,
-                            role_roster,
-                            role_bullet_minimums,
-                            **_validate_kwargs,
-                        ),
-                        baseline_violations,
-                    )
-                    if condensed_resume_data == resume_data:
-                        condense_violations = condense_violations or [
-                            "No targeted bullet was shortened -- rewrite at least one listed bullet to 108 characters or fewer."
-                        ]
-                    if condense_violations and condensed_resume_data != resume_data:
-                        # One widow among four shortened bullets used to throw
-                        # away all four, so every attempt of a 2026-09-16
-                        # build was discarded. Keep each edit that is clean
-                        # on its own.
-                        partial = _keep_clean_bullet_edits(
-                            resume_data,
-                            condensed_resume_data,
-                            lambda data: _newly_introduced(
-                                validate_resume.validate(
-                                    data,
-                                    style_rules_for_validation,
-                                    role_roster,
-                                    role_bullet_minimums,
-                                    **_validate_kwargs,
-                                ),
-                                baseline_violations,
-                            ),
-                        )
-                        if partial != resume_data:
-                            cli_art.print_literal(
-                                f"  Kept the condensed bullets that passed validation; "
-                                f"{len(condense_violations)} violating edit(s) reverted."
-                            )
-                            condensed_resume_data, condense_violations = partial, []
-                    if not condense_violations:
-                        resume_data = condensed_resume_data
-                        render_html(resume_data, html_out)
-                        page1_condense_last_violations = []
-                        continue
-                    cli_art.console.print(
-                        f"  {cli_art.WARNING} Condense attempt introduced "
-                        f"{len(condense_violations)} validator violation(s); discarding and "
-                        "retrying if attempts remain:",
-                        soft_wrap=True,
-                    )
-                    for v in condense_violations:
-                        cli_art.print_literal(f"    - {cli_art._escape_markup(v)}")
-                    page1_condense_last_violations = condense_violations
-                continue
-
-            if needs_why_backfill:
-                why_backfill_attempt += 1
-                cli_art.print_literal(
-                    f"  PDF is {page_count} page(s) with room to spare and company research "
-                    f"is available; backfilling the omitted Why section "
-                    f"(attempt {why_backfill_attempt}/{MAX_WHY_BACKFILL_ATTEMPTS})..."
-                )
-                why_instruction = _why_backfill_instruction(resume_data, research_block)
-                if why_backfill_last_violations:
-                    why_instruction += (
-                        "\n\nThe previous attempt at this same instruction was discarded for "
-                        "introducing these validator violation(s) -- do not repeat them, and "
-                        "do not touch any field other than SECTION_WHY/WHY_TEXT:\n"
-                        + "\n".join(f"- {v}" for v in why_backfill_last_violations)
-                    )
-                why_contents = (
-                    f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
-                    f"=== TASK ===\n{why_instruction}"
-                )
-                # Escalate off temperature=0.0 on a repeat attempt -- a
-                # deterministic call given the identical prompt otherwise
-                # returns the identical (already-discarded) response.
-                why_temperature = (
-                    0.0
-                    if why_backfill_attempt == 1
-                    else min(0.2 + 0.15 * (why_backfill_attempt - 2), 0.8)
-                )
-                why_text_resp, why_usage = GeminiClient.generate(
-                    model=BUILDER_MODEL,
-                    system_instruction=build_prompt,
-                    contents=why_contents,
-                    response_schema=WhyBackfillSchema,
-                    temperature=why_temperature,
-                )
-                _log_cache_stats(why_usage, 0, 0)
-                why_fields = GeminiClient.parse_json(why_text_resp or "")
-                if why_fields and why_fields.get("WHY_TEXT"):
-                    # Compare against the resume's own pre-backfill violations,
-                    # not an absolute zero -- resume_data can already carry
-                    # latent violations unrelated to Why (e.g. a bullet widow
-                    # that slipped through an earlier step), and treating
-                    # those as "introduced by this backfill" would wrongly
-                    # discard a perfectly good Why section forever.
-                    why_baseline_violations = set(
-                        validate_resume.validate(
-                            resume_data,
-                            style_rules_for_validation,
-                            role_roster,
-                            role_bullet_minimums,
-                            role_bullet_maximums=role_bullet_maximums,
-                            bullet_tuples=bullet_tuples,
-                        )
-                    )
-                    candidate_resume_data = dict(resume_data)
-                    candidate_resume_data["SECTION_WHY"] = why_fields.get(
-                        "SECTION_WHY", ""
-                    )
-                    candidate_resume_data["WHY_TEXT"] = why_fields.get("WHY_TEXT", "")
-                    all_violations = validate_resume.validate(
-                        candidate_resume_data,
-                        style_rules_for_validation,
-                        role_roster,
-                        role_bullet_minimums,
-                        role_bullet_maximums=role_bullet_maximums,
-                        bullet_tuples=bullet_tuples,
-                    )
-                    why_violations = [
-                        v for v in all_violations if v not in why_baseline_violations
-                    ]
-                    if not why_violations:
-                        # If this pushes the page count past 2, the existing
-                        # dropped_why trim step below removes it again on a
-                        # later iteration -- no separate revert path needed.
-                        resume_data = candidate_resume_data
-                        render_html(resume_data, html_out)
-                        why_backfill_last_violations = []
-                        continue
-                    cli_art.console.print(
-                        f"  {cli_art.WARNING} Why-section backfill introduced "
-                        f"{len(why_violations)} validator violation(s); discarding and "
-                        "retrying if attempts remain:",
-                        soft_wrap=True,
-                    )
-                    for v in why_violations:
-                        cli_art.print_literal(f"    - {cli_art._escape_markup(v)}")
-                    why_backfill_last_violations = why_violations
-                continue
-
-            if not dropped_optional_clients:
-                dropped_optional_clients = True
-                fixed_content = profile_paths.fixed_content_module()
-                has_optional_clients = any(
-                    fixed_content.CLIENTS.get(job.get("company"), {}).get("essential")
-                    is False
-                    and job.get("clients")
-                    for job in resume_data.get("EXPERIENCE", [])
-                )
-                if has_optional_clients:
-                    # Free, non-LLM trim step: drop the Inside Sales Team
-                    # client roster (fixed_content.CLIENTS marks it
-                    # non-essential) before spending an LLM-driven
-                    # trim_instructions attempt.
-                    cli_art.print_literal(
-                        f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping optional client rosters..."
-                    )
-                    resume_data = normalize_resume.normalize(
-                        resume_data, include_optional_clients=False
-                    )
-                    render_html(resume_data, html_out)
-                    continue
-
-            if not dropped_why:
-                dropped_why = True
-                if resume_data.get("SECTION_WHY") or resume_data.get("WHY_TEXT"):
-                    # Free, non-LLM trim step, same reasoning as the client-
-                    # roster drop above: Why only belongs on the resume if it
-                    # fits without pushing the page count past 2, and dropping
-                    # it is just blanking two fields -- routing it through the
-                    # LLM used to let the model bundle unrelated edits into
-                    # the same response, so a validator violation *anywhere*
-                    # in that response discarded the one edit that actually
-                    # freed a page, and Why silently stuck around for every
-                    # remaining trim attempt.
-                    cli_art.print_literal(
-                        f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), dropping the Why section (first thing to go when space is tight)..."
-                    )
-                    resume_data = dict(resume_data)
-                    resume_data["SECTION_WHY"] = ""
-                    resume_data["WHY_TEXT"] = ""
-                    render_html(resume_data, html_out)
-                    continue
-
-            # Deterministic, non-LLM trim step: drop a surplus bullet from the
-            # lowest-flex_priority role (respecting min_bullets floors and
-            # protected_bullets) before spending an LLM-driven trim_instructions attempt.
-            resume_data_trimmed, trimmed_bullet = trim_surplus_bullet_deterministically(
-                resume_data, _p_yaml, role_bullet_minimums
-            )
-            if trimmed_bullet:
-                resume_data = resume_data_trimmed
-                render_html(resume_data, html_out)
-                continue
-
-            cli_art.print_literal(
-                f"  PDF is {page_count} pages ({cli_art._escape_markup(size_str)}), applying trim step {trim_attempt + 1}/{max_trim_attempts}..."
-            )
-            trim_contents = (
-                f"=== ORIGINAL RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
-                f"=== TRIM INSTRUCTION (apply only this step) ===\n{trim_instructions[trim_attempt](resume_data)}"
-            )
-            trim_text, trim_usage = GeminiClient.generate(
-                model=BUILDER_MODEL,
-                system_instruction=build_prompt,
-                contents=trim_contents,
-                response_schema=TemplateSchema,
-                extra_schema_properties=edu_schema_properties,
-                extra_required=edu_schema_required,
-                temperature=0.0,
-            )
-            _log_cache_stats(trim_usage, 0, 0)
-            trimmed = GeminiClient.parse_json(trim_text or "")
-            if not trimmed:
-                # A transient failure here (e.g. all of GeminiClient.generate()'s
-                # own inner retries/fallback exhausted) shouldn't burn the whole
-                # trim loop -- unlike the violations-found branch below, this
-                # point is reached before trim_attempt is incremented, so it
-                # must be bumped here too or `continue` would spin on the same
-                # index forever.
-                cli_art.console.print(
-                    f"  {theme.colorize_icon('warning')} Trim attempt {trim_attempt + 1}/{max_trim_attempts} returned unparseable JSON; "
-                    f"keeping prior resume_data and retrying if attempts remain.",
-                    soft_wrap=True,
-                )
-                trim_attempt += 1
-                continue
-
-            trimmed_resume_data = normalize_resume.normalize(trimmed)
-            trim_violations = validate_resume.validate(
-                trimmed_resume_data,
-                style_rules_for_validation,
-                role_roster,
-                role_bullet_minimums,
-                role_bullet_maximums=role_bullet_maximums,
-                bullet_tuples=bullet_tuples,
-            )
-            if trim_violations:
-                cli_art.console.print(
-                    f"  {cli_art.WARNING} Trim attempt {trim_attempt + 1} introduced {len(trim_violations)} "
-                    f"validator violation(s); discarding this trim and keeping the prior resume_data:",
-                    soft_wrap=True,
-                )
-                for v in trim_violations:
-                    cli_art.print_literal(f"    - {cli_art._escape_markup(v)}")
-                trim_attempt += 1
-                continue
-
-            resume_data = trimmed_resume_data
-            render_html(resume_data, html_out)
-            trim_attempt += 1
-
+    def _validate_rendered_outputs(
+        self,
+        jd_keywords,
+        max_trim_attempts,
+        output_path,
+        page_count,
+        pdf_out,
+        resume_data,
+        stem,
+    ):
+        """Extracted step of build_tailored_resume."""
         if page_count > 2:
             cli_art.console.print(
                 f"  {theme.colorize_icon('error')} PDF still {page_count} pages after {max_trim_attempts} trim attempts.",
                 soft_wrap=True,
             )
-            return {}
+            return None
 
         # Re-save after Step 7: page fitting can still change resume_data --
         # the Why backfill adds WHY_TEXT when the PDF has room, and trims drop
@@ -9170,7 +9945,7 @@ class ResumeEngine:
                 # unwrapped and unstyled for tests that assert on the
                 # literal substring.
                 print(f"    - {fatal}")
-            return {}
+            return None
         if pdf_text_warnings:
             cli_art.console.print(
                 f"  {theme.colorize_icon('warning')} PDF text-layer check found {len(pdf_text_warnings)} potential issue(s) "
@@ -9194,12 +9969,16 @@ class ResumeEngine:
             render_resume_docx(resume_data, docx_out)
         except Exception as e:
             cli_art.friendly_error(e, "creating the DOCX for this resume")
-            return {}
+            return None
 
         # B18 (phase-9-backlog.md): reported before the pipeline claims
         # success, per the backlog item's own wording -- not gated. See
         # validate_resume.check_keyword_coverage()'s docstring for why a
         # missing keyword doesn't block the build.
+        return docx_out
+
+    def _report_keyword_coverage(self, jd_keywords, jd_path, resume_data):
+        """Extracted step of build_tailored_resume."""
         ats_match_rules = self.load_yaml(self.scoring_dir, "ats_match.yaml")
         coverage = validate_resume.check_keyword_coverage(
             resume_data, jd_keywords, ats_match_rules
@@ -9234,55 +10013,7 @@ class ResumeEngine:
         # success or record output paths unless the PDF is actually on disk
         # (ResumeDesignSystem.md's guarantee -- the system must never claim a
         # resume exists when generation failed).
-        if not os.path.exists(pdf_out):
-            cli_art.console.print(
-                f"  {theme.colorize_icon('error')} Pipeline did not complete -- expected PDF not found on disk: {pdf_out}",
-                soft_wrap=True,
-            )
-            return {}
-
-        cli_art.console.print(
-            f"  {theme.colorize_icon('success')} Pipeline complete! PDF → {pdf_out}",
-            soft_wrap=True,
-        )
-        jd_manager.delete_checkpoint(job_key)
-        resume_data["_output_paths"] = {
-            "json": output_path,
-            "html": html_out,
-            "pdf": pdf_out,
-            "docx": docx_out,
-        }
-        resume_data["_page_count"] = page_count
-        os.environ["RESUME_BUILDER_LAST_PDF"] = pdf_out
-
-        logger.info(f"build_tailored_resume completed successfully: {job_key}")
-
-        # Record any still-missing keywords to the verified skills ledger for
-        # NEXT time, without offering to rebuild THIS run. Previously this
-        # auto-offered (and defaulted to yes on) a full from-scratch rebuild
-        # -- re-mining the bank and re-running the builder, a second real
-        # API cost -- every time the finished-resume coverage check found
-        # something Step 1.5's confirm_jd_skill_gaps_interactively() (the
-        # pre-build prompt) hadn't already asked about. Since
-        # find_unverified_jd_skill_gaps() now checks the same
-        # tools/hard_skills/core_functions universe check_keyword_coverage()
-        # does (2026-09-06 fix), this list should usually already be empty
-        # by the time we get here; confirming here is a safety net for the
-        # cases it doesn't catch (e.g. ATS text-matching quirks), not a
-        # second full prompt-and-rebuild cycle.
-        if interactive and coverage["missing"]:
-            confirmed_skills = confirm_missing_coverage_keywords_interactively(
-                coverage["missing"]
-            )
-            if confirmed_skills:
-                cli_art.console.print(
-                    f"  {theme.colorize_icon('hint')} Saved for next build -- "
-                    f"run `resume run {jd_path}` again if you want this resume "
-                    f"to reflect {'them' if len(confirmed_skills) > 1 else 'it'}.",
-                    soft_wrap=True,
-                )
-
-        return resume_data
+        return coverage
 
     def build_application_package(
         self,

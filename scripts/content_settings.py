@@ -464,9 +464,301 @@ def write_settings(settings: dict, path: str | None = None) -> None:
         handle.write(updated)
 
 
+def _content_settings_choices(current: dict) -> list:
+    """Menu choices for the content-settings screen."""
+    import questionary
+
+    return [
+        questionary.Choice("Set the languages I can work in", value="languages"),
+        questionary.Choice("Set my maximum travel percentage", value="travel"),
+        questionary.Choice("Set the employment types I'll accept", value="employment"),
+        questionary.Choice("Set my minimum pay", value="pay"),
+        questionary.Choice("Set my weekly hours range", value="hours"),
+        questionary.Choice(
+            (
+                "Turn off IC-only mode (currently excluding manager roles)"
+                if (current.get("role_track") or {}).get("exclude_manager")
+                else "Turn on IC-only mode (exclude manager/people-lead roles)"
+            ),
+            value="toggle_role_track",
+        ),
+        questionary.Choice("Turn off language filtering", value="clear_languages"),
+        questionary.Choice("Turn off travel filtering", value="clear_travel"),
+        questionary.Choice(
+            "Turn off employment-type filtering", value="clear_employment"
+        ),
+        questionary.Choice("Turn off pay filtering", value="clear_pay"),
+        questionary.Choice("Turn off hours filtering", value="clear_hours"),
+        questionary.Choice("Back", value="back"),
+    ]
+
+
+def _print_content_filter_notes(current: dict) -> None:
+    """Explain the limits of each filter the user has just enabled."""
+    if current.get("employment_type"):
+        # The same honesty as the travel note below. Greenhouse -- the
+        # largest ATS source in this corpus -- publishes no employment
+        # field at all, so this gate is silent on those postings by
+        # design rather than by accident.
+        cli_art.console.print(
+            "  [dim]Note: postings that don't state an employment type are "
+            "always kept. Some sources (Greenhouse especially) never publish "
+            "one, so this only drops postings that name a type you excluded."
+            "[/dim]",
+            soft_wrap=True,
+        )
+
+    pay = current.get("compensation") or {}
+    if pay.get("annual_floor") or pay.get("hourly_floor"):
+        # The most important note of the three, because this filter's
+        # name overpromises hardest -- see compensation.describe_bias.
+        # A floor narrows the disclosing minority, not the whole list.
+        cli_art.console.print(
+            f"  [dim]Note: {compensation.describe_bias(0.27)}[/dim]",
+            soft_wrap=True,
+        )
+
+    if pay.get("min_hours_per_week") or pay.get("max_hours_per_week"):
+        # Stated even more plainly than the pay note: 2% is low enough
+        # that someone could reasonably think the setting is broken.
+        cli_art.console.print(
+            "  [dim]Note: only about 2% of postings state weekly hours -- but "
+            "about a quarter of PART-TIME ones do, which is where this "
+            "actually earns its keep. Postings that state none are kept.[/dim]",
+            soft_wrap=True,
+        )
+
+    ceiling = current.get("max_travel_percent")
+    if ceiling is not None:
+        # State the limit of the thing they just turned on. Only ~5% of
+        # postings state a travel figure, and a filter silently doing
+        # nothing on the other 95% is worth saying out loud once.
+        cli_art.console.print(
+            "  [dim]Note: postings that state no travel requirement are always "
+            "kept -- about 95% of them. This only drops postings that name a "
+            "figure above your ceiling.[/dim]",
+            soft_wrap=True,
+        )
+
+    if (current.get("role_track") or {}).get("exclude_manager"):
+        # Precision is measured at 100% / recall 94.1% on a 134-row
+        # holdout (docs/role_track.md) -- good, not perfect. Only
+        # HIGH-confidence manager/player_coach verdicts are excluded, the
+        # same gate the Jobs/Pipeline view filters use, so this can't
+        # newly zero a score the model itself is unsure about.
+        cli_art.console.print(
+            "  [dim]Note: this only excludes postings the model calls "
+            "manager/people-lead with HIGH confidence (~94% of true "
+            "manager roles, measured). It takes effect on future "
+            "evaluations -- re-evaluate a role to apply it retroactively, "
+            "or run scripts/find_retroactively_excluded_roles.py for "
+            "already-evaluated pending roles.[/dim]",
+            soft_wrap=True,
+        )
+
+
+def _cs_languages(current: dict) -> bool:
+    """Content-settings action 'languages'; returns False to skip the write."""
+    import questionary
+
+    selected = current.get("languages") or ["en"]
+    picked = cli_art.checkbox(
+        "Which languages can you work in?",
+        choices=[
+            questionary.Choice(label, value=code, checked=code in selected)
+            for code, label in LANGUAGE_LABELS.items()
+        ],
+    )
+    if not picked:
+        # An empty list would read as "no languages", which would
+        # reject everything. Refuse rather than write it.
+        cli_art.console.print(
+            f"{cli_art.WARNING} Pick at least one language, or use "
+            "'Turn off language filtering'.",
+            soft_wrap=True,
+        )
+        return False
+    current["languages"] = list(picked)
+    return True
+
+
+def _cs_travel(current: dict) -> bool:
+    """Content-settings action 'travel'; returns False to skip the write."""
+    import questionary
+
+    picked = cli_art.select(
+        "How much travel are you willing to do?",
+        choices=[
+            questionary.Choice(label, value=value) for value, label in TRAVEL_CHOICES
+        ],
+    )
+    if picked is None:
+        return False
+    current["max_travel_percent"] = picked
+    return True
+
+
+def _cs_employment(current: dict) -> bool:
+    """Content-settings action 'employment'; returns False to skip the write."""
+    import questionary
+
+    selected = current.get("employment_type") or list(EMPLOYMENT_LABELS)
+    picked = cli_art.checkbox(
+        "Which kinds of work will you accept?",
+        choices=[
+            questionary.Choice(label, value=value, checked=value in selected)
+            for value, label in EMPLOYMENT_LABELS.items()
+        ],
+    )
+    if not picked:
+        # Same reasoning as languages: an empty list reads as "no
+        # types accepted", which would reject every posting that
+        # states one.
+        cli_art.console.print(
+            f"{cli_art.WARNING} Pick at least one type, or use "
+            "'Turn off employment-type filtering'.",
+            soft_wrap=True,
+        )
+        return False
+    current["employment_type"] = list(picked)
+    return True
+
+
+def _cs_pay(current: dict) -> bool:
+    """Content-settings action 'pay'; returns False to skip the write."""
+    pay = dict(current.get("compensation") or {})
+    annual = cli_art.text(
+        "Minimum yearly salary (blank for none):",
+        default=_scalar_default(pay.get("annual_floor")),
+    )
+    if annual is None:
+        return False
+    hourly = cli_art.text(
+        "Minimum hourly rate (blank for none):",
+        default=_scalar_default(pay.get("hourly_floor")),
+    )
+    if hourly is None:
+        return False
+    parsed_annual = _parse_money(annual)
+    parsed_hourly = _parse_money(hourly)
+    if annual.strip() and parsed_annual is None:
+        cli_art.console.print(
+            f"{cli_art.WARNING} Couldn't read {annual!r} as an amount.",
+            soft_wrap=True,
+        )
+        return False
+    if hourly.strip() and parsed_hourly is None:
+        cli_art.console.print(
+            f"{cli_art.WARNING} Couldn't read {hourly!r} as an amount.",
+            soft_wrap=True,
+        )
+        return False
+    pay.pop("annual_floor", None)
+    pay.pop("hourly_floor", None)
+    if parsed_annual:
+        pay["annual_floor"] = parsed_annual
+    if parsed_hourly:
+        pay["hourly_floor"] = parsed_hourly
+    current["compensation"] = pay
+    return True
+
+
+def _cs_hours(current: dict) -> bool:
+    """Content-settings action 'hours'; returns False to skip the write."""
+    pay = dict(current.get("compensation") or {})
+    low = cli_art.text(
+        "Fewest hours per week you'd accept (blank for none):",
+        default=_scalar_default(pay.get("min_hours_per_week")),
+    )
+    if low is None:
+        return False
+    high = cli_art.text(
+        "Most hours per week you'd accept (blank for none):",
+        default=_scalar_default(pay.get("max_hours_per_week")),
+    )
+    if high is None:
+        return False
+    parsed_low = _parse_money(low)
+    parsed_high = _parse_money(high)
+    if parsed_low and parsed_high and parsed_low > parsed_high:
+        cli_art.console.print(
+            f"{cli_art.WARNING} {parsed_low:g} is more than {parsed_high:g} -- "
+            "the fewest hours has to be the smaller number.",
+            soft_wrap=True,
+        )
+        return False
+    pay.pop("min_hours_per_week", None)
+    pay.pop("max_hours_per_week", None)
+    if parsed_low:
+        pay["min_hours_per_week"] = parsed_low
+    if parsed_high:
+        pay["max_hours_per_week"] = parsed_high
+    current["compensation"] = pay
+    return True
+
+
+def _cs_toggle_role_track(current: dict) -> bool:
+    """Content-settings action 'toggle_role_track'; returns False to skip the write."""
+    role_track = dict(current.get("role_track") or {})
+    role_track["exclude_manager"] = not role_track.get("exclude_manager", False)
+    current["role_track"] = role_track
+    return True
+
+
+def _cs_clear_pay(current: dict) -> bool:
+    """Content-settings action 'clear_pay'; returns False to skip the write."""
+    pay = dict(current.get("compensation") or {})
+    pay.pop("annual_floor", None)
+    pay.pop("hourly_floor", None)
+    pay.pop("require_stated", None)
+    current["compensation"] = pay
+    return True
+
+
+def _cs_clear_hours(current: dict) -> bool:
+    """Content-settings action 'clear_hours'; returns False to skip the write."""
+    pay = dict(current.get("compensation") or {})
+    pay.pop("min_hours_per_week", None)
+    pay.pop("max_hours_per_week", None)
+    current["compensation"] = pay
+    return True
+
+
+def _cs_clear_languages(current: dict) -> bool:
+    """Content-settings action 'clear_languages'; returns False to skip the write."""
+    current.pop("languages", None)
+    return True
+
+
+def _cs_clear_travel(current: dict) -> bool:
+    """Content-settings action 'clear_travel'; returns False to skip the write."""
+    current.pop("max_travel_percent", None)
+    return True
+
+
+def _cs_clear_employment(current: dict) -> bool:
+    """Content-settings action 'clear_employment'; returns False to skip the write."""
+    current.pop("employment_type", None)
+    return True
+
+
+_CONTENT_SETTINGS_ACTIONS = {
+    "languages": _cs_languages,
+    "travel": _cs_travel,
+    "employment": _cs_employment,
+    "pay": _cs_pay,
+    "hours": _cs_hours,
+    "toggle_role_track": _cs_toggle_role_track,
+    "clear_pay": _cs_clear_pay,
+    "clear_hours": _cs_clear_hours,
+    "clear_languages": _cs_clear_languages,
+    "clear_travel": _cs_clear_travel,
+    "clear_employment": _cs_clear_employment,
+}
+
+
 def run_content_settings() -> None:
     """Interactive editor for the language and travel filters."""
-    import questionary
 
     path = scan_filters_path()
     if not os.path.exists(path):
@@ -491,185 +783,13 @@ def run_content_settings() -> None:
 
         action = cli_art.select(
             "Language & travel:",
-            choices=[
-                questionary.Choice(
-                    "Set the languages I can work in", value="languages"
-                ),
-                questionary.Choice("Set my maximum travel percentage", value="travel"),
-                questionary.Choice(
-                    "Set the employment types I'll accept", value="employment"
-                ),
-                questionary.Choice("Set my minimum pay", value="pay"),
-                questionary.Choice("Set my weekly hours range", value="hours"),
-                questionary.Choice(
-                    (
-                        "Turn off IC-only mode (currently excluding manager roles)"
-                        if (current.get("role_track") or {}).get("exclude_manager")
-                        else "Turn on IC-only mode (exclude manager/people-lead roles)"
-                    ),
-                    value="toggle_role_track",
-                ),
-                questionary.Choice(
-                    "Turn off language filtering", value="clear_languages"
-                ),
-                questionary.Choice("Turn off travel filtering", value="clear_travel"),
-                questionary.Choice(
-                    "Turn off employment-type filtering", value="clear_employment"
-                ),
-                questionary.Choice("Turn off pay filtering", value="clear_pay"),
-                questionary.Choice("Turn off hours filtering", value="clear_hours"),
-                questionary.Choice("Back", value="back"),
-            ],
+            choices=_content_settings_choices(current),
         )
         if action in (None, "back"):
             return
 
-        if action == "languages":
-            selected = current.get("languages") or ["en"]
-            picked = cli_art.checkbox(
-                "Which languages can you work in?",
-                choices=[
-                    questionary.Choice(label, value=code, checked=code in selected)
-                    for code, label in LANGUAGE_LABELS.items()
-                ],
-            )
-            if not picked:
-                # An empty list would read as "no languages", which would
-                # reject everything. Refuse rather than write it.
-                cli_art.console.print(
-                    f"{cli_art.WARNING} Pick at least one language, or use "
-                    "'Turn off language filtering'.",
-                    soft_wrap=True,
-                )
-                continue
-            current["languages"] = list(picked)
-
-        elif action == "travel":
-            picked = cli_art.select(
-                "How much travel are you willing to do?",
-                choices=[
-                    questionary.Choice(label, value=value)
-                    for value, label in TRAVEL_CHOICES
-                ],
-            )
-            if picked is None:
-                continue
-            current["max_travel_percent"] = picked
-
-        elif action == "employment":
-            selected = current.get("employment_type") or list(EMPLOYMENT_LABELS)
-            picked = cli_art.checkbox(
-                "Which kinds of work will you accept?",
-                choices=[
-                    questionary.Choice(label, value=value, checked=value in selected)
-                    for value, label in EMPLOYMENT_LABELS.items()
-                ],
-            )
-            if not picked:
-                # Same reasoning as languages: an empty list reads as "no
-                # types accepted", which would reject every posting that
-                # states one.
-                cli_art.console.print(
-                    f"{cli_art.WARNING} Pick at least one type, or use "
-                    "'Turn off employment-type filtering'.",
-                    soft_wrap=True,
-                )
-                continue
-            current["employment_type"] = list(picked)
-
-        elif action == "pay":
-            pay = dict(current.get("compensation") or {})
-            annual = cli_art.text(
-                "Minimum yearly salary (blank for none):",
-                default=_scalar_default(pay.get("annual_floor")),
-            )
-            if annual is None:
-                continue
-            hourly = cli_art.text(
-                "Minimum hourly rate (blank for none):",
-                default=_scalar_default(pay.get("hourly_floor")),
-            )
-            if hourly is None:
-                continue
-            parsed_annual = _parse_money(annual)
-            parsed_hourly = _parse_money(hourly)
-            if annual.strip() and parsed_annual is None:
-                cli_art.console.print(
-                    f"{cli_art.WARNING} Couldn't read {annual!r} as an amount.",
-                    soft_wrap=True,
-                )
-                continue
-            if hourly.strip() and parsed_hourly is None:
-                cli_art.console.print(
-                    f"{cli_art.WARNING} Couldn't read {hourly!r} as an amount.",
-                    soft_wrap=True,
-                )
-                continue
-            pay.pop("annual_floor", None)
-            pay.pop("hourly_floor", None)
-            if parsed_annual:
-                pay["annual_floor"] = parsed_annual
-            if parsed_hourly:
-                pay["hourly_floor"] = parsed_hourly
-            current["compensation"] = pay
-
-        elif action == "hours":
-            pay = dict(current.get("compensation") or {})
-            low = cli_art.text(
-                "Fewest hours per week you'd accept (blank for none):",
-                default=_scalar_default(pay.get("min_hours_per_week")),
-            )
-            if low is None:
-                continue
-            high = cli_art.text(
-                "Most hours per week you'd accept (blank for none):",
-                default=_scalar_default(pay.get("max_hours_per_week")),
-            )
-            if high is None:
-                continue
-            parsed_low = _parse_money(low)
-            parsed_high = _parse_money(high)
-            if parsed_low and parsed_high and parsed_low > parsed_high:
-                cli_art.console.print(
-                    f"{cli_art.WARNING} {parsed_low:g} is more than {parsed_high:g} -- "
-                    "the fewest hours has to be the smaller number.",
-                    soft_wrap=True,
-                )
-                continue
-            pay.pop("min_hours_per_week", None)
-            pay.pop("max_hours_per_week", None)
-            if parsed_low:
-                pay["min_hours_per_week"] = parsed_low
-            if parsed_high:
-                pay["max_hours_per_week"] = parsed_high
-            current["compensation"] = pay
-
-        elif action == "toggle_role_track":
-            role_track = dict(current.get("role_track") or {})
-            role_track["exclude_manager"] = not role_track.get("exclude_manager", False)
-            current["role_track"] = role_track
-
-        elif action == "clear_pay":
-            pay = dict(current.get("compensation") or {})
-            pay.pop("annual_floor", None)
-            pay.pop("hourly_floor", None)
-            pay.pop("require_stated", None)
-            current["compensation"] = pay
-
-        elif action == "clear_hours":
-            pay = dict(current.get("compensation") or {})
-            pay.pop("min_hours_per_week", None)
-            pay.pop("max_hours_per_week", None)
-            current["compensation"] = pay
-
-        elif action == "clear_languages":
-            current.pop("languages", None)
-
-        elif action == "clear_travel":
-            current.pop("max_travel_percent", None)
-
-        elif action == "clear_employment":
-            current.pop("employment_type", None)
+        if not _CONTENT_SETTINGS_ACTIONS[action](current):
+            continue
 
         write_settings(current, path)
         cli_art.console.print(
@@ -677,66 +797,7 @@ def run_content_settings() -> None:
             soft_wrap=True,
         )
 
-        if current.get("employment_type"):
-            # The same honesty as the travel note below. Greenhouse -- the
-            # largest ATS source in this corpus -- publishes no employment
-            # field at all, so this gate is silent on those postings by
-            # design rather than by accident.
-            cli_art.console.print(
-                "  [dim]Note: postings that don't state an employment type are "
-                "always kept. Some sources (Greenhouse especially) never publish "
-                "one, so this only drops postings that name a type you excluded."
-                "[/dim]",
-                soft_wrap=True,
-            )
-
-        pay = current.get("compensation") or {}
-        if pay.get("annual_floor") or pay.get("hourly_floor"):
-            # The most important note of the three, because this filter's
-            # name overpromises hardest -- see compensation.describe_bias.
-            # A floor narrows the disclosing minority, not the whole list.
-            cli_art.console.print(
-                f"  [dim]Note: {compensation.describe_bias(0.27)}[/dim]",
-                soft_wrap=True,
-            )
-
-        if pay.get("min_hours_per_week") or pay.get("max_hours_per_week"):
-            # Stated even more plainly than the pay note: 2% is low enough
-            # that someone could reasonably think the setting is broken.
-            cli_art.console.print(
-                "  [dim]Note: only about 2% of postings state weekly hours -- but "
-                "about a quarter of PART-TIME ones do, which is where this "
-                "actually earns its keep. Postings that state none are kept.[/dim]",
-                soft_wrap=True,
-            )
-
-        ceiling = current.get("max_travel_percent")
-        if ceiling is not None:
-            # State the limit of the thing they just turned on. Only ~5% of
-            # postings state a travel figure, and a filter silently doing
-            # nothing on the other 95% is worth saying out loud once.
-            cli_art.console.print(
-                "  [dim]Note: postings that state no travel requirement are always "
-                "kept -- about 95% of them. This only drops postings that name a "
-                "figure above your ceiling.[/dim]",
-                soft_wrap=True,
-            )
-
-        if (current.get("role_track") or {}).get("exclude_manager"):
-            # Precision is measured at 100% / recall 94.1% on a 134-row
-            # holdout (docs/role_track.md) -- good, not perfect. Only
-            # HIGH-confidence manager/player_coach verdicts are excluded, the
-            # same gate the Jobs/Pipeline view filters use, so this can't
-            # newly zero a score the model itself is unsure about.
-            cli_art.console.print(
-                "  [dim]Note: this only excludes postings the model calls "
-                "manager/people-lead with HIGH confidence (~94% of true "
-                "manager roles, measured). It takes effect on future "
-                "evaluations -- re-evaluate a role to apply it retroactively, "
-                "or run scripts/find_retroactively_excluded_roles.py for "
-                "already-evaluated pending roles.[/dim]",
-                soft_wrap=True,
-            )
+        _print_content_filter_notes(current)
 
 
 def run_scoring_weights_settings() -> None:

@@ -481,6 +481,243 @@ class _GeminiClientMeta(type):
         _CONSECUTIVE_FAILURES_STATE[0] = int(value)
 
 
+def _test_mode_no_sleep() -> bool:
+    return (
+        os.environ.get("CI") == "true"
+        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+    )
+
+
+def _retry_sleep_secs(attempt: int, server_delay: float | None = None) -> float:
+    if _test_mode_no_sleep():
+        return 0
+    if server_delay is not None:
+        # The server's own RetryInfo hint beats our guessed exponential
+        # curve -- a small buffer on top since the hint is the earliest safe
+        # retry time, not a guarantee, and free-tier quota windows are
+        # unforgiving.
+        return server_delay + random.uniform(1, 4)
+    backoff = cast(float, min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS))
+    return backoff + random.uniform(1, 4)
+
+
+def _pace_gemma(model: str) -> None:
+    if "gemma" not in model.lower():
+        return
+    elapsed = time.time() - GeminiClient._last_gemma_call_ts
+    if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS:
+        wait = GeminiClient.GEMMA_MIN_INTERVAL_SECS - elapsed
+        cli_art.console.print(
+            f"    {theme.colorize_icon('hint')} Pacing Gemma call: waiting {wait:.1f}s (16k TPM cap)...",
+            soft_wrap=True,
+        )
+        if (
+            os.environ.get("CI") == "true"
+            or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+        ) and not hasattr(time.sleep, "assert_called"):
+            pass
+        else:
+            time.sleep(wait)
+    GeminiClient._last_gemma_call_ts = time.time()
+
+
+def _resolve_raw_schema(response_schema, extra_schema_properties, extra_required):
+    raw_schema = None
+    if hasattr(response_schema, "model_json_schema"):
+        raw_schema = response_schema.model_json_schema()
+    elif hasattr(response_schema, "schema") and callable(response_schema.schema):
+        raw_schema = response_schema.schema()
+    elif isinstance(response_schema, dict):
+        raw_schema = response_schema
+    elif isinstance(response_schema, str):
+        try:
+            raw_schema = json.loads(response_schema)
+        except json.JSONDecodeError:
+            cli_art.console.print(
+                f"{cli_art.ERROR} response_schema string is not valid JSON.",
+                soft_wrap=True,
+            )
+    if raw_schema and (extra_schema_properties or extra_required):
+        # Callers that need profile-specific enum fields not knowable
+        # at Pydantic class-definition time (e.g. orchestrator.py's
+        # per-profile education achievement-key options) merge them
+        # in here rather than passing a hand-built dict as
+        # response_schema -- this keeps response_schema=SomeModel
+        # identity-comparable in tests/mocks that route on it, and
+        # keeps the merge applied before resolve_refs/sanitize_schema
+        # so it goes through the exact same pipeline as every other
+        # property. Copies rather than mutates raw_schema in place,
+        # since a Pydantic-sourced dict could in principle be reused
+        # across calls.
+        raw_schema = dict(raw_schema)
+        raw_schema["properties"] = {
+            **raw_schema.get("properties", {}),
+            **(extra_schema_properties or {}),
+        }
+        raw_schema["required"] = list(raw_schema.get("required", [])) + list(
+            extra_required or []
+        )
+    return raw_schema
+
+
+def _build_generation_config(
+    model,
+    temperature,
+    max_output_tokens,
+    response_schema,
+    extra_schema_properties,
+    extra_required,
+) -> dict:
+    # Used to force temperature to 0.0 whenever response_schema was
+    # set, regardless of what the caller passed -- silently
+    # defeating orchestrator.py's stall-escalation block, which
+    # computes an escalating fix_temperature specifically for its
+    # own schema-constrained retry call. Real 2026-09-03 build: 4
+    # fix attempts against the same TemplateSchema came back
+    # byte-identical because every one of them was actually sent
+    # at temperature 0.0 no matter what fix_temperature said.
+    generation_config: dict = {"temperature": temperature}
+    if max_output_tokens is not None:
+        generation_config["maxOutputTokens"] = int(max_output_tokens)
+
+    if "gemma" in model.lower():
+        # Gemma 4 emits a "thought" reasoning preamble by default
+        # (see the thought-part filter below) -- those tokens are
+        # discarded but still billed against the 16k TPM cap.
+        # thinkingLevel: "minimal" suppresses them at the source.
+        generation_config["thinkingConfig"] = {"thinkingLevel": "minimal"}
+    elif "flash-lite" in model.lower():
+        # B46/P5#1 (phase-5-modernization.md): every flash-lite call
+        # (CRITIQUE_MODEL, BUILDER_MODEL, FIND_WEBSITE_MODEL,
+        # SCORE_MODEL) previously sent no thinkingConfig at all, so
+        # it ran at whatever Google's current default is for this
+        # tier -- confirmed "minimal", but this tier's default has
+        # already shifted once (Gemini 3.5 Flash rollout). Pinning
+        # it explicitly keeps today's behavior identical while
+        # making it immune to a future silent default change.
+        generation_config["thinkingConfig"] = {"thinkingLevel": "minimal"}
+    if response_schema is not None:
+        generation_config["responseMimeType"] = "application/json"
+        # Gemma must also get responseSchema, not just responseMimeType --
+        # without it, Gemma defaults to emitting a "thought": true reasoning
+        # part before the real answer, which breaks parts[0]-based extraction.
+        raw_schema = _resolve_raw_schema(
+            response_schema, extra_schema_properties, extra_required
+        )
+        if raw_schema:
+            generation_config["responseSchema"] = GeminiClient.sanitize_schema(
+                GeminiClient.resolve_refs(raw_schema)
+            )
+    return generation_config
+
+
+def _build_request_body(
+    model, system_instruction, contents, generation_config, tier, tools, inline_file
+) -> tuple[dict[str, Any], str | None]:
+    # systemInstruction as its own top-level field, same shape for
+    # every model -- current Gemma-4-on-Gemini-API docs show it
+    # supported natively; the earlier manual merge into `contents`
+    # was a workaround for older Gemma versions that didn't respect
+    # a separate systemInstruction field.
+    # Attempt to use or create explicit context cache for Gemini requests
+    cache_name = None
+    if "gemini" in model.lower():
+        cache_name = GeminiClient._get_or_create_cache(model, system_instruction)
+
+    parts: list[dict[str, Any]] = [{"text": contents}]
+    if inline_file is not None:
+        file_bytes, mime_type = inline_file
+        parts.append(
+            {
+                "inlineData": {
+                    "mimeType": mime_type,
+                    "data": base64.b64encode(file_bytes).decode("ascii"),
+                }
+            }
+        )
+
+    body: dict[str, Any] = {
+        "contents": [{"role": "user", "parts": parts}],
+        "generationConfig": generation_config,
+        "serviceTier": tier,
+    }
+    if cache_name:
+        body["cachedContent"] = cache_name
+    else:
+        body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+
+    if tools:
+        body["tools"] = tools
+    return body, cache_name
+
+
+def _evict_cache_entry(cache_name: str) -> None:
+    cls_key = None
+    for k, entry in GeminiClient._cache_map.items():
+        if entry.get("cache_name") == cache_name:
+            cls_key = k
+            break
+    if cls_key:
+        GeminiClient._cache_map.pop(cls_key, None)
+
+
+def _post_generate(url, body, used_key, cache_name, system_instruction):
+    resp = requests.post(
+        url,
+        json=body,
+        headers={"x-goog-api-key": used_key},
+        timeout=GeminiClient._timeout,
+    )
+    # Self-healing fallback: if cachedContent expired or was evicted (HTTP 400), fall back immediately
+    if resp.status_code == 400 and cache_name and "cache" in resp.text.lower():
+        # Evict from class map
+        _evict_cache_entry(cache_name)
+        cli_art.console.print(
+            f"    {theme.colorize_icon('warning')} Context cache expired or evicted. Self-healing fallback to inline systemInstruction...",
+            soft_wrap=True,
+        )
+        # Retry this attempt with inline systemInstruction directly
+        body.pop("cachedContent", None)
+        body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+        resp = requests.post(
+            url,
+            json=body,
+            headers={"x-goog-api-key": used_key},
+            timeout=GeminiClient._timeout,
+        )
+    return resp
+
+
+def _parse_generate_response(data: dict) -> tuple[str | None, dict]:
+    candidates = data.get("candidates", [])
+    if not candidates:
+        return None, data.get("usageMetadata", {})
+
+    usage = data.get("usageMetadata", {})
+
+    finish_reason = candidates[0].get("finishReason")
+    if finish_reason not in (None, "STOP", "MAX_TOKENS"):
+        cli_art.cli_warning(
+            f"{_FINISH_REASON_EXPLANATIONS.get(finish_reason, _FINISH_REASON_DEFAULT)} "
+            "Skipping this one and moving on."
+        )
+        # Raw API code kept as VERBOSE-only detail: it's the first
+        # thing worth knowing when debugging a prompt, and the last
+        # thing a job seeker needs on screen.
+        cli_art.detail(f"    finishReason={finish_reason!r}")
+        return None, usage
+    if finish_reason == "MAX_TOKENS":
+        usage["truncated"] = True
+
+    content = candidates[0].get("content", {})
+    parts = content.get("parts", [])
+    # Skip thinking parts (part.get("thought") is True) -- Gemma without
+    # a schema puts its reasoning in parts[0] and the real answer later;
+    # concatenate only the non-thought parts to get the actual response.
+    text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+    return text, usage
+
+
 class GeminiClient(metaclass=_GeminiClientMeta):
 
     _cache_map: dict[str, dict[str, Any]] = {}
@@ -812,174 +1049,31 @@ class GeminiClient(metaclass=_GeminiClientMeta):
             # Switching to a fresh key after a 429 doesn't spend a retry.
             if attempt - key_switches >= max_retries:
                 break
-            if "gemma" in model.lower():
-                elapsed = time.time() - GeminiClient._last_gemma_call_ts
-                if elapsed < GeminiClient.GEMMA_MIN_INTERVAL_SECS:
-                    wait = GeminiClient.GEMMA_MIN_INTERVAL_SECS - elapsed
-                    cli_art.console.print(
-                        f"    {theme.colorize_icon('hint')} Pacing Gemma call: waiting {wait:.1f}s (16k TPM cap)...",
-                        soft_wrap=True,
-                    )
-                    if (
-                        os.environ.get("CI") == "true"
-                        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
-                    ) and not hasattr(time.sleep, "assert_called"):
-                        pass
-                    else:
-                        time.sleep(wait)
-                GeminiClient._last_gemma_call_ts = time.time()
-
-            # Used to force temperature to 0.0 whenever response_schema was
-            # set, regardless of what the caller passed -- silently
-            # defeating orchestrator.py's stall-escalation block, which
-            # computes an escalating fix_temperature specifically for its
-            # own schema-constrained retry call. Real 2026-09-03 build: 4
-            # fix attempts against the same TemplateSchema came back
-            # byte-identical because every one of them was actually sent
-            # at temperature 0.0 no matter what fix_temperature said.
-            generation_config: dict = {"temperature": temperature}
-            if max_output_tokens is not None:
-                generation_config["maxOutputTokens"] = int(max_output_tokens)
-
-            if "gemma" in model.lower():
-                # Gemma 4 emits a "thought" reasoning preamble by default
-                # (see the thought-part filter below) -- those tokens are
-                # discarded but still billed against the 16k TPM cap.
-                # thinkingLevel: "minimal" suppresses them at the source.
-                generation_config["thinkingConfig"] = {"thinkingLevel": "minimal"}
-            elif "flash-lite" in model.lower():
-                # B46/P5#1 (phase-5-modernization.md): every flash-lite call
-                # (CRITIQUE_MODEL, BUILDER_MODEL, FIND_WEBSITE_MODEL,
-                # SCORE_MODEL) previously sent no thinkingConfig at all, so
-                # it ran at whatever Google's current default is for this
-                # tier -- confirmed "minimal", but this tier's default has
-                # already shifted once (Gemini 3.5 Flash rollout). Pinning
-                # it explicitly keeps today's behavior identical while
-                # making it immune to a future silent default change.
-                generation_config["thinkingConfig"] = {"thinkingLevel": "minimal"}
-
-            raw_schema = None
-            if response_schema is not None:
-                generation_config["responseMimeType"] = "application/json"
-                # Gemma must also get responseSchema, not just responseMimeType --
-                # without it, Gemma defaults to emitting a "thought": true reasoning
-                # part before the real answer, which breaks parts[0]-based extraction.
-                if hasattr(response_schema, "model_json_schema"):
-                    raw_schema = response_schema.model_json_schema()
-                elif hasattr(response_schema, "schema") and callable(
-                    response_schema.schema
-                ):
-                    raw_schema = response_schema.schema()
-                elif isinstance(response_schema, dict):
-                    raw_schema = response_schema
-                elif isinstance(response_schema, str):
-                    try:
-                        raw_schema = json.loads(response_schema)
-                    except json.JSONDecodeError:
-                        cli_art.console.print(
-                            f"{cli_art.ERROR} response_schema string is not valid JSON.",
-                            soft_wrap=True,
-                        )
-                if raw_schema and (extra_schema_properties or extra_required):
-                    # Callers that need profile-specific enum fields not knowable
-                    # at Pydantic class-definition time (e.g. orchestrator.py's
-                    # per-profile education achievement-key options) merge them
-                    # in here rather than passing a hand-built dict as
-                    # response_schema -- this keeps response_schema=SomeModel
-                    # identity-comparable in tests/mocks that route on it, and
-                    # keeps the merge applied before resolve_refs/sanitize_schema
-                    # so it goes through the exact same pipeline as every other
-                    # property. Copies rather than mutates raw_schema in place,
-                    # since a Pydantic-sourced dict could in principle be reused
-                    # across calls.
-                    raw_schema = dict(raw_schema)
-                    raw_schema["properties"] = {
-                        **raw_schema.get("properties", {}),
-                        **(extra_schema_properties or {}),
-                    }
-                    raw_schema["required"] = list(
-                        raw_schema.get("required", [])
-                    ) + list(extra_required or [])
-                if raw_schema:
-                    generation_config["responseSchema"] = GeminiClient.sanitize_schema(
-                        GeminiClient.resolve_refs(raw_schema)
-                    )
-
-            # systemInstruction as its own top-level field, same shape for
-            # every model -- current Gemma-4-on-Gemini-API docs show it
-            # supported natively; the earlier manual merge into `contents`
-            # was a workaround for older Gemma versions that didn't respect
-            # a separate systemInstruction field.
-            # Attempt to use or create explicit context cache for Gemini requests
-            cache_name = None
-            if "gemini" in model.lower():
-                cache_name = GeminiClient._get_or_create_cache(
-                    model, system_instruction
-                )
-
-            parts: list[dict[str, Any]] = [{"text": contents}]
-            if inline_file is not None:
-                file_bytes, mime_type = inline_file
-                parts.append(
-                    {
-                        "inlineData": {
-                            "mimeType": mime_type,
-                            "data": base64.b64encode(file_bytes).decode("ascii"),
-                        }
-                    }
-                )
-
-            body: dict[str, Any] = {
-                "contents": [{"role": "user", "parts": parts}],
-                "generationConfig": generation_config,
-                "serviceTier": tier,
-            }
-            if cache_name:
-                body["cachedContent"] = cache_name
-            else:
-                body["systemInstruction"] = {"parts": [{"text": system_instruction}]}
-
-            if tools:
-                body["tools"] = tools
+            _pace_gemma(model)
+            generation_config = _build_generation_config(
+                model,
+                temperature,
+                max_output_tokens,
+                response_schema,
+                extra_schema_properties,
+                extra_required,
+            )
+            body, cache_name = _build_request_body(
+                model,
+                system_instruction,
+                contents,
+                generation_config,
+                tier,
+                tools,
+                inline_file,
+            )
 
             rate_limiter.acquire(1.0)
             used_key = _get_auth_headers(model)["x-goog-api-key"]
             try:
-                resp = requests.post(
-                    url,
-                    json=body,
-                    headers={"x-goog-api-key": used_key},
-                    timeout=GeminiClient._timeout,
+                resp = _post_generate(
+                    url, body, used_key, cache_name, system_instruction
                 )
-                # Self-healing fallback: if cachedContent expired or was evicted (HTTP 400), fall back immediately
-                if (
-                    resp.status_code == 400
-                    and cache_name
-                    and "cache" in resp.text.lower()
-                ):
-                    # Evict from class map
-                    cls_key = None
-                    for k, entry in GeminiClient._cache_map.items():
-                        if entry.get("cache_name") == cache_name:
-                            cls_key = k
-                            break
-                    if cls_key:
-                        GeminiClient._cache_map.pop(cls_key, None)
-                    cli_art.console.print(
-                        f"    {theme.colorize_icon('warning')} Context cache expired or evicted. Self-healing fallback to inline systemInstruction...",
-                        soft_wrap=True,
-                    )
-                    # Retry this attempt with inline systemInstruction directly
-                    body.pop("cachedContent", None)
-                    body["systemInstruction"] = {
-                        "parts": [{"text": system_instruction}]
-                    }
-                    resp = requests.post(
-                        url,
-                        json=body,
-                        headers={"x-goog-api-key": used_key},
-                        timeout=GeminiClient._timeout,
-                    )
             except requests.exceptions.RequestException as e:
                 failure_streak += 1
                 if model_fallback and failure_streak >= 2 and model in fallbacks:
@@ -991,15 +1085,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                     model = fallback_model
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
-                sleep_dur = (
-                    0
-                    if (
-                        os.environ.get("CI") == "true"
-                        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
-                    )
-                    else min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
-                    + random.uniform(1, 4)
-                )
+                sleep_dur = _retry_sleep_secs(attempt)
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Network error ({GeminiClient._timeout}s): {type(e).__name__}: {str(e)[:120]}. "
                     f"Waiting {sleep_dur:.1f}s before retry {attempt+1}/{max_retries}...",
@@ -1040,21 +1126,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                     url = f"{BASE_URL}/{model}:generateContent"
                     failure_streak = 0
                 server_delay = _server_retry_delay_secs(resp)
-                if (
-                    os.environ.get("CI") == "true"
-                    or os.environ.get("RESUME_BUILDER_TESTING") == "1"
-                ):
-                    sleep_dur = 0
-                elif server_delay is not None:
-                    # The server's own RetryInfo hint beats our guessed
-                    # exponential curve -- a small buffer on top since the
-                    # hint is the earliest safe retry time, not a
-                    # guarantee, and free-tier quota windows are unforgiving.
-                    sleep_dur = server_delay + random.uniform(1, 4)
-                else:
-                    sleep_dur = min(
-                        BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
-                    ) + random.uniform(1, 4)
+                sleep_dur = _retry_sleep_secs(attempt, server_delay)
                 cli_art.console.print(
                     f"    {cli_art.WARNING} HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s"
                     f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
@@ -1093,33 +1165,9 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                 )
                 return None, {}
 
-            candidates = data.get("candidates", [])
-            if not candidates:
-                return None, data.get("usageMetadata", {})
-
-            usage = data.get("usageMetadata", {})
-
-            finish_reason = candidates[0].get("finishReason")
-            if finish_reason not in (None, "STOP", "MAX_TOKENS"):
-                cli_art.cli_warning(
-                    f"{_FINISH_REASON_EXPLANATIONS.get(finish_reason, _FINISH_REASON_DEFAULT)} "
-                    "Skipping this one and moving on."
-                )
-                # Raw API code kept as VERBOSE-only detail: it's the first
-                # thing worth knowing when debugging a prompt, and the last
-                # thing a job seeker needs on screen.
-                cli_art.detail(f"    finishReason={finish_reason!r}")
+            text, usage = _parse_generate_response(data)
+            if text is None:
                 return None, usage
-            if finish_reason == "MAX_TOKENS":
-                usage["truncated"] = True
-
-            content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
-            # Skip thinking parts (part.get("thought") is True) -- Gemma without
-            # a schema puts its reasoning in parts[0] and the real answer later;
-            # concatenate only the non-thought parts to get the actual response.
-            text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
-            failure_streak = 0
             GeminiClient._consecutive_full_failures = 0
             return text, usage
 
