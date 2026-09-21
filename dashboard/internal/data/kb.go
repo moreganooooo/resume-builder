@@ -47,7 +47,12 @@ type metricsJSONFile struct {
 
 type factsJSONFile struct {
 	Facts []struct {
-		ID         string `json:"id"`
+		ID string `json:"id"`
+		// Profiles write label/claim/caveat (facts_manager.py); statement is
+		// kept as a fallback title for older files.
+		Label      string `json:"label"`
+		Claim      string `json:"claim"`
+		Caveat     string `json:"caveat"`
 		Statement  string `json:"statement"`
 		Category   string `json:"category"`
 		Confidence string `json:"confidence"`
@@ -152,8 +157,18 @@ func LoadKBItems(kbDir string) []KBItem {
 		var ff factsJSONFile
 		if err := json.Unmarshal(data, &ff); err == nil {
 			for _, f := range ff.Facts {
+				title := f.Label
+				if title == "" {
+					title = f.Statement
+				}
+				if title == "" {
+					title = f.Claim
+				}
 				var content strings.Builder
-				fmt.Fprintf(&content, "### %s\n\n", f.Statement)
+				fmt.Fprintf(&content, "### %s\n\n", title)
+				if f.Claim != "" && f.Claim != title {
+					fmt.Fprintf(&content, "%s\n\n", f.Claim)
+				}
 				if f.Category != "" {
 					fmt.Fprintf(&content, "- **Category:** %s\n", f.Category)
 				}
@@ -166,10 +181,13 @@ func LoadKBItems(kbDir string) []KBItem {
 				if f.Context != "" {
 					fmt.Fprintf(&content, "\n**Context:**\n%s\n", f.Context)
 				}
+				if f.Caveat != "" {
+					fmt.Fprintf(&content, "\n> **Caveat:** %s\n", f.Caveat)
+				}
 
 				items = append(items, KBItem{
 					ID:         f.ID,
-					Title:      f.Statement,
+					Title:      title,
 					Category:   "Facts",
 					Content:    content.String(),
 					Tags:       []string{f.Category},
