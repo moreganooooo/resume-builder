@@ -22,12 +22,17 @@ ARTIFACTS_DIR = os.path.join(PROJECT_ROOT, "artifacts")
 # question, so it costs one Gemini call per capture.
 ALL_SCREENS = [
     "menu",
+    "help",
+    "light",
+    "cli_menu",
     "pipeline",
     "progress",
     "heatmap",
     "jobs",
+    "jobs_help",
     "matrix",
     "kb_view",
+    "kb_metrics",
     "answers",
     "mobile",
 ]
