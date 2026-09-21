@@ -1026,7 +1026,8 @@ def _report_enrichment(
     resolved_office = str(enrichment.get("resolved_address") or "")
     company_display = item.get("company") or "Unknown"
     if status == "resolved":
-        loc_display_str = f" → {resolved_office}" if resolved_office else ""
+        # Avoid logging clear-text location/address details from enrichment data.
+        loc_display_str = " → [address redacted]" if resolved_office else ""
         print(
             f"  [{idx}/{total}] ✓ {company_display}: resolved via {source}{loc_display_str}"
         )
