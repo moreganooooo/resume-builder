@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/moreganooooo/resume-builder/dashboard/internal/answers"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
@@ -59,5 +60,41 @@ func TestAnswersWrapsLongAnswerAndKeepsInputVisible(t *testing.T) {
 	}
 	if !strings.Contains(view, "Enter send") {
 		t.Fatalf("footer pushed off-screen:\n%s", view)
+	}
+}
+
+func TestAnswersScrollback(t *testing.T) {
+	m := NewAnswersModel(theme.NewTheme("resume-builder"), model.JobRow{Path: "job"}, "python3", ".", 40, 12)
+	for _, word := range []string{"FIRST", "SECOND", "THIRD"} {
+		m.turns = append(m.turns, answerTurn{
+			Question: word, Answer: strings.Repeat("filler words here ", 8) + word + "END",
+		})
+	}
+	if !strings.Contains(m.View(), "THIRDEND") || strings.Contains(ansi.Strip(m.View()), "You: FIRST") {
+		t.Fatalf("default view should follow the newest answer:\n%s", m.View())
+	}
+	pgUp := tea.KeyPressMsg(tea.Key{Code: tea.KeyPgUp})
+	for i := 0; i < 20; i++ { // well past the top; must clamp
+		m, _ = m.Update(pgUp)
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "You: FIRST") {
+		t.Fatalf("PgUp should reach the oldest turn:\n%s", m.View())
+	}
+	if len(strings.Split(m.View(), "\n")) > 12 {
+		t.Fatal("scrolled view exceeds terminal height")
+	}
+	for i := 0; i < 20; i++ {
+		m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyPgDown}))
+	}
+	if m.scroll != 0 || !strings.Contains(m.View(), "THIRDEND") {
+		t.Fatalf("PgDn should return to the newest line (scroll=%d)", m.scroll)
+	}
+	m, _ = m.Update(tea.MouseWheelMsg(tea.Mouse{Button: tea.MouseWheelUp}))
+	if m.scroll == 0 {
+		t.Fatal("mouse wheel up should scroll back")
+	}
+	m, _ = m.Update(answers.AnswerMsg{Answer: "fresh"})
+	if m.scroll != 0 {
+		t.Fatal("a new answer should snap back to the newest line")
 	}
 }

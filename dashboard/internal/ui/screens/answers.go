@@ -35,10 +35,13 @@ type AnswersModel struct {
 	status        string
 	charLimit     int
 	width, height int
-	theme         theme.Theme
-	pythonPath    string
-	projectRoot   string
-	cancel        context.CancelFunc
+	// scroll is how many conversation lines the view sits above the newest
+	// one; 0 follows the latest answer.
+	scroll      int
+	theme       theme.Theme
+	pythonPath  string
+	projectRoot string
+	cancel      context.CancelFunc
 }
 
 func NewAnswersModel(t theme.Theme, job model.JobRow, pythonPath, projectRoot string, width, height int) AnswersModel {
@@ -68,6 +71,7 @@ func (m AnswersModel) Update(msg tea.Msg) (AnswersModel, tea.Cmd) {
 	case answers.AnswerMsg:
 		m.busy = false
 		m.status = "Answer ready"
+		m.scroll = 0
 		newTurn := answerTurn{
 			Question: m.input.Value(), Answer: msg.Answer, Kind: msg.Kind,
 			Limit: msg.CharLimit, Warnings: msg.Warnings,
@@ -94,8 +98,24 @@ func (m AnswersModel) Update(msg tea.Msg) (AnswersModel, tea.Cmd) {
 			m.cancel = nil
 		}
 		return m, nil
+	case tea.MouseWheelMsg:
+		// Button, not Y, gives the wheel direction (see kb.go).
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			m.scrollBy(3)
+		case tea.MouseWheelDown:
+			m.scrollBy(-3)
+		}
+		return m, nil
 	case tea.KeyPressMsg:
 		switch msg.String() {
+		// Page keys only: the arrow keys belong to the multi-line input.
+		case "pgup", "ctrl+u":
+			m.scrollBy(max(1, m.bodyHeight()/2))
+			return m, nil
+		case "pgdown", "ctrl+d":
+			m.scrollBy(-max(1, m.bodyHeight()/2))
+			return m, nil
 		case "esc":
 			if m.busy && m.cancel != nil {
 				m.cancel()
@@ -158,8 +178,37 @@ func (m AnswersModel) Update(msg tea.Msg) (AnswersModel, tea.Cmd) {
 func (m AnswersModel) View() string {
 	header := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).
 		Render(ansi.Truncate(fmt.Sprintf("Application Answers · %s · %s", m.job.Title, m.job.Company), max(1, m.width), "…"))
-	// Questions and answers word-wrap to the terminal width -- per-line
-	// truncation used to cut every answer after its first line.
+	bodyLines := m.conversationLines()
+	inputLines := strings.Split(m.input.View(), "\n")
+	hint := ""
+	// Header, input and footer stay put; the conversation scrolls between
+	// them, following the newest line unless the user has paged back.
+	if avail := m.bodyHeight(); avail > 0 && len(bodyLines) > avail {
+		scroll := min(m.scroll, len(bodyLines)-avail)
+		endLine := len(bodyLines) - scroll
+		bodyLines = bodyLines[endLine-avail : endLine]
+		if scroll > 0 {
+			hint = fmt.Sprintf(" · ↑%d PgUp/PgDn", scroll)
+		} else {
+			hint = " · PgUp older"
+		}
+	}
+	footer := lipgloss.NewStyle().Foreground(m.theme.Subtext).
+		Render(fmt.Sprintf("%s · Enter send · Esc back · q quit%s", m.status, hint))
+	lines := []string{header, ""}
+	lines = append(lines, bodyLines...)
+	lines = append(lines, "")
+	lines = append(lines, inputLines...)
+	lines = append(lines, footer)
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, max(1, m.width), "…")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// conversationLines renders every turn, word-wrapped to the terminal width --
+// per-line truncation used to cut every answer after its first line.
+func (m AnswersModel) conversationLines() []string {
 	wrap := func(s string) string { return ansi.Wrap(s, max(1, m.width), "") }
 	var body []string
 	for _, turn := range m.turns {
@@ -176,30 +225,26 @@ func (m AnswersModel) View() string {
 		body = append(body, wrap(lipgloss.NewStyle().Foreground(m.theme.Subtext).
 			Render("Paste an application question and press Enter.")))
 	}
-	footer := lipgloss.NewStyle().Foreground(m.theme.Subtext).
-		Render(fmt.Sprintf("%s · Enter send · Esc back · q quit", m.status))
-	bodyLines := strings.Split(strings.Join(body, "\n"), "\n")
-	inputLines := strings.Split(m.input.View(), "\n")
-	// Header, input and footer stay put; when wrapped answers outgrow the
-	// screen, keep the newest body lines so the latest answer stays visible.
-	if m.height > 0 {
-		avail := m.height - len(inputLines) - 4 // header, two blanks, footer
-		if avail < 1 {
-			avail = 1
-		}
-		if len(bodyLines) > avail {
-			bodyLines = bodyLines[len(bodyLines)-avail:]
-		}
+	return strings.Split(strings.Join(body, "\n"), "\n")
+}
+
+// bodyHeight is the number of conversation rows that fit between the header
+// and the input, or 0 when the height is unknown (render everything).
+func (m AnswersModel) bodyHeight() int {
+	if m.height <= 0 {
+		return 0
 	}
-	lines := []string{header, ""}
-	lines = append(lines, bodyLines...)
-	lines = append(lines, "")
-	lines = append(lines, inputLines...)
-	lines = append(lines, footer)
-	for i, line := range lines {
-		lines[i] = ansi.Truncate(line, max(1, m.width), "…")
+	return max(1, m.height-len(strings.Split(m.input.View(), "\n"))-4) // header, two blanks, footer
+}
+
+// scrollBy moves the view delta lines toward older turns (negative: newer),
+// clamped so it can neither pass the first line nor sink below the newest.
+func (m *AnswersModel) scrollBy(delta int) {
+	top := 0
+	if avail := m.bodyHeight(); avail > 0 {
+		top = max(0, len(m.conversationLines())-avail)
 	}
-	return strings.Join(lines, "\n")
+	m.scroll = min(max(0, m.scroll+delta), top)
 }
 
 func max(a, b int) int {
