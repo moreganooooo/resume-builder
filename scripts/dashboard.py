@@ -115,7 +115,9 @@ def compile_dashboard_if_needed() -> str | None:
         return None
 
 
-def run(profile: str | None = None, view: str = "", job: str = "") -> tuple[bool, str]:
+def run(
+    profile: str | None = None, view: str = "", job: str = "", theme: str = ""
+) -> tuple[bool, str]:
     """Launches the dashboard TUI against `profile`'s applications.md,
     full-screen and interactive -- inherits this process's stdio (unlike
     every other subprocess call in this codebase, which captures output)
@@ -212,6 +214,8 @@ def run(profile: str | None = None, view: str = "", job: str = "") -> tuple[bool
                 "-backlog",
                 str(backlog),
             ]
+        if theme:
+            cmd.extend(["-theme", theme])
         if view:
             cmd.extend(["-view", view])
         if job:
@@ -238,8 +242,11 @@ if __name__ == "__main__":
     _parser = argparse.ArgumentParser(description="Launch the dashboard TUI.")
     _parser.add_argument("--view", default="", help="Initial view, e.g. answers")
     _parser.add_argument("--job", default="", help="Job path or id for --view")
+    _parser.add_argument(
+        "--theme", default="", help="Theme name, e.g. catppuccin-latte"
+    )
     _args = _parser.parse_args()
-    ok, message = run(view=_args.view, job=_args.job)
+    ok, message = run(view=_args.view, job=_args.job, theme=_args.theme)
     if not ok:
         print(message, file=sys.stderr)
         sys.exit(1)
