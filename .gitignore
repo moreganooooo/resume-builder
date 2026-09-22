@@ -173,3 +173,12 @@ scratch/*
 .gitignore
 backups/relabel-20260916/bullet-bank-keepers.csv
 backups/relabel-20260916/bullet-bank-keepers-audited.csv
+
+# Tool output and research scratch, not source. These were tracked by
+# accident and were the bulk of the repo (~49 MB) until their history was
+# rewritten out on 2026-09-22: nogic's local index, graphify's generated
+# graph/AST/cache, and the scraped screenshots behind docs/morgan_research.
+# Nothing references them outside graphify's own generated index.
+/.nogic/
+/graphify-out/
+/docs/morgan_research/CrushPhotos/
