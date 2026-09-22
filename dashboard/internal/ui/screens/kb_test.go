@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -180,5 +181,113 @@ func TestKBModel_MouseClick(t *testing.T) {
 	m, _ = m.Update(tea.MouseClickMsg{X: info.StartX + 1, Y: info.StartY})
 	if m.cursor != 1 {
 		t.Errorf("expected cursor 1 after clicking kb item 1, got %d", m.cursor)
+	}
+}
+
+// TestKB_SkillsTabRunsToolsWithoutTouchingItems pins the two things that make
+// the Skills tab safe to sit alongside the content categories: it lists tools
+// rather than knowledge-base items, and Enter asks the host to run one instead
+// of doing it here.
+func TestKB_SkillsTabRunsToolsWithoutTouchingItems(t *testing.T) {
+	m := NewKBModel(theme.NewTheme("catppuccin-mocha"), []data.KBItem{
+		{Title: "Adobe Sign", Category: "Tools", Content: "verified"},
+	}, 120, 40)
+
+	m, _ = m.handleKey("6", "")
+	if m.activeCategory != kbSkillsCategory {
+		t.Fatalf("expected key 6 to select the Skills tab, got %q", m.activeCategory)
+	}
+	if got := m.visibleItems(); len(got) != 0 {
+		t.Errorf("the Skills tab holds no knowledge-base items, got %d", len(got))
+	}
+
+	view := ansi.Strip(m.View())
+	for _, want := range []string{"Skills", "View & Manage Profile Skills", "Enter"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("expected the Skills tab view to contain %q:\n%s", want, view)
+		}
+	}
+	// "Adobe Sign" is a Tools item; it must not leak into this tab.
+	if strings.Contains(view, "Adobe Sign") {
+		t.Errorf("a knowledge-base item rendered on the Skills tab:\n%s", view)
+	}
+
+	_, cmd := m.handleKey("enter", "")
+	if cmd == nil {
+		t.Fatal("expected Enter to emit a run-tool message")
+	}
+	msg, ok := cmd().(KBRunToolMsg)
+	if !ok || msg.Action != "manage_skills" {
+		t.Errorf("expected KBRunToolMsg for manage_skills, got %#v", cmd())
+	}
+}
+
+func clusterKBItems() []data.KBItem {
+	return []data.KBItem{
+		{Title: "HubSpot", Category: "Tools"},
+		{Title: "Adobe Sign", Category: "Tools"},
+		{Title: "42% lift", Category: "Metrics"},
+		{Title: "Odd One", Category: "Claims"},
+	}
+}
+
+// The tree's rows are a superset of the items, and every item row still
+// maps back to its own index -- that mapping is what the detail pane, the
+// arrow keys and the mouse hit-test all read.
+func TestKBClusterNodesMapRowsToItems(t *testing.T) {
+	cats := []string{"All", "Tools", "Metrics", "Facts", "Projects", kbSkillsCategory}
+	nodes, rowItems := kbClusterNodes(cats, clusterKBItems())
+
+	if len(rowItems) != ClusterRowCount(nodes) {
+		t.Fatalf("%d row mappings for %d rows", len(rowItems), ClusterRowCount(nodes))
+	}
+	// Tools(2) + Metrics(1) + Claims(1) = 3 groups, 4 items, 7 rows.
+	if len(nodes) != 3 || len(rowItems) != 7 {
+		t.Fatalf("got %d groups / %d rows, want 3 / 7", len(nodes), len(rowItems))
+	}
+	for row, item := range rowItems {
+		node, isGroup, _ := ClusterNodeAt(nodes, row)
+		if isGroup != (item < 0) {
+			t.Errorf("row %d: group=%v but item index %d", row, isGroup, item)
+		}
+		if !isGroup && node.Label != clusterKBItems()[item].Title {
+			t.Errorf("row %d points at %q, drew %q", row, clusterKBItems()[item].Title, node.Label)
+		}
+	}
+}
+
+// An empty category is dropped, and a category the tab bar never names is
+// still drawn -- the flat list showed it, so the tree must not hide it.
+func TestKBClusterNodesKeepTabOrderAndUnnamedCategories(t *testing.T) {
+	cats := []string{"All", "Tools", "Metrics", "Facts", "Projects", kbSkillsCategory}
+	nodes, _ := kbClusterNodes(cats, clusterKBItems())
+	var got []string
+	for _, n := range nodes {
+		got = append(got, n.Label)
+	}
+	want := []string{"Tools", "Metrics", "Claims"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("group order = %v, want %v", got, want)
+	}
+}
+
+// The "All" tab draws the tree; a single-category tab keeps the flat list,
+// where a tree would be one root over a list it adds nothing to.
+func TestKBAllTabRendersTheTree(t *testing.T) {
+	m := NewKBModel(theme.NewTheme("catppuccin-mocha"), clusterKBItems(), 120, 30)
+	all := ansi.Strip(m.View())
+	// With the trailing space: the panes' own rounded borders are a run of
+	// ─ with no space after, so a bare "╰──" would match those too.
+	if !strings.Contains(all, "├── ") && !strings.Contains(all, "╰── ") {
+		t.Errorf("the All tab drew no branch glyphs:\n%s", all)
+	}
+	if strings.Contains(all, "[Tool]") {
+		t.Errorf("the All tab still drew the flat category badge:\n%s", all)
+	}
+
+	m.activeCategory = "Tools"
+	tools := ansi.Strip(m.View())
+	if strings.Contains(tools, "╰── ") {
+		t.Errorf("a single-category tab drew a tree:\n%s", tools)
 	}
 }

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Resume (PDF)" description="One-page ATS-safe resume — DM Serif Display over DM Sans, black on white, strict page budget." -->
+<helmet><script src="./ds-base.js"></script><style>body{margin:0;background:#fff}@media print{@page{margin:0.55in 0.6in}}</style></helmet>
+<div style="background:#fff;max-width:8.5in;margin:0 auto;padding:0.55in 0.6in;font-family:var(--font-body);color:var(--print-text)">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.PrintPage" hint-size="100%,900px">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.PrintHeader" name="Morgan Avery" tagline="SENIOR BRAND STRATEGIST | CONTENT LEAD" contacts="{{ contacts }}" hint-size="100%,120px"></x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.PrintSection" title="PROFESSIONAL SUMMARY" avoid-break="{{ true }}" hint-size="100%,90px">Brand strategist with eleven years across CPG, retail and agency work. Builds campaign systems that survive handoff — seasonal planning frameworks, voice guidelines and review processes that let nine-person teams ship without a bottleneck.</x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.PrintSection" title="SKILLS" avoid-break="{{ true }}" hint-size="100%,90px">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.PrintSkills" groups="{{ skillGroups }}" hint-size="100%,60px"></x-import>
+</x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.PrintSection" title="WORK EXPERIENCE" hint-size="100%,320px">
+<sc-for list="{{ roles }}" as="role" hint-placeholder-count="3">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.PrintEntry" title="{{ role.title }}" meta="{{ role.meta }}" bullets="{{ role.bullets }}" hint-size="100%,100px"></x-import>
+</sc-for>
+</x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.PrintSection" title="EDUCATION" avoid-break="{{ true }}" hint-size="100%,60px">
+<div style="border-bottom:0.018cm solid #9aa3af;font-weight:800;font-size:var(--print-body-size);line-height:var(--print-lh)">BA, Journalism &amp; Mass Communications<span style="color:#9aa3af;padding:0 4px">|</span>University of Kansas<span style="color:#9aa3af;padding:0 4px">|</span>Lawrence, KS<span style="color:#9aa3af;padding:0 4px">|</span>2013</div>
+</x-import>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      contacts: ["(785) 555-0134", "morgan@example.com", "linkedin.com/in/morganavery", "Lawrence, KS"],
+      skillGroups: [
+        { label: "Brand", items: ["Positioning", "Naming", "Voice & tone", "Brand architecture"] },
+        { label: "Campaign", items: ["Seasonal planning", "Concept development", "Retail media", "Production oversight"] },
+        { label: "Leadership", items: ["Team building", "Budget ownership", "Agency management", "Cross-functional review"] },
+      ],
+      roles: [
+        { title: "Creative Director, Consumer Packaged Goods",
+          meta: ["Callahan Creek", "450 staff", "Lawrence, KS", "2019 – 2024"],
+          bullets: [
+            "Rebuilt the seasonal campaign process, cutting concept-to-air from 11 weeks to 6 across four product lines.",
+            "Led a team of nine — three copy, four art direction, two production — through a merger and two leadership changes.",
+            "Owned $4.1M in annual media and production budget, coming in under plan in three of five years.",
+          ] },
+        { title: "Associate Creative Director, Retail & Grocery",
+          meta: ["VML", "2,000+ staff", "Kansas City, MO", "2015 – 2019"],
+          bullets: [
+            "Ran the grocery vertical's weekly circular creative, a 52-week cadence with zero missed drops.",
+            "Introduced concept testing ahead of production, which cut late-stage revisions by roughly a third.",
+          ] },
+        { title: "Senior Copywriter",
+          meta: ["Bluestem Cooperative", "180 staff", "Lawrence, KS", "2013 – 2015"],
+          bullets: ["Wrote member-facing campaigns, annual reports and internal comms for a 40,000-member cooperative."] },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!-- @dsCard group="Components" viewport="700x470" name="File picker & editor" subtitle="FilePicker and TextEditor — the two places the user brings in or writes their own material" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:470px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;gap:12px}.k{font-size:11px;color:var(--tui-subtext);line-height:1.55}.lab{font-size:10px;letter-spacing:.08em;color:var(--tui-subtext)}.b{border:1px solid var(--tui-overlay);border-radius:4px;padding:11px 13px;display:flex;flex-direction:column;gap:7px}</style></head><body><div class="lab">FILEPICKER — ONBOARDING STAGE ONE</div><div class="b" id="d1"></div>
+<div class="lab">TEXTEDITOR — COVER LETTER</div><div id="d2"></div>
+<div class="k">An unreadable file is shown in Overlay with the reason attached, never filtered out: hiding it makes the user wonder whether the scan saw it. The path truncates from the left because the end of a path is the part that identifies it. The editor counts <span style="color:var(--tui-text)">characters</span>, not words — ATS forms truncate on characters.</div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="../_ds_bundle.js"></script><script>
+const {FilePicker,TextEditor}=window.ResumeBuilderDesignSystem_2d03b1,e=React.createElement;
+ReactDOM.createRoot(document.getElementById('d1')).render(e(FilePicker,{
+ path:'~/Documents/job-search/materials',allowed:['.pdf','.docx','.md','.txt'],cursor:2,selected:[0,2],
+ entries:[
+  {name:'resume-2026-general',dir:false,size:'82 KB'},
+  {name:'archive',dir:true,size:'14 items'},
+  {name:'cover-letter-northwind.docx',size:'21 KB'},
+  {name:'portfolio.sketch',size:'—',note:'unsupported type',disabled:true},
+  {name:'notes-on-roles.md',size:'6 KB'},
+ ]}));
+ReactDOM.createRoot(document.getElementById('d2')).render(e(TextEditor,{
+ cursorLine:3,cursorCol:44,count:1284,softLimit:1200,hardLimit:2000,
+ lines:['Dear hiring team,','',
+  'Northwind\u2019s move to a single editorial roadmap is the',
+  {text:'reason I applied. I spent the last three years doing',wrapped:false},
+  {text:'exactly that at a company half your size.',wrapped:true}]}));
+</script></body></html>

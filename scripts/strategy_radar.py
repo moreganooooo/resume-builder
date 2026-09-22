@@ -373,7 +373,7 @@ def render_strategy_radar_hud(report: Dict[str, Any]) -> None:
     if report["playbooks"]:
         cli_art.console.print()
         cli_art.console.print(
-            f"[bold {theme.BRAND_ACCENT}]⚡ Situation Room Tactical Playbooks[/]"
+            f"[bold {theme.BRAND_ACCENT}]▶ Situation Room Tactical Playbooks[/]"
         )
         for pb in report["playbooks"]:
             cli_art.console.print(
@@ -391,7 +391,7 @@ def render_strategy_radar_hud(report: Dict[str, Any]) -> None:
     if report.get("evidence_recommendations"):
         cli_art.console.print()
         cli_art.console.print(
-            f"[bold {theme.BRAND}]📖 Top Evidence Clusters for Cover Letter & Why Narrative[/]"
+            f"[bold {theme.BRAND}]⇪ Top Evidence Clusters for Cover Letter & Why Narrative[/]"
         )
         for ev in report["evidence_recommendations"]:
             name = ev.get("cluster") or ev.get("Evidence Cluster") or "Evidence Cluster"
@@ -407,7 +407,7 @@ def render_strategy_radar_hud(report: Dict[str, Any]) -> None:
     # Recommended Bullet Bank Proof
     if report.get("bullet_recommendations"):
         cli_art.console.print(
-            f"[bold {theme.BRAND}]🎯 Recommended Bullet Bank Anchors[/]"
+            f"[bold {theme.BRAND}]⌖ Recommended Bullet Bank Anchors[/]"
         )
         for b in report["bullet_recommendations"]:
             bullet_text = b[0]

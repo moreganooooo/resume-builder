@@ -544,7 +544,7 @@ def run_skills_menu():
 
         choices = [
             charm_prompt.Heading("Skills & Tools"),
-            questionary.Choice("➕  Add New Skill/Tool", "add_skill"),
+            questionary.Choice("+  Add New Skill/Tool", "add_skill"),
         ]
         if tools:
             choices.append(
@@ -560,10 +560,10 @@ def run_skills_menu():
             questionary.Choice(
                 "★  Review Staged Career Facts (D10 Gate)", "review_staged_facts"
             ),
-            questionary.Choice("📜  View Verified Facts Ledger", "view_facts_ledger"),
+            questionary.Choice("▥  View Verified Facts Ledger", "view_facts_ledger"),
             charm_prompt.Heading("Maintenance"),
             questionary.Choice(
-                "🚫  Manage Dismissed Skills (Not My Background)", "manage_dismissed"
+                "⊘  Manage Dismissed Skills (Not My Background)", "manage_dismissed"
             ),
             questionary.Choice("⬅  Back to Settings & Upkeep", "back"),
         ]

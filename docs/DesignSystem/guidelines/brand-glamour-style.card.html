@@ -1,0 +1,28 @@
+<!-- @dsCard group="Brand" viewport="700x400" name="Glamour style" subtitle="assets/glamour-resumebuilder.json — reports rendered in our palette, not Glamour's default dark" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../_ds_bundle.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:400px;background:var(--tui-base);padding:16px;font-family:var(--font-mono);font-size:12px;color:var(--tui-text)}.lbl{color:var(--tui-subtext);font-size:10px;letter-spacing:.08em;margin:12px 0 5px}.lbl:first-child{margin-top:0}.k{color:var(--tui-subtext);font-size:11px}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+const { GlamourDoc, TuiPanel } = window.ResumeBuilderDesignSystem_2d03b1;
+const SRC='## Where things stand\n\nSixty-four roles scanned this week, twelve scored at or above **4.0**.\n\n- Applied 9, up three week over week\n- Median first response 6 days\n\n### Coverage gaps\n\nTwelve roles are scored but have **no tailored bullets** yet.';
+function Demo(){return (<div>
+<div className="lbl">RENDERED REPORT</div>
+<TuiPanel variant="idle" pad="detail"><GlamourDoc source={SRC} /></TuiPanel>
+<div className="lbl">WHAT THE STYLE FILE SETS</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 18px'}} className="k">
+<div><span style={{color:'var(--tui-blue)',fontWeight:700}}>h1 / h2</span> — Blue, h1 wrapped in ✦ ✧</div>
+<div><span style={{color:'var(--tui-sky)',fontWeight:700}}>h3+</span> — Sky, so depth reads without a new hue</div>
+<div><span style={{color:'var(--tui-mauve)'}}>•</span> list bullets — Mauve</div>
+<div><span style={{color:'var(--tui-teal)',background:'var(--tui-surface)'}}>&nbsp;inline code&nbsp;</span> — Teal on Surface</div>
+<div><span style={{color:'var(--tui-blue)',textDecoration:'underline'}}>links</span> — Blue underlined, label Mauve bold</div>
+<div><span style={{color:'var(--tui-overlay)'}}>│ ├ ─</span> tables and rules — Overlay</div>
+</div>
+<div className="k" style={{marginTop:12}}>Emoji are off: reports are technical, and Glamour's default set breaks column math the same way the banned glyphs do. Headings deliberately avoid Mauve at full strength — inside a pane, Mauve means selection, and a heading is not selected.</div>
+<div className="k" style={{marginTop:8}}>Load with <span style={{color:'var(--tui-text)'}}>glamour.WithStylePath("assets/glamour-resumebuilder.json")</span>, or embed the file and pass <span style={{color:'var(--tui-text)'}}>glamour.WithStyles</span> so a shipped binary carries it.</div>
+</div>);}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script></body></html>

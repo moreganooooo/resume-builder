@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="CLI script menu" description="Banner + grouped selectable menu + footer — the shell for any new resume-builder CLI screen." -->
+<helmet><script src="./ds-base.js"></script><style>html,body{height:100%;margin:0}body{background:#14141f}</style></helmet>
+<div style="width:100%;height:100vh;background:var(--tui-base);font-family:var(--font-mono);font-size:var(--tui-font-size);line-height:var(--tui-line-height);color:var(--tui-text);display:flex;flex-direction:column;padding:34px;box-sizing:border-box;overflow:hidden">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.CliModeBar" screen="{{ screenLabel }}" hint-size="100%,29px"></x-import>
+<div style="height:34px"></div>
+<div style="color:var(--tui-mauve);font-weight:700">{{ title }}</div>
+<div style="height:12px"></div>
+<div style="flex:1;overflow-y:auto">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.CliMenu" groups="{{ groups }}" cursor="{{ cursor }}" onSelect="{{ select }}" hint-size="100%,100%"></x-import>
+</div>
+<div style="height:21px"></div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.CliFooterBar" variant="nav" hint-size="100%,21px"></x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+// Every resume-builder CLI screen (Find Jobs, Build Documents, Settings,
+// Bullet Bank...) is this exact shell: CliModeBar names the screen,
+// CliMenu groups the actions under UPPERCASE labels, CliFooterBar's "nav"
+// variant runs until a script starts (swap to "execution" then — see the
+// CLI script chrome specimen card for that state).
+//
+// Replace GROUPS with the screen's own groups; keep the shape:
+// [{ label: "GROUP LABEL", items: [{ icon, label, hint }] }].
+const GROUPS = [
+  { label: "GROUP ONE", items: [
+    { icon: "\u25c8", label: "First action", hint: "One line saying what it does and why you'd pick it" },
+    { icon: "\u25c8", label: "Second action", hint: "Same pattern \u2014 icon, label, one-line hint" },
+  ] },
+  { label: "GROUP TWO", items: [
+    { icon: "\u2726", label: "Another action", hint: "Groups are UPPERCASE; items are sentence case" },
+    { label: "Back to Main Menu", hook: false, back: true },
+  ] },
+];
+
+class Component extends DCLogic {
+  state = { cursor: 0 };
+  renderVals() {
+    return {
+      screenLabel: "SCREEN NAME",
+      title: "Screen Title:",
+      groups: GROUPS,
+      cursor: this.state.cursor,
+      select: (i) => this.setState({ cursor: i }),
+    };
+  }
+}
+</script>
+</body>
+</html>

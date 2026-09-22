@@ -70,7 +70,7 @@ class TestFetchJobrightJobsActivity(unittest.TestCase):
         activity.step.assert_called_with(
             "success",
             "JobRight",
-            '[dim]Found[/dim] "[#12C78F]Data Engineer[/#12C78F]" @ [dim]Acme[/dim]',
+            '[dim]Found[/dim] "[#9ab63f]Data Engineer[/#9ab63f]" @ [dim]Acme[/dim]',
             preserve_markup=True,
         )
 

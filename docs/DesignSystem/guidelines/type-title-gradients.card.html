@@ -1,0 +1,18 @@
+<!-- @dsCard group="Type" viewport="700x300" name="Title gradients" subtitle="Per-character interpolation between palette colours — any wide hue jump gets a third stop" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:300px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;justify-content:center;gap:12px}.k{font-size:11px;color:var(--tui-subtext)}.t{font-weight:700;letter-spacing:.24em;font-size:15px}.row{display:flex;flex-direction:column;gap:3px}.stops{display:flex;gap:6px;align-items:center}.dot{width:9px;height:9px;border-radius:2px}</style></head><body><div class="row"><div class="t" id="g1"></div><div class="stops"><div class="dot" style="background:var(--tui-blue)"></div><div class="dot" style="background:var(--tui-mauve)"></div><span class="k">Pipeline — Blue → Mauve</span></div></div>
+<div class="row"><div class="t" id="g2"></div><div class="stops"><div class="dot" style="background:var(--tui-blue)"></div><div class="dot" style="background:var(--tui-mauve)"></div><div class="dot" style="background:var(--tui-peach)"></div><span class="k">Jobs — Blue → Mauve → Peach</span></div></div>
+<div class="row"><div class="t" id="g3"></div><div class="stops"><div class="dot" style="background:var(--tui-peach)"></div><div class="dot" style="background:var(--tui-mauve)"></div><div class="dot" style="background:var(--tui-teal)"></div><span class="k">Progress — Peach → Mauve → Teal</span></div></div>
+<div class="row"><div class="t" id="g4"></div><div class="stops"><div class="dot" style="background:var(--tui-mauve)"></div><div class="dot" style="background:var(--tui-blue)"></div><span class="k">Main menu — Mauve → Blue</span></div></div>
+<div class="k">Jobs and Progress carry that Mauve midpoint deliberately: their endpoints sit on opposite sides of the wheel, and a straight two-stop blend passes through a desaturated brown at the middle of the string.</div>
+<div class="row"><div class="t" id="g5" style="letter-spacing:.14em;font-size:12px"></div><div class="k">The six-stop thinking gradient — Peach → Teal → Mauve → Lavender → Blue → Sky — runs on animated text during LLM work.</div></div>
+<script>
+const cs=getComputedStyle(document.documentElement);
+const c=n=>cs.getPropertyValue(n).trim();
+const hx=s=>[1,3,5].map(i=>parseInt(s.slice(i,i+2),16));
+function ramp(el,txt,stops){const cols=stops.map(s=>hx(c(s)));const n=txt.length;el.innerHTML=[...txt].map((ch,i)=>{const p=n===1?0:i/(n-1)*(cols.length-1);const a=Math.min(Math.floor(p),cols.length-2),t=p-a;const mix=cols[a].map((v,j)=>Math.round(v+(cols[a+1][j]-v)*t));return '<span style="color:rgb('+mix.join(',')+')">'+(ch===' '?'&nbsp;':ch)+'</span>';}).join('');}
+ramp(document.getElementById('g1'),'✦ CAREER PIPELINE ✧',['--tui-blue','--tui-mauve']);
+ramp(document.getElementById('g2'),'✦ JOB OPPORTUNITIES ✧',['--tui-blue','--tui-mauve','--tui-peach']);
+ramp(document.getElementById('g3'),'✦ PROGRESS ✧',['--tui-peach','--tui-mauve','--tui-teal']);
+ramp(document.getElementById('g4'),'✦ MAIN MENU ✧',['--tui-mauve','--tui-blue']);
+ramp(document.getElementById('g5'),'Scoring 12 roles against your bullet bank…',['--tui-peach','--tui-teal','--tui-mauve','--brand-vibrant-mauve','--tui-blue','--tui-sky']);
+</script></body></html>

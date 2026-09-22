@@ -1,0 +1,17 @@
+<!-- @dsCard group="Layout" viewport="700x380" name="Chrome budget & degradation" subtitle="Every fixed bar is measured before the pane height is computed" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:380px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;justify-content:center;gap:12px}.k{font-size:11px;color:var(--tui-subtext)}.st{display:flex;flex-direction:column;gap:3px}.bar{border:1px solid var(--tui-overlay);border-radius:3px;padding:4px 8px;display:flex;justify-content:space-between;color:var(--tui-subtext)}.bar b{color:var(--tui-text);font-weight:400}.pane{border:1px solid var(--tui-blue);border-radius:3px;padding:14px 8px;text-align:center;color:var(--tui-blue)}.sp{display:flex;gap:10px}.sp>div{flex:1}.seg{display:flex;height:22px;border-radius:3px;overflow:hidden;border:1px solid var(--tui-overlay)}</style></head><body><div class="st">
+<div class="bar"><b>header bar</b><span>1 row</span></div>
+<div class="bar"><b>tabs + underline</b><span>2 rows</span></div>
+<div class="bar"><b>metrics bar</b><span>1 row</span></div>
+<div class="bar"><b>sort / filter bar</b><span>1 row</span></div>
+<div class="bar"><b>search bar · notice</b><span>optional, 1 row each</span></div>
+<div class="pane">split pane — whatever is left</div>
+<div class="bar"><b>help bar</b><span>1 row</span></div>
+</div>
+<div class="k">A bar that wraps to two lines pushes the footer off screen, so each is measured, not assumed.</div>
+<div class="sp">
+<div><div class="k" style="margin-bottom:4px">Pipeline — sidebar 35%</div><div class="seg"><div style="flex:0 0 35%;background:var(--tui-surface)"></div><div style="flex:1;background:var(--tui-overlay);opacity:.5"></div></div></div>
+<div><div class="k" style="margin-bottom:4px">Jobs — sidebar 60% (scanning beats previewing)</div><div class="seg"><div style="flex:0 0 60%;background:var(--tui-surface)"></div><div style="flex:1;background:var(--tui-overlay);opacity:.5"></div></div></div>
+</div>
+<div class="k">Narrow terminals degrade, never overflow: bars truncate right-then-left with <span style="color:var(--tui-text)">…</span> and pad the gap; the tab row appends a Peach <span style="color:var(--tui-peach)">›more</span>; KB stacks its panes vertically below 70 columns. Minimum viewport 80×24, relaxed to 35×12 on mobile. Modals are 80% of width, capped at 100 columns, floor 40.</div>
+</body></html>

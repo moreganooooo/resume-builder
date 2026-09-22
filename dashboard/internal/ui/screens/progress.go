@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/list"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
@@ -32,7 +33,15 @@ type ProgressModel struct {
 	// showHelp toggles the `?` categorized keybinding overlay (see
 	// bars.go's renderHelpOverlay) over this screen's normal body.
 	showHelp bool
+	// mode selects which half of the sections renderBody assembles; see
+	// ProgressMode.
+	mode ProgressMode
 }
+
+// progressHelpZone namespaces this screen's clickable footer hints. Insights
+// shares it: the two modes are one model with one footer, so a second prefix
+// would only invite them to drift.
+const progressHelpZone HelpBarZonePrefix = "progress"
 
 var progressHelpCategories = []helpCategory{
 	{"Navigation", []helpBinding{
@@ -86,6 +95,18 @@ func (m ProgressModel) Update(msg tea.Msg) (ProgressModel, tea.Cmd) {
 			m.clampScrollOffset()
 		}
 		return m, nil
+	case tea.MouseClickMsg:
+		// A click on the help overlay dismisses it, the same as any key it
+		// accepts -- reaching a footer hint underneath a modal would act on a
+		// screen the user cannot currently see.
+		if m.showHelp {
+			m.showHelp = false
+			return m, nil
+		}
+		if k, ok := HelpBarClicked(progressHelpZone, progressHelpBindings, msg); ok {
+			return m.handleKeyString(k)
+		}
+		return m, nil
 	case tea.KeyPressMsg:
 		return m.handleKeyString(msg.String())
 	case tea.KeyMsg:
@@ -134,39 +155,81 @@ func (m ProgressModel) handleKeyString(k string) (ProgressModel, tea.Cmd) {
 // before scroll-offset slicing is applied. Shared by View() and
 // maxScrollOffset() so the scroll ceiling always matches what actually
 // gets rendered, instead of two separate computations that could drift.
-func (m ProgressModel) renderBody() string {
-	funnel := m.renderFunnel()
-	funnelDrilldown := m.renderFunnelDrilldown()
-	scores := m.renderScoreDistribution()
-	rates := m.renderRates()
-	radar := m.renderStrategyRadar()
-	platforms := m.renderPlatformYield()
-	companies := m.renderCompanyConcentration()
-	scatter := m.renderScoreVsCoverage()
-	weekly := m.renderWeeklyActivity()
-	missionControl := m.renderMissionControl()
+// ProgressMode selects which half of the old Progress screen to render.
+//
+// One screen had grown to thirteen sections and could not fit a 24-row
+// terminal, so it splits along a real question boundary rather than at a
+// convenient midpoint. Both halves share this model: they read the same
+// metrics and use the same chrome, scrolling and help, and forking them into
+// two models would duplicate all of that to express one difference.
+type ProgressMode int
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		funnel,
-		"",
-		funnelDrilldown,
-		"",
-		scores,
-		"",
-		rates,
-		"",
-		radar,
-		"",
-		platforms,
-		"",
-		companies,
-		"",
-		scatter,
-		"",
-		weekly,
-		"",
-		missionControl,
-	)
+const (
+	// ModeProgress answers "where do things stand" -- the funnel, conversion
+	// rates, coverage gaps and top employers. Checked often, so it stays
+	// fast to scan.
+	ModeProgress ProgressMode = iota
+	// ModeInsights answers "what's working and what changed" -- source
+	// yield, the score histogram, week-over-week activity and streaks. A
+	// slower question, asked less often.
+	ModeInsights
+)
+
+// WithMode returns the model rendering the given half.
+func (m ProgressModel) WithMode(mode ProgressMode) ProgressModel {
+	m.mode = mode
+	return m
+}
+
+// Mode reports which half this model renders.
+func (m ProgressModel) Mode() ProgressMode { return m.mode }
+
+// titleText is the header line for the current mode. Both share the design
+// system's Progress gradient (Peach -> Mauve -> Teal): the doc specifies it for
+// this screen, and Insights is a split of this screen rather than a new place
+// in the product, so inventing an unspecified second gradient would say
+// otherwise.
+func (m ProgressModel) titleText() string {
+	if m.mode == ModeInsights {
+		return "✦ INSIGHTS ✧"
+	}
+	return "✦ SEARCH PROGRESS ✧"
+}
+
+func (m ProgressModel) renderBody() string {
+	// Ordered most-actionable-first within each half: the design system's
+	// note on this persona is that someone in a low-focus moment bounces off
+	// a wall of tables, so whichever section answers the screen's own
+	// question most directly leads.
+	var sections []string
+	if m.mode == ModeInsights {
+		sections = []string{
+			m.renderPlatformYield(),
+			m.renderScoreDistribution(),
+			m.renderWeeklyActivity(),
+			m.renderHeatmap(),
+			m.renderSparklines(),
+			m.renderStrategyRadar(),
+		}
+	} else {
+		sections = []string{
+			m.renderFunnel(),
+			m.renderRates(),
+			m.renderFunnelDrilldown(),
+			m.renderScoreVsCoverage(),
+			m.renderCompanyConcentration(),
+			m.renderMissionControl(),
+		}
+	}
+
+	parts := make([]string, 0, len(sections)*2)
+	for i, s := range sections {
+		if i > 0 {
+			parts = append(parts, "")
+		}
+		parts = append(parts, s)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 // bodyAvailHeight is the number of body rows visible between the header
@@ -219,6 +282,7 @@ func (m ProgressModel) View() string {
 
 	// Apply scroll
 	bodyLines := strings.Split(body, "\n")
+	totalBodyLines := len(bodyLines)
 	offset := m.scrollOffset
 	if offset >= len(bodyLines) {
 		offset = len(bodyLines) - 1
@@ -236,7 +300,13 @@ func (m ProgressModel) View() string {
 		bodyLines = bodyLines[:availHeight]
 	}
 
-	body = strings.Join(bodyLines, "\n")
+	// Right-edge rail, per the design system's ScrollIndicator: this screen
+	// is the longest scroll in the app and had no position feedback at all.
+	// It hides itself when everything fits.
+	body = AttachScrollRail(m.theme,
+		strings.Join(bodyLines, "\n"),
+		ScrollState{Total: totalBodyLines, Visible: availHeight, Offset: offset},
+		m.width-1)
 
 	full := lipgloss.JoinVertical(lipgloss.Left, header, body, help)
 	if m.showHelp {
@@ -255,7 +325,7 @@ func (m ProgressModel) renderHeader() string {
 	style = theme.PadHorizontal(style)
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Peach).Background(m.theme.Surface).Render(m.theme.Icons.Progress+"  ") +
-		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderColorGradient("✦ SEARCH PROGRESS ✧", m.theme.Peach, m.theme.Pink))
+		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderGradientStops(m.titleText(), m.theme.Peach, m.theme.Mauve, m.theme.Pink))
 
 	right := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	total := len(m.metrics.FunnelStages)
@@ -263,7 +333,17 @@ func (m ProgressModel) renderHeader() string {
 	if total > 0 {
 		totalCount = m.metrics.FunnelStages[0].Count
 	}
-	info := right.Render(fmt.Sprintf("%d evaluated | %.1f avg score", totalCount, m.metrics.AvgScore))
+	infoText := fmt.Sprintf("%d evaluated | %.1f avg score", totalCount, m.metrics.AvgScore)
+	// The ScrollIndicator's readout half. The rail (View()) shows where the
+	// thumb is; this says it in a number, and both vanish when the page fits.
+	if maxScroll := m.maxScrollOffset(); maxScroll > 0 {
+		infoText += fmt.Sprintf(" | %d%%", ScrollState{
+			Total:   maxScroll + m.bodyAvailHeight(),
+			Visible: m.bodyAvailHeight(),
+			Offset:  m.scrollOffset,
+		}.Percent())
+	}
+	info := right.Render(infoText)
 
 	title, info, gap := fitBar(title, info, m.width, 4, m.theme.Surface)
 
@@ -698,31 +778,22 @@ func (m ProgressModel) renderWeeklyActivity() string {
 	return strings.Join(lines, "\n")
 }
 
+// progressHelpBindings is the short footer bar. Anything not here lives in
+// the `?` overlay (progressHelpCategories) -- see helpbar.go for why the bar
+// is capped rather than exhaustive.
+var progressHelpBindings = []HelpBinding{
+	{Key: "↑↓/jk", Desc: "scroll", Action: "down"},
+	{Key: "PgUp/Dn", Desc: "page", Action: "pgdown"},
+	{Key: "Esc", Desc: "back"},
+	{Key: "q", Desc: "quit"},
+}
+
 func (m ProgressModel) renderHelp() string {
-	style := lipgloss.NewStyle().
-		Foreground(m.theme.Blue).
-		Background(m.theme.Surface).
-		Width(m.width).
-		Padding(0, 1)
-
-	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Background(m.theme.Surface)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
-
-	// Subtext, not Overlay -- Overlay is the border/divider token (1.4-2.3:1
-	// against Surface/Base across all three themes, see statusColorMap's own
-	// comment in pipeline.go for the same measurement) and was never meant
-	// to carry readable text.
-	brand := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface).Render("resume-builder dashboard")
-
-	keys := keyStyle.Render("\u2191\u2193/jk") + descStyle.Render(" scroll  ") +
-		keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
-		keyStyle.Render("?") + descStyle.Render(" help  ") +
-		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
-		keyStyle.Render("q") + descStyle.Render(" quit")
-
-	keys, brand, gap := fitBar(keys, brand, m.width, 2, m.theme.Surface)
-
-	return style.Render(keys + gap + brand)
+	// Brand text in Subtext, not Overlay -- Overlay is the border/divider
+	// token (1.4-2.3:1 against Surface/Base across all three themes, see
+	// statusColorMap's own comment in pipeline.go for the same measurement)
+	// and was never meant to carry readable text. RenderHelpBar owns that.
+	return RenderHelpBar(m.theme, m.width, progressHelpZone, progressHelpBindings, "resume-builder dashboard")
 }
 
 // rateColor returns a color based on the rate value.
@@ -963,12 +1034,16 @@ func (m ProgressModel) renderScoreVsCoverage() string {
 		subtitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Peach).Render("  Write Bullets For (High Fit, Low Coverage):")
 		lines = append(lines, padStyle.Render(m.truncateRow(subtitle)))
 
+		roleList := list.New()
 		for i, r := range m.metrics.HighFitLowCoverageRoles {
 			if i >= 4 {
 				break
 			}
-			item := fmt.Sprintf("  ↳ %s @ %s (Score: %.1f, Cov: %.0f%%)", r.Title, r.Company, r.Score, r.Coverage)
-			lines = append(lines, padStyle.Render(m.truncateRow(item)))
+			roleList.Item(fmt.Sprintf("%s @ %s (Score: %.1f, Cov: %.0f%%)", r.Title, r.Company, r.Score, r.Coverage))
+		}
+		roleList.Enumerator(func(list.Items, int) string { return "↳" })
+		for _, row := range strings.Split(roleList.String(), "\n") {
+			lines = append(lines, padStyle.Render(m.truncateRow(row)))
 		}
 	}
 

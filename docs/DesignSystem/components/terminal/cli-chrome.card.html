@@ -1,0 +1,26 @@
+<!-- @dsCard group="Components" viewport="700x300" name="CLI script chrome" subtitle="Progress table and the two bottom-row footers every script screen uses" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:300px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:var(--tui-font-size);line-height:var(--tui-line-height);padding:14px;display:flex;flex-direction:column;justify-content:space-between}a{color:var(--tui-blue)}a:hover{color:var(--tui-mauve)}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+const { CliStatusTable, CliFooterBar } = window.ResumeBuilderDesignSystem_2d03b1;
+const rows = [
+  { label: "Upload Your Documents", status: "Up to date", detail: "11 document(s) processed" },
+  { label: "Draft Your Profile", status: "In progress", detail: "profile.yml written, cv.md not yet drafted" },
+  { label: "Audit Bullet Bank (Score Quality)", status: "Never run", detail: "" },
+  { label: "Embed Bullet Bank (Final Step)", status: "Locked", detail: "finish Step 5 first" },
+];
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <CliStatusTable title="Onboarding Progress" rows={rows} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <CliFooterBar variant="nav" />
+      <CliFooterBar variant="execution" />
+    </div>
+  </div>
+);
+</script></body></html>

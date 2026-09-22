@@ -1,0 +1,40 @@
+<!-- @dsCard group="Resume (PDF)" viewport="1000x900" name="Generated resume" subtitle="The print artifact — DM Serif Display + DM Sans, black on white, strict page budget" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Morgan Avery — Resume</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--tui-base);padding:24px;font-family:var(--font-body)}
+.switch{display:flex;gap:8px;margin:0 auto 20px;max-width:8.5in;font-family:var(--font-mono);font-size:12px}
+.switch button{all:unset;cursor:pointer;padding:2px 10px;color:var(--tui-subtext)}
+.switch button[aria-pressed="true"]{background:var(--tui-mauve);color:var(--tui-base);font-weight:700}
+.sheet{background:#fff;max-width:8.5in;margin:0 auto;padding:0.55in 0.6in;box-shadow:none}
+.note{max-width:8.5in;margin:16px auto 0;font-family:var(--font-mono);font-size:11px;color:var(--tui-subtext);line-height:1.6}
+a{color:var(--tui-blue)}a:hover{color:var(--tui-mauve)}
+@media print{body{background:#fff;padding:0}.switch,.note{display:none}.sheet{padding:0;max-width:none}}
+</style></head>
+<body><div id="root"></div>
+<script type="text/babel" src="Resume.jsx"></script>
+<script type="text/babel" src="CoverLetter.jsx"></script>
+<script type="text/babel">
+function App() {
+  const [doc, setDoc] = React.useState("resume");
+  return (
+    <>
+      <div className="switch">
+        <button aria-pressed={doc === "resume"} onClick={() => setDoc("resume")}>1:Resume</button>
+        <button aria-pressed={doc === "letter"} onClick={() => setDoc("letter")}>2:Cover Letter</button>
+      </div>
+      <div className="sheet">{doc === "resume" ? <Resume /> : <CoverLetter />}</div>
+      <div className="note">
+        Rendered by Playwright 1.61.1 headless Chromium from an HTML template. Ligatures are disabled:
+        pypdf and pdfminer extract "ﬁ" verbatim and the keyword stops matching. No colour, ever.
+      </div>
+    </>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script></body></html>

@@ -845,6 +845,29 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   losers through status writes and would take its own winner with them.
   Tests can't create such a copy with `db.upsert_job()` -- it folds a same
   company+title row into the existing one -- so insert the row directly.
+- **A LinkedIn scan cannot be killed, only abandoned -- so its callbacks
+  must be muzzled (`scan_linkedin.fetch_linkedin_jobs`).**
+  `linkedin_jobs_scraper` exposes no cancel or close API: `run()` submits
+  one future per query to its own `ThreadPoolExecutor` (`scraper._pool`)
+  and blocks. The `SCRAPER_TIMEOUT_SECONDS` guard therefore
+  `join(timeout=...)`s a DAEMON thread, which stops the waiting, not the
+  work -- Python cannot kill a thread, and the library's workers hold
+  Chrome. The abandoned run finished its page and then started the NEXT
+  search term, still firing `Events.DATA` into a caller that had already
+  returned: "Found: ..." lines printing into whatever screen the user had
+  moved on to, minutes after the scan reported itself finished, plus
+  appends to a list the caller was already iterating. Three guards, none
+  of which is a kill: a `scan_over` Event set BEFORE any teardown (checked
+  at the top of `on_data` and again in `_record()`, since
+  `_fetch_personalized_extras()` sits between them and is a network round
+  trip); `_stop_scraper()`, which calls `remove_all_listeners()` and, on a
+  timeout only, `_pool.shutdown(wait=False, cancel_futures=True)` -- the
+  in-flight page cannot be stopped, but every search term that has not
+  STARTED never begins, which is what bounds the damage; and a returned
+  `list(jobs)` COPY under a lock. `_stop_scraper()` swallows its own
+  failures deliberately (`_pool` is private and an upgrade could rename
+  it): it runs while a timeout is already being reported, and a teardown
+  that raised would replace that report with a traceback.
 - **A liveness sweep's temp files must be per-run, never a fixed path.**
   `liveness._run_temp_paths()` generates a unique input/output pair for
   every `check-liveness.mjs` spawn. They used to be two module-level

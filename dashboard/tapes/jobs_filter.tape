@@ -18,7 +18,7 @@ Wait+Screen@60s /Knowledge Base|Pipeline/
 Sleep 500ms
 Show
 Sleep 500ms
-Type "3"
+Type "4"
 Wait+Screen@30s /JOBS/
 Sleep 500ms
 Type "w"

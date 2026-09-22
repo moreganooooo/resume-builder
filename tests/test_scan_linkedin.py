@@ -137,7 +137,7 @@ class TestFetchLinkedinJobsActivity(unittest.TestCase):
         activity.step.assert_called_with(
             "success",
             "LinkedIn",
-            '[dim]Found[/dim] "[#12C78F]Data Engineer[/#12C78F]" @ [dim]Acme[/dim]',
+            '[dim]Found[/dim] "[#9ab63f]Data Engineer[/#9ab63f]" @ [dim]Acme[/dim]',
             preserve_markup=True,
         )
 
@@ -536,3 +536,134 @@ class TestScanLinkedinCookieAndQueries(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestScanLinkedinAbandonedRun(unittest.TestCase):
+    """The library offers no way to cancel a run: scraper.run() blocks on
+    its own thread pool, so a timeout can only abandon the thread waiting
+    on it. Unchecked, that abandoned run kept driving Chrome and kept
+    firing Events.DATA into a caller that had already returned -- results
+    printing into whatever screen the user had moved on to, long after the
+    scan reported itself finished. These tests pin the guards that stop
+    it."""
+
+    def _job_data(self, title="Late Role", company="Acme"):
+        return MagicMock(
+            title=title,
+            company=company,
+            link="https://linkedin.com/jobs/view/1",
+            apply_link=None,
+            place="Remote",
+            date=None,
+            date_text=None,
+            employment_type=None,
+            seniority_level=None,
+            description="desc",
+            description_html=None,
+            skills=None,
+            job_id="1",
+            company_link=None,
+        )
+
+    @patch(
+        "scan_linkedin._fetch_personalized_extras",
+        return_value={"is_top_applicant": False, "backup_description": None},
+    )
+    @patch("scan_linkedin.get_li_at_cookie", return_value="fake-li-at")
+    @patch(
+        "scan_linkedin.profile_paths.profile_yaml",
+        return_value={"target_roles": {"primary": ["Data Engineer"]}},
+    )
+    @patch("scan_linkedin.LinkedinScraper")
+    def test_a_result_arriving_after_the_scan_is_dropped_silently(
+        self, mock_scraper_cls, mock_profile, mock_cookie, mock_extras
+    ):
+        mock_scraper = mock_scraper_cls.return_value
+        registered = {}
+        mock_scraper.on.side_effect = lambda event, handler: registered.update(
+            {event: handler}
+        )
+        mock_scraper.run.side_effect = lambda queries: registered[
+            scan_linkedin.Events.DATA
+        ](self._job_data(title="In Time"))
+
+        activity = MagicMock()
+        jobs = scan_linkedin.fetch_linkedin_jobs(activity=activity)
+        self.assertEqual(["In Time"], [j["job_title"] for j in jobs])
+        calls_during_scan = activity.step.call_count
+
+        # Exactly what an abandoned worker does: fire DATA after the
+        # function has returned.
+        registered[scan_linkedin.Events.DATA](self._job_data(title="Too Late"))
+
+        # It must not reach the screen -- that is the reported bug ...
+        self.assertEqual(calls_during_scan, activity.step.call_count)
+        # ... and it must not reach the list the caller already holds.
+        self.assertEqual(["In Time"], [j["job_title"] for j in jobs])
+
+    @patch(
+        "scan_linkedin._fetch_personalized_extras",
+        return_value={"is_top_applicant": False, "backup_description": None},
+    )
+    @patch("scan_linkedin.get_li_at_cookie", return_value="fake-li-at")
+    @patch(
+        "scan_linkedin.profile_paths.profile_yaml",
+        return_value={"target_roles": {"primary": ["Data Engineer"]}},
+    )
+    @patch("scan_linkedin.LinkedinScraper")
+    def test_returns_a_copy_the_scraper_cannot_still_grow(
+        self, mock_scraper_cls, mock_profile, mock_cookie, mock_extras
+    ):
+        mock_scraper = mock_scraper_cls.return_value
+        registered = {}
+        mock_scraper.on.side_effect = lambda event, handler: registered.update(
+            {event: handler}
+        )
+        mock_scraper.run.side_effect = lambda queries: registered[
+            scan_linkedin.Events.DATA
+        ](self._job_data())
+
+        first = scan_linkedin.fetch_linkedin_jobs()
+        second = scan_linkedin.fetch_linkedin_jobs()
+        # Two scans must not share a list; a stale reference growing under
+        # the caller is how a result set changes size mid-iteration.
+        self.assertIsNot(first, second)
+        self.assertEqual(1, len(first))
+
+    @patch("scan_linkedin.get_li_at_cookie", return_value="fake-li-at")
+    @patch(
+        "scan_linkedin.profile_paths.profile_yaml",
+        return_value={"target_roles": {"primary": ["Data Engineer"]}},
+    )
+    @patch("scan_linkedin.LinkedinScraper")
+    def test_listeners_are_disconnected_when_the_run_ends(
+        self, mock_scraper_cls, mock_profile, mock_cookie
+    ):
+        mock_scraper = mock_scraper_cls.return_value
+        mock_scraper.run.side_effect = lambda queries: None
+        scan_linkedin.fetch_linkedin_jobs()
+        mock_scraper.remove_all_listeners.assert_called_once()
+
+    def test_stop_scraper_cancels_queued_queries_only_on_a_timeout(self):
+        # A clean run's queries are all finished; cancelling its pool would
+        # be pointless, and shutting down a healthy pool is not free.
+        clean = MagicMock()
+        scan_linkedin._stop_scraper(clean, timed_out=False)
+        clean._pool.shutdown.assert_not_called()
+
+        # An abandoned run's remaining SEARCH TERMS are the part that can
+        # still be stopped -- the in-flight page cannot be.
+        hung = MagicMock()
+        scan_linkedin._stop_scraper(hung, timed_out=True)
+        hung._pool.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
+
+    def test_stop_scraper_never_raises_over_a_failed_teardown(self):
+        # It runs while we are already reporting a timeout; a traceback
+        # here would replace that report.
+        broken = MagicMock()
+        broken.remove_all_listeners.side_effect = RuntimeError("boom")
+        broken._pool.shutdown.side_effect = RuntimeError("boom")
+        scan_linkedin._stop_scraper(broken, timed_out=True)
+
+        no_pool = MagicMock(spec=["remove_all_listeners"])
+        scan_linkedin._stop_scraper(no_pool, timed_out=True)

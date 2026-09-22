@@ -242,6 +242,27 @@ class TestOptionDict(unittest.TestCase):
         res = charm_prompt._option_dict(choice)
         self.assertEqual(res, {"label": "Styled Option", "value": "opt_styled"})
 
+    def test_description_fragment_becomes_its_own_field(self):
+        """A "class:description" fragment is the menu entry's explanation, and
+        the Go select renders it as a dimmer second line -- so it has to leave
+        here as its own key rather than flattened onto the label."""
+        choice = MagicMock()
+        choice.title = [
+            ("class:icon", "* "),
+            ("", "Find Jobs  "),
+            ("class:description", "(Search job boards or paste a job link)"),
+        ]
+        choice.value = "find_jobs"
+        res = charm_prompt._option_dict(choice)
+        self.assertEqual(
+            res,
+            {
+                "label": "* Find Jobs",
+                "value": "find_jobs",
+                "description": "Search job boards or paste a job link",
+            },
+        )
+
     def test_plain_scalar_input(self):
         res = charm_prompt._option_dict("simple_string")
         self.assertEqual(res, {"label": "simple_string", "value": "simple_string"})

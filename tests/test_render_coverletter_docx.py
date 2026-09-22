@@ -8,6 +8,7 @@ SCRIPTS_DIR = os.path.join(
 sys.path.insert(0, SCRIPTS_DIR)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import docx_theme  # noqa: E402
 from docx import Document  # noqa: E402
 from render_coverletter_docx import render_coverletter_docx  # noqa: E402
 
@@ -58,7 +59,12 @@ class TestRenderCoverletterDocx(unittest.TestCase):
         texts = self._paragraph_texts(doc)
         self.assertIn("Alex Rivera", texts)
         contact_line = next(t for t in texts if "alex.rivera@example.com" in t)
-        self.assertIn("PRODUCT MANAGER | GROWTH", contact_line)
+        self.assertNotIn("PRODUCT MANAGER", contact_line)
+        # Same split as the resume export, at the letter's own scale.
+        tagline_para = next(p for p in doc.paragraphs if "PRODUCT MANAGER" in p.text)
+        self.assertEqual(
+            docx_theme.LETTER_TAGLINE_PT, tagline_para.runs[0].font.size.pt
+        )
 
     def test_recipient_block_uses_hiring_team_when_no_contact_name(self):
         render_coverletter_docx(_minimal_letter_data(), self.out_path)

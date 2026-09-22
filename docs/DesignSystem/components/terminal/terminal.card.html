@@ -1,0 +1,37 @@
+<!-- @dsCard group="Components" viewport="700x430" name="Terminal chrome" subtitle="Header, tabs, rows, notices, footer — the frame every dashboard screen is built from" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:430px;background:var(--tui-base);padding:16px;font-family:var(--font-mono);font-size:12px}.lbl{color:var(--tui-subtext);font-size:10px;margin:10px 0 4px}.lbl:first-child{margin-top:0}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+const { TuiHeaderBar, TuiTabs, TuiPanel, SidebarRow, NoticeBar, SearchBar, TuiFooterBar, MenuList, Toast, EmploymentTag } = window.ResumeBuilderDesignSystem_2d03b1;
+function Demo(){const [tab,setTab]=React.useState(0);const [sel,setSel]=React.useState(0);
+const rows=[[4.4,'Callahan Creek','full_time','Creative Director  Fit 4.5 / Odds 3.9'],[3.9,'Meridian Labs','contract','Content Strategist  Fit 4.0 / Odds 3.6'],[3.1,'Northgate Retail','part_time','Copywriter  Fit 3.3 / Odds 2.9']];
+return (<>
+<TuiHeaderBar icon="pipeline" title="✦ CAREER PIPELINE ✧" info="128 offers | Avg 3.7/5" />
+<TuiTabs active={tab} onChange={setTab} tabs={[{label:'ALL',count:128},{label:'EVALUATED',count:64},{label:'APPLIED',count:21},{label:'TOP ≥4',count:12},{label:'LOW <3.5',count:30}]} />
+<SearchBar active query="creek" matched={3} total={128} />
+<div style={{display:'flex',gap:8,marginTop:8}}>
+  <TuiPanel variant="active" style={{flex:'0 0 44%'}}>
+    {rows.map((r,i)=><SidebarRow key={i} score={r[0]} company={r[1]} tag={<EmploymentTag type={r[2]} />} subtitle={r[3]} selected={i===sel} onClick={()=>setSel(i)} />)}
+  </TuiPanel>
+  <TuiPanel variant="idle" pad="detail" style={{flex:1}}>
+    <div style={{color:'var(--tui-blue)',fontWeight:700}}>{rows[sel][1]}</div>
+    <div>{rows[sel][3].split('  ')[0]}</div>
+    <div style={{color:'var(--tui-green)',fontWeight:700}}>$110,000 – $135,000</div>
+  </TuiPanel>
+</div>
+<div style={{marginTop:8}}><NoticeBar variant="banner" message="★ NEXT BEST MOVE: High match at Callahan Creek (4.4) — Press 't' to tailor now!" /></div>
+<NoticeBar variant="notice" message="No job URL saved for this application" />
+<NoticeBar variant="error" message="Gemini request failed — check your API key" />
+<div style={{marginTop:8}}><TuiFooterBar primary={[{key:'Enter',desc:'report'}]} actions={[{key:'↑↓/jk',desc:'nav'},{key:'/',desc:'search'},{key:'s',desc:'sort'},{key:'c',desc:'change'}]} system={[{key:'Esc',desc:'back'},{key:'q',desc:'quit'}]} /></div>
+<div style={{marginTop:10,display:'flex',flexDirection:'column',gap:6}}>
+  <Toast icon="complete" message="Resume tailored — output/morgan/callahan-creek.pdf" />
+  <Toast icon="success" celebrate message="Status moved to Interview — Harlow &amp; Finch" />
+</div>
+</>);}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script></body></html>

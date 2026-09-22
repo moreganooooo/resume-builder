@@ -127,7 +127,7 @@ class TestUnicodeIconsAreTextNotEmoji(unittest.TestCase):
     )
     # Text-presentation codepoints that live inside the ranges above but
     # are NOT emoji-by-default -- these are legitimate picks.
-    TEXT_ALLOWLIST = {"✓", "✗", "⚠", "✦", "⚙", "⚒", "❮", "❯"}
+    TEXT_ALLOWLIST = {"✓", "✗", "✕", "⚠", "✦", "⚙", "⚒", "❮", "❯"}
 
     def _is_emoji(self, ch: str) -> bool:
         if ch in self.TEXT_ALLOWLIST:

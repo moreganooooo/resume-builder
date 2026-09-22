@@ -112,6 +112,7 @@ PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)  # resume-builder/
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 import cli_art
+import diffline  # noqa: E402
 import profile_paths  # noqa: E402
 import theme  # noqa: E402
 
@@ -2229,10 +2230,13 @@ def process_bullet(
         last_reasoning = reasoning
         last_gaps = gaps
 
-        cli_art.console.print(
-            f"   {theme.colorize_icon('hint')} Rewritten: {rewritten[:80]}...",
-            soft_wrap=True,
-        )
+        # The before/after pair, not just the after. A rewrite is the one
+        # thing in this loop worth a human judgment, and it cannot be judged
+        # against a bullet that was never shown -- this line used to print
+        # the new text alone, truncated at 80 characters. See diffline.py for
+        # why the sign column is always there and why nothing is struck out.
+        for diff_line in diffline.render_rewrite(current_bullet, rewritten, reasoning):
+            cli_art.console.print(f"   {diff_line}", soft_wrap=True)
 
         new_scores = score_bullet(
             rewritten, tags, score_system, role_company=role_company, dry_run=dry_run

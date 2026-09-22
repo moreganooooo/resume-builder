@@ -1,0 +1,19 @@
+<!-- @dsCard group="Components" viewport="700x440" name="Toasts & elapsed time" subtitle="Toast and ElapsedTimer — reporting what happened, and admitting when work is slow" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:440px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;gap:12px}.k{font-size:11px;color:var(--tui-subtext);line-height:1.55}.lab{font-size:10px;letter-spacing:.08em;color:var(--tui-subtext)}.b{border:1px solid var(--tui-overlay);border-radius:4px;padding:11px 13px;display:flex;flex-direction:column;gap:7px}</style></head><body><div class="lab">TOAST STACK — BOTTOM RIGHT, ABOVE THE FOOTER</div><div class="b" id="d1" style="align-items:flex-end"></div>
+<div class="lab">ELAPSEDTIMER</div><div class="b" id="d2"></div>
+<div class="k"><span style="color:var(--tui-text)">Toast or panel?</span> A toast reports something that already happened and needs no answer. Anything the user must act on is a panel or an inline error — a toast that expires takes the user's only chance to act with it. Success and info auto-dismiss; warnings and errors wait for a keypress. Maximum three, with older ones collapsed rather than scrolling, so the newest is always in the same place.</div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="../_ds_bundle.js"></script><script>
+const {Toast,ElapsedTimer}=window.ResumeBuilderDesignSystem_2d03b1,e=React.createElement;
+ReactDOM.createRoot(document.getElementById('d1')).render(e(Toast,{overflow:2,items:[
+ {tone:'success',text:'Rendered profiles/morgan/resume.pdf'},
+ {tone:'error',text:'Could not reach the scoring model'},
+ {tone:'info',text:'Bullet bank checkpointed at 40/212'},
+]}));
+ReactDOM.createRoot(document.getElementById('d2')).render(e(React.Fragment,null,
+ e(ElapsedTimer,{label:'Scoring 12 roles',seconds:38,expected:180,frame:3}),
+ e(ElapsedTimer,{label:'Tailoring resume',seconds:437,expected:240,frame:7,style:{marginTop:8}}),
+ e(ElapsedTimer,{label:'Cancelling \u2014 finishing current role',mode:'countdown',seconds:9,cancelKey:'',style:{marginTop:8}}),
+));
+</script></body></html>

@@ -1036,10 +1036,21 @@ def render_comparison_table(rows: list) -> None:
     )
 
 
-_STAGE_STATUS_COLORS = {
-    "Up to date": theme.SUCCESS,
-    "Stale": theme.WARNING,
-    "In progress": theme.INFO,
+# Each status pairs a color with a GLYPH, per the design system's
+# CliStatusTable spec: color alone does not survive a monochrome terminal,
+# a screenshot run through a filter, or a colorblind reader, and this table
+# is the first thing a multi-stage flow shows. The spec's closed set is
+# four -- Up to date / In progress / Never run / Locked -- plus "Stale",
+# which is real here and has no spec entry: the bullet bank can be finished
+# AND out of date with respect to an upstream edit, a state the spec's four
+# cannot express. It takes the warning pairing, since it is the one status
+# that asks the user to re-run something they thought was done.
+_STAGE_STATUS_STYLES = {
+    "Up to date": (theme.SUCCESS, "success"),
+    "In progress": (theme.INFO, "resume"),
+    "Stale": (theme.WARNING, "warning"),
+    "Never run": (theme.MUTED, "pending"),
+    "Locked": (theme.WARNING, "skip"),
 }
 
 
@@ -1075,10 +1086,12 @@ def render_bullet_bank_status(
     table.add_column("Status")
 
     for number, label, status, detail in stage_rows:
-        color = _STAGE_STATUS_COLORS.get(status)
-        status_text = (
-            f"[{color}]{status}[/{color}]" if color else f"[dim]{status}[/dim]"
-        )
+        color, icon_name = _STAGE_STATUS_STYLES.get(status, (None, None))
+        if color:
+            glyph = theme.ICONS.get(icon_name, "")
+            status_text = f"[{color}]{glyph} {status}[/{color}]"
+        else:
+            status_text = f"[dim]{status}[/dim]"
         if detail:
             status_text += f" ({detail})"
         row = (
@@ -1461,7 +1474,7 @@ def display_playbook() -> None:
         "▣ STEP 3: Apply & Track Effortlessly\n", style=f"bold {theme.BRAND_ACCENT}"
     )
     content.append(
-        "   • Open 'Track & Follow Up' (the Career Dashboard) to review and submit.\n",
+        "   • Open 'Command Center' (the Career Dashboard) to review and submit.\n",
         style=theme.MUTED,
     )
     content.append(

@@ -353,6 +353,56 @@ def _muted_scraper_logger():
         scraper_logger.setLevel(original_level)
 
 
+def _stop_scraper(scraper, *, timed_out: bool) -> None:
+    """Tears a LinkedinScraper down as far as the library allows.
+
+    linkedin_jobs_scraper exposes no cancel or close API at all: run()
+    submits one future per query to its own ThreadPoolExecutor
+    (``scraper._pool``) and blocks on the results. So a timeout here can
+    only ever ABANDON the thread waiting on that pool -- Python cannot
+    kill a thread, and the library's workers are the ones holding Chrome.
+
+    Left alone, an abandoned run does not stop: it finishes its current
+    page and then starts the NEXT search term, driving a browser and
+    firing Events.DATA into a caller that has already returned. That is
+    the whole "the scan didn't stop, and results turned up in the menu
+    afterwards" failure. Two things help, and neither is a kill:
+
+      * ``remove_all_listeners()`` disconnects our callbacks, so nothing
+        the abandoned run finds can reach the UI even if a later guard is
+        missed;
+      * ``shutdown(wait=False, cancel_futures=True)`` drops every query
+        that has not STARTED yet, which is what bounds the damage -- the
+        in-flight page still has to finish, but the remaining search
+        terms never begin.
+
+    Both are best-effort by nature (``_pool`` is private and could be
+    renamed by an upgrade, and a shutdown on a pool mid-flight can raise),
+    so a failure here is logged and swallowed: this runs while we are
+    already reporting a problem, and a teardown that raises would replace
+    that report with a traceback.
+    """
+    try:
+        scraper.remove_all_listeners()
+    except Exception as exc:  # pragma: no cover - defensive
+        logging.debug("LinkedIn scraper listener removal failed: %s", exc)
+    if not timed_out:
+        # A clean run's pool has no queued work left and its drivers have
+        # already quit themselves (the library quits each in a finally).
+        return
+    pool = getattr(scraper, "_pool", None)
+    if pool is None:
+        logging.warning(
+            "LinkedIn scraper has no _pool to shut down -- an abandoned run "
+            "may keep scraping in the background until it finishes on its own."
+        )
+        return
+    try:
+        pool.shutdown(wait=False, cancel_futures=True)
+    except Exception as exc:  # pragma: no cover - defensive
+        logging.debug("LinkedIn scraper pool shutdown failed: %s", exc)
+
+
 def _build_queries(job_limit: int, search_terms: list) -> list:
     """Builds one LinkedIn Query per entry in search_terms -- see
     fetch_linkedin_jobs() for where those entries actually come from
@@ -441,6 +491,27 @@ def fetch_linkedin_jobs(limit: int | None = None, activity=None) -> list:
     LinkedInConfig.LI_AT_COOKIE = li_at_cookie
 
     jobs = []
+    jobs_lock = threading.Lock()
+    # Set the moment this function stops waiting for the scraper, whether
+    # that is a timeout or an exception. It exists because the wait below
+    # ABANDONS a daemon thread rather than killing it (see the teardown
+    # comment there): the library's own worker pool keeps driving a live
+    # Chrome session and keeps firing Events.DATA afterwards. Unchecked,
+    # those late callbacks wrote "Found: ..." lines into whatever screen
+    # the user had moved on to -- scan results surfacing in the menu
+    # minutes after the scan reported itself finished -- and appended to a
+    # list the caller was already iterating.
+    scan_over = threading.Event()
+
+    def _record(job: dict) -> None:
+        """Appends one job under the lock, re-checking scan_over rather
+        than trusting the check at the top of on_data: the two are
+        separated by _fetch_personalized_extras(), a network round trip,
+        so a result that was live when it arrived can easily be late by
+        the time it is ready to store."""
+        with jobs_lock:
+            if not scan_over.is_set():
+                jobs.append(job)
 
     def on_data(data: EventData):
         # scraper.run() is one long blocking Selenium session with no
@@ -448,6 +519,11 @@ def fetch_linkedin_jobs(limit: int | None = None, activity=None) -> list:
         # line (Events.DATA already fires once per job found) is the only
         # real signal available during the run, so a multi-query/slow-page
         # scan doesn't look hung for minutes with only on_error visible.
+        if scan_over.is_set():
+            # A result that arrives after we stopped waiting has nowhere
+            # to go: the caller already has its list. Dropping it silently
+            # is the point -- printing it is the bug.
+            return
         title = getattr(data, "title", "?")
         company = getattr(data, "company", "?")
         if activity is not None:
@@ -474,7 +550,7 @@ def fetch_linkedin_jobs(limit: int | None = None, activity=None) -> list:
         final_desc = primary_desc if primary_desc else extras["backup_description"]
 
         place = getattr(data, "place", "") or ""
-        jobs.append(
+        _record(
             {
                 "status": "new",
                 "source_platform": "linkedin",
@@ -563,9 +639,15 @@ def fetch_linkedin_jobs(limit: int | None = None, activity=None) -> list:
     scraper_thread.start()
     scraper_thread.join(timeout=SCRAPER_TIMEOUT_SECONDS)
 
+    # Whatever happened, this function is done waiting -- say so BEFORE
+    # anything else, so no further callback can write to the screen or the
+    # list while we tear down. See scan_over's own comment.
+    scan_over.set()
+    _stop_scraper(scraper, timed_out=scraper_thread.is_alive())
+
     if scraper_thread.is_alive():
         cli_art.cli_error(
-            f"LinkedIn scan exceeded {SCRAPER_TIMEOUT_SECONDS}s timeout and was killed. "
+            f"LinkedIn scan exceeded {SCRAPER_TIMEOUT_SECONDS}s timeout and was abandoned. "
             f"Returning {len(jobs)} roles found so far. This typically indicates a hang in "
             f"Selenium pagination or a query getting stuck on a slow page load."
         )
@@ -588,4 +670,8 @@ def fetch_linkedin_jobs(limit: int | None = None, activity=None) -> list:
         )
         on_end()
 
-    return jobs
+    # A copy, not the live list: on a timeout the abandoned worker thread
+    # is still running, and handing the caller a list another thread can
+    # still mutate is how a scan's result set changes size mid-iteration.
+    with jobs_lock:
+        return list(jobs)

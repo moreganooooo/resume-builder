@@ -935,3 +935,52 @@ class TestGradientTextAndSuccessCelebration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBulletBankStatusGlyphs(unittest.TestCase):
+    """The design system's CliStatusTable requires every status to pair its
+    color with a glyph, so the state is still readable once the color is
+    gone (a monochrome terminal, a colorblind reader, a filtered
+    screenshot). Colors are invisible in Rich's exported text, which is
+    exactly why this asserts on the glyph."""
+
+    def test_every_status_renders_its_own_glyph(self):
+        rows = [
+            (1, "Audit Bullet Bank", status, "why")
+            for status in cli_art._STAGE_STATUS_STYLES
+        ]
+        output = _rendered(cli_art.render_bullet_bank_status, rows, [])
+
+        for status, (_, icon_name) in cli_art._STAGE_STATUS_STYLES.items():
+            self.assertIn(status, output)
+            self.assertIn(cli_art.theme.ICONS[icon_name], output)
+
+    def test_statuses_do_not_share_a_glyph(self):
+        glyphs = [icon for _, icon in cli_art._STAGE_STATUS_STYLES.values()]
+        self.assertEqual(
+            len(glyphs),
+            len(set(glyphs)),
+            "two statuses sharing a glyph is the failure this pairing exists to avoid",
+        )
+
+    def test_unknown_status_still_renders(self):
+        # A caller inventing a status should degrade to plain text rather
+        # than raising mid-render, the way the old color-only map did.
+        output = _rendered(
+            cli_art.render_bullet_bank_status, [(1, "Stage", "Whatever", "")], []
+        )
+        self.assertIn("Whatever", output)
+
+
+class TestBootstrapLockedRowsExplainThemselves(unittest.TestCase):
+    """CliStatusTable's own rule: "a Locked row without a reason is a bug."
+    A user who cannot run a stage and is not told why has no next move."""
+
+    def test_phase05_locked_row_carries_a_reason(self):
+        import bootstrap_menu
+
+        with patch.object(bootstrap_menu, "_phase0_status", return_value=("Never run", "")):
+            status, detail = bootstrap_menu._phase05_status()
+
+        self.assertEqual(status, "Locked")
+        self.assertTrue(detail.strip(), "a Locked row must say what unlocks it")

@@ -71,6 +71,58 @@ type appModel struct {
 	// duration. Cleared in startTransition so a new transition never shows
 	// a stale screen's content before its own first tick lands.
 	transitionRender string
+
+	// palette is the ctrl+k / `:` command palette. It lives here rather
+	// than on any one screen because it spans them: half its rows navigate
+	// somewhere else, and the other half are the CURRENT screen's own
+	// bindings, which only the app model knows how to route.
+	palette screens.PaletteModel
+}
+
+// currentScreenName is the palette's (and any future cross-screen feature's)
+// name for whatever is showing -- the same strings menu.MenuSelectMsg uses,
+// so a palette row can be dispatched straight back through the existing
+// navigation switch.
+func (m appModel) currentScreenName() string {
+	switch m.state {
+	case viewPipeline:
+		return "Pipeline"
+	case viewJobs:
+		return "Jobs"
+	case viewKB:
+		return "Knowledge Base"
+	case viewProgress:
+		if m.progress.Mode() == screens.ModeInsights {
+			return "Insights"
+		}
+		return "Progress"
+	case viewReport:
+		return "Report"
+	case viewAnswers:
+		return "Answers"
+	default:
+		return "Menu"
+	}
+}
+
+// paletteKeyPress turns a palette row's key string back into a real key
+// press for the screen underneath. Only the keys a help bar actually
+// advertises need to survive this trip -- single runes and the handful of
+// named keys screens bind.
+func paletteKeyPress(key string) (tea.KeyPressMsg, bool) {
+	named := map[string]rune{
+		"enter": tea.KeyEnter,
+		"esc":   tea.KeyEscape,
+		"tab":   tea.KeyTab,
+		"space": tea.KeySpace,
+	}
+	if code, ok := named[key]; ok {
+		return tea.KeyPressMsg(tea.Key{Code: code}), true
+	}
+	if r := []rune(key); len(r) == 1 {
+		return tea.KeyPressMsg(tea.Key{Code: r[0], Text: key}), true
+	}
+	return tea.KeyPressMsg{}, false
 }
 
 // transitionTickMsg drives the reveal's ~60fps animation loop.
@@ -197,6 +249,27 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if keyStr == "ctrl+c" || (keyStr == "q" && m.width > 0 && (m.width < minWidth || m.height < minHeight)) {
 			return m, tea.Quit
 		}
+
+		// The palette eats every key while it is open -- including plain
+		// letters, which are the query. Checked BEFORE the open binding so
+		// typing ":" into a search stays a colon.
+		if m.palette.Open {
+			_, chosen := m.palette.HandleKey(keyStr)
+			if !chosen {
+				return m, nil
+			}
+			cmd, _ := m.palette.Selected()
+			m.palette.Close()
+			return m.runPaletteCommand(cmd)
+		}
+		// Not offered on the menu (which IS the navigation the palette
+		// stands in for) nor on Answers, where `:` and most letters are
+		// text the user is typing into a question.
+		if (keyStr == "ctrl+k" || keyStr == ":") && m.state != viewMenu && m.state != viewAnswers {
+			m.palette = screens.NewPalette(
+				screens.PaletteCommandsForScreen(m.currentScreenName()))
+			return m, nil
+		}
 	}
 
 	// Handled ahead of the viewMenu early-return
@@ -238,26 +311,74 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		if menuMsg, ok := msg.(menu.MenuSelectMsg); ok {
-			switch menuMsg.Command {
-			case "Pipeline":
-				return m.startTransition(viewPipeline)
-			case "Progress":
-				m.progress = screens.NewProgressModel(m.theme, m.progressMetrics, m.width, m.height)
-				return m.startTransition(viewProgress)
-			case "Jobs":
-				return m.startTransition(viewJobs)
-			case "Knowledge Base":
-				return m.startTransition(viewKB)
-			case "Exit":
-				return m, tea.Quit
-			}
-			return m, nil
+			return m.navigateTo(menuMsg.Command)
 		}
 		var cmd tea.Cmd
 		m.menu, cmd = m.menu.Update(msg)
 		return m, cmd
 	}
+	return m.updateScreen(msg)
+}
 
+// navigateTo is the ONE place a named destination becomes a screen. Both
+// the menu's own selection and the command palette route through it, so a
+// screen can never be reachable from one and not the other.
+func (m appModel) navigateTo(command string) (tea.Model, tea.Cmd) {
+	switch command {
+	case "Pipeline":
+		return m.startTransition(viewPipeline)
+	case "Progress":
+		m.progress = screens.NewProgressModel(m.theme, m.progressMetrics, m.width, m.height)
+		return m.startTransition(viewProgress)
+	case "Insights":
+		// The same model and the same viewProgress state: Insights
+		// is the other half of this screen, not another place in
+		// the app, so every route already wired for Progress --
+		// View, Update, ProgressClosedMsg, resize -- carries it
+		// with no second copy to keep in step.
+		m.progress = screens.NewProgressModel(m.theme, m.progressMetrics, m.width, m.height).
+			WithMode(screens.ModeInsights)
+		return m.startTransition(viewProgress)
+	case "Jobs":
+		return m.startTransition(viewJobs)
+	case "Documents":
+		// Suspends the dashboard and hands the terminal to the
+		// Python Build Documents submenu, which already owns every
+		// one of these flows (batch tailor, recruiter resume,
+		// re-render, polish) and the prompts they need. Rebuilding
+		// them here would be a second copy of the same flow to keep
+		// in step with that one, and each still has to shell out to
+		// Python to do the actual work regardless.
+		return m, m.runBuildDocuments()
+	case "Knowledge Base":
+		return m.startTransition(viewKB)
+	case "Exit":
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+// runPaletteCommand acts on the row the user chose. A navigation row goes
+// through navigateTo, the same path the menu uses. An action row is
+// replayed as the keypress it advertises, so the screen's own handler does
+// the work -- the palette never reimplements an action, which is what
+// keeps the two from drifting apart.
+func (m appModel) runPaletteCommand(cmd screens.PaletteCommand) (tea.Model, tea.Cmd) {
+	if cmd.Nav != "" {
+		return m.navigateTo(cmd.Nav)
+	}
+	key, ok := paletteKeyPress(cmd.Key)
+	if !ok {
+		return m, nil
+	}
+	return m.updateScreen(key)
+}
+
+// updateScreen handles a message once a screen other than the menu is
+// showing. Split out of Update so the palette can replay a keypress into
+// it directly, without re-entering Update's own key interception and
+// having the palette swallow the key it just dispatched.
+func (m appModel) updateScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case screens.PipelineClosedMsg:
 		if msg.Quit {
@@ -270,6 +391,12 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		return m.startTransition(m.previousState)
+
+	case screens.KBRunToolMsg:
+		// Same suspend-and-run shape as the Documents entry: the tool is a
+		// Python flow with its own prompts, and the alt screen has to be
+		// released for it rather than shared with it.
+		return m, m.runSkillsTool(msg.Action)
 
 	case screens.KBCloseMsg:
 		if msg.Quit {
@@ -298,8 +425,13 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		err := data.UpdateApplicationStatus(msg.CareerOpsPath, msg.App, msg.NewStatus)
 		if err != nil {
 			m.pipeline.SetNotice(fmt.Sprintf("Status update failed: %v", err))
+			return m, m.reloadPipelineDataCmd()
 		}
-		return m, m.reloadPipelineDataCmd()
+		// Success previously showed nothing at all: the row moved and that
+		// was the only evidence, which on a grouped view is easy to miss.
+		toastCmd := m.pipeline.PushToast(screens.ToastSuccess,
+			"%s \u2192 %s", msg.App.Company, msg.NewStatus)
+		return m, tea.Batch(m.reloadPipelineDataCmd(), toastCmd)
 
 	case screens.PipelineRefreshMsg:
 		return m, m.reloadPipelineDataCmd()
@@ -408,10 +540,55 @@ func (m appModel) View() tea.View {
 			content = strings.Join(lines[:revealed], "\n")
 		}
 	}
+	// Drawn after the reveal clamp, so opening the palette mid-transition
+	// still shows the palette rather than waiting for the screen under it
+	// to finish arriving.
+	if m.palette.Open {
+		rows := m.height/2 - 4
+		if rows > 12 {
+			rows = 12
+		}
+		content = screens.OverlayCentered(content,
+			m.palette.Render(m.theme, m.width, rows), m.width, m.height)
+	}
+
 	v := tea.NewView(zone.Scan(content))
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
+}
+
+// runBuildDocuments releases the alt screen, runs the Python Build Documents
+// submenu attached to the real terminal, and restores the dashboard when it
+// exits. tea.ExecProcess, not exec.Command: that submenu draws its own huh
+// prompts and needs the terminal to itself, and anything less leaves two
+// programs writing to the same screen.
+func (m appModel) runBuildDocuments() tea.Cmd {
+	c := exec.Command(m.pythonPath, filepath.Join(m.projectRoot, "scripts", "menu.py"), "--build-documents")
+	c.Dir = m.projectRoot
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		// The submenu exiting is not an event this dashboard acts on -- the
+		// menu redraws itself on the next frame either way -- but a failure
+		// to launch it at all is worth surfacing through the same path a
+		// failed URL open uses.
+		if err != nil {
+			return screens.URLOpenFailedMsg{Err: err}
+		}
+		return nil
+	})
+}
+
+// runSkillsTool suspends the dashboard and runs one Knowledge Base skills
+// tool, named by the same key menu.py's _SKILLS_TOOLS dispatches on.
+func (m appModel) runSkillsTool(action string) tea.Cmd {
+	c := exec.Command(m.pythonPath, filepath.Join(m.projectRoot, "scripts", "menu.py"), "--skills-tool", action)
+	c.Dir = m.projectRoot
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		if err != nil {
+			return screens.URLOpenFailedMsg{Err: err}
+		}
+		return nil
+	})
 }
 
 // generateJobsExport writes a JD evaluation export to a temp file by
@@ -460,6 +637,14 @@ func main() {
 	jobFlag := flag.String("job", "", "Job path or ID for the answers view")
 	flag.Parse()
 
+	// The theme is resolved here rather than just before the first screen is
+	// built, because the warnings below this point are the earliest thing the
+	// program can print -- and until now they printed in the log library's own
+	// default colors, so the first thing a user saw when something went wrong
+	// was the one line that did not look like this program.
+	t := theme.NewTheme(*themeFlag)
+	t.ApplyLogStyles()
+
 	careerOpsPath := *pathFlag
 
 	jobsPath := *jobsPathFlag
@@ -502,7 +687,6 @@ func main() {
 	profile := data.LoadActiveProfile(*projectRootFlag, *profileFlag)
 
 	// Batch-load all report summaries
-	t := theme.NewTheme(*themeFlag)
 	pm := screens.NewPipelineModel(t, apps, metrics, careerOpsPath, 120, 40)
 
 	for _, app := range apps {
@@ -550,7 +734,7 @@ func main() {
 		profile:         profile,
 
 		state:            viewMenu,
-		menu:             menu.NewMenuModel(t).WithProfile(profile),
+		menu:             menu.NewMenuModel(t).WithProfile(profile).WithNextBestMoves(screens.CountNextBestMoves(jobRows)),
 		transitioning:    !anim.ReducedMotion(),
 		transitionSpring: anim.NewSpring(anim.Organic, 0, 24),
 	}

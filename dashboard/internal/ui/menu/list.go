@@ -63,6 +63,43 @@ type MenuModel struct {
 	sparkleBuffer string
 	sparkleActive bool
 	profile       data.ProfileInfo
+	nextBestMoves int
+}
+
+// WithNextBestMoves records how many pending roles are worth acting on right
+// now, for the banner above the menu.
+//
+// Jobs' own NEXT BEST MOVE banner is the highest-value thing in the product
+// for someone who opens the dashboard unsure what to do -- and it sat one
+// menu level deep, so the screen that greets that user was the one screen
+// that didn't answer "what do I do right now". This surfaces a count of the
+// same set at the first screen and points at Jobs, where the specific role
+// gets named. Deliberately a count and not a role: naming it here would
+// duplicate the banner rather than lead to it, and the menu is not where the
+// `t` binding lives.
+func (m MenuModel) WithNextBestMoves(n int) MenuModel {
+	m.nextBestMoves = n
+	return m
+}
+
+// renderNextBestMove returns the banner line, or "" when nothing qualifies --
+// an empty line here would be a permanent reminder that there is nothing to
+// do, which is the opposite of what the banner is for.
+func (m MenuModel) renderNextBestMove(width int) string {
+	if m.nextBestMoves <= 0 {
+		return ""
+	}
+	noun := "jobs are"
+	if m.nextBestMoves == 1 {
+		noun = "job is"
+	}
+	return theme.PadHorizontal(
+		lipgloss.NewStyle().
+			Bold(true).
+			Foreground(m.theme.Mauve).
+			Background(m.theme.Surface).
+			Width(width),
+	).Render(fmt.Sprintf("★ %d %s worth a look — open Jobs to see which", m.nextBestMoves, noun))
 }
 
 // SetSubtitle updates the dynamic motivational header text under the main menu title.
@@ -95,8 +132,10 @@ func (d zoneMenuDelegate) Render(w io.Writer, m list.Model, index int, item list
 func NewMenuModel(t theme.Theme) MenuModel {
 	items := []list.Item{
 		MenuItem{title: "Pipeline", desc: "Career pipeline view", icon: t.Icons.Pipeline},
-		MenuItem{title: "Progress", desc: "Analytics and funnel", icon: t.Icons.Progress},
+		MenuItem{title: "Progress", desc: "Where things stand: funnel & rates", icon: t.Icons.Progress},
+		MenuItem{title: "Insights", desc: "What's working: yield & trends", icon: t.Icons.Graph},
 		MenuItem{title: "Jobs", desc: "Browse & Manage Jobs", icon: t.Icons.Jobs},
+		MenuItem{title: "Documents", desc: "Tailor, polish & re-render resumes", icon: t.Icons.Report},
 		MenuItem{title: "Knowledge Base", desc: "Inspect claims, metrics & tools", icon: t.Icons.Search},
 		MenuItem{title: "Exit", desc: "Leave the dashboard", icon: t.Icons.Quit},
 	}
@@ -199,20 +238,29 @@ func (m MenuModel) Update(msg tea.Msg) (MenuModel, tea.Cmd) {
 			return m, nil
 		case "q", "ctrl+c":
 			return m, func() tea.Msg { return MenuQuitMsg{} }
-		case "1":
-			return m, func() tea.Msg { return MenuSelectMsg{Command: "Pipeline"} }
-		case "2":
-			return m, func() tea.Msg { return MenuSelectMsg{Command: "Progress"} }
-		// No "Reports" entry: it opened an empty viewer, because the
+		// Numeric shortcuts are read off the rendered rows rather than
+		// listed here. Adding "Insights" shifted every key below it, which
+		// is the same silent desync removing the dead "Reports" row caused
+		// once already; derived from the list, the two cannot disagree.
+		//
+		// (No "Reports" entry: it opened an empty viewer, because the
 		// markdown reports it browsed are produced by career-ops, not by
 		// resume-builder. Pipeline still opens a report directly when an
-		// application actually has one (PipelineOpenReportMsg).
-		case "3":
-			return m, func() tea.Msg { return MenuSelectMsg{Command: "Jobs"} }
-		case "4":
-			return m, func() tea.Msg { return MenuSelectMsg{Command: "Knowledge Base"} }
-		case "5":
-			return m, func() tea.Msg { return MenuQuitMsg{} }
+		// application actually has one, via PipelineOpenReportMsg.)
+		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+			idx := int(keyStr[0] - '1')
+			items := m.list.Items()
+			if idx < 0 || idx >= len(items) {
+				return m, nil
+			}
+			sel, ok := items[idx].(MenuItem)
+			if !ok {
+				return m, nil
+			}
+			if sel.title == "Exit" {
+				return m, func() tea.Msg { return MenuQuitMsg{} }
+			}
+			return m, func() tea.Msg { return MenuSelectMsg{Command: sel.title} }
 		case "enter":
 			if sel, ok := m.list.SelectedItem().(MenuItem); ok {
 				return m, func() tea.Msg { return MenuSelectMsg{Command: sel.title} }
@@ -275,6 +323,12 @@ func (m MenuModel) View() string {
 
 	body := m.list.View()
 
+	parts := []string{header, caption}
+	if banner := m.renderNextBestMove(width); banner != "" {
+		parts = append(parts, banner)
+	}
+	parts = append(parts, body)
+
 	footerStyle := theme.PadHorizontal(
 		lipgloss.NewStyle().
 			Foreground(m.theme.Token.Subtext).
@@ -283,7 +337,8 @@ func (m MenuModel) View() string {
 	)
 	footer := footerStyle.Render("←↑↓→ navigate • ↩ select • 1-5 jump • ? help • q quit")
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, caption, body, footer)
+	parts = append(parts, footer)
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 // Messages exposed to the parent application.

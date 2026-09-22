@@ -39,7 +39,7 @@ func NewKBModel(t theme.Theme, items []data.KBItem, width, height int) KBModel {
 		items:          items,
 		cursor:         0,
 		activeCategory: "All",
-		categories:     []string{"All", "Tools", "Metrics", "Facts", "Projects"},
+		categories:     []string{"All", "Tools", "Metrics", "Facts", "Projects", kbSkillsCategory},
 		width:          width,
 		height:         height,
 	}
@@ -60,6 +60,14 @@ func (m *KBModel) Resize(w, h int) {
 func (m KBModel) visibleItems() []data.KBItem {
 	var results []data.KBItem
 	q := strings.ToLower(strings.TrimSpace(m.searchQuery))
+
+	if m.activeCategory == kbSkillsCategory {
+		// The Skills tab lists tools, not knowledge-base items; every item
+		// reader on this screen goes through here, so returning nothing is
+		// what keeps the cursor, the detail pane and the mouse hit-test
+		// from reading an item list this tab does not have.
+		return nil
+	}
 
 	for _, it := range m.items {
 		if m.activeCategory != "All" && it.Category != m.activeCategory {
@@ -91,6 +99,15 @@ func (m KBModel) Update(msg tea.Msg) (KBModel, tea.Cmd) {
 				m.cursor = 0
 				return m, nil
 			}
+		}
+		if m.activeCategory == kbSkillsCategory {
+			for i := range kbSkillTools {
+				if zone.InBoundsClick(fmt.Sprintf("kb_skill_%d", i), msg) {
+					m.cursor = i
+					return m, nil
+				}
+			}
+			return m, nil
 		}
 		vis := m.visibleItems()
 		for i := range vis {
@@ -174,7 +191,13 @@ func (m KBModel) handleKey(keyStr, text string) (KBModel, tea.Cmd) {
 		m.searching = true
 		m.searchQuery = ""
 		return m, nil
-	case "1", "2", "3", "4", "5":
+	case "enter":
+		if m.activeCategory == kbSkillsCategory && m.cursor >= 0 && m.cursor < len(kbSkillTools) {
+			tool := kbSkillTools[m.cursor]
+			return m, func() tea.Msg { return KBRunToolMsg{Action: tool.action, Label: tool.label} }
+		}
+		return m, nil
+	case "1", "2", "3", "4", "5", "6":
 		idx := int(keyClean[0] - '1')
 		if idx >= 0 && idx < len(m.categories) {
 			m.activeCategory = m.categories[idx]
@@ -187,6 +210,12 @@ func (m KBModel) handleKey(keyStr, text string) (KBModel, tea.Cmd) {
 		}
 		return m, nil
 	case "down", "j":
+		if m.activeCategory == kbSkillsCategory {
+			if m.cursor < len(kbSkillTools)-1 {
+				m.cursor++
+			}
+			return m, nil
+		}
 		vis := m.visibleItems()
 		if m.cursor < len(vis)-1 {
 			m.cursor++
@@ -196,6 +225,10 @@ func (m KBModel) handleKey(keyStr, text string) (KBModel, tea.Cmd) {
 		m.cursor = 0
 		return m, nil
 	case "end", "G":
+		if m.activeCategory == kbSkillsCategory {
+			m.cursor = len(kbSkillTools) - 1
+			return m, nil
+		}
 		vis := m.visibleItems()
 		if len(vis) > 0 {
 			m.cursor = len(vis) - 1
@@ -303,14 +336,25 @@ func (m KBModel) View() string {
 
 	// Render Left Item List
 	var listLines []string
-	if len(vis) == 0 {
+	if m.activeCategory == kbSkillsCategory {
+		listLines = m.renderSkillsList(leftWidth)
+	} else if m.activeCategory == "All" && len(vis) > 0 {
+		listLines = m.renderClusteredList(t, vis, leftWidth, contentHeight)
+	} else if len(vis) == 0 {
 		listLines = append(listLines, lipgloss.NewStyle().Foreground(t.Overlay).Italic(true).Render("No matching items found."))
 	} else {
-		startIdx := 0
-		if m.cursor >= contentHeight {
-			startIdx = m.cursor - contentHeight + 1
+		// One body line goes to the paginator caption once the list is
+		// longer than the pane, so the window has to shrink with it --
+		// otherwise the caption pushes the last row out of the border.
+		listHeight := contentHeight
+		if len(vis) > contentHeight {
+			listHeight--
 		}
-		endIdx := min(len(vis), startIdx+contentHeight)
+		startIdx := 0
+		if m.cursor >= listHeight {
+			startIdx = m.cursor - listHeight + 1
+		}
+		endIdx := min(len(vis), startIdx+listHeight)
 
 		for i := startIdx; i < endIdx; i++ {
 			it := vis[i]
@@ -340,6 +384,17 @@ func (m KBModel) View() string {
 			}
 			listLines = append(listLines, zone.Mark(fmt.Sprintf("kb_item_%d", i), renderedItem))
 		}
+
+		// Same affordance the Jobs sidebar gets: a knowledge base runs to
+		// hundreds of entries, and a window with no caption gives the user
+		// nothing to judge how much of it they have seen.
+		if pager := RenderPaginator(t, PageState{
+			TotalItems:   len(vis),
+			ItemsPerPage: listHeight,
+			FirstItem:    startIdx,
+		}, leftWidth); pager != "" {
+			listLines = append(listLines, pager)
+		}
 	}
 
 	leftPane := lipgloss.NewStyle().
@@ -352,7 +407,9 @@ func (m KBModel) View() string {
 
 	// Render Right Markdown Detail View
 	var detailContent string
-	if len(vis) > 0 && m.cursor < len(vis) {
+	if m.activeCategory == kbSkillsCategory {
+		detailContent = m.renderSkillsDetail()
+	} else if len(vis) > 0 && m.cursor < len(vis) {
 		selectedItem := vis[m.cursor]
 		md := selectedItem.Content
 		renderedMD, err := glamour.Render(md, "dark")
@@ -388,6 +445,12 @@ func (m KBModel) View() string {
 		{Key: "↑/↓", Desc: "Select"},
 		{Key: "/", Desc: "Search"},
 	}
+	if m.activeCategory == kbSkillsCategory {
+		actions = []HelpBinding{
+			{Key: "↑/↓", Desc: "Select"},
+			{Key: "Enter", Desc: "Run tool"},
+		}
+	}
 	system := []HelpBinding{
 		{Key: "Esc", Desc: "Back"},
 		{Key: "q", Desc: "Quit"},
@@ -402,4 +465,104 @@ func (m KBModel) View() string {
 		"",
 		footer,
 	)
+}
+
+// renderClusteredList draws the "All" tab as a ClusterTree rather than a
+// flat list with a truncated `[Cate]` badge on every row. The badge was
+// the only thing carrying the grouping, so reading it meant reconstructing
+// the structure line by line; the tree draws it once, and a category that
+// has nearly emptied out announces itself instead of being four rows that
+// happen to share a prefix.
+//
+// Only this tab: every other tab is already one category, where a tree
+// would be a single root over a list it adds nothing to.
+//
+// The cursor stays an index into the ITEMS, exactly as the rest of this
+// screen -- the detail pane, the mouse hit-test and the arrow keys all read
+// it -- so the group rows the tree adds are translated into, and never out
+// of, that numbering here.
+func (m KBModel) renderClusteredList(t theme.Theme, vis []data.KBItem, width, height int) []string {
+	nodes, rowItems := kbClusterNodes(m.categories, vis)
+
+	cursorRow := 0
+	for row, item := range rowItems {
+		if item == m.cursor {
+			cursorRow = row
+			break
+		}
+	}
+
+	lines := RenderClusterTree(t, nodes, cursorRow, width)
+
+	listHeight := height
+	if len(lines) > height {
+		listHeight-- // the paginator caption takes a body line, as above
+	}
+	start := 0
+	if cursorRow >= listHeight {
+		start = cursorRow - listHeight + 1
+	}
+	end := min(len(lines), start+listHeight)
+
+	var out []string
+	for i := start; i < end; i++ {
+		if item := rowItems[i]; item >= 0 {
+			out = append(out, zone.Mark(fmt.Sprintf("kb_item_%d", item), lines[i]))
+			continue
+		}
+		out = append(out, lines[i])
+	}
+	if pager := RenderPaginator(t, PageState{
+		TotalItems:   len(lines),
+		ItemsPerPage: listHeight,
+		FirstItem:    start,
+	}, width); pager != "" {
+		out = append(out, pager)
+	}
+	return out
+}
+
+// kbClusterNodes groups the visible items by category and returns, beside
+// the nodes, one entry per rendered row holding the index of the item that
+// row draws -- or -1 for a group heading, which is not selectable.
+// Categories keep the tab order they are listed in, so the tree and the
+// tab bar cannot disagree about what the knowledge base contains.
+func kbClusterNodes(categories []string, vis []data.KBItem) ([]ClusterNode, []int) {
+	order := make([]string, 0, len(categories))
+	seen := map[string]bool{}
+	for _, c := range categories {
+		if c == "All" || c == kbSkillsCategory {
+			continue
+		}
+		order, seen[c] = append(order, c), true
+	}
+	// A category the tab bar does not name still has to be drawn: dropping
+	// it would hide entries the flat list used to show.
+	for _, it := range vis {
+		if !seen[it.Category] {
+			order, seen[it.Category] = append(order, it.Category), true
+		}
+	}
+
+	var nodes []ClusterNode
+	var rowItems []int
+	for _, cat := range order {
+		var children []ClusterNode
+		var indexes []int
+		for i, it := range vis {
+			if it.Category == cat {
+				children = append(children, ClusterNode{Label: it.Title})
+				indexes = append(indexes, i)
+			}
+		}
+		if len(children) == 0 {
+			continue
+		}
+		nodes = append(nodes, ClusterNode{
+			Label: cat, Count: len(children), HasCount: true, Children: children,
+		})
+		rowItems = append(rowItems, -1)
+		rowItems = append(rowItems, indexes...)
+	}
+	return nodes, rowItems
 }

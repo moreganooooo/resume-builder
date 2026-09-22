@@ -45,23 +45,25 @@ func newResumeBuilder() Theme {
 		Subtext: lipgloss.Color("#a6adc8"),
 
 		// Accents -- resume-builder's scripts/theme.py tokens. Sky
-		// (#8B75FF, BRAND) clears Base (#1e1e2e) at 4.75:1 -- AA text
-		// contrast, but with little margin -- and fails outright against
-		// Surface (#313244) at 3.64:1. It's currently only ever
-		// composited against Base (progress.go/viewer.go section
+		// (#a47bff, BRAND) is docs/DesignSystem/tokens/colors.css's
+		// corrected value (a shifted violet reading as purple) and is
+		// the one documented Base-only exception to the >=4.5:1-on-
+		// both-backgrounds rule: it clears Base (#1e1e2e) but only
+		// reaches ~4.0:1 against Surface (#313244). It's currently only
+		// ever composited against Base (progress.go/viewer.go section
 		// titles), which is why this isn't visibly broken today; don't
 		// pair it with Background(Surface) without re-measuring, unlike
 		// catppuccin_latte.go's accents (see that file's own contrast
 		// comment), which were deliberately tuned against the tighter of
 		// the two backgrounds.
-		Blue:   lipgloss.Color("#00A4FF"), // INFO
+		Blue:   lipgloss.Color("#4dabf7"), // INFO
 		Mauve:  lipgloss.Color("#FF60FF"), // BRAND_ACCENT
-		Green:  lipgloss.Color("#12C78F"), // SUCCESS
+		Green:  lipgloss.Color("#9ab63f"), // SUCCESS
 		Yellow: lipgloss.Color("#F5EF34"), // WARNING
-		Sky:    lipgloss.Color("#8B75FF"), // BRAND
+		Sky:    lipgloss.Color("#a47bff"), // BRAND
 		Peach:  lipgloss.Color("#FF985A"), // PEACH
 		Red:    lipgloss.Color("#FF7B99"), // ERROR
-		Pink:   lipgloss.Color("#FF84FF"), // PINK
+		Pink:   lipgloss.Color("#12e6c8"), // PINK
 	}
 
 	// Populate Token shortcuts

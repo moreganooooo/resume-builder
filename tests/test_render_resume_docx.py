@@ -8,6 +8,7 @@ SCRIPTS_DIR = os.path.join(
 )
 sys.path.insert(0, SCRIPTS_DIR)
 
+import docx_theme  # noqa: E402
 from docx import Document  # noqa: E402
 from render_resume_docx import render_resume_docx  # noqa: E402
 
@@ -62,9 +63,16 @@ class TestRenderResumeDocx(unittest.TestCase):
         texts = self._paragraph_texts(doc)
         self.assertIn("Jane Doe", texts)
         contact_line = next(t for t in texts if "555-123-4567" in t)
-        self.assertIn("PRODUCT MANAGER | GROWTH", contact_line)
         self.assertIn("jane@example.com", contact_line)
         self.assertIn("Austin, TX", contact_line)
+        # The tagline is its own paragraph, not part of the contact line:
+        # cv-template.html sets .header-tagline at 15pt against
+        # .contact-row's 9.75pt, and one joined paragraph cannot carry two
+        # sizes.
+        tagline_para = next(p for p in doc.paragraphs if "PRODUCT MANAGER" in p.text)
+        self.assertNotIn("555-123-4567", tagline_para.text)
+        self.assertIn("GROWTH", tagline_para.text)
+        self.assertEqual(docx_theme.TAGLINE_PT, tagline_para.runs[0].font.size.pt)
 
     def test_summary_first_sentence_is_bold_and_strong_tags_are_stripped(self):
         render_resume_docx(_minimal_resume_data(), self.out_path)

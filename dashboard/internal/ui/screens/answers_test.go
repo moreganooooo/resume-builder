@@ -3,6 +3,7 @@ package screens
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -10,6 +11,7 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/answers"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
+	"github.com/moreganooooo/resume-builder/dashboard/internal/ui/zone"
 )
 
 func TestAnswersViewFitsSmallTerminal(t *testing.T) {
@@ -58,7 +60,11 @@ func TestAnswersWrapsLongAnswerAndKeepsInputVisible(t *testing.T) {
 			t.Fatalf("line exceeds width 40: %q", line)
 		}
 	}
-	if !strings.Contains(view, "Enter send") {
+	// Stripped, and lowercase: the footer is a HelpBar now, which prints the
+	// key itself rather than a prose label ("enter" is what a person types)
+	// and styles the key and its description separately -- so the two are
+	// adjacent on screen but not adjacent in the raw string.
+	if !strings.Contains(ansi.Strip(view), "enter send") {
 		t.Fatalf("footer pushed off-screen:\n%s", view)
 	}
 }
@@ -122,5 +128,80 @@ func TestAnswersQTypesUnlessInputEmpty(t *testing.T) {
 	}
 	if msg, ok := cmd().(AnswersClosedMsg); !ok || !msg.Quit {
 		t.Fatal("q on an empty input should send a quit message")
+	}
+}
+
+func TestAnswersHelpOverlayOnlyOpensOnAnEmptyBox(t *testing.T) {
+	// A question mark is punctuation on this screen far more often than it
+	// is a command, so the overlay must lose the key while the user is
+	// mid-question -- the same rule `q` already follows.
+	m := NewAnswersModel(theme.NewTheme("resume-builder"), model.JobRow{Path: "job"}, "python3", ".", 80, 24)
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: '?', Text: "?"}))
+	if !m.showHelp {
+		t.Fatal("? on an empty box should open the reference")
+	}
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+	if m.showHelp {
+		t.Fatal("esc should dismiss the reference")
+	}
+
+	m.input.SetValue("Why do you want to work here")
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: '?', Text: "?"}))
+	if m.showHelp {
+		t.Fatal("? mid-question is punctuation, not a command")
+	}
+	if !strings.Contains(m.input.Value(), "?") {
+		t.Fatal("the question mark should have reached the input")
+	}
+}
+
+func TestAnswersHelpOverlaySwallowsEveryKey(t *testing.T) {
+	// The box is hidden behind the modal; typing into what you cannot see is
+	// how a reference screen silently corrupts a half-written question.
+	m := NewAnswersModel(theme.NewTheme("resume-builder"), model.JobRow{Path: "job"}, "python3", ".", 80, 24)
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: '?', Text: "?"}))
+	m, cmd := m.Update(tea.KeyPressMsg(tea.Key{Code: 'x', Text: "x"}))
+	if m.input.Value() != "" {
+		t.Fatalf("key reached the hidden input: %q", m.input.Value())
+	}
+	if cmd != nil {
+		t.Fatal("a key consumed by the overlay should issue no command")
+	}
+}
+
+func TestAnswersFooterHintsAreClickable(t *testing.T) {
+	// The footer is a real HelpBar now, so a click on "esc back" has to
+	// produce exactly what typing esc produces.
+	m := NewAnswersModel(theme.NewTheme("resume-builder"), model.JobRow{Path: "job"}, "python3", ".", 80, 24)
+	_ = zone.Scan(m.View())
+	var escIndex = -1
+	for i, b := range answersHelpBindings {
+		if b.Key == "esc" {
+			escIndex = i
+		}
+	}
+	if escIndex < 0 {
+		t.Fatal("expected an esc hint in the footer")
+	}
+	info := zone.WaitFor(helpBarZoneID(answersHelpZone, escIndex), time.Second)
+	if info == nil {
+		t.Fatal("the esc hint published no zone bounds")
+	}
+	_, cmd := m.Update(tea.MouseClickMsg{X: info.StartX, Y: info.StartY, Button: tea.MouseLeft})
+	if cmd == nil {
+		t.Fatal("clicking the esc hint should close the screen")
+	}
+	if _, ok := cmd().(AnswersClosedMsg); !ok {
+		t.Fatal("clicking esc produced a different message than pressing it")
+	}
+}
+
+func TestAnswersClickOutsideTheFooterReachesTheInput(t *testing.T) {
+	// Swallowing every click would leave the one box on this screen
+	// unreachable by mouse.
+	m := NewAnswersModel(theme.NewTheme("resume-builder"), model.JobRow{Path: "job"}, "python3", ".", 80, 24)
+	_ = zone.Scan(m.View())
+	if _, ok := HelpBarClicked(answersHelpZone, answersHelpBindings, tea.MouseClickMsg{X: 2, Y: 1, Button: tea.MouseLeft}); ok {
+		t.Fatal("a click in the header should not resolve to a footer hint")
 	}
 }

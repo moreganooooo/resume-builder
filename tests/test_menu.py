@@ -1681,3 +1681,31 @@ class TestOfferNextSteps(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCancelRecoveryLanguage(unittest.TestCase):
+    """An interrupted run has to answer "did I lose that work?" -- and only
+    where the answer is actually known."""
+
+    def _printed(self, action: str) -> str:
+        with patch.object(menu.cli_art, "console") as console:
+            menu._print_cancelled(action)
+        return " ".join(str(c.args[0]) for c in console.print.call_args_list)
+
+    def test_known_action_says_what_survived(self):
+        out = self._printed("build_documents")
+        self.assertIn("Cancelled.", out)
+        self.assertIn("Nothing was lost", out)
+        self.assertIn("checkpoint", out)
+
+    def test_unknown_action_claims_nothing(self):
+        out = self._printed("some_action_with_no_resume_story")
+        self.assertIn("Cancelled.", out)
+        self.assertNotIn("Nothing was lost", out)
+
+    def test_every_recovery_line_names_a_real_menu_action(self):
+        """Keyed on the same values _build_choices() dispatches on, or the
+        message is attached to an action that can never be cancelled."""
+        values = {c.value for c in menu._build_choices() if getattr(c, "value", None)}
+        for action in menu._CANCEL_RECOVERY:
+            self.assertIn(action, values)

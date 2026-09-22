@@ -1,0 +1,38 @@
+<!-- @dsCard group="Components" viewport="700x470" name="Data display" subtitle="Scores, pills, tags, bars, sparklines and the empty-pane starfield" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:470px;background:var(--tui-base);padding:16px;font-family:var(--font-mono);font-size:12px}.lbl{color:var(--tui-subtext);font-size:10px;margin:10px 0 4px}.lbl:first-child{margin-top:0}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+const { ScoreBadge, StatusPill, EmploymentTag, ScoreBar, ProgressBar, FunnelBar, FUNNEL_COLORS, Sparkline, StarfieldPane } = window.ResumeBuilderDesignSystem_2d03b1;
+function Demo(){
+const stages=[['Evaluated',128],['Applied',52],['Responded',18],['Interview',7],['Offer',2]];
+return (<>
+<div className="lbl">ScoreBadge — tier by colour and glyph</div>
+<div style={{display:'flex',gap:18}}>
+  <ScoreBadge score={4.6} suffix="/5" /><ScoreBadge score={3.9} suffix="/5" /><ScoreBadge score={3.2} suffix="/5" /><ScoreBadge score={2.4} suffix="/5" /><ScoreBadge score={null} />
+</div>
+<div className="lbl">StatusPill · EmploymentTag</div>
+<div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+  <StatusPill status="interview" /><StatusPill status="applied" /><StatusPill status="rejected" />
+  <EmploymentTag type="full_time" /><EmploymentTag type="contract" /><EmploymentTag type="internship" />
+</div>
+<div className="lbl">ScoreBar — subscores (max 5) and skill coverage (max 100)</div>
+<ScoreBar label="Skill overlap" value={4.4} />
+<ScoreBar label="Level plausibility" value={3.1} />
+<ScoreBar label="Figma" value={65} max={100} />
+<div className="lbl">ProgressBar — determinate work (3 rows for tailor) and indeterminate</div>
+<ProgressBar value={62} thickness={3} label="Tailoring resume... (esc to cancel)" width={38} />
+<div style={{height:6}} />
+<ProgressBar mode="indeterminate" width={38} label="Scanning job boards..." />
+<div className="lbl">FunnelBar — pipeline funnel</div>
+{stages.map((s,i)=><FunnelBar key={s[0]} label={s[0]} count={s[1]} max={128} pct={i?(s[1]/stages[i-1][1])*100:undefined} color={FUNNEL_COLORS[i]} width={34} />)}
+<div className="lbl">Sparkline</div>
+<div><span style={{color:'var(--tui-text)'}}>Score Trend&nbsp;&nbsp;</span><Sparkline values={[2,3,3,4,5,4,6,7,6,8,7,9,8,9]} /></div>
+<div><span style={{color:'var(--tui-text)'}}>Weekly Volume</span> <Sparkline values={[9,7,8,4,5,3,6,2,4,5,7,8,6,9]} color="var(--tui-blue)" /></div>
+</>);}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script></body></html>

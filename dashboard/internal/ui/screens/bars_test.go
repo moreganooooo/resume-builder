@@ -96,9 +96,9 @@ func TestToastNotification_Lifecycle(t *testing.T) {
 
 func TestRenderFooter_ThreeTiers(t *testing.T) {
 	th := theme.NewTheme("catppuccin-mocha")
-	primary := []HelpBinding{{"Enter", "Select"}}
-	actions := []HelpBinding{{"t", "Tailor"}, {"a", "Archive"}}
-	system := []HelpBinding{{"?", "Help"}, {"q", "Quit"}}
+	primary := []HelpBinding{{Key: "Enter", Desc: "Select"}}
+	actions := []HelpBinding{{Key: "t", Desc: "Tailor"}, {Key: "a", Desc: "Archive"}}
+	system := []HelpBinding{{Key: "?", Desc: "Help"}, {Key: "q", Desc: "Quit"}}
 
 	rendered := RenderHierarchicalFooter(th, 80, primary, actions, system)
 	plain := ansi.Strip(rendered)
@@ -130,9 +130,9 @@ func TestWindowResize_BelowMinDimensions(t *testing.T) {
 func TestHelpOverlay_Scrolling(t *testing.T) {
 	th := theme.NewTheme("catppuccin-mocha")
 	categories := []HelpCategory{
-		{Label: "Navigation", Bindings: []HelpBinding{{"j/k", "Move down/up"}, {"g/G", "Top/Bottom"}}},
-		{Label: "Actions", Bindings: []HelpBinding{{"t", "Tailor resume"}, {"a", "Archive job"}}},
-		{Label: "System", Bindings: []HelpBinding{{"?", "Toggle help"}, {"q", "Quit"}}},
+		{Label: "Navigation", Bindings: []HelpBinding{{Key: "j/k", Desc: "Move down/up"}, {Key: "g/G", Desc: "Top/Bottom"}}},
+		{Label: "Actions", Bindings: []HelpBinding{{Key: "t", Desc: "Tailor resume"}, {Key: "a", Desc: "Archive job"}}},
+		{Label: "System", Bindings: []HelpBinding{{Key: "?", Desc: "Toggle help"}, {Key: "q", Desc: "Quit"}}},
 	}
 	// Small height=12 with 3 categories should render with clip/scroll indicator
 	rendered := RenderHelpOverlay(th, "Jobs", categories, 80, 12)
@@ -213,5 +213,22 @@ func TestHelpOverlayKeyColumnFitsLongestKey(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing aligned row %q in:\n%s", want, out)
 		}
+	}
+}
+
+func TestToastNotification_ConfettiIsAClosedSet(t *testing.T) {
+	// A plain toast must not celebrate. Routine saves, status changes and
+	// completed scans all go through Show, and bursting on every one of
+	// them is what makes the burst meaningless.
+	plain := NewToastNotification()
+	plain.Show("✓", "Saved", 2)
+	if plain.particles.Active() {
+		t.Errorf("Show() emitted confetti; only ShowCelebrating() may")
+	}
+
+	celebrating := NewToastNotification()
+	celebrating.ShowCelebrating("✦", "Moved to Interview", 2)
+	if !celebrating.particles.Active() {
+		t.Errorf("ShowCelebrating() did not emit confetti")
 	}
 }

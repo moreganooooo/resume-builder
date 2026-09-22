@@ -216,6 +216,66 @@ func RenderColorGradient(text string, c1, c2 color.Color) string {
 	return RenderGradient(text, ColorToHex(c1), ColorToHex(c2))
 }
 
+// RenderGradientStops blends a string across an arbitrary number of palette
+// stops, character-by-character, interpolating linearly within each segment.
+//
+// Two stops are not always enough. A straight blend between endpoints that sit
+// on opposite sides of the hue wheel passes through a desaturated brown at the
+// middle of the string -- which is exactly where a screen title's most
+// readable characters are. The design system's rule is that any wide hue jump
+// gets a third stop rather than that muddy midpoint (Jobs runs
+// Blue -> Mauve -> Peach, Progress runs Peach -> Mauve -> Teal); short jumps
+// like Pipeline's Blue -> Mauve stay on RenderColorGradient, where a second
+// stop would only add a constraint without changing what you see.
+//
+// Fewer than two stops renders the text unstyled rather than guessing a
+// gradient from one color.
+func RenderGradientStops(text string, stops ...color.Color) string {
+	if len(stops) < 2 {
+		return text
+	}
+	if len(stops) == 2 {
+		return RenderColorGradient(text, stops[0], stops[1])
+	}
+
+	runes := []rune(text)
+	n := len(runes)
+	if n <= 1 {
+		return text
+	}
+
+	type rgb struct{ r, g, b int }
+	parsed := make([]rgb, len(stops))
+	for i, s := range stops {
+		r, g, b := parseHex(ColorToHex(s))
+		parsed[i] = rgb{r, g, b}
+	}
+
+	segments := len(parsed) - 1
+	var result strings.Builder
+	for i, rn := range runes {
+		// Position along the whole string, then which segment that lands in.
+		pos := float64(i) / float64(n-1) * float64(segments)
+		seg := int(pos)
+		if seg >= segments {
+			// The final character lands exactly on the last stop; clamp it
+			// into the last segment so t resolves to 1.0 rather than
+			// indexing past the end.
+			seg = segments - 1
+		}
+		t := pos - float64(seg)
+
+		from, to := parsed[seg], parsed[seg+1]
+		r := int(float64(from.r) + t*float64(to.r-from.r))
+		g := int(float64(from.g) + t*float64(to.g-from.g))
+		b := int(float64(from.b) + t*float64(to.b-from.b))
+
+		fmt.Fprintf(&result, "\x1b[38;2;%d;%d;%dm%c", r, g, b, rn)
+	}
+	result.WriteString("\x1b[0m")
+	return result.String()
+}
+
 // RenderGradient takes a string and blends it from startHex to endHex color character-by-character.
 func RenderGradient(text string, startHex, endHex string) string {
 	r1, g1, b1 := parseHex(startHex)

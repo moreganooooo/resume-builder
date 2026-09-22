@@ -1017,7 +1017,7 @@ def rag_cmd(query, top_bullets, top_evidence, top_chunks, index_docs):
     # Document chunks
     if res.get("doc_chunks"):
         cli_art.console.print(
-            f"[bold {theme.BRAND}]📑 Matched Document Chunks ({len(res['doc_chunks'])})[/]"
+            f"[bold {theme.BRAND}]▥ Matched Document Chunks ({len(res['doc_chunks'])})[/]"
         )
         for ch in res["doc_chunks"]:
             source = ch.get("source_file", "Doc")
@@ -1031,7 +1031,7 @@ def rag_cmd(query, top_bullets, top_evidence, top_chunks, index_docs):
     # Evidence clusters
     if res.get("evidence"):
         cli_art.console.print(
-            f"[bold {theme.BRAND_ACCENT}]📖 Matched Evidence Clusters ({len(res['evidence'])})[/]"
+            f"[bold {theme.BRAND_ACCENT}]⇪ Matched Evidence Clusters ({len(res['evidence'])})[/]"
         )
         for ev in res["evidence"]:
             name = ev.get("cluster", "Cluster")
@@ -1047,7 +1047,7 @@ def rag_cmd(query, top_bullets, top_evidence, top_chunks, index_docs):
     # Bullets
     if res.get("bullets"):
         cli_art.console.print(
-            f"[bold {theme.BRAND}]🎯 Matched Bullet Bank Achievements ({len(res['bullets'])})[/]"
+            f"[bold {theme.BRAND}]⌖ Matched Bullet Bank Achievements ({len(res['bullets'])})[/]"
         )
         for b in res["bullets"]:
             bullet_text, role, tags, score = b

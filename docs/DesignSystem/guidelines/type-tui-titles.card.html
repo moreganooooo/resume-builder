@@ -1,0 +1,12 @@
+<!-- @dsCard group="Type" viewport="700x170" name="TUI titles" subtitle="Letter-tracked, sparkle-bracketed, rendered as a per-character gradient" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:170px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;justify-content:center;gap:12px}.bar{background:var(--tui-surface);padding:0 16.8px;display:flex;justify-content:space-between;align-items:center;height:21px;font-weight:700}.g span{font-weight:700}</style></head><body><div class="bar"><span class="g" id="a"></span><span style="color:var(--tui-subtext);font-weight:400">128 offers | Avg 3.7/5</span></div>
+<div class="bar"><span class="g" id="b"></span><span style="color:var(--tui-subtext);font-weight:400">64 job(s) <span style="color:var(--tui-mauve);font-weight:700">● ALL JOBS</span></span></div>
+<div class="bar"><span class="g" id="c"></span><span style="color:var(--tui-subtext);font-weight:400">212 evaluated | 3.7 avg score</span></div>
+<div style="color:var(--tui-subtext);font-size:11px;padding:0 16.8px">RenderColorGradient interpolates each character between two palette colours.</div>
+<script>
+const tok=n=>{const v=getComputedStyle(document.documentElement).getPropertyValue(n).trim();return v.length===4?'#'+[1,2,3].map(i=>v[i]+v[i]).join(''):v;};
+function grad(el,text,...names){const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));const ramp=names.map(n=>p(tok(n)));el.innerHTML=[...text].map((ch,i)=>{const t=i/(text.length-1);const s=Math.min(ramp.length-2,Math.floor(t*(ramp.length-1)));const l=t*(ramp.length-1)-s;const a=ramp[s],b=ramp[s+1];const col=a.map((v,k)=>Math.round(v+l*(b[k]-v))).join(',');return '<span style="color:rgb('+col+')">'+(ch===' '?'&nbsp;':ch)+'</span>';}).join('');}
+grad(document.getElementById('a'),'⚙  ✦ CAREER PIPELINE ✧','--tui-blue','--tui-mauve');
+grad(document.getElementById('b'),'▣  ✦ JOBS ✧','--tui-blue','--tui-mauve','--tui-peach');
+grad(document.getElementById('c'),'▤  ✦ SEARCH PROGRESS ✧','--tui-peach','--tui-mauve','--tui-teal');
+</script></body></html>

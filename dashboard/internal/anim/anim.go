@@ -41,6 +41,26 @@ func ReducedMotion() bool {
 	return false
 }
 
+// SuppressIdleAnimation reports whether continuous, idle background loops --
+// the starfield twinkle, shimmers, anything running on a timer while the user
+// is doing nothing -- should be skipped entirely.
+//
+// Broader than ReducedMotion on purpose. On a phone, an idle 20fps redraw
+// loop is a battery drain rather than an accessibility problem, and the
+// mobile guidance is that idle CPU should sit near zero; the user never asked
+// for reduced motion, so ReducedMotion alone would leave it running. One-shot
+// animations with a settled end state (a reveal spring, a transition) still
+// key off ReducedMotion -- they cost nothing once converged.
+func SuppressIdleAnimation() bool {
+	return ReducedMotion() || mobileTerminal()
+}
+
+func mobileTerminal() bool {
+	return os.Getenv("TERMUX_VERSION") != "" ||
+		os.Getenv("RESUME_BUILDER_MOBILE") == "1" ||
+		os.Getenv("RESUME_BUILDER_COMPACT") == "1"
+}
+
 // Spring wraps harmonica.Spring with target tracking and convergence detection.
 type Spring struct {
 	spring  harmonica.Spring

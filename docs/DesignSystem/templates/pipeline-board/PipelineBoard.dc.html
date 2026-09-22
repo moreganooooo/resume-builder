@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Kanban board screen" description="The Pipeline board lens — five columns in pipeline order, keyboard-moved cards, confirm-on-move." -->
+<helmet><script src="./ds-base.js"></script><style>html,body{height:100%;margin:0}body{background:#14141f}</style></helmet>
+<div style="width:100%;height:100vh;background:var(--tui-base);font-family:var(--font-mono);font-size:var(--tui-font-size);line-height:var(--tui-line-height);color:var(--tui-text);display:flex;flex-direction:column;overflow:hidden">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiHeaderBar" icon="pipeline" gradient="pipeline" title="✦ CAREER PIPELINE ✧" info="{{ headerInfo }}" hint-size="100%,21px"></x-import>
+<div style="background:var(--tui-surface);color:var(--tui-subtext);padding:0 var(--pad-h);display:flex;gap:16px"><span>View: <span style="color:var(--tui-mauve);font-weight:700">BOARD</span> <span style="color:var(--tui-overlay)">|</span> list</span><span>{{ totals }}</span></div>
+<div style="color:var(--tui-subtext);padding:0 var(--pad-h)">Skip and Rejected stay list-only — a board is for work in flight</div>
+<div style="flex:1;display:flex;gap:6px;padding:4px var(--pad-h);min-height:0">
+<sc-for list="{{ columns }}" as="col" hint-placeholder-count="5">
+<div style="flex:1;min-width:0;display:flex">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="{{ col.variant }}" pad="tight" dc-props="{{ col.panel }}" hint-size="100%,100%">
+<div style="color:var(--tui-subtext);letter-spacing:.14em;padding-bottom:4px">{{ col.header }}</div>
+<sc-for list="{{ col.cards }}" as="card" hint-placeholder-count="2">
+<sc-if value="{{ card.selected }}" hint-placeholder-val="{{ false }}">
+<div style="padding:4px 0 4px 7.4px;cursor:pointer;border-left:1px solid var(--tui-mauve)" onClick="{{ card.select }}">
+<div style="display:flex;gap:6px;align-items:baseline"><x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.ScoreBadge" score="{{ card.score }}" hint-size="52px,21px"></x-import><span style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ card.company }}</span></div>
+<div style="color:var(--tui-subtext);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ card.role }}</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.EmploymentTag" type="{{ card.employment }}" hint-size="90px,21px"></x-import>
+</div>
+</sc-if>
+<sc-if value="{{ card.unselected }}" hint-placeholder-val="{{ true }}">
+<div style="padding:4px 0 4px 8.4px;cursor:pointer;border-left:1px solid transparent" onClick="{{ card.select }}">
+<div style="display:flex;gap:6px;align-items:baseline"><x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.ScoreBadge" score="{{ card.score }}" hint-size="52px,21px"></x-import><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ card.company }}</span></div>
+<div style="color:var(--tui-subtext);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ card.role }}</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.EmploymentTag" type="{{ card.employment }}" hint-size="90px,21px"></x-import>
+</div>
+</sc-if>
+</sc-for>
+<sc-if value="{{ col.empty }}" hint-placeholder-val="{{ false }}">
+<div style="position:relative;flex:1;min-height:80px"><x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.StarfieldPane" density="{{ 0.065 }}" card="{{ false }}" title="" hint-size="100%,100%"></x-import></div>
+</sc-if>
+</x-import>
+</div>
+</sc-for>
+</div>
+<sc-if value="{{ pending }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 var(--pad-h) 4px">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.Modal" title="Confirm move" width="440px" hint-size="440px,84px">
+<div>{{ pendingText }}</div>
+<div style="color:var(--tui-subtext);padding-top:4px">Enter/y confirm &nbsp; Esc/n cancel</div>
+</x-import>
+</div>
+</sc-if>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiFooterBar" primary="{{ primary }}" actions="{{ actions }}" system="{{ system }}" brand="resume-builder dashboard" hint-size="100%,21px"></x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800}}">
+// Board is a lens on the same object as the list — same header, footer and
+// selection language; only the middle region changes shape (`v` toggles).
+// Columns are unordered sets: H/L propose a move, they never commit on keypress.
+class Component extends DCLogic {
+  state = { col: 1, row: 0, pending: null };
+  renderVals() {
+    const order = ['EVALUATED', 'APPLIED', 'RESPONDED', 'INTERVIEW', 'OFFER'];
+    const data = [
+      [{ company: 'Callahan Creek', role: 'Brand Strategist', score: 4.4, employment: 'full_time' },
+       { company: 'Harbor & Co', role: 'Copy Director', score: 3.9, employment: 'contract' }],
+      [{ company: 'Northwind Labs', role: 'Content Lead', score: 4.6, employment: 'full_time' },
+       { company: 'Meridian Group', role: 'Comms Manager', score: 3.4, employment: 'contract_to_hire' }],
+      [{ company: 'Bright Path', role: 'Editorial Lead', score: 4.1, employment: 'full_time' }],
+      [{ company: 'Orchard Media', role: 'Senior Writer', score: 4.2, employment: 'full_time' }],
+      [],
+    ];
+    const total = data.reduce((n, c) => n + c.length, 0);
+    const p = this.state.pending;
+    return {
+      headerInfo: total + ' in flight | Avg 4.1/5',
+      totals: order.map((l, i) => l.toLowerCase() + ' ' + data[i].length).join('  •  '),
+      pending: !!p,
+      pendingText: p ? 'Change status to ' + p + '?' : '',
+      columns: data.map((cards, ci) => ({
+        header: order[ci] + ' (' + cards.length + ')',
+        variant: ci === this.state.col ? 'active' : 'idle',
+        empty: cards.length === 0,
+        // Column-level dim (Theme.Dimmed, 0.55) rides the panel mount, so the
+        // card markup can keep every style literal and paint while streaming.
+        panel: { style: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', opacity: ci === this.state.col ? 1 : 0.55 } },
+        cards: cards.map((c, ri) => {
+          const sel = ci === this.state.col && ri === this.state.row;
+          return {
+            ...c,
+            selected: sel,
+            unselected: !sel,
+            select: () => this.setState({ col: ci, row: ri, pending: null }),
+          };
+        }),
+      })),
+      primary: [{ key: 'enter', desc: 'open' }],
+      actions: [{ key: '←→', desc: 'column' }, { key: '↑↓', desc: 'card' }, { key: 'H/L', desc: 'move' }, { key: 'v', desc: 'list view' }],
+      system: [{ key: 'esc', desc: 'back' }, { key: 'q', desc: 'quit' }],
+    };
+  }
+}
+</script>
+</body>
+</html>

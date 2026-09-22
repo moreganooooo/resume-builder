@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="TUI screen shell" description="Empty split-pane dashboard screen with the full chrome stack, measured and in order." -->
+<helmet><script src="./ds-base.js"></script><style>html,body{height:100%;margin:0}body{background:#14141f}</style></helmet>
+<div style="width:100%;height:100vh;background:var(--tui-base);font-family:var(--font-mono);font-size:var(--tui-font-size);line-height:var(--tui-line-height);color:var(--tui-text);display:flex;flex-direction:column;overflow:hidden">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiHeaderBar" icon="pipeline" gradient="pipeline" title="✦ SCREEN TITLE ✧" info="{{ headerInfo }}" hint-size="100%,21px"></x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiTabs" tabs="{{ tabs }}" active="{{ tab }}" onChange="{{ setTab }}" hint-size="100%,42px"></x-import>
+<div style="background:var(--tui-surface);color:var(--tui-subtext);padding:0 var(--pad-h)">Metrics bar — the counts this screen is accountable for</div>
+<div style="color:var(--tui-subtext);padding:0 var(--pad-h);display:flex;gap:16px"><span>[Sort: score]</span><span>[View: grouped]</span><span>{{ shown }}</span></div>
+<div style="flex:1;display:flex;gap:8px;padding:4px var(--pad-h);min-height:0">
+<div style="flex:0 0 35%;min-width:0;display:flex">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="active" pad="tight" dc-props="{{ sidebarPanel }}" hint-size="100%,100%">
+<sc-for list="{{ rows }}" as="row" hint-placeholder-count="3">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.SidebarRow" score="{{ row.score }}" company="{{ row.company }}" subtitle="{{ row.subtitle }}" selected="{{ row.selected }}" onClick="{{ row.select }}" hint-size="100%,42px"></x-import>
+</sc-for>
+</x-import>
+</div>
+<div style="flex:1;min-width:0;display:flex">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="idle" pad="detail" dc-props="{{ detailPanel }}" hint-size="100%,100%">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.StarfieldPane" title="✦ No active selection ✧" hints="{{ hints }}" hint-size="100%,100%"></x-import>
+</x-import>
+</div>
+</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiFooterBar" primary="{{ primary }}" actions="{{ actions }}" system="{{ system }}" brand="resume-builder dashboard" hint-size="100%,21px"></x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+// The chrome stack, top to bottom, in the order every screen uses it:
+//   header bar -> tabs -> metrics bar -> sort/filter bar -> split pane -> footer
+// Each fixed bar is one --tui-line-height tall and is measured BEFORE the
+// pane height is computed. Adding a bar means subtracting its height from
+// the pane, never letting it push the footer off screen.
+//
+// Pipeline gives the sidebar 35%; Jobs gives it 60%. Pick per screen.
+class Component extends DCLogic {
+  state = { tab: 0, cursor: 0 };
+  renderVals() {
+    const data = [
+      { company: 'Company name', subtitle: 'Role title  Fit 0.0 / Odds 0.0', score: 0 },
+      { company: 'Company name', subtitle: 'Role title  Fit 0.0 / Odds 0.0', score: 0 },
+      { company: 'Company name', subtitle: 'Role title  Fit 0.0 / Odds 0.0', score: 0 },
+    ];
+    return {
+      headerInfo: data.length + ' items | Avg 0.0/5',
+      shown: 'Showing ' + data.length + ' of ' + data.length,
+      tabs: [{ label: 'ALL', count: data.length }, { label: 'EVALUATED', count: 0 }, { label: 'TOP ≥4', count: 0 }],
+      tab: this.state.tab,
+      setTab: (i) => this.setState({ tab: i }),
+      rows: data.map((r, i) => ({ ...r, selected: i === this.state.cursor, select: () => this.setState({ cursor: i }) })),
+      hints: ['press [ enter ] to open', 'press [ t ] to tailor'],
+      sidebarPanel: { style: { flex: 1, overflowY: 'auto' } },
+      detailPanel: { style: { flex: 1, position: 'relative', overflow: 'hidden' } },
+      primary: [{ key: 'enter', desc: 'open' }],
+      actions: [{ key: '↑↓', desc: 'nav' }, { key: 's', desc: 'sort' }, { key: 'r', desc: 'refresh' }],
+      system: [{ key: 'esc', desc: 'back' }, { key: 'q', desc: 'quit' }],
+    };
+  }
+}
+</script>
+</body>
+</html>

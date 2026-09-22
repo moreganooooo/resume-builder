@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Job scorecard" description="One role's full breakdown, sized for a Freeze PNG/SVG export — the only sanctioned way a TUI screen leaves the terminal." -->
+<helmet><script src="./ds-base.js"></script><style>html,body{height:100%;margin:0}body{background:#14141f}</style></helmet>
+<div style="width:100%;min-height:100vh;background:var(--tui-base);font-family:var(--font-mono);font-size:var(--tui-font-size);line-height:var(--tui-line-height);color:var(--tui-text);padding:var(--pad-v) var(--pad-h);display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;justify-content:space-between;align-items:baseline">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.GradientText" gradient="jobs" tracked="{{ true }}" bold="{{ true }}" hint-size="380px,21px">✦ SCORECARD ✧</x-import>
+<span style="color:var(--tui-subtext)">scored 2026-09-18 • gpt-4.1-mini</span>
+</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="idle" pad="detail" dc-props="{{ fill }}" hint-size="100%,520px">
+<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+<span style="font-weight:700;font-size:15px">Northwind Labs</span>
+<span style="color:var(--tui-subtext)">Content Lead</span>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.EmploymentTag" type="full_time" hint-size="90px,21px"></x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.StatusPill" status="applied" hint-size="80px,21px"></x-import>
+<span style="color:var(--tui-subtext)">⌂ On-site · 6.2 mi</span>
+<span style="color:var(--tui-subtext)">[DIRECT]</span>
+</div>
+<div style="display:flex;gap:10px;align-items:baseline;padding-top:6px">
+<span style="color:var(--tui-subtext)">Interview Probability:</span>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.ScoreBadge" score="{{ 4.6 }}" suffix="/5" hint-size="80px,21px"></x-import>
+<span style="color:var(--tui-subtext)">Fit 4.5 / Odds 3.9</span>
+</div>
+<div style="color:var(--tui-text);font-weight:700;padding-top:10px">Scores</div>
+<sc-for list="{{ subscores }}" as="s" hint-placeholder-count="5">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.ScoreBar" value="{{ s.value }}" max="{{ 5 }}" label="{{ s.label }}" valueText="{{ s.text }}" hint-size="100%,21px"></x-import>
+</sc-for>
+<div style="color:var(--tui-text);font-weight:700;padding-top:10px">Stress &amp; Stretch</div>
+<div style="color:var(--tui-green)">✓ No stress signals detected — earned the low-stress bonus</div>
+<div style="color:var(--tui-green)">✓ No experience gaps flagged</div>
+<div style="color:var(--tui-text);font-weight:700;padding-top:10px">Skills Gap Matrix</div>
+<sc-for list="{{ skills }}" as="k" hint-placeholder-count="4">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.ScoreBar" value="{{ k.value }}" max="{{ 100 }}" label="{{ k.label }}" valueText="{{ k.text }}" hint-size="100%,21px"></x-import>
+</sc-for>
+<div style="color:var(--tui-subtext);padding-top:10px">↳ Evidence: 6 bullets matched from the bank; 2 rewritten for this role</div>
+</x-import>
+<div style="display:flex;justify-content:space-between;color:var(--tui-subtext)">
+<span>Press [ t ] to tailor · [ u ] to open the posting · [ f ] to export this card</span>
+<span>resume-builder dashboard</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:900,&quot;height&quot;:760}}">
+// Sized for charmbracelet/freeze: a static, self-contained card with no chrome
+// stack and no selection state, because an exported image has no cursor.
+// It keeps the TUI palette — the print palette stays for the resume (No-Bleed Rule).
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      fill: { style: { flex: 1 } },
+      subscores: [
+        { label: 'Skill overlap', value: 4.7, text: '4.7' },
+        { label: 'Seniority fit', value: 4.4, text: '4.4' },
+        { label: 'Domain match', value: 4.1, text: '4.1' },
+        { label: 'Location', value: 4.9, text: '4.9' },
+        { label: 'Competition', value: 3.6, text: '3.6' },
+      ],
+      skills: [
+        { label: 'Editorial strategy', value: 92, text: '92%' },
+        { label: 'Content ops', value: 78, text: '78%' },
+        { label: 'SEO tooling', value: 54, text: '54%' },
+        { label: 'People management', value: 31, text: '31%' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

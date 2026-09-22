@@ -1,0 +1,116 @@
+/* Colors — two palettes that never mix (DESIGN.md, "The No-Bleed Rule").
+   TUI values originate in the shipped dashboard theme
+   (dashboard/internal/theme/resumebuilder.go, generated from
+   scripts/theme.py). Accents clear 4.5:1 WCAG AA against BOTH --tui-base
+   and --tui-surface (Surface is the tighter constraint) with one
+   documented exception, --tui-sky, which is Base-only.
+
+   THREE ACCENTS DIVERGE FROM UPSTREAM on purpose — see "Palette
+   divergences" in readme.md. If you are porting these back into Go or
+   Python, these are the values to write; the repo's current ones are
+   older:
+     --tui-sky    #8b75ff -> #a47bff   (shifted violet, reads as purple)
+     --tui-teal   #ff84ff -> #12e6c8   (was Pink; too close to Mauve)
+     --tui-green  #12c78f -> #9ab63f   (olive-lime; freed the teal band)
+   The Go/Python field is still named Pink; this system renames it Teal. */
+
+:root {
+  /* --- TUI structural neutrals (Catppuccin Mocha, untouched) --- */
+  --tui-base: #1e1e2e;      /* Deep Midnight — workspace background */
+  --tui-surface: #313244;   /* elevated panel / header / status bars */
+  --tui-overlay: #45475a;   /* borders, dividers, floating overlays. NEVER text */
+  --tui-text: #cdd6f4;      /* primary terminal text */
+  --tui-subtext: #a6adc8;   /* dimmed contextual text */
+
+  /* --- TUI accents (Charmtone, via scripts/theme.py) --- */
+  --tui-blue: #4dabf7;      /* INFO / Electric Sky — titles, subtitles, tabs. DESIGN.md's declared brand blue, adopted over the shipped Charmtone Malibu. */
+  --tui-mauve: #ff60ff;     /* BRAND_ACCENT / Charmtone Dolly — focus, hover, section accents */
+  --tui-green: #9ab63f;     /* SUCCESS / olive-lime, pulled away from Teal */
+  --tui-yellow: #f5ef34;    /* WARNING / Charmtone Mustard */
+  --tui-sky: #a47bff;       /* BRAND / Hazy, shifted violet — only ever on --tui-base (~4.0:1 on Surface) */
+  --tui-peach: #ff985a;     /* Charmtone Tang — decorative */
+  --tui-red: #ff7b99;       /* ERROR / Charmtone Coral, lightened */
+  --tui-teal: #12e6c8;      /* Teal, high-chroma — decorative, cool counterweight to Peach */
+  --tui-muted: #a3a3a3;     /* neutral gray for "not evaluated" */
+
+  /* --- Catppuccin decorative set --- */
+  /* Used for the CLI banner wordmark, the six-stop thinking gradient shown
+     during LLM work, and the confetti particle palette. Nothing here is a
+     general-purpose accent: reach for the --tui-* set instead. */
+  --cat-mauve: #cba6f7;
+  --cat-lavender: #b4befe;
+  --cat-blue: #89b4fa;
+  --cat-sky: #89dceb;
+  --cat-green: #a6e3a1;
+  --cat-yellow: #f9e2af;
+  --cat-red: #f38ba8;
+  --cat-peach: #fab387;
+
+  /* The two decorative sequences, in order. Consumers should read these
+     rather than re-listing the stops, so the order stays canonical. */
+  --thinking-stop-1: var(--tui-peach);
+  --thinking-stop-2: var(--tui-teal);
+  --thinking-stop-3: var(--tui-mauve);
+  --thinking-stop-4: var(--cat-lavender);
+  --thinking-stop-5: var(--cat-blue);
+  --thinking-stop-6: var(--tui-sky);
+
+  --confetti-1: var(--cat-mauve);
+  --confetti-2: var(--cat-blue);
+  --confetti-3: var(--cat-sky);
+  --confetti-4: var(--cat-green);
+  --confetti-5: var(--cat-yellow);
+  --confetti-6: var(--cat-peach);
+
+  /* --- DESIGN.md / design.json declared brand pair ---
+     Electric Sky is now the live --tui-blue. Vibrant Mauve stays a
+     documentation-surface value: the runtime uses Charmtone Dolly
+     (--tui-mauve, #ff60ff) as BRAND_ACCENT. Keep --brand-vibrant-mauve for
+     documentation surfaces and DESIGN.md-faithful mocks only; never use it
+     as a UI accent, which is --tui-mauve's job. */
+  --brand-electric-sky: #4dabf7;
+  --brand-vibrant-mauve: #b39ddb;
+
+  /* --- Print / PDF (absolute, no color ever) --- */
+  --print-text: #000000;
+  --print-bg: #ffffff;
+  --print-divider: #9aa3af;
+
+  /* --- Semantic aliases --- */
+  --bg-app: var(--tui-base);
+  --bg-panel: var(--tui-surface);
+  --bg-float: var(--tui-overlay);
+  --text-body: var(--tui-text);
+  --text-muted: var(--tui-subtext);
+  --text-title: var(--tui-blue);
+  --text-accent: var(--tui-mauve);
+  --border-idle: var(--tui-overlay);
+  --border-active: var(--tui-blue);
+  --border-focus: var(--tui-mauve);
+
+  --score-strong: var(--tui-green);   /* >= 4.2 */
+  --score-good: var(--tui-yellow);    /* >= 3.8 */
+  --score-fair: var(--tui-text);      /* >= 3.0 */
+  --score-weak: var(--tui-red);       /* <  3.0 */
+  --score-none: var(--tui-muted);     /* unscored — not the same as zero */
+
+  /* Pipeline status colors (pipeline.go statusColorMap). Closed-out
+     statuses use Subtext, never Overlay. */
+  --status-offer: var(--tui-green);
+  --status-interview: var(--tui-mauve);
+  --status-responded: var(--tui-peach);
+  --status-applied: var(--tui-blue);
+  --status-evaluated: var(--tui-sky);
+  --status-skip: var(--tui-yellow);
+  --status-rejected: var(--tui-subtext);
+  --status-discarded: var(--tui-subtext);
+
+  /* Employment-type tag colors (jobs.go employmentTags).
+     full_time is deliberately NOT green — green is the score scale. */
+  --tag-full-time: var(--tui-mauve);
+  --tag-part-time: var(--tui-sky);
+  --tag-contract: var(--tui-peach);
+  --tag-contract-to-hire: var(--tui-yellow);
+  --tag-temporary: var(--tui-teal);
+  --tag-internship: var(--tui-blue);
+}

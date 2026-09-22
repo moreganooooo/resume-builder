@@ -98,6 +98,32 @@ func TestMenuModel_DynamicMotivationalHeader(t *testing.T) {
 	}
 }
 
+func TestMenuModel_NextBestMoveBanner(t *testing.T) {
+	th := theme.NewTheme("catppuccin-mocha")
+
+	m := NewMenuModel(th).WithNextBestMoves(3)
+	m.Resize(80, 24)
+	view := ansi.Strip(m.View())
+	if !strings.Contains(view, "3 jobs are worth a look") {
+		t.Errorf("expected the next-best-move banner, got:\n%s", view)
+	}
+
+	// Singular, so the first screen a new user sees doesn't say "1 jobs".
+	one := NewMenuModel(th).WithNextBestMoves(1)
+	one.Resize(80, 24)
+	if v := ansi.Strip(one.View()); !strings.Contains(v, "1 job is worth a look") {
+		t.Errorf("expected singular phrasing, got:\n%s", v)
+	}
+
+	// Nothing to do renders no banner at all -- an empty line here would be
+	// a standing reminder that there is nothing worth acting on.
+	none := NewMenuModel(th).WithNextBestMoves(0)
+	none.Resize(80, 24)
+	if v := ansi.Strip(none.View()); strings.Contains(v, "worth a look") {
+		t.Errorf("expected no banner when nothing qualifies, got:\n%s", v)
+	}
+}
+
 func TestMenuModel_ProfileBadge(t *testing.T) {
 	th := theme.NewTheme("catppuccin-mocha")
 	m := NewMenuModel(th)
@@ -158,11 +184,32 @@ func TestMenuModel_NumericShortcuts(t *testing.T) {
 		t.Errorf("expected MenuSelectMsg with 'Progress', got: %#v", msg)
 	}
 
-	// Pressing '4' selects "Knowledge Base" -- 4, not 5, since the dead
-	// "Reports" entry was removed from the menu.
-	_, cmd = m.Update(pressKey("4"))
+	// Pressing '3' selects "Insights" -- the other half of the Progress
+	// screen sits directly under it.
+	_, cmd = m.Update(pressKey("3"))
 	if cmd == nil {
-		t.Fatalf("expected non-nil cmd on pressing '4'")
+		t.Fatalf("expected non-nil cmd on pressing '3'")
+	}
+	msg = cmd()
+	if sel, ok := msg.(MenuSelectMsg); !ok || sel.Command != "Insights" {
+		t.Errorf("expected MenuSelectMsg with 'Insights', got: %#v", msg)
+	}
+
+	// Pressing '5' selects "Documents", and '6' the Knowledge Base -- both
+	// shifted down as rows were added above them, which is exactly what
+	// TestMenuModel_ShortcutsMatchVisibleOrder exists to keep honest.
+	_, cmd = m.Update(pressKey("5"))
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd on pressing '5'")
+	}
+	msg = cmd()
+	if sel, ok := msg.(MenuSelectMsg); !ok || sel.Command != "Documents" {
+		t.Errorf("expected MenuSelectMsg with 'Documents', got: %#v", msg)
+	}
+
+	_, cmd = m.Update(pressKey("6"))
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd on pressing '5'")
 	}
 	msg = cmd()
 	if sel, ok := msg.(MenuSelectMsg); !ok || sel.Command != "Knowledge Base" {

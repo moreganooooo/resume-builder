@@ -222,13 +222,13 @@ def render_job_comparison(comp: dict[str, Any], console: Console | None = None) 
     # Common Skills & Verdict
     if comp["common_skills"]:
         c.print(
-            f"[bold {theme.BRAND_ACCENT}]🔗 Shared Required Competencies ({len(comp['common_skills'])}):[/] "
+            f"[bold {theme.BRAND_ACCENT}]⧉ Shared Required Competencies ({len(comp['common_skills'])}):[/] "
             + ", ".join(comp["common_skills"][:8])
         )
     c.print()
     c.print(
         Panel(
-            f"🎯 [bold]Comparative Verdict:[/] {comp['verdict']}",
+            f"⌖ [bold]Comparative Verdict:[/] {comp['verdict']}",
             border_style=theme.SUCCESS,
             padding=(0, 2),
         )

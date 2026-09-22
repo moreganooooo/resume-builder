@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Report archive" description="Glow's stashed-document browser applied to weekly reports — a sortable table beside the reader." -->
+<helmet><script src="./ds-base.js"></script><style>html,body{height:100%;margin:0}body{background:#14141f}</style></helmet>
+<div style="width:100%;height:100vh;background:var(--tui-base);font-family:var(--font-mono);font-size:var(--tui-font-size);line-height:var(--tui-line-height);color:var(--tui-text);display:flex;flex-direction:column;overflow:hidden">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiHeaderBar" icon="report" gradient="progress" title="✦ REPORT ARCHIVE ✧" info="{{ headerInfo }}" hint-size="100%,21px"></x-import>
+<div style="background:var(--tui-surface);color:var(--tui-subtext);padding:0 var(--pad-h);display:flex;gap:16px"><span>profiles/morgan/reports/</span><span>{{ span }}</span></div>
+<div style="flex:1;display:flex;gap:12px;padding:12px var(--pad-h);min-height:0">
+<div style="flex:0 0 46%;min-width:0;display:flex">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="active" pad="tight" dc-props="{{ fillCol }}" hint-size="100%,100%">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.DataTable" columns="{{ columns }}" rows="{{ rows }}" cursor="{{ cursor }}" sortKey="week" sortDir="desc" onSelect="{{ select }}" hint-size="100%,300px"></x-import>
+<div style="padding-top:10px">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.Paginator" page="{{ 0 }}" pages="{{ 3 }}" hint-size="100%,21px"></x-import>
+</div>
+</x-import>
+</div>
+<div style="flex:1;min-width:0;display:flex">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="idle" pad="detail" dc-props="{{ fillDoc }}" hint-size="100%,100%">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.GlamourDoc" source="{{ source }}" hint-size="100%,100%"></x-import>
+</x-import>
+</div>
+</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiFooterBar" primary="{{ primary }}" actions="{{ actions }}" system="{{ system }}" brand="resume-builder dashboard" hint-size="100%,21px"></x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800}}">
+// Reports accumulate weekly and become the record of a job search, so the
+// archive is a table rather than a list: the columns ARE the longitudinal
+// story, and sorting by response rate is the question people actually ask.
+// The reader sits beside the table, not behind it — Glow's stash makes you
+// leave the list to read, which is wrong when comparing weeks is the point.
+class Component extends DCLogic {
+  state = { cursor: 0 };
+  data = [
+    { week: '2026-W38', scanned: 64, applied: 9, replies: 4, rate: '44%', doc: `## Week 38\n\nSixty-four roles scanned, twelve at or above 4.0. The applied count hit the weekly goal on Thursday.\n\n- **Applied** 9 (up 3 week over week)\n- **Responded** 4\n- **Interview** 2\n\nDirect company boards continue to out-convert aggregators by roughly six to one.` },
+    { week: '2026-W37', scanned: 51, applied: 6, replies: 2, rate: '33%', doc: `## Week 37\n\nA slower week by design — three days went to rebuilding the bullet bank after the clustering pass.\n\n- **Applied** 6\n- **Responded** 2\n\nThe rebuilt bank raised median fit score from 3.6 to 4.1 on the roles scanned after it landed.` },
+    { week: '2026-W36', scanned: 78, applied: 11, replies: 3, rate: '27%', doc: `## Week 36\n\nHighest volume week so far, and the lowest response rate. Worth reading those two numbers together.\n\n- **Applied** 11\n- **Responded** 3\n\nEight of the eleven came from aggregators. This is the week that motivated the source change.` },
+    { week: '2026-W35', scanned: 43, applied: 5, replies: 2, rate: '40%', doc: `## Week 35\n\nFirst full week after onboarding finished.\n\n- **Applied** 5\n- **Responded** 2\n\nBaseline week — nothing to compare against yet.` },
+  ];
+  renderVals() {
+    const cur = this.data[this.state.cursor];
+    return {
+      headerInfo: this.data.length + ' reports | 31 applied | 11 replies',
+      span: 'W35 – W38, 2026',
+      fillCol: { style: { flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' } },
+      fillDoc: { style: { flex: 1, overflowY: 'auto' } },
+      columns: [
+        { key: 'week', label: 'Week' },
+        { key: 'scanned', label: 'Scanned', align: 'right' },
+        { key: 'applied', label: 'Applied', align: 'right' },
+        { key: 'replies', label: 'Replies', align: 'right' },
+        { key: 'rate', label: 'Reply rate', align: 'right' },
+      ],
+      rows: this.data,
+      cursor: this.state.cursor,
+      select: (i) => this.setState({ cursor: i }),
+      source: cur.doc,
+      primary: [{ key: '↑↓', desc: 'report' }],
+      actions: [{ key: 's', desc: 'sort' }, { key: 'e', desc: 'export md' }, { key: '/', desc: 'search' }],
+      system: [{ key: 'esc', desc: 'back' }, { key: 'q', desc: 'quit' }],
+    };
+  }
+}
+</script>
+</body>
+</html>

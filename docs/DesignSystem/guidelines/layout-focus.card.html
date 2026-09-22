@@ -1,0 +1,17 @@
+<!-- @dsCard group="Layout" viewport="700x450" name="Focus & escape" subtitle="What holds focus, what esc pops, and the one rule that keeps the stack honest" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:450px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;gap:12px}.k{font-size:11px;color:var(--tui-subtext);line-height:1.55}.lab{font-size:10px;letter-spacing:.08em;color:var(--tui-subtext)}.b{border:1px solid var(--tui-overlay);border-radius:4px;padding:11px 13px;display:flex;flex-direction:column;gap:7px}.st{display:flex;flex-direction:column;gap:4px}.lv{display:flex;gap:10px;align-items:baseline;border:1px solid var(--tui-overlay);border-radius:3px;padding:5px 10px}.lv b{font-weight:700;width:120px;flex:none}.lv .e{color:var(--tui-mauve);width:96px;flex:none}</style></head><body><div class="lab">THE ESCAPE STACK — esc POPS EXACTLY ONE LEVEL</div>
+<div class="st">
+<div class="lv" style="border-color:var(--tui-mauve)"><b>Modal / form</b><span class="e">→ pane</span><span class="k">Huh owns the keys. Esc cancels without committing.</span></div>
+<div class="lv"><b>Detail pane</b><span class="e">→ list pane</span><span class="k">Tab also moves between the two panes.</span></div>
+<div class="lv"><b>List pane</b><span class="e">→ screen</span><span class="k">Focused pane takes the Blue border; the other is Overlay.</span></div>
+<div class="lv"><b>Screen</b><span class="e">→ main menu</span><span class="k">Instant, never sprung.</span></div>
+<div class="lv"><b>Main menu</b><span class="e">→ confirm quit</span><span class="k">The only level where esc asks rather than acts.</span></div>
+</div>
+<div class="lab">WHO OWNS THE KEYBOARD</div>
+<div class="b">
+<div class="k"><span style="color:var(--tui-text)">One owner at a time.</span> While a modal, a form or the command palette is open it consumes every key except its own exit. Global shortcuts do not fire through it — a <span style="color:var(--tui-text)">q</span> typed into a search field is the letter q.</div>
+<div class="k"><span style="color:var(--tui-text)">Focus is always visible.</span> If a surface accepts keys, something on screen is Mauve or Blue. There is no state where the user must guess where a keystroke will land.</div>
+<div class="k"><span style="color:var(--tui-text)">Esc never destroys work.</span> It cancels a form that has not committed and closes a view. Anything that discards typed text confirms first — and offers <span style="color:var(--tui-text)">u</span> to undo afterwards.</div>
+<div class="k"><span style="color:var(--tui-text)">Ctrl-c is not esc.</span> It quits the program from anywhere, at any depth, without confirming. That is the terminal's contract and the product does not override it.</div>
+</div>
+</body></html>

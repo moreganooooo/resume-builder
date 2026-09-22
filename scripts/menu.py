@@ -96,7 +96,7 @@ def _build_choices() -> list:
     2026-08 menu collapse: a design audit found the previous 15 flat
     selectable items (grouped only by section separators) exceeded a
     first-time user's working memory. This is now a 7-item tree -- Find
-    Jobs / Build Documents / Bullet Bank / Track & Follow Up / Settings &
+    Jobs / Build Documents / Bullet Bank / Command Center / Settings &
     Upkeep, plus New User? Start Here! / Help / Exit -- with every leaf
     action moved into one of the category submenu builders below
     (_build_find_jobs_choices() etc.), each following this same
@@ -140,7 +140,7 @@ def _build_choices() -> list:
         ),
         questionary.Choice(
             title=[
-                *_icon_title("evaluate", "Track & Follow Up  "),
+                *_icon_title("evaluate", "Command Center  "),
                 (
                     "class:description",
                     "(See your active applications, match odds & interview reminders)",
@@ -717,7 +717,7 @@ def _build_settings_upkeep_choices() -> list:
 
 def _run_leaf_submenu(prompt: str, build_choices, session_stats: dict) -> None:
     """Shared loop for the three category submenus (Find Jobs, Build
-    Documents, Track & Follow Up) introduced by the 2026-08 menu collapse
+    Documents, Command Center) introduced by the 2026-08 menu collapse
     -- each just dispatches straight into a real _HANDLERS leaf action,
     exactly like these entries used to fire from the old flat main menu,
     so a leaf's own "what's next" chain (_run_with_chain/offer_next_steps)
@@ -2050,10 +2050,13 @@ def _handle_run_doctor() -> None:
                     rule = REPAIRABLE_CHECKS[c["name"]]
 
                     if rule.get("special") == "gemini_api":
-                        key_val = questionary.text(
-                            "Enter your GEMINI_API_KEY:",
-                            style=cli_art.QUESTIONARY_STYLE,
-                        ).ask()
+                        # Masked, and through charm_prompt rather than raw
+                        # questionary: this was the last prompt in the menu
+                        # still echoing a secret back to the terminal (where
+                        # it stays in scrollback and in any VHS capture), and
+                        # a raw questionary call here also renders nothing at
+                        # all under _run_with_chain's clamped scroll region.
+                        key_val = charm_prompt.password("Enter your GEMINI_API_KEY:")
                         if key_val:
                             env_p = profile_paths.env_path()
                             lines = []
@@ -2074,7 +2077,15 @@ def _handle_run_doctor() -> None:
                                 f.writelines(lines)
 
                             cli_art.console.print(
-                                f"[{theme.SUCCESS}]✓ GEMINI_API_KEY written to {env_p}![/{theme.SUCCESS}]"
+                                # Last four characters only, per the design
+                                # system's settings rules: enough to tell
+                                # WHICH key is loaded, which is the question
+                                # a user actually has when two projects'
+                                # keys look alike, without putting the
+                                # secret back on screen after masking it.
+                                f"[{theme.SUCCESS}]✓ GEMINI_API_KEY "
+                                f"(…{key_val.strip()[-4:]}) written to "
+                                f"{env_p}![/{theme.SUCCESS}]"
                             )
                         else:
                             cli_art.console.print(
@@ -2308,9 +2319,9 @@ def _handle_manage_scraping():
             questionary.Choice(
                 "⊞ Toggle Active Job Boards (Enable/Disable)", value="toggle_boards"
             ),
-            questionary.Choice("➕ Add Custom RSS Job Board Feed", value="add_board"),
+            questionary.Choice("+ Add Custom RSS Job Board Feed", value="add_board"),
             questionary.Choice(
-                "➖ Delete/Remove Custom RSS Job Board Feed", value="delete_board"
+                "− Delete/Remove Custom RSS Job Board Feed", value="delete_board"
             ),
             questionary.Choice(
                 "⌖ Edit LinkedIn Boolean Search Queries", value="linkedin_queries"
@@ -2473,8 +2484,8 @@ def _handle_edit_linkedin_queries(profile_path):
             cli_art.console.print()
 
         choices = [
-            questionary.Choice("➕ Add New Boolean Query String", value="add"),
-            questionary.Choice("➖ Delete/Remove Boolean Query String", value="delete"),
+            questionary.Choice("+ Add New Boolean Query String", value="add"),
+            questionary.Choice("− Delete/Remove Boolean Query String", value="delete"),
             questionary.Choice("Back", value="back"),
         ]
 
@@ -2656,12 +2667,12 @@ def _handle_edit_title_filters(filters_path):
         cli_art.console.print()
 
         choices = [
-            questionary.Choice("➕ Add Positive Keyword", value="add_pos"),
-            questionary.Choice("➕ Add Negative Keyword", value="add_neg"),
-            questionary.Choice("➖ Delete Positive Keyword", value="del_pos"),
-            questionary.Choice("➖ Delete Negative Keyword", value="del_neg"),
-            questionary.Choice("👁 View All Positive Keywords", value="view_pos"),
-            questionary.Choice("👁 View All Negative Keywords", value="view_neg"),
+            questionary.Choice("+ Add Positive Keyword", value="add_pos"),
+            questionary.Choice("+ Add Negative Keyword", value="add_neg"),
+            questionary.Choice("− Delete Positive Keyword", value="del_pos"),
+            questionary.Choice("− Delete Negative Keyword", value="del_neg"),
+            questionary.Choice("▤ View All Positive Keywords", value="view_pos"),
+            questionary.Choice("▤ View All Negative Keywords", value="view_neg"),
             questionary.Choice("Back", value="back"),
         ]
 
@@ -3419,7 +3430,15 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
     # two skip the clamp entirely rather than risk a rushed, lossy
     # checkbox port -- everything else about the action (banner, footer,
     # chain-offer afterward) stays the same.
-    _skip_scroll_region = {"tailor_pick", "coverletter_pick"}
+    # add_manual_jd joins them for the same reason, one field further on:
+    # its "Paste the Job Description text" prompt is a questionary MULTILINE
+    # text field, which charm_prompt.text() has no equivalent for (huh's
+    # Text field is a different editing contract, and the Esc-then-Enter
+    # terminator this prompt documents is prompt_toolkit's). Under the clamp
+    # that prompt drew nothing at all, so pasting a job link by hand -- the
+    # path the empty-state hint at line 1599 actively recommends -- looked
+    # like the menu had hung.
+    _skip_scroll_region = {"tailor_pick", "coverletter_pick", "add_manual_jd"}
 
     is_interactive = value in interactive_actions
     title = action_titles.get(value)
@@ -3626,10 +3645,100 @@ def run_interactive_menu() -> None:
                 else:
                     _run_with_chain(choice, session_stats)
             except KeyboardInterrupt:
-                cli_art.console.print(f"\n[{theme.MUTED}]Cancelled.[/{theme.MUTED}]")
+                _print_cancelled(choice)
             except Exception as exc:  # noqa: BLE001 -- see comment above
                 cli_art.friendly_error(exc, f"running {choice}")
                 _pause_and_return()
 
             if os.environ.get("RESUME_GUEST_MODE") and os.environ.get("RESUME_PROFILE"):
                 os.environ.pop("RESUME_GUEST_MODE", None)
+
+
+def run_build_documents_menu() -> None:
+    """Open the Build Documents submenu on its own, without the main menu.
+
+    The Go dashboard's "Documents" entry suspends itself and runs this: the
+    four document actions it offers (batch run, recruiter resume, re-render,
+    polish) already live here, behind prompts that are Python's to own, and a
+    Go reimplementation would be a second copy of the same flow to keep in
+    step with this one.
+    """
+    _handle_build_documents({})
+
+
+# The skills tools the dashboard's Knowledge Base screen offers, mapped to
+# the handlers Settings & Upkeep already dispatches for the same names. One
+# mapping, so the two surfaces cannot drift into running different things
+# under the same label.
+_SKILLS_TOOLS = {
+    "manage_skills": lambda: skills_menu.run_skills_menu(),
+    "scan_pending_skills": lambda: _handle_scan_pending_skills(),
+    "refresh_skill_embeddings": lambda: _handle_refresh_skill_embeddings(),
+    "clear_stale_skill_matrices": lambda: _handle_clear_stale_skill_matrices(),
+    "discover_employers": lambda: _handle_discover_employers(),
+}
+
+
+# What survives a Ctrl-C, per action. A bare "Cancelled." leaves the one
+# question an interrupted user actually has -- did I just lose that work? --
+# unanswered, and the honest answer is different per action, so this is a map
+# rather than one blanket reassurance. Anything not named here falls back to
+# the plain notice: claiming a resume that does not exist would be worse than
+# saying nothing.
+_CANCEL_RECOVERY = {
+    "build_documents": (
+        "Nothing was lost -- an interrupted build resumes from its checkpoint, "
+        "so re-running it picks up where this one stopped."
+    ),
+    "find_jobs": (
+        "Nothing was lost -- roles found before you stopped are already saved, "
+        "and the next scan skips the ones it has."
+    ),
+    "track_followup": "Nothing was lost -- scores are saved as each role finishes.",
+    "bullet_bank": (
+        "Nothing was lost -- each bullet bank stage writes its own file as it "
+        "goes, so the next run resumes from the last completed stage."
+    ),
+    "update_knowledge": "Nothing was lost -- your source documents are untouched.",
+}
+
+
+def _print_cancelled(action: str) -> None:
+    """Print the cancellation notice, plus what survived it where that is known."""
+    cli_art.console.print(f"\n[{theme.MUTED}]Cancelled.[/{theme.MUTED}]")
+    recovery = _CANCEL_RECOVERY.get(action)
+    if recovery:
+        cli_art.console.print(f"[{theme.MUTED}]{recovery}[/{theme.MUTED}]")
+
+
+def run_skills_tool(name: str) -> int:
+    """Run one skills tool by name, for the dashboard's Knowledge Base tab.
+
+    Returns a process exit code rather than raising: the caller is a Go
+    program that has suspended its own screen to run this, and a traceback
+    on a restored alt screen reads as the dashboard crashing.
+    """
+    tool = _SKILLS_TOOLS.get(name)
+    if tool is None:
+        cli_art.console.print(f"Unknown skills tool: {name}")
+        return 2
+    try:
+        tool()
+    except KeyboardInterrupt:
+        _print_cancelled(name)
+    except Exception as exc:  # noqa: BLE001 -- same reasoning as the menu loop
+        cli_art.friendly_error(exc, f"running {name}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    _args = sys.argv[1:]
+    if "--build-documents" in _args:
+        run_build_documents_menu()
+    elif "--skills-tool" in _args:
+        _idx = _args.index("--skills-tool")
+        _name = _args[_idx + 1] if _idx + 1 < len(_args) else ""
+        sys.exit(run_skills_tool(_name))
+    else:
+        run_interactive_menu()

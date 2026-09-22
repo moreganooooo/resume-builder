@@ -130,4 +130,7 @@ skip = "*.json,*.csv,*.db,*.pyc,*.pycache,*.rtf,*.html,node_modules,scripts/cont
 #   identifiers quoted in prose: alllocations (lever.mjs's allLocations)
 #   pandas/stdlib vocabulary: datas, nd, sav
 #   genuine dialect words in prose: cant, wit
-ignore-words-list = "unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations,ment,hsa,fsa,significan,categor,datas,nd,sav"
+#   third-party level labels quoted verbatim: erro (charmbracelet/log's
+#     own four-character ERROR tag, which logstyle.py reproduces so the
+#     Python and Go halves write one log format rather than two)
+ignore-words-list = "unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations,ment,hsa,fsa,significan,categor,datas,nd,sav,erro"

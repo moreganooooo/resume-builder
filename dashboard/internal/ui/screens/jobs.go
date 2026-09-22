@@ -129,7 +129,11 @@ type JobsModel struct {
 	// notice explains why a keypress was a no-op (e.g. "t" on a non-Pending
 	// job) instead of silently doing nothing. Dismissed on the next
 	// keypress, same convention as actionError.
-	notice       string
+	notice string
+
+	// toasts reports completed actions in the bottom-right without taking a
+	// layout row the way notice/actionError do -- see toast.go.
+	toasts       ToastStack
 	statusPicker bool
 	statusCursor int
 	// statusConfirm/pendingStatus hold the inline confirm step between
@@ -464,6 +468,13 @@ func (m JobsModel) sidebarViewportLines(boxHeight int) int {
 	maxLines := boxHeight - 2
 	if m.statusPicker {
 		maxLines -= len(jobsApplicationStatuses) + 1
+	}
+	// The paginator caption costs a body line, so it has to be reserved
+	// HERE rather than in the renderer alone: adjustScroll sizes the window
+	// from this same function, and a line the renderer quietly took back
+	// would let the cursor sit behind the caption.
+	if len(m.filtered)*2 > maxLines {
+		maxLines--
 	}
 	if maxLines < 0 {
 		maxLines = 0
@@ -1051,6 +1062,7 @@ func (m *JobsModel) syncSprings(cmd *tea.Cmd) {
 func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case jobsActionCompleteMsg:
+		finished := m.actionInProgress
 		m.actionInProgress = ""
 		m.actionChan = nil
 		if m.actionCancel != nil {
@@ -1062,7 +1074,16 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.actionErrorExpanded = false
 			return m, nil
 		}
-		return m, reloadJobsCmd(m.jobsPath)
+		// Success had NO feedback at all: the progress bar simply vanished
+		// and the list reloaded, so a long scan and a no-op looked alike.
+		// It reports what already happened and asks nothing, which is
+		// exactly what a toast is for -- failures stay in the action-error
+		// panel, because "d for details" is a decision.
+		m.toasts.Push(ToastSuccess, "%s\u2009\u2014 done", actionLabel(finished))
+		return m, tea.Batch(reloadJobsCmd(m.jobsPath), ToastTick())
+
+	case ToastTickMsg:
+		return m, m.toasts.Age()
 
 	case jobsReloadedMsg:
 		if msg.err != nil {
@@ -1122,6 +1143,11 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 				m.adjustScroll()
 				return m, nil
 			}
+		}
+		// Footer hints last: a row occupies the body, so nothing can overlap,
+		// but ordering the cheap list first keeps the common click cheap.
+		if k, ok := HelpBarClicked(jobsHelpZone, jobsHelpBindings, msg); ok {
+			return m.Update(helpBarKeyMsg(k))
 		}
 		return m, nil
 
@@ -1497,6 +1523,9 @@ func (m JobsModel) chromeAvailHeight(extraRows int) int {
 	return h
 }
 
+// jobsHelpZone namespaces this screen's clickable footer hints.
+const jobsHelpZone HelpBarZonePrefix = "jobs"
+
 var jobsHelpCategories = []helpCategory{
 	{"Navigation", []helpBinding{
 		{"↑ ↓ / j k", "Move selection"},
@@ -1547,6 +1576,32 @@ var jobsHelpCategories = []helpCategory{
 	}},
 }
 
+// NextBestMoveScore is the composite score at or above which a pending role
+// earns the "NEXT BEST MOVE" banner. Exported because the main menu surfaces
+// a count of the same set (see menu.MenuModel.WithNextBestMoves) -- the
+// design system's point is that the first screen answers "what do I do right
+// now", and it can only do that honestly if it counts exactly the roles Jobs
+// would go on to name.
+const NextBestMoveScore = 4.0
+
+// IsNextBestMove reports whether a single row qualifies for the banner.
+func IsNextBestMove(row model.JobRow) bool {
+	return strings.EqualFold(row.Status, "Pending") &&
+		row.Evaluation.CompositeScore >= NextBestMoveScore
+}
+
+// CountNextBestMoves returns how many rows qualify, for the main menu's
+// pointer at this screen.
+func CountNextBestMoves(rows []model.JobRow) int {
+	n := 0
+	for _, row := range rows {
+		if IsNextBestMove(row) {
+			n++
+		}
+	}
+	return n
+}
+
 // bestNextMoveRow returns the highest-scoring pending role eligible for the
 // "NEXT BEST MOVE" banner (nil if none qualify) -- shared by
 // renderNextBestMove and hasNextBestMove so the two can never disagree about
@@ -1555,7 +1610,7 @@ func (m JobsModel) bestNextMoveRow() *model.JobRow {
 	var best *model.JobRow
 	for i := range m.rows {
 		row := &m.rows[i]
-		if strings.EqualFold(row.Status, "Pending") && row.Evaluation.CompositeScore >= 4.0 {
+		if IsNextBestMove(*row) {
 			if best == nil || row.Evaluation.CompositeScore > best.Evaluation.CompositeScore {
 				best = row
 			}
@@ -1648,7 +1703,10 @@ func (m JobsModel) View() string {
 		return renderModalOverlay(m.theme, fullContent, helpContent, m.width, m.height)
 	}
 
-	return fullContent
+	// Toasts last and on top: they overlay the split pane without changing
+	// its height, one row above the footer. Under the help modal the whole
+	// background is dimmed, so a toast there would be unreadable anyway.
+	return OverlayBottomRight(fullContent, m.toasts.Render(m.theme, m.width), m.width, 1)
 }
 
 func actionLabel(action string) string {
@@ -1772,7 +1830,7 @@ func (m JobsModel) renderHeader() string {
 
 	countStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
 	info := countStyle.Render(fmt.Sprintf("%d job(s) ", len(m.filtered))) +
-		filterStyle.Render("⏺ "+filterLabel)
+		filterStyle.Render("● "+filterLabel)
 	if m.backlog > 0 {
 		info += countStyle.Render(fmt.Sprintf("  %d awaiting evaluation", m.backlog))
 	}
@@ -1808,7 +1866,7 @@ func (m JobsModel) renderHeader() string {
 	}
 
 	title := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Background(m.theme.Surface).Render(m.theme.Icons.Jobs+"  ") +
-		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderColorGradient("✦ JOBS ✧", m.theme.Blue, m.theme.Peach))
+		lipgloss.NewStyle().Bold(true).Background(m.theme.Surface).Render(theme.RenderGradientStops("✦ JOBS ✧", m.theme.Blue, m.theme.Mauve, m.theme.Peach))
 	title, info, gap := fitBar(title, info, m.width, 4, m.theme.Surface)
 	return style.Render(title + gap + info)
 }
@@ -1841,39 +1899,13 @@ func (m JobsModel) getFilterLabel() string {
 // glyph, same "N/M matching" count, same hint text, same live-cursor
 // treatment -- so search looks and behaves identically on both screens.
 func (m JobsModel) renderSearchBar() string {
-	if !m.searchInput && m.searchQuery == "" {
-		return ""
-	}
-
-	style := lipgloss.NewStyle().
-		Foreground(m.theme.Text).
-		Width(m.width).
-		Padding(0, 2)
-
-	var prompt string
-	if m.searchInput {
-		prompt = lipgloss.NewStyle().Bold(true).Foreground(m.theme.Surface).Background(m.theme.Blue).Padding(0, 1).Render(" SEARCH ")
-	} else {
-		prompt = lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("/")
-	}
-	queryStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-	hintStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
-
-	display := queryStyle.Render(m.searchQuery)
-	if m.searchInput {
-		display += lipgloss.NewStyle().Foreground(m.theme.Blue).Render("█")
-	}
-
-	matchInfo := hintStyle.Render(fmt.Sprintf("  %d/%d matching", len(m.filtered), m.countForStatusFilter()))
-
-	hint := ""
-	if m.searchInput {
-		hint = hintStyle.Render("   Enter: keep   Esc: cancel   Ctrl+U: clear")
-	} else {
-		hint = hintStyle.Render("   Esc: clear   /: edit")
-	}
-
-	return style.Render(prompt + " " + display + matchInfo + hint)
+	return RenderSearchBar(m.theme, SearchBarState{
+		Query:   m.searchQuery,
+		Typing:  m.searchInput,
+		Matched: len(m.filtered),
+		Total:   m.countForStatusFilter(),
+		Width:   m.width,
+	})
 }
 
 func (m JobsModel) renderSidebarList(width, height int) string {
@@ -1927,6 +1959,17 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 		bodyLines = bodyLines[:maxLines]
 	}
 	content := strings.Join(bodyLines, "\n")
+
+	// Paging affordance: 286 roles and 12 looked identical until the user
+	// pressed a key. Pages are derived from the same window this function
+	// just drew, so the caption can never claim a page the list is not on.
+	if pager := RenderPaginator(m.theme, PageState{
+		TotalItems:   len(m.filtered),
+		ItemsPerPage: maxJobs,
+		FirstItem:    startJob,
+	}, sidebarInnerWidth(width)); pager != "" {
+		content += "\n" + pager
+	}
 
 	if m.statusPicker {
 		confirmLabel := ""
@@ -2499,6 +2542,7 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 	// Apply detailScrollOffset: skip the first N lines
 	joined := strings.Join(content, "\n")
 	lines := strings.Split(joined, "\n")
+	totalDetailLines := len(lines)
 	visibleBudget := detailVisibleBudget(height)
 	maxScroll := detailMaxScrollFor(len(lines), height)
 	offset := m.detailScrollOffset
@@ -2528,7 +2572,13 @@ func (m JobsModel) renderJobDetailPane(job model.JobRow, width, height int) stri
 		lines = append(lines, scrollHint)
 	}
 
-	joined = strings.Join(lines, "\n")
+	// Right-edge rail alongside the textual hint: the hint names the keys
+	// (a rail cannot), the rail says how far along the pane is (the hint
+	// cannot). Inner width is the box minus its border and Padding(1, 2).
+	joined = AttachScrollRail(m.theme,
+		strings.Join(lines, "\n"),
+		ScrollState{Total: totalDetailLines, Visible: visibleBudget, Offset: offset},
+		width-detailPaneChrome-1)
 	return scrollBorder.Render(joined)
 }
 
@@ -2556,28 +2606,20 @@ func (m JobsModel) renderHelp() string {
 				keyStyle.Render("Esc") + descStyle.Render(" cancel"))
 	}
 
-	return style.Render(
-		keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +
-			keyStyle.Render("J/K") + descStyle.Render(" scroll detail  ") +
-			keyStyle.Render("g/G") + descStyle.Render(" top/bot  ") +
-			keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
-			keyStyle.Render("/") + descStyle.Render(" search  ") +
-			keyStyle.Render("f") + descStyle.Render(" filter  ") +
-			keyStyle.Render("w") + descStyle.Render(" workplace  ") +
-			keyStyle.Render("e") + descStyle.Render(" emp type  ") +
-			keyStyle.Render("d") + descStyle.Render(" nearest  ") +
-			keyStyle.Render("p") + descStyle.Render(" pay  ") +
-			keyStyle.Render("r") + descStyle.Render(" managers  ") +
-			keyStyle.Render("o") + descStyle.Render(" open  ") +
-			keyStyle.Render("l") + descStyle.Render(" liveness  ") +
-			keyStyle.Render("m") + descStyle.Render(" matrix  ") +
-			keyStyle.Render("t") + descStyle.Render(" tailor  ") +
-			keyStyle.Render("u") + descStyle.Render(" status  ") +
-			keyStyle.Render("a") + descStyle.Render(" archive  ") +
-			keyStyle.Render("v") + descStyle.Render(" vocabulary  ") +
-			keyStyle.Render("?") + descStyle.Render(" help  ") +
-			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
-			keyStyle.Render("q") + descStyle.Render(" quit"))
+	return RenderHelpBar(m.theme, m.width, jobsHelpZone, jobsHelpBindings, "resume-builder dashboard")
+}
+
+// jobsHelpBindings is the short footer bar. This screen binds twenty-one
+// keys and used to print every one of them on that line, which is the exact
+// defect the design system's HelpBar exists to fix: the two a person reaches
+// for were indistinguishable from the nineteen they do not. The rest stay one
+// `?` away in jobsHelpCategories, which is the complete reference.
+var jobsHelpBindings = []HelpBinding{
+	{Key: "↑↓/jk", Desc: "nav", Action: "down"},
+	{Key: "/", Desc: "search"},
+	{Key: "f", Desc: "filter"},
+	{Key: "t", Desc: "tailor"},
+	{Key: "Esc", Desc: "back", Action: "esc"},
 }
 
 // jobsScoreDetailMinWidth is the narrowest sidebar that still has room for

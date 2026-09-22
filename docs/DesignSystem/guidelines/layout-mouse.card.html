@@ -1,0 +1,25 @@
+<!-- @dsCard group="Layout" viewport="700x490" name="Mouse affordances" subtitle="bubblezone hit-testing — click is a shortcut for a key that already exists, never the only way" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:490px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;justify-content:flex-start;gap:12px}.k{font-size:11px;color:var(--tui-subtext);line-height:1.55}.lab{font-size:10px;letter-spacing:.08em;color:var(--tui-subtext)}.b{border:1px solid var(--tui-overlay);border-radius:4px;padding:10px 12px;display:flex;flex-direction:column;gap:7px}.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}.z{border:1px dashed var(--tui-blue);border-radius:3px;padding:3px 7px;display:inline-flex;gap:6px;white-space:nowrap}.no{color:var(--tui-red)}.yes{color:var(--tui-green)}</style></head><body><div class="k">Keyboard stays primary — the product's stated posture. Mouse support exists because clicking a tab is what people try first, and a tab that does nothing when clicked reads as broken. Every zone below maps to a binding already in the footer.</div>
+<div class="g">
+<div><div class="lab">ZONES WORTH MARKING</div><div class="b">
+<div><span class="yes">✓</span> filter tabs <span class="k">→ same as <span style="color:var(--tui-text)">←/→</span></span></div>
+<div><span class="yes">✓</span> sidebar rows and board cards <span class="k">→ moves the cursor, does not open</span></div>
+<div><span class="yes">✓</span> menu entries <span class="k">→ single click selects, double opens</span></div>
+<div><span class="yes">✓</span> footer keybinding hints <span class="k">→ fires that action</span></div>
+<div><span class="yes">✓</span> modal confirm / cancel <span class="k">→ Enter / Esc</span></div>
+</div></div>
+<div><div class="lab">ZONES TO LEAVE ALONE</div><div class="b">
+<div><span class="no">✕</span> drag to move a card <span class="k">→ columns are unordered sets; there is no insertion index to drop onto</span></div>
+<div><span class="no">✕</span> text selection inside panes <span class="k">→ mouse capture breaks the terminal's own copy</span></div>
+<div><span class="no">✕</span> scroll-wheel as the only way to page <span class="k">→ it may pass through; <span style="color:var(--tui-text)">space</span> must still work</span></div>
+<div><span class="no">✕</span> hover-only meaning <span class="k">→ there is no hover state in this system</span></div>
+</div></div>
+</div>
+<div class="lab">WHAT A ZONE LOOKS LIKE</div>
+<div class="b"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+<span class="z"><span>ALL</span><span>64</span></span><span class="z" style="border-color:var(--tui-mauve);color:var(--tui-mauve);font-weight:700"><span>TOP ≥4</span><span>12</span></span><span class="z"><span>APPLIED</span><span>9</span></span>
+<span class="k">zone.Mark("tab-top", …) wraps the rendered string; zone.Get("tab-top").InBounds(msg) tests the click.</span>
+</div>
+<div class="k">A zone adds no visual weight of its own — the dashed outlines here are the card explaining itself. Mouse cell reporting must be enabled with <span style="color:var(--tui-text)">tea.WithMouseCellMotion()</span>, and a click never produces a state the keyboard cannot reach.</div>
+</div>
+</body></html>

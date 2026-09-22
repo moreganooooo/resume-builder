@@ -85,6 +85,31 @@ def _is_selectable(choice) -> bool:
     return getattr(choice, "disabled", None) is None
 
 
+def _split_styled_title(parts: list) -> tuple[str, str]:
+    """Split a questionary styled title into (label, description).
+
+    A "class:description" fragment is the explanatory parenthetical a menu
+    entry carries, and the Go select renders it as its own dimmer line under
+    the label (prompt.Option.Description). Everything else is the label.
+    Flattening the two into one string -- which is what this used to do --
+    is what kept those explanations stuck on the same line."""
+    label_parts, desc_parts = [], []
+    for item in parts:
+        if not isinstance(item, tuple):
+            continue
+        style, text = item[0], item[1]
+        if "description" in str(style):
+            desc_parts.append(text)
+        else:
+            label_parts.append(text)
+    desc = " ".join(d.strip() for d in desc_parts).strip()
+    # The parentheses were there to set the aside apart on a shared line; on
+    # a line of its own, in its own tone, they are just noise.
+    if desc.startswith("(") and desc.endswith(")"):
+        desc = desc[1:-1].strip()
+    return "".join(label_parts).strip(), desc
+
+
 def _option_dict(choice) -> dict:
     if isinstance(choice, dict):
         return {"label": choice["label"], "value": choice["value"]}
@@ -92,8 +117,10 @@ def _option_dict(choice) -> dict:
         # Handle Choice objects that have titles as lists/styled text
         label = choice.title
         if isinstance(label, list):
-            # Strip questionary color styling tuples to get raw label text
-            label = "".join(item[1] for item in label if isinstance(item, tuple))
+            label, desc = _split_styled_title(label)
+            if desc:
+                return {"label": label, "value": choice.value, "description": desc}
+            return {"label": label, "value": choice.value}
         return {"label": str(label).strip(), "value": choice.value}
     return {"label": str(choice), "value": str(choice)}
 

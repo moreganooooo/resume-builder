@@ -74,6 +74,42 @@ func TestRenderColorGradient(t *testing.T) {
 	}
 }
 
+func TestRenderGradientStops(t *testing.T) {
+	th := NewTheme("catppuccin-mocha")
+
+	rendered := RenderGradientStops("✦ JOBS ✧", th.Blue, th.Mauve, th.Peach)
+	if plain := ansi.Strip(rendered); plain != "✦ JOBS ✧" {
+		t.Errorf("expected stripped text to match '✦ JOBS ✧', got: %s", plain)
+	}
+
+	// The whole point of a third stop: the middle of the string must land
+	// near the midpoint color, not on the muddy blend of the two endpoints.
+	two := RenderGradientStops("✦ JOBS ✧", th.Blue, th.Peach)
+	if rendered == two {
+		t.Errorf("three stops produced the same output as two; the midpoint is being ignored")
+	}
+
+	// Two stops must agree exactly with RenderColorGradient, so a caller can
+	// move between the two helpers without a visual change.
+	if got, want := two, RenderColorGradient("✦ JOBS ✧", th.Blue, th.Peach); got != want {
+		t.Errorf("two-stop form diverged from RenderColorGradient")
+	}
+
+	// Fewer than two stops has no gradient to render; the text comes back
+	// unstyled rather than the function guessing a second color.
+	if got := RenderGradientStops("Hello", th.Blue); got != "Hello" {
+		t.Errorf("expected unstyled text for a single stop, got: %q", got)
+	}
+
+	// Every rune must be colored, including the last -- the final character
+	// lands exactly on the last stop, which is where an off-by-one in the
+	// segment index would index past the end of the stop list.
+	six := RenderGradientStops("ABCDEF", th.Peach, th.Pink, th.Mauve, th.Blue, th.Sky)
+	if n := strings.Count(six, "\x1b[38;2;"); n != 6 {
+		t.Errorf("expected 6 color sequences, one per rune, got %d", n)
+	}
+}
+
 func TestRenderFlowingGradient(t *testing.T) {
 	th := NewTheme("catppuccin-mocha")
 	rendered1 := RenderFlowingGradient("Pipeline Active", th.Mauve, th.Blue, 0.0)

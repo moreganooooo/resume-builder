@@ -34,12 +34,17 @@ from rich.console import Console
 # Coral instead, both from the same purple/red family but lighter. All six
 # below clear >=4.5:1 (most with a real ~5:1+ margin, not sitting right on
 # the line) against both Base and Surface.
-BRAND = "#8B75FF"  # Charmtone Hazy (Charple substitute, contrast fix)
+# BRAND, SUCCESS, and INFO below are docs/DesignSystem/tokens/colors.css's
+# corrected values, not Charmtone originals -- see that file's header
+# comment ("porting these back into Go or Python") for the divergence
+# rationale. BRAND (tui-sky) is the one documented Base-only exception to
+# the >=4.5:1-on-both-backgrounds rule above (~4.0:1 on Surface).
+BRAND = "#a47bff"  # shifted violet, reads as purple (design-system correction; Base-only, ~4.0:1 on Surface)
 BRAND_ACCENT = "#FF60FF"  # Charmtone Dolly
-SUCCESS = "#12C78F"  # Charmtone Guac
+SUCCESS = "#9ab63f"  # olive-lime (design-system correction, frees the teal band)
 ERROR = "#FF7B99"  # Charmtone Coral, lightened (Sriracha substitute, contrast fix: 4.14:1 -> 5.12:1 on Surface)
 WARNING = "#F5EF34"  # Charmtone Mustard
-INFO = "#00A4FF"  # Charmtone Malibu
+INFO = "#4dabf7"  # Electric Sky (design-system correction; matches DESIGN.md's own declared brand blue, over the shipped Charmtone Malibu)
 MUTED = "#A3A3A3"  # lightened neutral gray -- #888888 only cleared 4.63:1 on Base
 # but just 3.55:1 on Surface (fails AA's 4.5:1 floor, same bug class BRAND_ACCENT and
 # ERROR hit above); #A3A3A3 clears ~6.5:1 on Base and ~5.0:1 on Surface.
@@ -50,7 +55,7 @@ MUTED = "#A3A3A3"  # lightened neutral gray -- #888888 only cleared 4.63:1 on Ba
 # Yellow/Sky/Peach/Red/Pink) has 8 actually-distinct colors instead of
 # reusing two of the six above. See sync_dashboard_theme.py.
 PEACH = "#FF985A"  # Charmtone Tang
-PINK = "#FF84FF"  # Charmtone Blush
+PINK = "#12e6c8"  # design-system correction (was Charmtone Blush, too close to Mauve); the doc renames this role "Teal" but the field name stays PINK/Pink
 MAUVE = "#cba6f7"  # Catppuccin Mauve
 LAVENDER = "#b4befe"  # Catppuccin Lavender
 BLUE = "#89b4fa"  # Catppuccin Blue
@@ -138,6 +143,11 @@ _NERD_ICONS = {
     "location": "",  # nf-fa-map_marker -- place/commute
     "filter": "",  # nf-fa-filter -- exclusion gates (language, travel)
     "knowledge": "",  # nf-fa-upload -- adding new source material
+    # nf-fa-circle_o, written as an escape like "recruiter" above: an empty
+    # circle is the "never run" half of a status table, reading as an
+    # unticked box beside "success"'s check, which is what keeps the state
+    # legible with the color stripped.
+    "pending": "\uf10c",
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
@@ -167,7 +177,11 @@ _UNICODE_ICONS = {
     "utility": "⚙",  # U+2699 gear -- settings (was the hammer-and-wrench emoji)
     "bullet_bank": "◈",  # U+25C8 diamond in diamond (was the gem emoji)
     "skip": "⊘",  # U+2298 circled division slash
-    "save": "⭳",  # U+2B73 arrow to bar (was the floppy-disk emoji)
+    # U+21A7 downwards arrow from bar (was the floppy-disk emoji, then
+    # U+2B73, which sits in a block many terminal fonts don't cover).
+    # docs/DesignSystem's glyph table and brand-glyphs card both specify
+    # this codepoint.
+    "save": "↧",
     "resume": "▶",  # U+25B6 play triangle
     "complete": "✓",  # U+2713 check mark, consistent with success
     "gem": "✦",  # U+2726 four-pointed star
@@ -185,7 +199,8 @@ _UNICODE_ICONS = {
     "prev": "❮",  # U+276E angle quote left
     "next": "❯",  # U+276F angle quote right
     "back": "❮",  # U+276E angle quote left, same as prev
-    "exit": "⏻",  # U+23FB power symbol
+    "exit": "✕",  # U+2715 multiplication x (was U+23FB power symbol)
+    "pending": "○",  # U+25CB white circle -- not yet run, an unticked box
 }
 
 
@@ -263,6 +278,7 @@ _ICON_COLORS = {
     "next": BRAND_ACCENT,  # purple, matches existing pagination style
     "back": BRAND_ACCENT,  # purple, matches existing pagination style
     "exit": ERROR,  # red -- distinct from "utility" (Settings & Upkeep) it used to share
+    "pending": MUTED,  # gray -- "not yet run" is an absence, not a warning
 }
 
 

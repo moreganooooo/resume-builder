@@ -19,6 +19,7 @@ import bootstrap_bullet_bank
 import bootstrap_profile
 import bullet_bank_menu
 import cli_art
+import logstyle
 import profile_paths
 import questionary
 import theme
@@ -294,6 +295,12 @@ def _run_express_setup(interactive: bool = True) -> bool:
         # disk, so knowing WHICH stage died is the whole question. The
         # traceback goes to a file rather than the terminal because the
         # scroll region below is still clamped at this point.
+        #
+        # The record itself is written through logstyle, in the same format
+        # the Go side's themed charmbracelet/log writes -- so the stage,
+        # the profile, the exception type and the time are structured
+        # fields rather than an English sentence, and a second failure
+        # appends something comparable to the first. See logstyle.py.
         import traceback
 
         log_path = os.path.join(profile_paths.profile_root(), "bootstrap-error.log")
@@ -302,9 +309,19 @@ def _run_express_setup(interactive: bool = True) -> bool:
         written_log: str | None = None
         try:
             os.makedirs(os.path.dirname(log_path), exist_ok=True)
-            with open(log_path, "w", encoding="utf-8") as f:
-                f.write(f"Express setup failed during: {_stage['name']}\n\n")
-                f.write(traceback.format_exc())
+            # Appended, not truncated: the previous attempt's failure is
+            # exactly the context for this one when a re-run dies further
+            # along, and it was being thrown away.
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(
+                    logstyle.format_failure(
+                        "express setup failed",
+                        detail=traceback.format_exc(),
+                        stage=_stage["name"],
+                        profile=profile_paths.active_profile(),
+                        error=type(e).__name__,
+                    )
+                )
             written_log = log_path
         except OSError:
             written_log = None
@@ -341,7 +358,7 @@ def _build_choices(include_express: bool = False) -> list:
         choices.append(
             questionary.Choice(
                 title=[
-                    ("class:text", "⚡ Express Auto-Pilot (Recommended)  "),
+                    ("class:text", "▶ Express Auto-Pilot (Recommended)  "),
                     (
                         "class:description",
                         "(Sets up your profile & accomplishment vault in 2 minutes automatically so you can start applying!)",

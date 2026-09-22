@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
@@ -81,5 +82,69 @@ func TestAppModel_MobileTerminal(t *testing.T) {
 	mobileView := ansi.Strip(app.renderScreen())
 	if strings.Contains(mobileView, "Terminal Window Too Small") {
 		t.Errorf("expected 45x20 to NOT trigger compact warning in mobile mode, got:\n%s", mobileView)
+	}
+}
+
+// testPaletteApp is an app sitting on the Jobs screen, which has both
+// navigation targets and its own bindings.
+func testPaletteApp() appModel {
+	th := theme.NewTheme("catppuccin-mocha")
+	prof := data.ProfileInfo{Name: "morgan", Role: "Staff Engineer", IsActive: true}
+	return appModel{
+		pipeline: screens.NewPipelineModel(th, []model.CareerApplication{}, model.PipelineMetrics{}, ".", 100, 30),
+		jobs:     screens.NewJobsModel(th, []model.JobRow{}, 100, 30),
+		kb:       screens.NewKBModel(th, []data.KBItem{}, 100, 30).WithProfile(prof),
+		menu:     menu.NewMenuModel(th).WithProfile(prof),
+		state:    viewJobs,
+		theme:    th,
+		width:    100,
+		height:   30,
+	}
+}
+
+func pressKey(app appModel, key string) appModel {
+	msg := tea.KeyPressMsg(tea.Key{Code: []rune(key)[0], Text: key})
+	if key == "ctrl+k" {
+		msg = tea.KeyPressMsg(tea.Key{Code: 'k', Mod: tea.ModCtrl})
+	}
+	updated, _ := app.Update(msg)
+	return updated.(appModel)
+}
+
+// ctrl+k opens the palette, and while it is open the keys the user types
+// are the query -- they must NOT also reach the screen underneath.
+func TestPaletteOpensAndSwallowsKeys(t *testing.T) {
+	app := pressKey(testPaletteApp(), "ctrl+k")
+	if !app.palette.Open {
+		t.Fatal("ctrl+k did not open the palette")
+	}
+	app = pressKey(app, "p")
+	if app.palette.Query() != "p" {
+		t.Errorf("typed key did not reach the palette: query = %q", app.palette.Query())
+	}
+	if app.state != viewJobs {
+		t.Errorf("a key typed into the palette changed the screen to %v", app.state)
+	}
+	view := ansi.Strip(screens.OverlayCentered(app.renderScreen(),
+		app.palette.Render(app.theme, app.width, 8), app.width, app.height))
+	if !strings.Contains(view, "enter run") {
+		t.Errorf("the palette was not drawn over the screen:\n%s", view)
+	}
+}
+
+// The menu is the navigation the palette stands in for, so it does not
+// open there -- and the palette's own navigation rows go through the same
+// dispatch the menu uses.
+func TestPaletteNavigatesLikeTheMenu(t *testing.T) {
+	app := testPaletteApp()
+	app.state = viewMenu
+	if pressKey(app, "ctrl+k").palette.Open {
+		t.Error("the palette opened on the menu screen")
+	}
+
+	app = testPaletteApp()
+	updated, _ := app.runPaletteCommand(screens.PaletteCommand{Nav: "Pipeline"})
+	if got := updated.(appModel).state; got != viewPipeline {
+		t.Errorf("palette navigation left the app on %v, want viewPipeline", got)
 	}
 }

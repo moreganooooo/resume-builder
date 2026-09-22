@@ -1,0 +1,36 @@
+/* Surfaces, borders and glyphs.
+   Depth in the TUI is color + border, never shadow. Print is absolutely
+   flat. The only "shapes" available are Unicode box-drawing characters,
+   so they are tokens here too. */
+
+:root {
+  --border-width: 1px;
+  --radius-panel: 4px;           /* Lip Gloss RoundedBorder ≈ a 4px corner */
+  --radius-pill: 0;              /* terminal pills are square cells */
+
+  --box-tl: "╭"; /* @kind other */
+  --box-tr: "╮"; /* @kind other */
+  --box-bl: "╰"; /* @kind other */
+  --box-br: "╯"; /* @kind other */
+  --box-h: "─"; /* @kind other */
+  --box-v: "│"; /* @kind other */
+  --rule-active: "━";            /* @kind other */ /* selected tab underline */
+  --rule-idle: "─";              /* @kind other */ /* inactive tab underline */
+  --hover-bar: "┃";              /* @kind other */ /* left-edge selection indicator */
+
+  --glyph-spark-solid: "✦";      /* @kind other */ /* gem / high-tier / flourish */
+  --glyph-spark-hollow: "✧";     /* @kind other */ /* paired flourish, closes a header */
+  --glyph-star: "★"; /* @kind other */
+  --glyph-check: "✓"; /* @kind other */
+  --glyph-ban: "⊘"; /* @kind other */
+  --glyph-bar-fill: "▆";         /* @kind other */ /* score bars — lower ¾ block leaves a gap */
+  --glyph-block: "█";            /* @kind other */ /* funnel / progress bars */
+  --glyph-heat: "■";             /* @kind other */ /* heatmap cell */
+
+  /* Sparkline ramp (progress.go RenderSparkline) */
+  --ramp-spark: " ▂▃▄▅▆▇█"; /* @kind other */
+  /* Eighth-step ramp (progress.go RenderBlockBar) */
+  --ramp-eighths: " ▏▎▍▌▋▊▉█"; /* @kind other */
+
+  --focus-ring: inset 0 0 0 1px var(--tui-blue);
+}

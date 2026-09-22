@@ -440,8 +440,11 @@ func TestActionCompleteMsgSuccessReloadsAndReselects(t *testing.T) {
 	}
 	// The reload now happens off-thread (see reloadJobsCmd) -- run the
 	// returned Cmd and feed its jobsReloadedMsg back in, mirroring what the
-	// real bubbletea runtime does.
-	m, _ = m.Update(cmd())
+	// real bubbletea runtime does. It is a Batch (the reload plus the toast
+	// heartbeat), so every sub-command is drained the way the runtime would.
+	for _, msg := range drainCmd(cmd) {
+		m, _ = m.Update(msg)
+	}
 
 	if len(m.rows) != 1 || m.rows[0].Company != "Acme Updated" {
 		t.Fatalf("expected reloaded rows to reflect the refreshed export, got %+v", m.rows)
@@ -1223,5 +1226,25 @@ func TestJobsViewFitsTerminalWithTagsAndPay(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// drainCmd runs a Cmd and flattens any tea.BatchMsg into the messages the
+// runtime would deliver, so a test can feed them back in one at a time.
+func drainCmd(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		var out []tea.Msg
+		for _, sub := range msg {
+			out = append(out, drainCmd(sub)...)
+		}
+		return out
+	case nil:
+		return nil
+	default:
+		return []tea.Msg{msg}
 	}
 }

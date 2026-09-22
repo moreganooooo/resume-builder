@@ -48,6 +48,12 @@ type Option struct {
 	Value string `json:"value"`
 	// Heading marks a non-selectable section title (select only).
 	Heading bool `json:"heading,omitempty"`
+	// Description is a supporting line rendered under the label, dimmer
+	// than it (select only). It carries what used to be an inline
+	// parenthetical on the label itself: at a glance the menu is then six
+	// short names rather than six sentences, and the explanation is still
+	// right there for anyone who needs it.
+	Description string `json:"description,omitempty"`
 }
 
 // Spec describes the prompt to render, decoded from the CLI argument JSON.
@@ -97,7 +103,7 @@ func Run(t theme.Theme, spec Spec) (Result, error) {
 	case "confirm":
 		return runConfirm(t, spec)
 	case "select":
-		if hasHeadings(spec) {
+		if needsSectionModel(spec) {
 			return runSections(t, spec)
 		}
 		return runSelect(t, spec)

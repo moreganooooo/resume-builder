@@ -1,0 +1,30 @@
+<!-- @dsCard group="Components" viewport="700x390" name="Print resume" subtitle="The PDF primitives — black, white, gray, and one rule weight" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:390px;background:#ffffff;padding:16px;font-family:var(--font-mono);font-size:12px}.lbl{color:var(--tui-subtext);font-size:10px;margin:10px 0 4px}.lbl:first-child{margin-top:0}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+const { PrintPage, PrintHeader, PrintSection, PrintEntry, PrintSkills } = window.ResumeBuilderDesignSystem_2d03b1;
+function Demo(){return (
+<PrintPage>
+  <PrintHeader name="Morgan Avery" tagline="SENIOR BRAND STRATEGIST | CONTENT LEAD"
+    contacts={["(785) 555-0134","morgan@example.com","linkedin.com/in/morganavery","Lawrence, KS"]} />
+  <PrintSection title="PROFESSIONAL SUMMARY" avoidBreak>
+    Brand strategist with eleven years across CPG and retail, building campaign systems that hold up
+    across agency, in-house and freelance teams.
+  </PrintSection>
+  <PrintSection title="SKILLS" avoidBreak>
+    <PrintSkills groups={[{label:'Brand',items:['Positioning','Naming','Voice & tone']},{label:'Operations',items:['Campaign planning','Team leadership','Budget ownership']}]} />
+  </PrintSection>
+  <PrintSection title="WORK EXPERIENCE">
+    <PrintEntry title="Creative Director, Consumer Packaged Goods"
+      meta={["Callahan Creek","450 staff","Lawrence, KS","2019 – 2024"]}
+      note="Role absorbed two adjacent teams after the 2021 merger."
+      bullets={["Rebuilt the seasonal campaign process, cutting concept-to-air from 11 weeks to 6.","Led a team of nine across copy, art direction and production."]} />
+  </PrintSection>
+</PrintPage>);}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script></body></html>

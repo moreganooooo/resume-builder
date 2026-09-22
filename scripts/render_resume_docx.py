@@ -19,6 +19,7 @@ import json
 import os
 import re
 
+import docx_theme
 import normalize_resume
 from docx import Document
 
@@ -31,12 +32,11 @@ def _add_bold_first_sentence(paragraph, text: str) -> None:
     match = re.match(r"<strong>(.*?)</strong>(.*)", text, re.DOTALL)
     if match:
         bold_part, rest = match.groups()
-        run = paragraph.add_run(bold_part)
-        run.bold = True
+        docx_theme.style_run(paragraph.add_run(bold_part), bold=True)
         if rest:
-            paragraph.add_run(rest)
+            docx_theme.style_run(paragraph.add_run(rest))
     else:
-        paragraph.add_run(text)
+        docx_theme.style_run(paragraph.add_run(text))
 
 
 def _add_bold_markdown_runs(paragraph, text: str) -> None:
@@ -47,8 +47,7 @@ def _add_bold_markdown_runs(paragraph, text: str) -> None:
     for i, part in enumerate(parts):
         if not part:
             continue
-        run = paragraph.add_run(part)
-        run.bold = i % 2 == 1
+        docx_theme.style_run(paragraph.add_run(part), bold=i % 2 == 1)
 
 
 def _is_blank_or_null(value: str) -> bool:
@@ -56,13 +55,31 @@ def _is_blank_or_null(value: str) -> bool:
 
 
 def _write_header(doc, resume_data: dict) -> None:
-    """Writes the name line and the contact/tagline line."""
+    """Writes the name line, the tagline and the contact line.
+
+    The tagline gets its own paragraph rather than riding in the contact
+    string: the template sets it at 15pt against the contact row's 9.75pt
+    (.header-tagline vs .contact-row), and one joined line cannot express
+    two sizes.
+    """
     # --- Header ---
-    doc.add_heading(resume_data.get("NAME", ""), level=0)
+    docx_theme.name_heading(doc, resume_data.get("NAME", ""))
+
+    tagline = resume_data.get("TAGLINE", "")
+    if tagline:
+        paragraph = doc.add_paragraph()
+        docx_theme.space(paragraph, after=2)
+        # The tagline's own pipes are grey in the template too, and the
+        # data string carries them literally.
+        docx_theme.pipe_join(
+            paragraph,
+            [part.strip() for part in str(tagline).split("|")],
+            size_pt=docx_theme.TAGLINE_PT,
+        )
+
     contact_parts = [
         p
         for p in (
-            resume_data.get("TAGLINE", ""),
             resume_data.get("PHONE", ""),
             resume_data.get("EMAIL", ""),
             resume_data.get("LINKEDIN_DISPLAY", ""),
@@ -71,7 +88,9 @@ def _write_header(doc, resume_data: dict) -> None:
         if p
     ]
     if contact_parts:
-        doc.add_paragraph(" | ".join(contact_parts))
+        paragraph = doc.add_paragraph()
+        docx_theme.space(paragraph, after=8)
+        docx_theme.pipe_join(paragraph, contact_parts, size_pt=docx_theme.CONTACT_PT)
 
 
 def _write_summary(doc, resume_data: dict) -> None:
@@ -79,8 +98,8 @@ def _write_summary(doc, resume_data: dict) -> None:
     # --- Summary ---
     summary_text = resume_data.get("SUMMARY_TEXT", "")
     if summary_text:
-        doc.add_heading(
-            resume_data.get("SECTION_SUMMARY", "Professional Summary"), level=1
+        docx_theme.section_heading(
+            doc, resume_data.get("SECTION_SUMMARY", "Professional Summary")
         )
         p = doc.add_paragraph()
         _add_bold_first_sentence(p, summary_text)
@@ -91,9 +110,11 @@ def _write_skills(doc, resume_data: dict) -> None:
     # --- Skills ---
     skills = resume_data.get("SKILLS", [])
     if skills:
-        doc.add_heading(resume_data.get("SECTION_SKILLS", "Skills"), level=1)
+        docx_theme.section_heading(doc, resume_data.get("SECTION_SKILLS", "Skills"))
         for skill in skills:
             p = doc.add_paragraph()
+            # .skills-grid is a 1px-gap column, not ordinary paragraphs.
+            docx_theme.space(p, after=0)
             _add_bold_markdown_runs(p, skill)
 
 
@@ -102,13 +123,15 @@ def _write_experience(doc, resume_data: dict) -> None:
     # --- Experience ---
     experience = resume_data.get("EXPERIENCE", [])
     if experience:
-        doc.add_heading(
-            resume_data.get("SECTION_EXPERIENCE", "Work Experience"), level=1
+        docx_theme.section_heading(
+            doc, resume_data.get("SECTION_EXPERIENCE", "Work Experience")
         )
-        for job in experience:
+        for index, job in enumerate(experience):
             title_p = doc.add_paragraph()
-            title_run = title_p.add_run(job.get("title", ""))
-            title_run.bold = True
+            # .job + .job .job-title: breathing room above every role but
+            # the first, which the section heading already spaces.
+            docx_theme.space(title_p, before=4 if index else 0, after=0)
+            docx_theme.style_run(title_p.add_run(job.get("title", "")), bold=True)
 
             company = job.get("company", "")
             if job.get("size_revenue"):
@@ -119,28 +142,37 @@ def _write_experience(doc, resume_data: dict) -> None:
                 if p
             ]
             if meta_parts:
-                doc.add_paragraph(" | ".join(meta_parts))
+                meta_p = doc.add_paragraph()
+                docx_theme.space(meta_p, after=2)
+                docx_theme.pipe_join(meta_p, meta_parts, bold=True)
+                # .job-meta's thin rule, separating company info from the
+                # bullets below it.
+                docx_theme.add_bottom_rule(meta_p)
 
             if job.get("clients"):
                 p = doc.add_paragraph()
-                run = p.add_run("Clients: ")
-                run.bold = True
-                p.add_run(job["clients"])
+                docx_theme.style_run(p.add_run("Clients: "), bold=True)
+                docx_theme.style_run(p.add_run(job["clients"]))
 
             for label, bullets in normalize_resume.grouped_achievements(job):
                 if label:
                     label_p = doc.add_paragraph()
-                    label_run = label_p.add_run(f"{label}:")
-                    label_run.bold = True
-                    label_run.italic = True
+                    docx_theme.space(label_p, before=3, after=0)
+                    docx_theme.style_run(
+                        label_p.add_run(f"{label}:"), bold=True, italic=True
+                    )
                 for achievement in bullets:
-                    doc.add_paragraph(achievement, style="List Bullet")
+                    p = doc.add_paragraph(style="List Bullet")
+                    # No bold inside bullets, per the design system -- the
+                    # run is written here rather than passed to
+                    # add_paragraph() so it carries the sheet's font.
+                    docx_theme.style_run(p.add_run(achievement))
 
             if job.get("career_note"):
                 p = doc.add_paragraph()
-                run = p.add_run("Career Note: ")
-                run.bold = True
-                p.add_run(job["career_note"])
+                docx_theme.style_run(p.add_run("Career Note: "), bold=True)
+                # .career-note is italic; its label is not.
+                docx_theme.style_run(p.add_run(job["career_note"]), italic=True)
 
 
 def _write_certifications(doc, resume_data: dict) -> None:
@@ -148,21 +180,27 @@ def _write_certifications(doc, resume_data: dict) -> None:
     # --- Certifications ---
     certifications = resume_data.get("CERTIFICATIONS", [])
     if certifications:
-        doc.add_heading(
+        docx_theme.section_heading(
+            doc,
             resume_data.get("SECTION_CERTIFICATIONS", "Training & Certifications"),
-            level=1,
         )
         for cert in certifications:
-            cert_parts = [
-                p
-                for p in (
-                    cert.get("title", ""),
-                    cert.get("org", ""),
-                    cert.get("year", ""),
+            paragraph = doc.add_paragraph()
+            docx_theme.space(paragraph, after=1)
+            # .cert-title is 800-weight; .cert-org/.cert-year are not.
+            title = cert.get("title", "")
+            rest = [p for p in (cert.get("org", ""), cert.get("year", "")) if p]
+            if title:
+                docx_theme.style_run(paragraph.add_run(title), bold=True)
+            elif rest:
+                # A cert with no title still has to start with content, not
+                # with a separator.
+                docx_theme.style_run(paragraph.add_run(str(rest.pop(0))))
+            for part in rest:
+                docx_theme.style_run(
+                    paragraph.add_run(" | "), color=docx_theme.RULE_COLOR
                 )
-                if p
-            ]
-            doc.add_paragraph(" | ".join(cert_parts))
+                docx_theme.style_run(paragraph.add_run(str(part)))
 
 
 def _write_education(doc, resume_data: dict) -> None:
@@ -170,7 +208,9 @@ def _write_education(doc, resume_data: dict) -> None:
     # --- Education ---
     education = resume_data.get("EDUCATION", [])
     if education:
-        doc.add_heading(resume_data.get("SECTION_EDUCATION", "Education"), level=1)
+        docx_theme.section_heading(
+            doc, resume_data.get("SECTION_EDUCATION", "Education")
+        )
         for edu in education:
             meta_parts = [
                 m
@@ -182,17 +222,19 @@ def _write_education(doc, resume_data: dict) -> None:
                 if m
             ]
             p = doc.add_paragraph()
+            docx_theme.space(p, after=2)
             degree = edu.get("degree", "")
-            if degree:
-                run = p.add_run(degree)
-                run.bold = True
-            if meta_parts:
-                meta_text = " | ".join(meta_parts)
-                p.add_run(f" | {meta_text}" if degree else meta_text)
+            # .edu-title and .edu-meta-text are both 800-weight; the header
+            # carries the same grey rule .job-meta does.
+            docx_theme.pipe_join(
+                p, ([degree] if degree else []) + meta_parts, bold=True
+            )
+            docx_theme.add_bottom_rule(p)
             if edu.get("description"):
-                doc.add_paragraph(edu["description"])
+                docx_theme.body_paragraph(doc, edu["description"])
             for bullet in edu.get("bullets", []):
-                doc.add_paragraph(bullet, style="List Bullet")
+                bullet_p = doc.add_paragraph(style="List Bullet")
+                docx_theme.style_run(bullet_p.add_run(bullet))
 
 
 def _write_why(doc, resume_data: dict) -> None:
@@ -206,7 +248,7 @@ def _write_why(doc, resume_data: dict) -> None:
             if not _is_blank_or_null(section_why)
             else "Additional Relevant Experience"
         )
-        doc.add_heading(heading, level=1)
+        docx_theme.section_heading(doc, heading)
         # WHY_TEXT contains literal <p>/<em> tags (see render_html.py's
         # build_why_html() comment) -- split into paragraphs on </p> and
         # strip the tags, rather than collapsing everything into one run.
@@ -214,7 +256,7 @@ def _write_why(doc, resume_data: dict) -> None:
         for raw_p in raw_paragraphs:
             clean = re.sub(r"</?p>|</?em>", "", raw_p).strip()
             if clean:
-                doc.add_paragraph(clean)
+                docx_theme.body_paragraph(doc, clean)
 
 
 def render_resume_docx(resume_data: dict, output_path: str) -> str:
@@ -223,6 +265,10 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
     output_path. Returns output_path on success.
     """
     doc = Document()
+    # Before any content: apply_document_theme() rewrites the shared Normal
+    # / Title / Heading 1 / List Bullet styles and the page margins, so the
+    # export matches cv-template.html rather than Word's factory look.
+    docx_theme.apply_document_theme(doc)
 
     _write_header(doc, resume_data)
     _write_summary(doc, resume_data)

@@ -350,6 +350,13 @@ type detailPaneStyles struct {
 	Value   lipgloss.Style
 }
 
+// detailPaneChrome is what a detail pane's border and padding cost its text:
+// lipgloss counts both inside Width, so a pane styled Width(w-2).Padding(1, 2)
+// has w-2-2(border)-4(padding) = w-8 columns of usable text. Anything that
+// needs to sit at the text's own right edge (the scroll rail) has to subtract
+// it rather than guess.
+const detailPaneChrome = 8
+
 func newDetailPaneStyles(t theme.Theme, width, height int) detailPaneStyles {
 	return detailPaneStyles{
 		Border: lipgloss.NewStyle().
@@ -378,6 +385,11 @@ func newDetailPaneStyles(t theme.Theme, width, height int) detailPaneStyles {
 type HelpBinding struct {
 	Key  string
 	Desc string
+	// Action is the key string a CLICK on this hint should send, for the
+	// footer HelpBar (see helpbar.go). Empty means Key is typeable as-is;
+	// set it when the label is a legend rather than a key ("↑↓/jk" is not
+	// something a key handler can switch on, "down" is).
+	Action string
 }
 
 type helpBinding struct {
@@ -543,7 +555,6 @@ func renderStatusPickerOverlay(t theme.Theme, body string, availWidth int, heade
 		pickerWidth = 10
 	}
 	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
-	headerStyle := lipgloss.NewStyle().Foreground(t.Blue).Bold(true)
 
 	var picker []string
 	if confirmLabel != "" {
@@ -552,17 +563,14 @@ func renderStatusPickerOverlay(t theme.Theme, body string, availWidth int, heade
 		picker = append(picker, padStyle.Render(confirmStyle.Render(truncateRunes(confirmLabel, pickerWidth))))
 		picker = append(picker, padStyle.Render(hintStyle.Render("Enter/y confirm  Esc/n cancel")))
 	} else {
-		picker = append(picker, padStyle.Render(headerStyle.Render(header)))
-		for i, opt := range options {
-			style := lipgloss.NewStyle().Foreground(t.Blue).Width(pickerWidth)
-			if i == cursor {
-				style = style.Background(t.Overlay).Bold(true)
-			}
-			prefix := "  "
-			if i == cursor {
-				prefix = "> "
-			}
-			picker = append(picker, padStyle.Render(style.Render(prefix+opt)))
+		// The option list follows the design system's HuhField select: a
+		// rail in the focused color, a Mauve ┃ on the current row, and that
+		// row alone in Text while the rest sit back in Subtext. It replaces
+		// an all-Blue list marked by a "> " and an Overlay background --
+		// same information, but found by reading the brightest row rather
+		// than by spotting a filled rectangle.
+		for _, line := range RenderSelectField(t, header, options, cursor, FieldFocused, pickerWidth) {
+			picker = append(picker, padStyle.Render(line))
 		}
 	}
 
@@ -696,12 +704,29 @@ func (t *ToastNotification) Visible() bool {
 }
 
 // Show activates the toast message with an icon and duration in seconds.
+// No confetti: a routine status change, a normal save and a completed scan
+// all come through here, and a burst on every one of them is the defect the
+// design system's closed-set rule exists to prevent -- a signal that fires on
+// everything stops meaning anything. Use ShowCelebrating for the four moments
+// that earn it.
 func (t *ToastNotification) Show(icon, msg string, seconds int) {
+	t.show(icon, msg, seconds, false)
+}
+
+// ShowCelebrating is Show plus the confetti burst, reserved for the four
+// moments the design system names: the first resume ever tailored, a status
+// moving to Interview or to Offer, onboarding completing, and a weekly
+// application goal being hit. Nothing else should call it.
+func (t *ToastNotification) ShowCelebrating(icon, msg string, seconds int) {
+	t.show(icon, msg, seconds, true)
+}
+
+func (t *ToastNotification) show(icon, msg string, seconds int, celebrate bool) {
 	t.icon = icon
 	t.message = msg
 	t.visible = true
 	t.seconds = seconds
-	if t.particles != nil {
+	if celebrate && t.particles != nil {
 		t.particles.Emit(40, 10, 25)
 	}
 }

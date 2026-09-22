@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Tailoring review" description="The before/after redline for a tailored resume — accept or reject each rewrite, with the model's reason attached." -->
+<helmet><script src="./ds-base.js"></script><style>html,body{height:100%;margin:0}body{background:#14141f}</style></helmet>
+<div style="width:100%;height:100vh;background:var(--tui-base);font-family:var(--font-mono);font-size:var(--tui-font-size);line-height:var(--tui-line-height);color:var(--tui-text);display:flex;flex-direction:column;overflow:hidden">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiHeaderBar" icon="edit" gradient="jobs" title="✦ TAILORING REVIEW ✧" info="{{ headerInfo }}" hint-size="100%,21px"></x-import>
+<div style="background:var(--tui-surface);color:var(--tui-subtext);padding:0 var(--pad-h);display:flex;gap:16px"><span>Northwind Labs · Content Lead</span><span>{{ progress }}</span></div>
+<div style="flex:1;display:flex;gap:12px;padding:12px var(--pad-h);min-height:0">
+<div style="flex:0 0 30%;min-width:0;display:flex">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="active" pad="tight" dc-props="{{ fillCol }}" hint-size="100%,100%">
+<div style="color:var(--tui-subtext);letter-spacing:.14em;padding-bottom:6px">CHANGES</div>
+<sc-for list="{{ changes }}" as="c" hint-placeholder-count="5">
+<sc-if value="{{ c.selected }}" hint-placeholder-val="{{ false }}">
+<div style="padding:3px 0 3px 7.4px;border-left:1px solid var(--tui-mauve);cursor:pointer;margin-bottom:6px" onClick="{{ c.select }}"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.title }}</div><div style="color:var(--tui-subtext)">{{ c.state }}</div></div>
+</sc-if>
+<sc-if value="{{ c.unselected }}" hint-placeholder-val="{{ true }}">
+<div style="padding:3px 0 3px 8.4px;border-left:1px solid transparent;cursor:pointer;margin-bottom:6px;opacity:.55" onClick="{{ c.select }}"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.title }}</div><div style="color:var(--tui-subtext)">{{ c.state }}</div></div>
+</sc-if>
+</sc-for>
+</x-import>
+</div>
+<div style="flex:1;min-width:0;display:flex">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="idle" pad="detail" dc-props="{{ fillDoc }}" hint-size="100%,100%">
+<div style="color:var(--tui-subtext);letter-spacing:.14em;padding-bottom:8px">{{ sectionLabel }}</div>
+<sc-for list="{{ lines }}" as="l" hint-placeholder-count="5">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.DiffLine" kind="{{ l.kind }}" emphasis="{{ l.emphasis }}" hint-size="100%,21px">{{ l.text }}</x-import>
+</sc-for>
+<div style="border-top:1px solid var(--tui-overlay);margin-top:12px;padding-top:10px;color:var(--tui-subtext)">Evidence</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.EnumList" enumerator="check" items="{{ evidence }}" hint-size="100%,80px"></x-import>
+</x-import>
+</div>
+</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiFooterBar" primary="{{ primary }}" actions="{{ actions }}" system="{{ system }}" brand="resume-builder dashboard" hint-size="100%,21px"></x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:800}}">
+// The screen that shows the product's core value happening. Design rules it
+// carries beyond the components' own:
+//  - Every rewrite is reviewable individually. A single "accept all" that
+//    silently rewrites twelve bullets is how people send out a resume with a
+//    number in it they cannot defend in an interview.
+//  - The model's reason is shown with the change, not behind a key. If the
+//    reason is not good enough to display, the change is not good enough to make.
+//  - Rejecting is one key and is not confirmed — `u` undoes it. Confirm
+//    dialogs on reversible actions train people to dismiss dialogs.
+//  - Nothing is written to disk until the user leaves the screen with `w`.
+class Component extends DCLogic {
+  state = { sel: 1 };
+  data = [
+    { title: 'Summary', state: 'accepted', section: 'PROFESSIONAL SUMMARY',
+      lines: [
+        { kind: 'remove', text: 'Content marketer with 8 years of experience.', emphasis: ['Content marketer'] },
+        { kind: 'add', text: 'Editorial leader with 8 years building content programs at SaaS companies.', emphasis: ['Editorial leader', 'content programs'] },
+        { kind: 'note', text: 'The posting names editorial leadership three times and never says "marketer".' },
+      ],
+      evidence: [{ text: 'Title language matched to the posting' }, { text: 'Years of experience unchanged — never inflated', note: 'verified against profile.json' }] },
+    { title: 'Northwind bullet 2', state: 'needs review', section: 'EXPERIENCE — CONTENT OPERATIONS LEAD',
+      lines: [
+        { kind: 'same', text: 'Led content operations for a mid-market SaaS company.' },
+        { kind: 'remove', text: 'Wrote blog posts and managed the editorial calendar.', emphasis: ['Wrote blog posts'] },
+        { kind: 'add', text: 'Owned the editorial roadmap across 4 writers, lifting organic traffic 38% in two quarters.', emphasis: ['editorial roadmap', '38%'] },
+        { kind: 'note', text: 'The posting asks for roadmap ownership and names a traffic target.' },
+        { kind: 'same', text: 'Partnered with design and demand gen on launch messaging.' },
+      ],
+      evidence: [{ text: '38% figure sourced from bullet bank entry #87' }, { text: 'Team size of 4 confirmed' }, { text: 'No claim added that the bank does not support' }] },
+    { title: 'Skills order', state: 'needs review', section: 'SKILLS',
+      lines: [
+        { kind: 'remove', text: 'SEO · Analytics · Editorial strategy · Content ops' },
+        { kind: 'add', text: 'Editorial strategy · Content ops · SEO · Analytics' },
+        { kind: 'note', text: 'Reordered only — no skill added or removed. The top two are the posting\u2019s stated requirements.' },
+      ],
+      evidence: [{ text: 'Set is identical; order changed' }] },
+    { title: 'Harbor bullet 1', state: 'rejected', section: 'EXPERIENCE — SENIOR WRITER',
+      lines: [
+        { kind: 'remove', text: 'Wrote long-form pieces for an agency client roster.' },
+        { kind: 'add', text: 'Drove a 200% increase in engagement across agency accounts.', emphasis: ['200%'] },
+        { kind: 'note', text: 'Rejected: the 200% figure is not in the bullet bank and cannot be sourced.' },
+      ],
+      evidence: [{ text: 'Figure has no supporting entry', ok: false }] },
+    { title: 'Education', state: 'unchanged', section: 'EDUCATION',
+      lines: [{ kind: 'same', text: 'BA, Journalism — no changes proposed.' }],
+      evidence: [{ text: 'Nothing in the posting bears on education' }] },
+  ];
+  renderVals() {
+    const cur = this.data[this.state.sel];
+    const done = this.data.filter(d => d.state !== 'needs review').length;
+    return {
+      headerInfo: this.data.length + ' changes | ' + done + ' resolved',
+      progress: 'Reviewing ' + (this.state.sel + 1) + ' of ' + this.data.length + ' — nothing written until w',
+      fillCol: { style: { flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' } },
+      fillDoc: { style: { flex: 1, overflowY: 'auto' } },
+      changes: this.data.map((d, i) => {
+        const sel = i === this.state.sel;
+        return { title: d.title, state: d.state, selected: sel, unselected: !sel, select: () => this.setState({ sel: i }) };
+      }),
+      sectionLabel: cur.section,
+      lines: cur.lines.map(l => ({ ...l, emphasis: l.emphasis || [] })),
+      evidence: cur.evidence,
+      primary: [{ key: 'a', desc: 'accept' }, { key: 'r', desc: 'reject' }],
+      actions: [{ key: '↑↓', desc: 'change' }, { key: 'e', desc: 'edit by hand' }, { key: 'u', desc: 'undo' }, { key: 'w', desc: 'write' }],
+      system: [{ key: 'esc', desc: 'back' }, { key: 'q', desc: 'quit' }],
+    };
+  }
+}
+</script>
+</body>
+</html>

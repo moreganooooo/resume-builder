@@ -1,0 +1,23 @@
+<!-- @dsCard group="Components" viewport="700x430" name="Redline" subtitle="DiffLine — the tailoring rewrite made visible; sign column always present, strikethrough never" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:430px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;gap:12px}.k{font-size:11px;color:var(--tui-subtext);line-height:1.55}.lab{font-size:10px;letter-spacing:.08em;color:var(--tui-subtext)}.b{border:1px solid var(--tui-overlay);border-radius:4px;padding:11px 13px;display:flex;flex-direction:column;gap:7px}</style></head><body><div class="lab">A TAILORED BULLET</div><div class="b" id="d1"></div>
+<div class="lab">THE RULES</div>
+<div class="b">
+<div class="k"><span style="color:var(--tui-text)">The sign column is never dropped.</span> Colour is not the only signal, and a diff pasted into a plain-text email still reads.</div>
+<div class="k"><span style="color:var(--tui-text)">Removed text is not struck through.</span> Strikethrough is unreliable across terminals, and where it renders the user can no longer read the original — which is the thing they need in order to judge the rewrite.</div>
+<div class="k"><span style="color:var(--tui-text)">A rewrite is one decision.</span> Paired −/+ lines sit adjacent with the Mauve ┃ rationale beneath, so accepting or rejecting has one obvious target.</div>
+<div class="k"><span style="color:var(--tui-text)">Word emphasis is bold, not fill.</span> A filled span at this size reads as redaction.</div>
+</div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="../_ds_bundle.js"></script><div id="r1"></div>
+<script>
+const {DiffLine}=window.ResumeBuilderDesignSystem_2d03b1,e=React.createElement;
+const rows=[
+ ['same','Led content operations for a mid-market SaaS company.'],
+ ['remove','Wrote blog posts and managed the editorial calendar.',['Wrote blog posts']],
+ ['add','Owned the editorial roadmap across 4 writers, lifting organic traffic 38% in two quarters.',['editorial roadmap','38%']],
+ ['note','Rewritten: the posting asks for roadmap ownership and names a traffic target.'],
+ ['same','Partnered with design and demand gen on launch messaging.'],
+];
+ReactDOM.createRoot(document.getElementById('d1')).render(e(React.Fragment,null,rows.map((r,i)=>e(DiffLine,{key:i,kind:r[0],emphasis:r[2]||[]},r[1]))));
+</script></body></html>

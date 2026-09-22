@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -117,26 +118,61 @@ func TestProgressModel_View_RendersAnalyticsSections(t *testing.T) {
 		},
 	}
 
-	m := NewProgressModel(th, metrics, 100, 40)
-	view := m.View()
+	// Each mode renders its own sections and only its own: the whole point
+	// of the split is that neither screen is a wall of everything.
+	progress := NewProgressModel(th, metrics, 100, 200)
+	insights := progress.WithMode(ModeInsights)
 
-	if view == "" {
-		t.Fatalf("expected non-empty View output")
+	// Stripped: the title is a per-rune gradient, so a raw substring match
+	// would never find it.
+	progressView, insightsView := ansi.Strip(progress.View()), ansi.Strip(insights.View())
+	if progressView == "" || insightsView == "" {
+		t.Fatalf("expected non-empty View output from both modes")
 	}
 
-	for _, expectedHeader := range []string{
-		"Source-Platform Yield & Quality",
-		"Top Employers & Staffing Detection",
-		"Score vs. Bullet Coverage (High-ROI Gap Radar)",
-		"Greenhouse",
-		"CyberCoders",
-		"[AGENCY]",
-		"[DIRECT]",
-		"Write Bullets For (High Fit, Low Coverage):",
-		"Lead Architect",
-	} {
-		if !containsSubstring(view, expectedHeader) {
-			t.Errorf("expected View() to contain %q", expectedHeader)
+	cases := []struct {
+		name    string
+		view    string
+		present []string
+		absent  []string
+	}{
+		{
+			name: "progress",
+			view: progressView,
+			present: []string{
+				"SEARCH PROGRESS",
+				"Top Employers & Staffing Detection",
+				"Score vs. Bullet Coverage (High-ROI Gap Radar)",
+				"CyberCoders",
+				"[AGENCY]",
+				"[DIRECT]",
+				"Write Bullets For (High Fit, Low Coverage):",
+				"Lead Architect",
+			},
+			absent: []string{"Source-Platform Yield & Quality", "INSIGHTS"},
+		},
+		{
+			name: "insights",
+			view: insightsView,
+			present: []string{
+				"INSIGHTS",
+				"Source-Platform Yield & Quality",
+				"Greenhouse",
+			},
+			absent: []string{"Top Employers & Staffing Detection", "SEARCH PROGRESS"},
+		},
+	}
+
+	for _, tc := range cases {
+		for _, want := range tc.present {
+			if !containsSubstring(tc.view, want) {
+				t.Errorf("%s: expected View() to contain %q", tc.name, want)
+			}
+		}
+		for _, notWant := range tc.absent {
+			if containsSubstring(tc.view, notWant) {
+				t.Errorf("%s: expected View() not to contain %q", tc.name, notWant)
+			}
 		}
 	}
 }

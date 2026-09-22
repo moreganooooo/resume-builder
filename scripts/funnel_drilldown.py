@@ -215,7 +215,7 @@ def render_funnel_drilldown(
     c.print()
 
     # Tactical Bottleneck Guidance
-    c.print(f"[bold {theme.BRAND_ACCENT}]🔍 Tactical Recommendations:[/]")
+    c.print(f"[bold {theme.BRAND_ACCENT}]⌖ Tactical Recommendations:[/]")
     if bottlenecks["unapplied_gap"] > 10:
         c.print(
             f"  • [bold {theme.WARNING}]Application Inertia Bottleneck:[/] You have [bold]{bottlenecks['unapplied_gap']}[/] high-fit roles "

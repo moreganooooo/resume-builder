@@ -1,0 +1,36 @@
+/* Motion — Harmonica spring physics, ported to CSS.
+   dashboard/internal/anim/anim.go defines four curves as
+   (frequency, damping) pairs at 60fps. The cubic-beziers below are
+   visual equivalents for the web; the raw spring params are kept so a
+   real spring implementation can use them directly.
+
+   Nothing in this system fades or slides "just because": motion means
+   a value changed, a cursor moved, or work is happening. */
+
+:root {
+  --spring-snappy: 6.0 0.9;      /* @kind other */ /* cursor moves, pane switches */
+  --spring-organic: 4.0 0.7;     /* @kind other */ /* reveals, score bars settling */
+  --spring-elastic: 3.5 0.5;     /* @kind other */ /* celebration badges */
+  --spring-shake: 8.0 0.4;       /* @kind other */ /* error / warning cues */
+
+  --ease-snappy: cubic-bezier(0.22, 1, 0.36, 1); /* @kind other */
+  --ease-organic: cubic-bezier(0.34, 1.26, 0.64, 1); /* @kind other */
+  --ease-elastic: cubic-bezier(0.18, 1.6, 0.5, 1); /* @kind other */
+
+  --dur-instant: 0ms;            /* @kind other */ /* pane switching is instant by design */
+  --dur-cursor: 140ms; /* @kind other */
+  --dur-reveal: 320ms; /* @kind other */
+  --dur-settle: 520ms; /* @kind other */
+
+  --tick-starfield: 60ms;        /* @kind other */ /* empty-pane twinkle */
+  --tick-frame: 16.67ms;         /* @kind other */ /* 60fps */
+  --dim-fraction: 0.55;          /* @kind other */ /* inactive rows blend 55% toward Base */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-cursor: 0ms; /* @kind other */
+    --dur-reveal: 0ms; /* @kind other */
+    --dur-settle: 0ms; /* @kind other */
+  }
+}

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Terminal dashboard" description="Bubble Tea screen scaffold — gradient header, filter tabs, list/detail split, key footer." -->
+<helmet><script src="./ds-base.js"></script><style>html,body{height:100%;margin:0}body{background:#14141f}</style></helmet>
+<div style="width:100%;height:100vh;background:var(--tui-base);font-family:var(--font-mono);font-size:var(--tui-font-size);line-height:var(--tui-line-height);color:var(--tui-text);display:flex;flex-direction:column;overflow:hidden">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiHeaderBar" icon="pipeline" title="✦ CAREER PIPELINE ✧" gradient="pipeline" info="{{ headerInfo }}" hint-size="100%,26px"></x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiTabs" tabs="{{ tabs }}" active="{{ tab }}" onChange="{{ setTab }}" hint-size="100%,60px"></x-import>
+<div style="color:var(--tui-subtext);padding:0 var(--pad-h);display:flex;gap:16px"><span>[Sort: score]</span><span>[View: grouped]</span><span>{{ shown }}</span></div>
+<div style="display:flex;flex:1;min-height:0">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="active" style="flex:0 0 35%;overflow:hidden" hint-size="35%,100%">
+<div style="color:var(--tui-blue);font-weight:700;padding:0 8.4px">PENDING</div>
+<sc-for list="{{ rows }}" as="row" hint-placeholder-count="6">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.SidebarRow" score="{{ row.score }}" company="{{ row.company }}" subtitle="{{ row.title }}" selected="{{ row.selected }}" onClick="{{ row.select }}" hint-size="100%,42px"></x-import>
+</sc-for>
+</x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="idle" pad="detail" style="flex:1;overflow:auto" hint-size="65%,100%">
+<div style="color:var(--tui-blue);font-weight:700">{{ selected.company }}</div>
+<div>{{ selected.title }}</div>
+<div>&nbsp;</div>
+<div style="color:var(--tui-mauve);font-weight:700">Fit subscores</div>
+<sc-for list="{{ subscores }}" as="s" hint-placeholder-count="4">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.ScoreBar" label="{{ s.label }}" value="{{ s.value }}" hint-size="100%,21px"></x-import>
+</sc-for>
+<div>&nbsp;</div>
+<div style="color:var(--tui-mauve);font-weight:700">Why</div>
+<div style="text-wrap:pretty">{{ selected.why }}</div>
+</x-import>
+</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiFooterBar" actions="{{ actions }}" system="{{ system }}" hint-size="100%,26px"></x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const JOBS = [
+  { company: "Allego", title: "Senior Customer Marketing & Community Manager", score: 5.0,
+    why: "Near-perfect match: the role is customer marketing with a community mandate, and every requirement maps to a verified bullet." },
+  { company: "Hirehangar", title: "Customer Enablement & Training Specialist", score: 4.8,
+    why: "Enablement overlaps the training work, but the role skews closer to support than to marketing." },
+  { company: "Cengage", title: "Sr Content Marketing Manager, Faculty Programs", score: 4.6,
+    why: "Content marketing at scale, with an audience you have worked with before." },
+  { company: "Higher Logic", title: "Content Marketing Manager", score: 4.4,
+    why: "Solid fit on content; the community platform angle is new but adjacent." },
+  { company: "Litmos", title: "Customer Marketing Manager", score: 4.2,
+    why: "Direct title match. Smaller team than your last two roles." },
+  { company: "TEKsystems", title: "Marketing Manager 1", score: 3.6,
+    why: "Staffing-agency posting — the end client is not named, which caps confidence." },
+];
+
+class Component extends DCLogic {
+  state = { tab: 0, cursor: 0 };
+  renderVals() {
+    const selected = JOBS[this.state.cursor];
+    return {
+      headerInfo: JOBS.length + " offers | Avg 4.4/5",
+      shown: JOBS.length + " shown",
+      tab: this.state.tab,
+      setTab: (i) => this.setState({ tab: i }),
+      tabs: [
+        { label: "ALL", count: JOBS.length }, { label: "EVALUATED", count: 4 },
+        { label: "APPLIED", count: 1 }, { label: "INTERVIEW", count: 0 },
+        { label: "TOP ≥4", count: 5 }, { label: "SKIP", count: 0 },
+      ],
+      rows: JOBS.map((j, i) => ({ ...j, selected: i === this.state.cursor, select: () => this.setState({ cursor: i }) })),
+      selected,
+      subscores: [
+        { label: "Title Continuity", value: 5.0 }, { label: "Reputation", value: 5.0 },
+        { label: "Comp", value: 3.0 }, { label: "Culture", value: 4.0 }, { label: "Growth", value: 5.0 },
+      ],
+      actions: [{ key: "↑↓/jk", desc: "nav" }, { key: "←→/hl", desc: "tabs" }, { key: "/", desc: "search" }, { key: "Enter", desc: "report" }, { key: "?", desc: "help" }],
+      system: [{ key: "Esc", desc: "back" }, { key: "q", desc: "quit" }],
+    };
+  }
+}
+</script>
+</body>
+</html>

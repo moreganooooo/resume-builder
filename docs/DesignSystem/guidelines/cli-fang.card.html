@@ -1,0 +1,22 @@
+<!-- @dsCard group="CLI" viewport="700x430" name="Styled help & errors" subtitle="charmbracelet/fang — the non-TUI entrypoints, currently the only unstyled surface left" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:430px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;gap:12px}.k{font-size:11px;color:var(--tui-subtext);line-height:1.55}.lab{font-size:10px;letter-spacing:.08em;color:var(--tui-subtext)}.b{border:1px solid var(--tui-overlay);border-radius:4px;padding:11px 13px;display:flex;flex-direction:column;gap:7px}.term{border:1px solid var(--tui-overlay);border-radius:4px;padding:11px 13px;white-space:pre-wrap;line-height:1.6}</style></head><body><div class="lab">resume-builder --help</div>
+<div class="term"><span style="color:var(--tui-mauve);font-weight:700">RESUME-BUILDER</span> <span style="color:var(--tui-subtext)">v2.4.0</span>
+<span style="color:var(--tui-subtext)">An LLM-powered job application manager.</span>
+
+<span style="color:var(--tui-blue);font-weight:700">USAGE</span>
+  resume-builder <span style="color:var(--tui-text)">&lt;command&gt;</span> <span style="color:var(--tui-subtext)">[flags]</span>
+
+<span style="color:var(--tui-blue);font-weight:700">COMMANDS</span>
+  <span style="color:var(--tui-text)">dashboard</span>   <span style="color:var(--tui-subtext)">Open the terminal dashboard</span>
+  <span style="color:var(--tui-text)">scan</span>        <span style="color:var(--tui-subtext)">Find new roles from configured sources</span>
+  <span style="color:var(--tui-text)">tailor</span>      <span style="color:var(--tui-subtext)">Rewrite your resume for one role</span>
+  <span style="color:var(--tui-text)">report</span>      <span style="color:var(--tui-subtext)">Render this week's report</span>
+
+<span style="color:var(--tui-blue);font-weight:700">FLAGS</span>
+  <span style="color:var(--tui-peach)">--profile</span> <span style="color:var(--tui-subtext)">string</span>   <span style="color:var(--tui-subtext)">Profile directory (default "morgan")</span>
+  <span style="color:var(--tui-peach)">--no-color</span>         <span style="color:var(--tui-subtext)">Disable colour output</span></div>
+<div class="lab">A FAILED COMMAND</div>
+<div class="term" style="border-color:var(--tui-red)"><span style="color:var(--tui-red);font-weight:700">✗ Error</span> <span style="color:var(--tui-text)">unknown profile "morgn"</span>
+  <span style="color:var(--tui-subtext)">Did you mean </span><span style="color:var(--tui-text)">morgan</span><span style="color:var(--tui-subtext)">? Profiles live in ./profiles.</span></div>
+<div class="k">The TUI is the product's face and the CLI is its front door, so they use one palette: Mauve for the program name, Blue for section headings, Peach for flags, Subtext for description. Fang supplies this over Cobra, which means <span style="color:var(--tui-text)">--help</span>, version output and error formatting stop being three separately hand-styled things. Errors follow the same rule as everywhere else — plain language first, the fix named, no stack trace above the fold. <span style="color:var(--tui-text)">--no-color</span> and <span style="color:var(--tui-text)">NO_COLOR</span> both strip styling and leave the structure intact.</div>
+</body></html>

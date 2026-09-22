@@ -18,7 +18,7 @@ Wait+Screen@60s /Knowledge Base|Pipeline/
 Sleep 500ms
 Show
 Sleep 500ms
-Type "3"
+Type "4"
 Wait+Screen@30s /Jobs|filter/
 Sleep 1s
 Screenshot artifacts/tui_jobs.png

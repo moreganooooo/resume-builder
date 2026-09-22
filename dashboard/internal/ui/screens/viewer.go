@@ -187,6 +187,16 @@ func (m *ViewerModel) jumpPrevMatch() {
 // Update handles input for the viewer screen.
 func (m ViewerModel) Update(msg tea.Msg) (ViewerModel, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.MouseClickMsg:
+		// Search mode owns the footer (it renders a prompt, not hints), so a
+		// click there must not resolve against stale bindings.
+		if !m.searchActive {
+			if k, ok := HelpBarClicked(viewerHelpZone, viewerHelpBindings, msg); ok {
+				return m.Update(helpBarKeyMsg(k))
+			}
+		}
+		return m, nil
+
 	case tea.MouseWheelMsg:
 		// Button, not Y (always >= 0, the screen row -- not a delta),
 		// determines wheel direction. See jobs.go's identical fix.
@@ -376,6 +386,11 @@ func (m ViewerModel) renderHeader() string {
 	return style.Render(title + gap + scroll)
 }
 
+// viewerBodyPad is the total horizontal padding theme.PadHorizontal applies
+// (2 cells each side). The scroll rail has to know it to sit at the text's
+// right edge rather than the terminal's.
+const viewerBodyPad = 4
+
 func (m ViewerModel) renderBody() string {
 	bh := m.bodyHeight()
 	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
@@ -408,7 +423,15 @@ func (m ViewerModel) renderBody() string {
 	flat := make([]string, bh)
 	copy(flat, visible)
 
-	return padStyle.Render(strings.Join(flat, "\n"))
+	// The rail goes on before the horizontal padding, so it lands at the
+	// text's own right edge rather than the terminal's -- padStyle's right
+	// pad would otherwise push a gap between the two.
+	body := AttachScrollRail(m.theme,
+		strings.Join(flat, "\n"),
+		ScrollState{Total: len(m.renderedLines), Visible: bh, Offset: m.scrollOffset},
+		m.width-viewerBodyPad-1)
+
+	return padStyle.Render(body)
 }
 
 // renderWithGlamour renders rawContent via Glamour with project-token styling,
@@ -868,25 +891,26 @@ func (m ViewerModel) renderFooter() string {
 		return style.Render(promptStyle.Render("/ ") + textStyle.Render(m.searchQuery+"█") + hintStyle.Render("  Enter find • Esc cancel"))
 	}
 
-	keyStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Text).Background(m.theme.Surface)
-	descStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface)
-
-	searchInfo := ""
+	// Search state rides on the right, where the brand normally sits: the
+	// left side is the capped HelpBar and has no room for a variable badge.
+	brand := "resume-builder dashboard"
 	if len(m.searchMatches) > 0 {
-		matchBadge := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Mauve).Background(m.theme.Surface)
-		searchInfo = matchBadge.Render(fmt.Sprintf("[%d/%d] ", m.searchMatchIdx+1, len(m.searchMatches))) +
-			keyStyle.Render("n/N") + descStyle.Render(" jump  ")
+		brand = fmt.Sprintf("[%d/%d] n/N jump", m.searchMatchIdx+1, len(m.searchMatches))
 	} else if m.searchQuery != "" {
-		noMatch := lipgloss.NewStyle().Foreground(m.theme.Peach).Background(m.theme.Surface)
-		searchInfo = noMatch.Render("[0 matches] ")
+		brand = "[0 matches]"
 	}
 
-	return style.Render(
-		searchInfo +
-			keyStyle.Render("↑↓/jk") + descStyle.Render(" scroll  ") +
-			keyStyle.Render("/") + descStyle.Render(" search  ") +
-			keyStyle.Render("g/G") + descStyle.Render(" top/end  ") +
-			keyStyle.Render("?") + descStyle.Render(" help  ") +
-			keyStyle.Render("Esc") + descStyle.Render(" back  ") +
-			keyStyle.Render("q") + descStyle.Render(" quit"))
+	return RenderHelpBar(m.theme, m.width, viewerHelpZone, viewerHelpBindings, brand)
+}
+
+// viewerHelpZone namespaces this screen's clickable footer hints.
+const viewerHelpZone HelpBarZonePrefix = "viewer"
+
+// viewerHelpBindings is the short footer bar; `?` opens the full reference.
+var viewerHelpBindings = []HelpBinding{
+	{Key: "\u2191\u2193/jk", Desc: "scroll", Action: "down"},
+	{Key: "/", Desc: "search"},
+	{Key: "g/G", Desc: "top/end", Action: "g"},
+	{Key: "Esc", Desc: "back", Action: "esc"},
+	{Key: "q", Desc: "quit"},
 }

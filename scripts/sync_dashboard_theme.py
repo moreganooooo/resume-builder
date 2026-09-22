@@ -132,10 +132,12 @@ func newResumeBuilder() Theme {
 		Subtext: lipgloss.Color("#a6adc8"),
 
 		// Accents -- resume-builder's scripts/theme.py tokens. Sky
-		// (#8B75FF, BRAND) clears Base (#1e1e2e) at 4.75:1 -- AA text
-		// contrast, but with little margin -- and fails outright against
-		// Surface (#313244) at 3.64:1. It's currently only ever
-		// composited against Base (progress.go/viewer.go section
+		// (#a47bff, BRAND) is docs/DesignSystem/tokens/colors.css's
+		// corrected value (a shifted violet reading as purple) and is
+		// the one documented Base-only exception to the >=4.5:1-on-
+		// both-backgrounds rule: it clears Base (#1e1e2e) but only
+		// reaches ~4.0:1 against Surface (#313244). It's currently only
+		// ever composited against Base (progress.go/viewer.go section
 		// titles), which is why this isn't visibly broken today; don't
 		// pair it with Background(Surface) without re-measuring, unlike
 		// catppuccin_latte.go's accents (see that file's own contrast
@@ -208,10 +210,23 @@ def _flat_subscore_labels() -> dict:
 
 
 def build_subscore_labels_source() -> str:
+    """Builds subscore_labels.go, gofmt-aligned.
+
+    The alignment is not cosmetic: emitting a single space after each
+    colon produces a file `gofmt` immediately rewrites, so every run of
+    this script (including `resume doctor`'s auto-repair) left the
+    checkout dirty with a formatting-only diff. gofmt pads a map literal's
+    values to one column past the longest `"key":` in the run, which is
+    reproduced here rather than shelling out to `gofmt` -- this script
+    runs on machines that may not have Go installed at all."""
     flat = _flat_subscore_labels()
+    keys = sorted(flat)
+    # +3 for the two quotes and the colon; +1 for gofmt's single trailing space.
+    value_column = max((len(k) for k in keys), default=0) + 4
     lines = [_SUBSCORE_LABELS_HEADER]
-    for key in sorted(flat):
-        lines.append(f'\t"{key}": "{flat[key]}",\n')
+    for key in keys:
+        prefix = f'"{key}":'
+        lines.append(f'\t{prefix.ljust(value_column)}"{flat[key]}",\n')
     lines.append(_SUBSCORE_LABELS_FOOTER)
     return "".join(lines)
 

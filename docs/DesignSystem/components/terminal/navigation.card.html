@@ -1,0 +1,37 @@
+<!-- @dsCard group="Components" viewport="760x470" name="Finding your way" subtitle="Command palette, progressive help, paging and scroll evidence" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{width:760px;height:470px;background:var(--tui-base);padding:16px;font-family:var(--font-mono);font-size:12px;color:var(--tui-text)}.lbl{color:var(--tui-subtext);font-size:10px;letter-spacing:.08em;margin:12px 0 5px}.lbl:first-child{margin-top:0}.k{color:var(--tui-subtext);font-size:11px}</style></head>
+<body><div id="root"></div>
+<script type="text/babel">
+const { CommandPalette, HelpBar, Paginator, ScrollIndicator, TuiPanel } = window.ResumeBuilderDesignSystem_2d03b1;
+const RESULTS=[{group:'Pipeline',label:'Tailor resume for selected role',match:[0,1,2],key:'t'},{group:'Jobs',label:'Toggle top matches only',match:[0,1,7],key:'T'},{group:'Global',label:'Take weekly report snapshot',match:[0,1,5],key:'r'},{group:'KB',label:'Cluster the bullet bank',match:[3,4]}];
+function Demo(){const [open,setOpen]=React.useState(true);const [c,setC]=React.useState(0);const [exp,setExp]=React.useState(false);
+return (<div>
+<div className="lbl">COMMAND PALETTE — ctrl-k. Matched characters are Mauve, so you can see why a result matched.</div>
+<CommandPalette query="ta" results={RESULTS} cursor={c} onSelect={setC} width={700} />
+<div className="lbl">PROGRESSIVE HELP — ? expands the bar in place; keys never move horizontally</div>
+<HelpBar bindings={[{key:'↑↓',desc:'nav'},{key:'enter',desc:'open'},{key:'t',desc:'tailor'},{key:'/',desc:'search'},{key:'q',desc:'quit'}]} expanded={exp}
+ groups={[{label:'Navigation',bindings:[{key:'↑↓ / jk',desc:'move'},{key:'g / G',desc:'top / bottom'},{key:'tab',desc:'next pane'}]},{label:'Actions',bindings:[{key:'enter',desc:'open'},{key:'t',desc:'tailor'},{key:'c',desc:'change status'}]},{label:'View',bindings:[{key:'v',desc:'board / list'},{key:'/',desc:'search'},{key:'s',desc:'sort'}]}]} />
+<div style={{marginTop:6}}><span className="k" style={{cursor:'pointer',color:'var(--tui-blue)'}} onClick={()=>setExp(!exp)}>press ? ({exp?'collapse':'expand'})</span></div>
+<div style={{display:'flex',gap:16,marginTop:14,alignItems:'stretch'}}>
+<div style={{flex:1}}>
+<div className="lbl">PAGING — dots to 12 pages, Arabic past that</div>
+<Paginator page={2} pages={5} perPage={20} total={94} />
+<div style={{height:8}}></div>
+<Paginator page={12} pages={31} perPage={20} total={612} />
+</div>
+<div style={{flex:'0 0 240px'}}>
+<div className="lbl">SCROLL EVIDENCE</div>
+<div style={{display:'flex',gap:10,height:96}}>
+<TuiPanel variant="idle" pad="detail" style={{flex:1,overflow:'hidden'}}><div className="k">Sixty-four roles scanned this week, twelve scored at or above 4.0. The applied count hit the weekly goal on Thursday…</div></TuiPanel>
+<ScrollIndicator offset={6} visible={8} total={42} />
+</div>
+</div>
+</div>
+</div>);}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+</script></body></html>

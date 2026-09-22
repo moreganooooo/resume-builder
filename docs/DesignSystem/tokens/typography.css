@@ -1,0 +1,34 @@
+/* Typography — a split system.
+   Print/PDF: DM Serif Display (display) + DM Sans (everything else),
+   sizes in pt, taken verbatim from resume-engine/templates/cv-template.html.
+   TUI: one monospace family at one size; hierarchy comes from color,
+   weight and box-drawing, never from type size. */
+
+:root {
+  --font-display: "DM Serif Display", Georgia, serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  /* Print scale (pt) */
+  --print-display-size: 36pt; /* @kind font */
+  --print-display-lh: 0.5625in; /* @kind other */
+  --print-tagline-size: 15pt; /* @kind font */
+  --print-tagline-lh: 0.268in; /* @kind other */
+  --print-headline-size: 16pt;   /* @kind font */ /* section titles, DM Serif Display */
+  --print-body-size: 9.75pt;     /* @kind font */ /* bullets, meta, titles — everything else */
+  --print-lh: 1.15; /* @kind other */
+  --print-weight-regular: 400; /* @kind font */
+  --print-weight-title: 800;     /* @kind font */ /* job titles, labels, section meta */
+  --print-rule: 0.018cm;         /* @kind other */ /* the one divider weight in the resume */
+
+  /* TUI scale. The terminal has one size; the web recreation fixes a
+     cell so box-drawing lines up. */
+  --tui-font-size: 14px; /* @kind font */
+  --tui-line-height: 21px; /* @kind font */
+  --tui-cell-w: 8.4px; /* @kind spacing */
+
+  /* Ligatures OFF in print output. Never remove: pypdf/pdfminer extract
+     "ﬁ" verbatim and ATS keyword matching fails. */
+  --print-ligatures: none; /* @kind other */
+  --print-font-features: "liga" 0, "clig" 0; /* @kind other */
+}

@@ -1,0 +1,23 @@
+<!-- @dsCard group="Spacing" viewport="700x400" name="Density modes" subtitle="Comfortable and compact — the same layout at two vertical scales, chosen by terminal height" -->
+<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{width:700px;height:400px;background:var(--tui-base);color:var(--tui-text);font-family:var(--font-mono);font-size:12px;padding:18px;display:flex;flex-direction:column;gap:12px}.k{font-size:11px;color:var(--tui-subtext);line-height:1.55}.lab{font-size:10px;letter-spacing:.08em;color:var(--tui-subtext)}.b{border:1px solid var(--tui-overlay);border-radius:4px;padding:11px 13px;display:flex;flex-direction:column;gap:7px}.g{display:grid;grid-template-columns:1fr 1fr;gap:12px}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--tui-overlay)}th{font-size:10px;letter-spacing:.08em;color:var(--tui-subtext);font-weight:400}.row{border-left:1px solid var(--tui-mauve);padding-left:7.4px}.row.d{border-left-color:transparent;padding-left:8.4px;opacity:.55}</style></head><body><div class="g">
+<div><div class="lab">COMFORTABLE — 30 ROWS OR MORE OF HEIGHT</div><div class="b" style="gap:0">
+<div class="row" style="padding-top:2px;padding-bottom:2px"><div style="font-weight:700">Northwind Labs</div><div class="k">Content Lead · ✓ 4.6</div></div>
+<div style="height:8px"></div>
+<div class="row d" style="padding-top:2px;padding-bottom:2px"><div>Callahan Creek</div><div class="k">Brand Strategist · ✓ 4.4</div></div>
+<div style="height:8px"></div>
+<div class="row d" style="padding-top:2px;padding-bottom:2px"><div>Harbor &amp; Co</div><div class="k">Copy Director · ✦ 3.9</div></div>
+</div></div>
+<div><div class="lab">COMPACT — UNDER 30 ROWS</div><div class="b" style="gap:0">
+<div class="row"><span style="font-weight:700">Northwind Labs</span> <span class="k">Content Lead · ✓ 4.6</span></div>
+<div class="row d"><span>Callahan Creek</span> <span class="k">Brand Strategist · ✓ 4.4</span></div>
+<div class="row d"><span>Harbor &amp; Co</span> <span class="k">Copy Director · ✦ 3.9</span></div>
+</div></div>
+</div>
+<table><tr><th></th><th>Comfortable</th><th>Compact</th></tr>
+<tr><td class="k">Row</td><td>two lines, 2px padding</td><td>one line, no padding</td></tr>
+<tr><td class="k">Gap between rows</td><td>8px</td><td>0</td></tr>
+<tr><td class="k">Section spacing</td><td>28px</td><td>14px</td></tr>
+<tr><td class="k">Pane padding</td><td>--pad-v / --pad-h</td><td>halved vertically, unchanged horizontally</td></tr>
+</table>
+<div class="k">Density is chosen from terminal height, not preference, and switches at 30 rows — the point below which the chrome stack plus a comfortable list stops fitting. Horizontal padding never changes: columns are the one thing that must stay aligned across both modes. <span style="color:var(--tui-text)">Nothing is removed in compact</span> — the score, the tag and the company are all still there. A mode that hides information is a different screen, not a density.</div>
+</body></html>

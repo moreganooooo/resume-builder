@@ -13,12 +13,13 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
-// hasHeadings reports whether a select spec carries section headings.
-// huh's Select has no non-selectable rows, so a headed menu renders through
-// sectionModel instead; a plain one keeps huh.
-func hasHeadings(spec Spec) bool {
+// needsSectionModel reports whether a select spec needs the custom renderer
+// below rather than huh's own Select: huh has neither a non-selectable row
+// (a heading) nor a per-option second line (a description), and both are
+// presentation this menu depends on.
+func needsSectionModel(spec Spec) bool {
 	for _, o := range spec.Options {
-		if o.Heading {
+		if o.Heading || o.Description != "" {
 			return true
 		}
 	}
@@ -143,6 +144,15 @@ func (m sectionModel) lines() (out []string, cursorLine int) {
 			out = append(out, m.st.Focused.SelectSelector.Render("> ")+m.st.Focused.SelectedOption.Render(label))
 		} else {
 			out = append(out, "  "+m.st.Focused.UnselectedOption.Render(label))
+		}
+		if o.Description != "" {
+			// Indented under the label and in the theme's description
+			// tone, so the eye reads a column of names first and drops to
+			// the explanation only where it wants one. Rendered for every
+			// row, not just the focused one: a menu whose second lines
+			// appear and vanish as the cursor moves reflows on every
+			// keypress, which reads as the list moving under you.
+			out = append(out, "    "+rule.Render(ansi.Truncate(o.Description, w-4, "…")))
 		}
 	}
 	return out, cursorLine

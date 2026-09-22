@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="Settings & profile" description="A Huh form page: grouped fields, inline validation, secrets masked, nothing saved until the user says so." -->
+<helmet><script src="./ds-base.js"></script><style>html,body{height:100%;margin:0}body{background:#14141f}</style></helmet>
+<div style="width:100%;min-height:100vh;background:var(--tui-base);font-family:var(--font-mono);font-size:var(--tui-font-size);line-height:var(--tui-line-height);color:var(--tui-text);display:flex;flex-direction:column;overflow:hidden">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiHeaderBar" icon="utility" gradient="menu" title="✦ SETTINGS ✧" info="{{ headerInfo }}" hint-size="100%,21px"></x-import>
+<div style="background:var(--tui-surface);color:var(--tui-subtext);padding:0 var(--pad-h)">profiles/morgan/config.toml · profiles/morgan/.env</div>
+<div style="flex:1;display:flex;gap:12px;padding:12px var(--pad-h);min-height:0">
+<div style="flex:0 0 24%;min-width:0;display:flex">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="idle" pad="tight" dc-props="{{ fillCol }}" hint-size="100%,100%">
+<div style="color:var(--tui-subtext);letter-spacing:.14em;padding-bottom:6px">GROUPS</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.EnumList" enumerator="check" items="{{ groups }}" hint-size="100%,120px"></x-import>
+<div style="border-top:1px solid var(--tui-overlay);margin-top:12px;padding-top:10px;color:var(--tui-subtext)">One group per page, the way Huh renders them. A group with an error cannot be left.</div>
+</x-import>
+</div>
+<div style="flex:1;min-width:0;display:flex">
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiPanel" variant="focus" pad="detail" dc-props="{{ fillDoc }}" hint-size="100%,100%">
+<div style="color:var(--tui-subtext);letter-spacing:.14em;padding-bottom:10px">MODEL &amp; SCORING</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.HuhField" kind="select" label="Scoring model" options="{{ models }}" cursor="{{ 1 }}" state="blurred" help="Cost and latency differ by roughly 6x across these." hint-size="100%,120px"></x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.HuhField" kind="input" label="API key" value="sk-••••••••••••••••••••7Ja2" state="focused" help="Written to profiles/morgan/.env, never to config.toml or the log." hint-size="100%,80px"></x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.HuhField" kind="input" label="Minimum score to surface" value="4.0" error="Must be between 0 and 5. Enter 4 or 4.0, not 40." hint-size="100%,80px"></x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.HuhField" kind="multiselect" label="Scan sources" options="{{ sources }}" selected="{{ picked }}" cursor="{{ 0 }}" help="Direct company boards out-convert aggregators about six to one." hint-size="100%,140px"></x-import>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.HuhField" kind="input" label="Weekly application goal" value="8" state="complete" hint-size="100%,70px"></x-import>
+<div style="border-top:1px solid var(--tui-overlay);margin-top:8px;padding-top:10px;color:var(--tui-yellow)">⚠ One field needs fixing before this group can be saved</div>
+</x-import>
+</div>
+</div>
+<x-import component-from-global-scope="ResumeBuilderDesignSystem_2d03b1.TuiFooterBar" primary="{{ primary }}" actions="{{ actions }}" system="{{ system }}" brand="resume-builder dashboard" hint-size="100%,21px"></x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860}}">
+// A Huh form as a full screen. What this template is really specifying:
+//  - Secrets are masked in the field and never echoed to the log, the toast
+//    or the report. The last four characters are shown so the user can tell
+//    which key is loaded without revealing it.
+//  - Validation is inline and blocking per group: a group with an error
+//    cannot be left, because a settings page that lets you walk away from a
+//    bad value fails later, somewhere unrelated, with a worse message.
+//  - Errors name the fix in the user's units ("Enter 4 or 4.0, not 40").
+//  - Nothing writes until ctrl-s. Esc discards, and says so.
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      headerInfo: 'Profile: morgan | unsaved changes',
+      fillCol: { style: { flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' } },
+      fillDoc: { style: { flex: 1, overflowY: 'auto' } },
+      groups: [
+        { text: 'Profile', note: 'complete' },
+        { text: 'Model & scoring', note: '1 error', ok: false },
+        { text: 'Sources', note: 'complete' },
+        { text: 'Output & paths', note: 'complete' },
+        { text: 'Appearance', note: 'complete' },
+      ],
+      models: ['gpt-4.1', 'gpt-4.1-mini', 'claude-sonnet-4.5', 'local (ollama)'],
+      sources: ['Direct company boards', 'Local employer registry', 'Aggregators', 'Referral inbox'],
+      picked: [0, 1],
+      primary: [{ key: 'ctrl-s', desc: 'save' }],
+      actions: [{ key: 'tab', desc: 'field' }, { key: '←→', desc: 'group' }, { key: 'enter', desc: 'edit' }],
+      system: [{ key: 'esc', desc: 'discard' }, { key: 'q', desc: 'quit' }],
+    };
+  }
+}
+</script>
+</body>
+</html>

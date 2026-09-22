@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
@@ -54,5 +55,41 @@ func TestSectionsRenderHeadingsAndDefault(t *testing.T) {
 	m = newSectionModel(theme.NewTheme("resume-builder"), Spec{Options: m.opts, DefaultValue: "manage"})
 	if m.opts[m.cursor].Value != "manage" {
 		t.Errorf("default value not honored")
+	}
+}
+
+// TestDescriptionsRenderOnTheirOwnLine pins the two halves of the second-line
+// menu description: a spec carrying descriptions must reach this renderer at
+// all (huh's own Select cannot draw them), and the description must land on a
+// line of its own rather than beside the label.
+func TestDescriptionsRenderOnTheirOwnLine(t *testing.T) {
+	spec := Spec{
+		Message: "Main Menu",
+		Options: []Option{
+			{Label: "Find Jobs", Value: "find_jobs",
+				Description: "Search job boards or paste a job link"},
+			{Label: "Exit", Value: "exit"},
+		},
+	}
+	if !needsSectionModel(spec) {
+		t.Fatal("a spec with descriptions must not fall through to huh's Select")
+	}
+
+	out := ansi.Strip(newSectionModel(theme.NewTheme("resume-builder"), spec).View().Content)
+	var labelLine, descLine = -1, -1
+	for i, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "Find Jobs") {
+			labelLine = i
+		}
+		if strings.Contains(line, "Search job boards") {
+			descLine = i
+		}
+	}
+	if labelLine < 0 || descLine < 0 {
+		t.Fatalf("expected both the label and its description in:\n%s", out)
+	}
+	if descLine != labelLine+1 {
+		t.Errorf("description should sit on the line under its label, got %d and %d:\n%s",
+			labelLine, descLine, out)
 	}
 }

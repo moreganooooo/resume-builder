@@ -85,7 +85,17 @@ func Run(t theme.Theme) (WizardData, error) {
 				Value(&data.IngestPath).
 				CurrentDirectory(homeDir).
 				AllowedTypes([]string{".pdf", ".json", ".jsonl"}).
-				Description("Press Enter to browse and pick the file (starts in your home folder).").
+				// The permitted extensions are STATED, per the design
+				// spec, not discovered by trying: huh renders anything
+				// outside AllowedTypes as unselectable, so a user who
+				// does not know the rule just meets a file that refuses
+				// to be chosen and has nothing to conclude from that.
+				// ShowSize is the spec's right-aligned size column, and
+				// it earns its width here -- a 2 KB "resume.pdf" next to
+				// a 400 KB one is usually the stub, not the real thing.
+				ShowSize(true).
+				Description("Accepts .pdf, .json or .jsonl. "+
+					"Press Enter to browse and pick the file (starts in your home folder).").
 				Validate(func(s string) error {
 					if data.SourceChoice == "manual" {
 						return nil

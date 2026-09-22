@@ -3,7 +3,6 @@ package screens
 import (
 	"fmt"
 	"image/color"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/moreganooooo/resume-builder/dashboard/internal/anim"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/data"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/model"
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
@@ -142,11 +142,16 @@ type PipelineModel struct {
 	detailScrollOffset int
 	sortMode           string
 	activeTab          int
-	viewMode           string // "grouped" or "flat"
-	width, height      int
-	theme              theme.Theme
-	careerOpsPath      string
-	reportCache        map[string]reportSummary
+	viewMode           string // "grouped", "flat" or "board"
+	// boardColumn is the focused board column. It is only consulted when
+	// the cursor sits on no column at all (an application in a terminal
+	// status, which the board does not show) -- otherwise the cursor's own
+	// column is the focus, so the two can never disagree.
+	boardColumn   int
+	width, height int
+	theme         theme.Theme
+	careerOpsPath string
+	reportCache   map[string]reportSummary
 	// Status picker sub-state
 	statusPicker bool
 	statusCursor int
@@ -177,6 +182,11 @@ type PipelineModel struct {
 	// URL) instead of silently doing nothing. Cleared on the next keypress,
 	// same dismiss convention as jobs.go's actionError.
 	notice string
+
+	// toasts reports a change that already landed (a committed status move),
+	// which is what separates them from notice: a notice explains why a
+	// keypress did nothing and waits to be read. See toast.go.
+	toasts ToastStack
 
 	// showHelp toggles the `?` categorized keybinding overlay (see
 	// bars.go's renderHelpOverlay) over this screen's normal body.
@@ -216,11 +226,14 @@ func NewPipelineModel(t theme.Theme, apps []model.CareerApplication, metrics mod
 
 // Init implements tea.Model.
 func (m *PipelineModel) Init() tea.Cmd {
-	if os.Getenv("RESUME_BUILDER_MOTION") == "reduced" {
+	// anim.ReducedMotion(), not a raw env read: it also honors
+	// REDUCED_MOTION=1 and RESUME_BUILDER_MOTION=off/0/false, all of which a
+	// literal == "reduced" comparison silently ignored.
+	if anim.ReducedMotion() {
 		m.animDone = true
 		return nil
 	}
-	if len(m.filtered) == 0 {
+	if len(m.filtered) == 0 && !anim.SuppressIdleAnimation() {
 		return tickStarfield()
 	}
 	// Kick off a short fade‑in animation.
@@ -276,6 +289,9 @@ func (m PipelineModel) WithReloadedData(apps []model.CareerApplication, metrics 
 	// committed query and the user loses their place mid-investigation.
 	reloaded.searchQuery = m.searchQuery
 	reloaded.searchInput = m.searchInput
+	// A status change pushes its toast and reloads in the same batch, so
+	// dropping the stack here would erase the confirmation before it drew.
+	reloaded.toasts = m.toasts
 	reloaded.applyFilterAndSort()
 	reloaded.CopyReportCache(&m)
 
@@ -315,6 +331,14 @@ func (m PipelineModel) CurrentApp() (model.CareerApplication, bool) {
 	return m.filtered[m.cursor], true
 }
 
+// PushToast reports a completed action in the bottom-right stack, returning
+// the heartbeat command that ages it. Used for outcomes that need no answer --
+// anything the user must act on stays a notice.
+func (m *PipelineModel) PushToast(tone ToastTone, format string, args ...any) tea.Cmd {
+	m.toasts.Push(tone, format, args...)
+	return ToastTick()
+}
+
 // SetNotice sets the user-facing notice/error banner message.
 func (m *PipelineModel) SetNotice(n string) {
 	m.notice = n
@@ -331,8 +355,11 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 	case animationMsg:
 		m.animDone = true
 		return m, nil
+	case ToastTickMsg:
+		return m, m.toasts.Age()
+
 	case starfieldTickMsg:
-		if len(m.filtered) == 0 && os.Getenv("RESUME_BUILDER_MOTION") != "reduced" {
+		if len(m.filtered) == 0 && !anim.SuppressIdleAnimation() {
 			return m, tickStarfield()
 		}
 		return m, nil
@@ -363,6 +390,11 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 				m.adjustScroll()
 				return m, m.loadCurrentReport()
 			}
+		}
+		// Footer hints last: rows and tabs occupy the body, so nothing can
+		// overlap, and the cheap common click stays first.
+		if k, ok := HelpBarClicked(pipelineHelpZone, pipelineHelpBindings, msg); ok {
+			return m.Update(helpBarKeyMsg(k))
 		}
 		return m, nil
 
@@ -446,6 +478,12 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.viewMode == "board" {
+		if handled, next, cmd := m.handleBoardKey(msg); handled {
+			return next, cmd
+		}
+	}
+
 	switch msg.String() {
 	case "?":
 		m.showHelp = true
@@ -524,9 +562,19 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 		m.scrollOffset = 0
 
 	case "v":
-		if m.viewMode == "grouped" {
+		switch m.viewMode {
+		case "grouped":
 			m.viewMode = "flat"
-		} else {
+		case "flat":
+			m.viewMode = "board"
+			// Land the cursor somewhere the board actually shows, so the
+			// first thing the user sees is a focused card rather than five
+			// unfocused columns.
+			if _, row := m.boardCursorColumn(); row < 0 {
+				m.boardMoveCursor(0, 0)
+			}
+			return m, m.loadCurrentReport()
+		default:
 			m.viewMode = "grouped"
 		}
 
@@ -1019,12 +1067,21 @@ func (m PipelineModel) cursorLineEstimate() int {
 }
 
 // View renders the pipeline screen.
+// pipelineHelpZone namespaces this screen's clickable footer hints.
+const pipelineHelpZone HelpBarZonePrefix = "pipeline"
+
 var pipelineHelpCategories = []helpCategory{
 	{"Navigation", []helpBinding{
 		{"↑ ↓ / j k", "Move selection"},
 		{"g / G", "Jump to top / bottom"},
 		{"PgUp / PgDn", "Page up / down"},
-		{"← → / h l", "Cycle tabs"},
+		{"← → / h l", "Cycle tabs (board: move between columns)"},
+	}},
+	{"Board view", []helpBinding{
+		{"v", "Cycle grouped → flat → board"},
+		{"H / L", "Propose moving this card a column (asks first)"},
+		{"f", "Cycle tabs, since h/l drive the columns here"},
+		{"", "Skip/Rejected/Discarded are list-only, not board columns"},
 	}},
 	{"Actions", []helpBinding{
 		{"Enter", "Open report"},
@@ -1036,7 +1093,7 @@ var pipelineHelpCategories = []helpCategory{
 	{"View", []helpBinding{
 		{"/", "Search company/role/notes"},
 		{"s", "Cycle sort mode"},
-		{"v", "Toggle grouped/flat view"},
+		{"v", "Cycle grouped / flat / board view"},
 		{"p", "Open Progress screen"},
 	}},
 	{"Filters", []helpBinding{
@@ -1068,6 +1125,36 @@ func (m PipelineModel) View() string {
 	}
 	if notice := m.renderNotice(); notice != "" {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, notice)
+	}
+
+	if m.viewMode == "board" {
+		boardHeight := m.height - m.chromeRowsFixed()
+		if boardHeight < 5 {
+			boardHeight = 5
+		}
+		full := lipgloss.JoinVertical(lipgloss.Left, content, m.renderBoard(m.width, boardHeight), help)
+		if !m.animDone {
+			full = lipgloss.NewStyle().Foreground(m.theme.Subtext).Render(full)
+		}
+		if m.showHelp {
+			helpContent := renderHelpOverlay(m.theme, "Pipeline", pipelineHelpCategories, helpOverlayWidth(m.width), m.height-4)
+			return renderModalOverlay(m.theme, full, helpContent, m.width, m.height)
+		}
+		if m.statusPicker {
+			// The board has no sidebar to host the picker inline, so it
+			// gets the same modal treatment help does -- and it has to stay
+			// reachable here, since H/L are what open it.
+			confirmLabel := ""
+			if m.statusConfirm {
+				confirmLabel = fmt.Sprintf("Change status to %s?", m.pendingStatus)
+			}
+			picker := renderStatusPickerOverlay(m.theme, "", helpOverlayWidth(m.width)-4, "Change status:", statusOptions, m.statusCursor, confirmLabel)
+			return renderModalOverlay(m.theme, full, picker, m.width, m.height)
+		}
+		// Board mode gets the same toast overlay the split view does: a status
+		// change made from the board moves a card between columns, which is the
+		// easiest of all the views to miss.
+		return OverlayBottomRight(full, m.toasts.Render(m.theme, m.width), m.width, 1)
 	}
 
 	leftWidth := int(float64(m.width) * pipelineSidebarRatio)
@@ -1106,7 +1193,10 @@ func (m PipelineModel) View() string {
 		return renderModalOverlay(m.theme, full, helpContent, m.width, m.height)
 	}
 
-	return full
+	// Toasts overlay the split pane one row above the footer without changing
+	// its height -- see OverlayBottomRight. Not drawn under a modal, whose
+	// dimmed background would swallow them anyway.
+	return OverlayBottomRight(full, m.toasts.Render(m.theme, m.width), m.width, 1)
 }
 
 func (m PipelineModel) renderSidebarList(width, height int) string {
@@ -1323,7 +1413,12 @@ func (m PipelineModel) renderJobDetailPane(app model.CareerApplication, width, h
 	if budget := detailVisibleBudget(height); len(lines) > budget {
 		lines = append(lines[:budget:budget], styles.Subtext.Render("  J ↓ more"))
 	}
-	joined := strings.Join(lines, "\n")
+	// Right-edge rail, same contract as Jobs's detail pane.
+	// Right-edge rail, same contract as Jobs's detail pane.
+	joined := AttachScrollRail(m.theme,
+		strings.Join(lines, "\n"),
+		ScrollState{Total: len(content), Visible: detailVisibleBudget(height), Offset: m.detailScrollOffset},
+		width-detailPaneChrome-1)
 	return styles.Border.Render(joined)
 }
 
@@ -1354,40 +1449,13 @@ func (m *PipelineModel) clampDetailScroll() {
 // search; otherwise it renders a vim-style status line showing the query and the
 // match count. While in input mode, a trailing cursor is appended.
 func (m PipelineModel) renderSearchBar() string {
-	if !m.searchInput && m.searchQuery == "" {
-		return ""
-	}
-
-	style := lipgloss.NewStyle().
-		Foreground(m.theme.Text).
-		Width(m.width).
-		Padding(0, 2)
-
-	var prompt string
-	if m.searchInput {
-		prompt = lipgloss.NewStyle().Bold(true).Foreground(m.theme.Surface).Background(m.theme.Blue).Padding(0, 1).Render(" SEARCH ")
-	} else {
-		prompt = lipgloss.NewStyle().Bold(true).Foreground(m.theme.Blue).Render("/")
-	}
-	queryStyle := lipgloss.NewStyle().Foreground(m.theme.Text)
-	hintStyle := lipgloss.NewStyle().Foreground(m.theme.Subtext)
-
-	display := queryStyle.Render(m.searchQuery)
-	if m.searchInput {
-		display += lipgloss.NewStyle().Foreground(m.theme.Blue).Render("█")
-	}
-
-	tabFiltered := m.countForFilter(pipelineTabs[m.activeTab].filter)
-	matchInfo := hintStyle.Render(fmt.Sprintf("  %d/%d matching", len(m.filtered), tabFiltered))
-
-	hint := ""
-	if m.searchInput {
-		hint = hintStyle.Render("   Enter: keep   Esc: cancel   Ctrl+U: clear")
-	} else {
-		hint = hintStyle.Render("   Esc: clear   /: edit")
-	}
-
-	return style.Render(prompt + " " + display + matchInfo + hint)
+	return RenderSearchBar(m.theme, SearchBarState{
+		Query:   m.searchQuery,
+		Typing:  m.searchInput,
+		Matched: len(m.filtered),
+		Total:   m.countForFilter(pipelineTabs[m.activeTab].filter),
+		Width:   m.width,
+	})
 }
 
 // renderNotice explains why the last keypress was a no-op (see the "o" case
@@ -1609,31 +1677,17 @@ func (m PipelineModel) renderHelp() string {
 				keyStyle.Render("Esc") + descStyle.Render(" cancel"))
 	}
 
-	// Subtext, not Overlay -- see statusColorMap's own comment below for the
-	// same 1.4-2.3:1 measurement; Overlay is the border/divider token, not
-	// a readable-text one.
-	brand := lipgloss.NewStyle().Foreground(m.theme.Subtext).Background(m.theme.Surface).Render("resume-builder dashboard")
+	return RenderHelpBar(m.theme, m.width, pipelineHelpZone, pipelineHelpBindings, "resume-builder dashboard")
+}
 
-	keys := keyStyle.Render("↑↓/jk") + descStyle.Render(" nav  ") +
-		keyStyle.Render("g/G") + descStyle.Render(" top/bot  ") +
-		keyStyle.Render("PgUp/Dn") + descStyle.Render(" page  ") +
-		keyStyle.Render("←→/hl") + descStyle.Render(" tabs  ") +
-		keyStyle.Render("/") + descStyle.Render(" search  ") +
-		keyStyle.Render("s") + descStyle.Render(" sort  ") +
-		keyStyle.Render("r") + descStyle.Render(" refresh  ") +
-		keyStyle.Render("Enter") + descStyle.Render(" report  ") +
-		keyStyle.Render("o") + descStyle.Render(" url  ") +
-		keyStyle.Render("c") + descStyle.Render(" change  ") +
-		keyStyle.Render("v") + descStyle.Render(" view  ") +
-		keyStyle.Render("p") + descStyle.Render(" progress  ") +
-		keyStyle.Render("w/e/$/t/x") + descStyle.Render(" filter  ") +
-		keyStyle.Render("?") + descStyle.Render(" help  ") +
-		keyStyle.Render("Esc") + descStyle.Render(" back  ") +
-		keyStyle.Render("q") + descStyle.Render(" quit")
-
-	keys, brand, gap := fitBar(keys, brand, m.width, 2, m.theme.Surface)
-
-	return style.Render(keys + gap + brand)
+// pipelineHelpBindings is the short footer bar; the full sixteen-key list
+// lives one `?` away in pipelineHelpCategories. See helpbar.go.
+var pipelineHelpBindings = []HelpBinding{
+	{Key: "\u2191\u2193/jk", Desc: "nav", Action: "down"},
+	{Key: "\u2190\u2192/hl", Desc: "tabs", Action: "right"},
+	{Key: "/", Desc: "search"},
+	{Key: "Enter", Desc: "report", Action: "enter"},
+	{Key: "Esc", Desc: "back", Action: "esc"},
 }
 
 // -- Helpers --
