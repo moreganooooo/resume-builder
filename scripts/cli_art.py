@@ -1086,7 +1086,10 @@ def render_bullet_bank_status(
     table.add_column("Status")
 
     for number, label, status, detail in stage_rows:
-        color, icon_name = _STAGE_STATUS_STYLES.get(status, (None, None))
+        # An unknown status falls back to empty strings rather than None, so
+        # the ICONS lookup below stays a plain str -> str call; the empty
+        # colour is falsy and still routes to the dim branch.
+        color, icon_name = _STAGE_STATUS_STYLES.get(status, ("", ""))
         if color:
             glyph = theme.ICONS.get(icon_name, "")
             status_text = f"[{color}]{glyph} {status}[/{color}]"
