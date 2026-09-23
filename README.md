@@ -20,7 +20,7 @@ From Browse & Manage Jobs or Pipeline, select a role and press `a` to open
 Application Answers. The chat drafts grounded answers using the job, evaluation,
 company research, verified experience, and writing voice, then saves the
 conversation back to that job. Sensitive EEO questions are never answered by
-the model. Use `resume dashboard -view answers -job <path-or-id>` to open the
+the model. Use `resume dashboard --view answers --job <path-or-id>` to open the
 screen directly, or choose **Build Documents → One Role → Application Answers**
 from the menu.
 

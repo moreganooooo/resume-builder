@@ -44,7 +44,7 @@ export function CommandPalette({ query = "", results = [], cursor = 0, onSelect,
                 display: "flex", gap: "8.4px", alignItems: "baseline", cursor: onSelect ? "pointer" : "default",
                 padding: "3px 12px 3px 11px",
                 borderLeft: sel ? "1px solid var(--tui-mauve)" : "1px solid transparent",
-                opacity: sel ? 1 : 0.7,
+                fontWeight: sel ? 700 : 400,
               }}>
               <span style={{ color: "var(--tui-subtext)", width: 74, flex: "0 0 74px" }}>{r.group}</span>
               <span style={{ color: "var(--tui-text)", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>

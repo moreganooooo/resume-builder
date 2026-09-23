@@ -1,4 +1,4 @@
-# VHS Tape: Progress calendar heatmap (scrolls to Mission Control)
+# VHS Tape: Progress calendar heatmap (Insights, below Weekly Activity)
 Output artifacts/tui_heatmap.gif
 
 Set FontSize 14
@@ -17,11 +17,11 @@ Wait+Screen@60s /Knowledge Base|Pipeline/
 Sleep 500ms
 Show
 Sleep 500ms
-Type "2"
-Wait+Screen@30s /SEARCH PROGRESS/
+Type "3"
+Wait+Screen@30s /INSIGHTS/
 Sleep 500ms
 Type@10ms "jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj"
-Wait+Screen@30s /Mission Control/
+Wait+Screen@30s /Sat .*■|No activity data for heatmap/
 Sleep 1s
 Screenshot artifacts/tui_heatmap.png
 Sleep 1s

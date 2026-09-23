@@ -1,0 +1,173 @@
+{
+  "_comment": "Glamour style for resume-builder. Load with glamour.WithStylePath or embed and use glamour.WithStyles. Colours are the --tui-* palette verbatim; emoji are off because reports are technical. Headings use Blue (h1/h2) and Sky (h3+) so the document's own hierarchy does not compete with the Mauve selection language outside the pane.",
+  "document": {
+    "block_prefix": "\n",
+    "block_suffix": "\n",
+    "color": "#cdd6f4",
+    "margin": 2
+  },
+  "block_quote": {
+    "color": "#a6adc8",
+    "italic": true,
+    "indent": 1,
+    "indent_token": "┃ "
+  },
+  "paragraph": {},
+  "list": {
+    "level_indent": 2
+  },
+  "heading": {
+    "block_suffix": "\n",
+    "color": "#4dabf7",
+    "bold": true
+  },
+  "h1": {
+    "prefix": "✦ ",
+    "suffix": " ✧",
+    "color": "#4dabf7",
+    "bold": true
+  },
+  "h2": {
+    "prefix": "## ",
+    "color": "#4dabf7",
+    "bold": true
+  },
+  "h3": {
+    "prefix": "### ",
+    "color": "#a47bff",
+    "bold": true
+  },
+  "h4": {
+    "prefix": "#### ",
+    "color": "#a47bff"
+  },
+  "h5": {
+    "prefix": "##### ",
+    "color": "#a6adc8"
+  },
+  "h6": {
+    "prefix": "###### ",
+    "color": "#a6adc8"
+  },
+  "text": {},
+  "strikethrough": {
+    "crossed_out": true,
+    "color": "#a6adc8"
+  },
+  "emph": {
+    "italic": true,
+    "color": "#cdd6f4"
+  },
+  "strong": {
+    "bold": true,
+    "color": "#cdd6f4"
+  },
+  "hr": {
+    "color": "#45475a",
+    "format": "\n────────────────\n"
+  },
+  "item": {
+    "block_prefix": "• "
+  },
+  "enumeration": {
+    "block_prefix": ". "
+  },
+  "task": {
+    "ticked": "✓ ",
+    "unticked": "✗ "
+  },
+  "link": {
+    "color": "#4dabf7",
+    "underline": true
+  },
+  "link_text": {
+    "color": "#ff60ff",
+    "bold": true
+  },
+  "image": {
+    "color": "#a47bff",
+    "underline": true
+  },
+  "image_text": {
+    "color": "#a6adc8",
+    "format": "Image: {{.text}}"
+  },
+  "code": {
+    "color": "#12e6c8",
+    "background_color": "#313244",
+    "prefix": " ",
+    "suffix": " "
+  },
+  "code_block": {
+    "color": "#cdd6f4",
+    "margin": 2,
+    "chroma": {
+      "text": {
+        "color": "#cdd6f4"
+      },
+      "error": {
+        "color": "#ff7b99"
+      },
+      "comment": {
+        "color": "#45475a",
+        "italic": true
+      },
+      "keyword": {
+        "color": "#ff60ff"
+      },
+      "keyword_type": {
+        "color": "#a47bff"
+      },
+      "name_builtin": {
+        "color": "#12e6c8"
+      },
+      "name_function": {
+        "color": "#4dabf7"
+      },
+      "name_class": {
+        "color": "#f5ef34"
+      },
+      "name_tag": {
+        "color": "#ff60ff"
+      },
+      "name_attribute": {
+        "color": "#9ab63f"
+      },
+      "literal_string": {
+        "color": "#9ab63f"
+      },
+      "literal_number": {
+        "color": "#ff985a"
+      },
+      "operator": {
+        "color": "#a6adc8"
+      },
+      "generic_deleted": {
+        "color": "#ff7b99"
+      },
+      "generic_inserted": {
+        "color": "#9ab63f"
+      },
+      "generic_emph": {
+        "italic": true
+      },
+      "generic_strong": {
+        "bold": true
+      }
+    }
+  },
+  "table": {
+    "center_separator": "┼",
+    "column_separator": "│",
+    "row_separator": "─"
+  },
+  "definition_list": {},
+  "definition_term": {
+    "bold": true
+  },
+  "definition_description": {
+    "block_prefix": "\n↳ "
+  },
+  "html_block": {},
+  "html_span": {}
+}

@@ -660,3 +660,14 @@ class TestLoadVerifiedSkillReferenceVectors(unittest.TestCase):
         mock_load.return_value = np.ones((3, 768), dtype=np.float32)
         result = dashboard_actions._load_verified_skill_reference_vectors()
         self.assertEqual(result.shape, (3, 768))
+
+
+class TestCancelledMessage(unittest.TestCase):
+    """A dashboard cancel says what survived, where that is known."""
+
+    def test_resumable_action_says_nothing_was_lost(self):
+        msg = dashboard_actions._cancelled_message("tailor")
+        self.assertTrue(msg.startswith("Cancelled. Nothing was lost"))
+
+    def test_unknown_action_makes_no_claim(self):
+        self.assertEqual(dashboard_actions._cancelled_message("archive"), "Cancelled.")

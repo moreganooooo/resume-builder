@@ -17,6 +17,7 @@ import (
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/stopwatch"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/muesli/termenv"
@@ -165,6 +166,10 @@ type JobsModel struct {
 	// subprocess can be told apart from a slow one -- without it the
 	// spinner spins identically forever either way.
 	actionStartedAt time.Time
+	// clock is the design system's ElapsedTimer for the in-flight action.
+	// Its stopwatch only drives the once-a-second redraw; what it shows is
+	// always derived from actionStartedAt (see actionClock).
+	clock ElapsedTimer
 
 	actionChan      chan tea.Msg
 	actionStepLabel string
@@ -230,7 +235,8 @@ var stepLineRe = regexp.MustCompile(`^Step (\d+(?:\.\d+)?): (.+?)\.\.\.`)
 // data.LoadJobs. rows should already be sorted best-first (as
 // picker.list_all_evaluated_jds() on the Python side does).
 func NewJobsModel(t theme.Theme, rows []model.JobRow, width, height int) JobsModel {
-	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
+	// MiniDot is the ElapsedTimer spec's frame set (⠋⠙⠹⠸…).
+	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot))
 	// Blue (not Sky) -- Sky on Surface measures 3.64:1 under the
 	// resume-builder theme, short of WCAG's 4.5:1 text minimum; Blue clears
 	// 4.5:1+ on Surface across all three themes and is already the header
@@ -243,6 +249,7 @@ func NewJobsModel(t theme.Theme, rows []model.JobRow, width, height int) JobsMod
 		width:   width,
 		height:  height,
 		theme:   t,
+		clock:   NewElapsedTimer(),
 		spinner: sp,
 		progress: progress.New(
 			progress.WithColors(t.Sky, t.Mauve),
@@ -449,7 +456,12 @@ func (m JobsModel) extraRows() int {
 		// on narrow terminals.
 		rows += lipgloss.Height(m.renderNextBestMove())
 	}
-	if m.hasExtraBar() {
+	if m.actionInProgress != "" {
+		// Measured, not assumed one row: tailor adds a three-row progress
+		// bar, and the ElapsedTimer adds its overrun sentence once an
+		// action outlasts its usual duration.
+		rows += lipgloss.Height(m.renderActionStatus())
+	} else if m.hasExtraBar() {
 		rows++
 	}
 	if m.searchInput || m.searchQuery != "" {
@@ -1490,6 +1502,23 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 		}
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
+		// Every action starts the spinner, so its first tick is the one
+		// place that sees every action begin; starting the clock here
+		// avoids repeating it at each of the action's call sites.
+		if !m.clock.Running() {
+			var start tea.Cmd
+			m.clock, start = m.clock.StartAt(m.actionStartedAt, m.expectedDuration())
+			cmd = tea.Batch(cmd, start)
+		}
+		return m, cmd
+
+	case stopwatch.TickMsg, stopwatch.StartStopMsg, stopwatch.ResetMsg:
+		var cmd tea.Cmd
+		if m.actionInProgress == "" && m.clock.Running() {
+			m.clock, cmd = m.clock.Stop()
+			return m, cmd
+		}
+		m.clock, cmd = m.clock.Update(msg)
 		return m, cmd
 	}
 	return m, nil
@@ -1753,27 +1782,55 @@ func (m JobsModel) renderActionStatus() string {
 		}
 		// Render progress bar 3 lines thick for a bolder appearance
 		progressView := renderThickProgress(m.progress, m.theme, 3)
-		return style.Render(label + " (esc to cancel)" + m.stalledHint() + "\n" + progressView)
+		return m.renderClockLines(label) + "\n" + style.Render(progressView)
 	}
+	return m.renderClockLines(actionLabel(m.actionInProgress))
+}
 
-	// The spinner carries its own pre-rendered style (see NewJobsModel's
-	// sp.Style), which ends in its own SGR reset -- concatenating it raw
-	// into a single style.Render call (the previous form here) wipes this
-	// bar's Yellow-on-Surface styling for everything rendered after it,
-	// confirmed via a raw-ANSI capture: the label text after the spinner
-	// glyph rendered in the terminal's bare default colors, not themed at
-	// all. Every segment (left pad, spinner, label, right pad) is styled
-	// and joined independently instead of nesting the spinner inside one
-	// more Render call, so the Surface fill survives regardless of what
-	// resets the spinner's own style emits.
+// renderClockLines renders the ElapsedTimer: one line, plus the overrun
+// sentence once the action has outlasted its usual duration.
+//
+// The spinner carries its own pre-rendered style (see NewJobsModel's
+// sp.Style), which ends in its own SGR reset -- concatenating it raw into a
+// single style.Render call wiped this bar's Surface fill for everything
+// rendered after it (confirmed via a raw-ANSI capture). Every segment is
+// therefore styled independently with the Surface background, and each line
+// is padded to full width the same way.
+func (m JobsModel) renderClockLines(label string) string {
 	bg := lipgloss.NewStyle().Background(m.theme.Surface)
-	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Yellow).Background(m.theme.Surface)
-	left := bg.Render("  ") + bg.Render(m.spinner.View()) +
-		labelStyle.Render(" "+actionLabel(m.actionInProgress)+"... (esc to cancel)"+m.stalledHint())
-	if pad := m.width - lipgloss.Width(left); pad > 0 {
-		left += bg.Render(strings.Repeat(" ", pad))
+	styles := DefaultElapsedTimerStyles(m.theme)
+	styles.Spinner = bg
+	styles.Label = styles.Label.Background(m.theme.Surface)
+	styles.Clock = styles.Clock.Background(m.theme.Surface)
+	styles.Over = styles.Over.Background(m.theme.Surface)
+	styles.Hint = styles.Hint.Background(m.theme.Surface)
+
+	clock := m.actionClock()
+	pad := func(line string) string {
+		line = bg.Render("  ") + line
+		if n := m.width - lipgloss.Width(line); n > 0 {
+			line += bg.Render(strings.Repeat(" ", n))
+		}
+		return line
 	}
-	return left
+	out := pad(clock.Line(styles, m.spinner.View(), label, "esc"))
+	if over := clock.OverrunLine(styles); over != "" {
+		out += "\n" + pad(over)
+	}
+	return out
+}
+
+// actionClock is the ElapsedTimer as of now, derived from actionStartedAt
+// so it is correct from the first frame -- before the stopwatch's first
+// tick -- and so a test can backdate the start without driving ticks.
+func (m JobsModel) actionClock() ElapsedTimer {
+	c := m.clock
+	if m.actionInProgress == "" || m.actionStartedAt.IsZero() {
+		c.running = false
+		return c
+	}
+	c.started, c.expected, c.running = m.actionStartedAt, m.expectedDuration(), true
+	return c
 }
 
 // renderActionError shows m.actionError (the plain-language line, if
@@ -2804,34 +2861,23 @@ func jobSubtitleWithScores(t theme.Theme, job model.JobRow, width int) string {
 	return truncateRunes(job.Title, titleRoom) + lipgloss.NewStyle().Foreground(t.Subtext).Render(suffix)
 }
 
-// Stall thresholds. These are "something is wrong" signals, not progress
-// hints, so they sit well above how long the work legitimately takes:
+// Usual durations, which the ElapsedTimer names once an action outlasts
+// them. They sit well above how long the work typically takes, so passing
+// one means "something may be wrong", not "this is a little slow":
 // orchestrator.py allows 180s for a single PDF render alone, and a tailor
-// action runs a whole multi-step Gemini pipeline around that, so anything
-// under a few minutes would cry wolf constantly. Liveness and status are
-// bounded network calls and get a much shorter leash.
+// action runs a whole multi-step Gemini pipeline around that. Liveness and
+// status are bounded network calls and get a much shorter leash.
 const (
 	stalledTailorAfter   = 6 * time.Minute
 	stalledLivenessAfter = 90 * time.Second
 )
 
-// stalledHint returns a plain-language warning once an action has run
-// long enough to look hung, or "" while it's still within normal time.
-// The user can always press esc -- this exists so they know they should.
-func (m JobsModel) stalledHint() string {
-	if m.actionInProgress == "" || m.actionStartedAt.IsZero() {
-		return ""
-	}
-	limit := stalledLivenessAfter
+// expectedDuration is how long the in-flight action usually takes.
+func (m JobsModel) expectedDuration() time.Duration {
 	if m.actionInProgress == "tailor" {
-		limit = stalledTailorAfter
+		return stalledTailorAfter
 	}
-	elapsed := time.Since(m.actionStartedAt)
-	if elapsed < limit {
-		return ""
-	}
-	return fmt.Sprintf(" -- still going after %dm, which is longer than usual; esc to cancel",
-		int(elapsed.Minutes()))
+	return stalledLivenessAfter
 }
 
 // HighlightMatches highlights occurrences of query in text using highlightStyle (case-insensitive).

@@ -12,7 +12,7 @@ export function SidebarRow({ score, company, tag, subtitle, selected = false, on
         fontFamily: "var(--font-mono)", fontSize: "var(--tui-font-size)", lineHeight: "var(--tui-line-height)",
         padding: selected ? "3px 8.4px 3px 7.4px" : "3px 8.4px",
         borderLeft: selected ? "1px solid var(--tui-mauve)" : "1px solid transparent",
-        display: "flex", gap: 8.4, opacity: selected ? 1 : 0.62,
+        display: "flex", gap: 8.4, opacity: selected ? 1 : "calc(1 - var(--dim-fraction))",
       }}>
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>

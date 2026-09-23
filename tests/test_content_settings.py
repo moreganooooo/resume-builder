@@ -129,6 +129,15 @@ class TestDescribe(unittest.TestCase):
     def test_an_unknown_code_still_renders(self):
         self.assertIn("ja", cs.describe({"languages": ["ja"]}))
 
+    def test_short_form_names_only_what_is_set(self):
+        self.assertEqual(cs.describe_short({}), "no limits")
+        self.assertEqual(
+            cs.describe_short(
+                {"max_travel_percent": 0, "employment_type": ["full_time", "part_time"]}
+            ),
+            "travel ≤0% · 2 job types",
+        )
+
 
 class TestWriteSettings(_TempYaml):
     def test_round_trip(self):

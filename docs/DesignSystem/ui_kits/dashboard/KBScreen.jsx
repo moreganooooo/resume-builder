@@ -128,7 +128,7 @@ function KBScreen({ items, profile, onBack }) {
                 background: i === cursor ? "var(--tui-sky)" : "transparent",
                 color: i === cursor ? "var(--tui-base)" : "var(--tui-text)",
               }}>
-              {(i === cursor ? "▶ " : "  ")}
+              {"  "}
               <span style={{ color: i === cursor ? "var(--tui-base)" : "var(--tui-overlay)" }}>[{it.cat.slice(0, 4)}]</span> {it.title}
             </div>
           ))}

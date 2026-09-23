@@ -272,7 +272,7 @@ def _content_filter_label() -> str:
     try:
         import content_settings
 
-        return f"({content_settings.describe(content_settings.read_settings())})"
+        return f"({content_settings.describe_short(content_settings.read_settings())})"
     except Exception:
         return ""
 
@@ -703,11 +703,11 @@ def _build_settings_upkeep_choices() -> list:
             value="doctor",
         ),
         questionary.Choice(
-            title=_icon_title("next", "↳ Check for GitHub Updates"),
+            title=_icon_title("updates", "↳ Check for GitHub Updates"),
             value="check_updates",
         ),
         questionary.Choice(
-            title=_icon_title("prev", "↳ Manage Profiles (Rename / Delete)"),
+            title=_icon_title("profiles", "↳ Manage Profiles (Rename / Delete)"),
             value="manage_profiles",
         ),
         questionary.Separator(" "),

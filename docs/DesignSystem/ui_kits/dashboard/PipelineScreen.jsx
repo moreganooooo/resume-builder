@@ -36,10 +36,11 @@ const BOARD_EXTRA = [
 ];
 
 const PIPELINE_HELP = [
-  { label: "Navigation", bindings: [{ key: "↑ ↓ / j k", desc: "Move selection" }, { key: "g / G", desc: "Jump to top / bottom" }, { key: "← → / h l", desc: "Cycle tabs (list view) or columns (board view)" }] },
-  { label: "Actions", bindings: [{ key: "Enter", desc: "Open report" }, { key: "o", desc: "Open job URL in browser" }, { key: "c", desc: "Change application status" }, { key: "r", desc: "Refresh from disk" }] },
-  { label: "View", bindings: [{ key: "/", desc: "Search company/role/notes" }, { key: "s", desc: "Cycle sort mode" }, { key: "v", desc: "Toggle list / board view" }, { key: "p", desc: "Open Progress screen" }] },
-  { label: "Filters", bindings: [{ key: "w", desc: "Cycle workplace mode" }, { key: "$", desc: "Cycle pay-disclosure mode" }, { key: "", desc: "Roles you have applied to are never hidden by that bar" }] },
+  { label: "Navigation", bindings: [{ key: "↑ ↓ / j k", desc: "Move selection" }, { key: "g / G", desc: "Jump to top / bottom" }, { key: "PgUp / PgDn", desc: "Page up / down" }, { key: "← → / h l", desc: "Cycle tabs (board: move between columns)" }] },
+  { label: "Board view", bindings: [{ key: "v", desc: "Cycle grouped → flat → board" }, { key: "H / L", desc: "Propose moving this card a column (asks first)" }, { key: "f", desc: "Cycle tabs, since h/l drive the columns here" }, { key: "", desc: "Skip/Rejected/Discarded are list-only, not board columns" }] },
+  { label: "Actions", bindings: [{ key: "Enter", desc: "Open report" }, { key: "o", desc: "Open job URL in browser" }, { key: "a", desc: "Open application answers chat" }, { key: "c", desc: "Change application status" }, { key: "r", desc: "Refresh from disk" }] },
+  { label: "View", bindings: [{ key: "/", desc: "Search company/role/notes" }, { key: "s", desc: "Cycle sort mode" }, { key: "v", desc: "Cycle grouped → flat → board" }, { key: "p", desc: "Open Progress screen" }] },
+  { label: "Filters", bindings: [{ key: "w", desc: "Cycle workplace mode" }, { key: "e", desc: "Cycle employment type" }, { key: "$", desc: "Cycle pay-disclosure mode" }, { key: "t", desc: "Toggle manager-track only" }, { key: "x", desc: "Toggle years/degree blocker only" }, { key: "", desc: "ALL / EVALUATED hide scored roles under 3.5; LOW <3.5 shows them" }, { key: "", desc: "Roles you have applied to are never hidden by that bar" }] },
   { label: "Exit", bindings: [{ key: "Esc", desc: "Clear search, or back to Main Menu" }, { key: "q", desc: "Quit dashboard" }] },
 ];
 
@@ -89,7 +90,7 @@ function BoardCard({ job, selected, dimmed, onClick }) {
       display: "flex", flexDirection: "column", cursor: "pointer",
       borderLeft: selected ? "1px solid var(--tui-mauve)" : "1px solid transparent",
       paddingLeft: selected ? 7.4 : 8.4, paddingRight: 8.4, marginBottom: 8, paddingTop: 2, paddingBottom: 2,
-      opacity: dimmed ? 0.45 : 1, whiteSpace: "nowrap", overflow: "hidden",
+      opacity: dimmed ? "calc(1 - var(--dim-fraction))" : 1, whiteSpace: "nowrap", overflow: "hidden",
     }}>
       <div style={{ display: "flex", gap: "8.4px", alignItems: "baseline", minWidth: 0 }}>
         <ScoreBadge score={job.score} />

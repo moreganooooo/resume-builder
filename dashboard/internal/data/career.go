@@ -611,8 +611,9 @@ func LoadReportSummary(careerOpsPath, reportPath string) (archetype, tldr, remot
 	}
 
 	// Truncate long fields
-	if len(tldr) > 120 {
-		tldr = tldr[:117] + "..."
+	// By rune, not byte: a byte slice can split a multi-byte character.
+	if r := []rune(tldr); len(r) > 120 {
+		tldr = string(r[:119]) + "…"
 	}
 
 	if statErr == nil {

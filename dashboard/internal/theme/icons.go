@@ -65,22 +65,22 @@ type MenuIcons struct {
 func NewMenuIcons() MenuIcons {
 	if os.Getenv("RESUME_BUILDER_ICONS") != "unicode" {
 		return MenuIcons{
-			Pipeline: "", // nf-fa-cog
-			Progress: "", // nf-fa-bar_chart
-			Report:   "", // nf-fa-file_text_o
-			Quit:     "", // nf-fa-sign_out
-			Menu:     "", // nf-fa-bars
-			Jobs:     "▣", // briefcase / job board icon replacement
-			Profile:  "", // nf-fa-user
-			Search:   "", // nf-fa-search
-			Source:   "", // nf-fa-folder_open
-			Path:     "", // nf-fa-file_o
-			Magic:    "", // nf-fa-magic
-			Trash:    "", // nf-fa-trash
-			Edit:     "", // nf-fa-pencil
-			External: "", // nf-fa-external_link
-			Clock:    "", // nf-fa-clock_o
-			Graph:    "", // nf-fa-line_chart
+			Pipeline: "",      // nf-fa-cog
+			Progress: "",      // nf-fa-bar_chart
+			Report:   "",      // nf-fa-file_text_o
+			Quit:     "",      // nf-fa-sign_out
+			Menu:     "",      // nf-fa-bars
+			Jobs:     "\uf0b1", // nf-fa-briefcase
+			Profile:  "",      // nf-fa-user
+			Search:   "",      // nf-fa-search
+			Source:   "",      // nf-fa-folder_open
+			Path:     "",      // nf-fa-file_o
+			Magic:    "",      // nf-fa-magic
+			Trash:    "",      // nf-fa-trash
+			Edit:     "",      // nf-fa-pencil
+			External: "",      // nf-fa-external_link
+			Clock:    "",      // nf-fa-clock_o
+			Graph:    "",      // nf-fa-line_chart
 
 			ScoreStrong: "✓",
 			ScoreGood:   "✦",

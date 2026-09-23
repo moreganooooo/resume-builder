@@ -21,7 +21,7 @@ export function ClusterTree({ nodes = [], cursor, onSelect, style }) {
       const thin = n.count != null && n.count < 3;
       out.push(
         <div key={idx} onClick={onSelect ? () => onSelect(idx) : undefined}
-          style={{ display: "flex", gap: "8.4px", cursor: onSelect ? "pointer" : "default", whiteSpace: "pre", padding: "1px 0", opacity: sel ? 1 : 0.82 }}>
+          style={{ display: "flex", gap: "8.4px", cursor: onSelect ? "pointer" : "default", whiteSpace: "pre", padding: "1px 0" }}>
           <span style={{ color: sel ? "var(--tui-mauve)" : "transparent" }}>{"\u2503"}</span>
           <span style={{ color: "var(--tui-overlay)" }}>{prefix + (depth ? (last ? "\u2514\u2500\u2500 " : "\u251c\u2500\u2500 ") : "")}</span>
           <span style={{ color: depth ? "var(--tui-text)" : "var(--tui-blue)", fontWeight: depth ? (sel ? 700 : 400) : 700 }}>{n.label}</span>

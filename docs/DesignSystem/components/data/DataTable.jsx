@@ -44,7 +44,7 @@ export function DataTable({ columns = [], rows = [], cursor = 0, sortKey, sortDi
             const sel = ri === cursor;
             return (
               <tr key={ri} onClick={onSelect ? () => onSelect(ri) : undefined}
-                style={{ cursor: onSelect ? "pointer" : "default", opacity: sel ? 1 : 0.78 }}>
+                style={{ cursor: onSelect ? "pointer" : "default", opacity: sel ? 1 : "calc(1 - var(--dim-fraction))" }}>
                 <td style={{ width: 10, padding: 0, color: sel ? "var(--tui-mauve)" : "transparent" }}>{"\u2503"}</td>
                 {columns.map((c, i) => (
                   <td key={c.key} style={{

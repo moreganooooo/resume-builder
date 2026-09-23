@@ -28,6 +28,7 @@ import build_sample
 # where the call actually happens -- rather than reaching it through a
 # re-export here, which worked only because module objects are singletons.
 import cli_art
+import cli_help
 import doctor
 import jd_manager
 import liveness as liveness_module
@@ -88,7 +89,7 @@ def _should_proceed(count: int, skip_confirm: bool) -> bool:
 # loop-back-into-the-menu shape.
 
 
-@click.group(invoke_without_command=True)
+@click.group(cls=cli_help.StyledGroup, invoke_without_command=True)
 @click.version_option(version=_read_version(), prog_name="resume-builder")
 @click.option(
     "--profile", default=None, help="Override RESUME_PROFILE for this invocation only."

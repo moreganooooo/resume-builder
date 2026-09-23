@@ -1093,7 +1093,7 @@ var pipelineHelpCategories = []helpCategory{
 	{"View", []helpBinding{
 		{"/", "Search company/role/notes"},
 		{"s", "Cycle sort mode"},
-		{"v", "Cycle grouped / flat / board view"},
+		{"v", "Cycle grouped → flat → board"},
 		{"p", "Open Progress screen"},
 	}},
 	{"Filters", []helpBinding{
@@ -1744,7 +1744,9 @@ func formatTimeAgo(dateStr string) string {
 	return fmt.Sprintf("%dd ago", hours/24)
 }
 
-// truncateRunes truncates a string to at most maxRunes runes, appending "..." if truncated.
+// truncateRunes truncates a string to at most maxRunes runes, ending in a
+// single-rune "…" if truncated (a three-dot ASCII tail costs two extra
+// columns and is banned by the TUI standards).
 // maxRunes is floored at 0 -- callers derive it from terminal-width arithmetic
 // (e.g. paneWidth - 6) that goes negative on a sufficiently narrow terminal,
 // and runes[:maxRunes] panics on a negative index.
@@ -1756,10 +1758,10 @@ func truncateRunes(s string, maxRunes int) string {
 	if len(runes) <= maxRunes {
 		return s
 	}
-	if maxRunes <= 3 {
+	if maxRunes <= 1 {
 		return string(runes[:maxRunes])
 	}
-	return string(runes[:maxRunes-3]) + "..."
+	return string(runes[:maxRunes-1]) + "…"
 }
 
 func statusLabel(norm string) string {

@@ -1,8 +1,7 @@
 const { TuiHeaderBar, TuiFooterBar, FunnelBar, FUNNEL_COLORS, Sparkline, Heatmap, HelpOverlay } = window.ResumeBuilderDesignSystem_2d03b1;
 
 const PROGRESS_HELP = [
-  { label: "Navigation", bindings: [{ key: "↑ ↓ / j k", desc: "Scroll one line" }, { key: "PgUp / PgDn", desc: "Scroll one page" }, { key: "g / G", desc: "Jump to top / bottom" }] },
-  { label: "Reading the report", bindings: [{ key: "", desc: "Percentages in the drill-down are stage-to-stage, not cumulative" }, { key: "", desc: "Heatmap cells are counts per day over the last 24 weeks" }] },
+  { label: "Navigation", bindings: [{ key: "↑ ↓ / j k", desc: "Scroll" }, { key: "PgUp / PgDn", desc: "Page up / down" }] },
   { label: "Exit", bindings: [{ key: "Esc", desc: "Back to Main Menu" }, { key: "q", desc: "Quit dashboard" }] },
 ];
 

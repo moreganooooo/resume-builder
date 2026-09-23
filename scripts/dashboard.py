@@ -183,17 +183,17 @@ def run(
         if bin_path and os.path.exists(bin_path):
             cmd = [
                 bin_path,
-                "-path",
+                "--path",
                 data_dir,
-                "-jobs-path",
+                "--jobs-path",
                 jobs_path,
-                "-python-path",
+                "--python-path",
                 sys.executable,
-                "-project-root",
+                "--project-root",
                 profile_paths.PROJECT_ROOT,
-                "-profile",
+                "--profile",
                 active_profile or "morgan",
-                "-backlog",
+                "--backlog",
                 str(backlog),
             ]
         else:
@@ -201,25 +201,25 @@ def run(
                 "go",
                 "run",
                 ".",
-                "-path",
+                "--path",
                 data_dir,
-                "-jobs-path",
+                "--jobs-path",
                 jobs_path,
-                "-python-path",
+                "--python-path",
                 sys.executable,
-                "-project-root",
+                "--project-root",
                 profile_paths.PROJECT_ROOT,
-                "-profile",
+                "--profile",
                 active_profile or "morgan",
-                "-backlog",
+                "--backlog",
                 str(backlog),
             ]
         if theme:
-            cmd.extend(["-theme", theme])
+            cmd.extend(["--theme", theme])
         if view:
-            cmd.extend(["-view", view])
+            cmd.extend(["--view", view])
         if job:
-            cmd.extend(["-job", job])
+            cmd.extend(["--job", job])
         # interactive_subprocess.run(), not subprocess.run() directly:
         # this is the long-running TUI itself -- two of these were found
         # orphaned and still running hours after their parent was gone.

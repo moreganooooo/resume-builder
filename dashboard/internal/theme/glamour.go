@@ -1,6 +1,8 @@
 package theme
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"image/color"
 
@@ -33,10 +35,39 @@ import (
 //     prime viewport height.
 func GlamourConfig(t Theme) []glamour.TermRendererOption {
 	return []glamour.TermRendererOption{
-		glamour.WithStyles(glamourStyle(t)),
+		glamour.WithStyles(styleFor(t)),
 		glamour.WithWordWrap(0), // viewer.go wraps manually to its known width
 		glamour.WithInlineTableLinks(true),
 	}
+}
+
+// resumeBuilderGlamourJSON is the design system's own Glamour style
+// (docs/DesignSystem/assets/glamour-resumebuilder.json), copied into the
+// module because go:embed cannot reach outside it. TestGlamourJSONMatchesDesignSystem
+// fails the moment the two copies differ, so the docs file stays the source.
+//
+//go:embed glamour-resumebuilder.json
+var resumeBuilderGlamourJSON []byte
+
+// styleFor uses the design system's JSON verbatim for the resume-builder
+// palette -- its prefixes, block-quote bar and heading colors are choices the
+// Go-built style never made -- and keeps the Go-built style for the
+// Catppuccin variants, which the JSON (hex values from one palette) cannot
+// describe. One deviation, deliberate: the document margin is zeroed, because
+// viewer.go wraps to its exact pane width and a 2-column margin would push
+// every full-width line past it.
+func styleFor(t Theme) ansi.StyleConfig {
+	rb := newResumeBuilder()
+	if colorToHex(t.Base) != colorToHex(rb.Base) || colorToHex(t.Blue) != colorToHex(rb.Blue) {
+		return glamourStyle(t)
+	}
+	var cfg ansi.StyleConfig
+	if err := json.Unmarshal(resumeBuilderGlamourJSON, &cfg); err != nil {
+		return glamourStyle(t) // unreachable while the test below parses it
+	}
+	var zero uint
+	cfg.Document.Margin = &zero
+	return cfg
 }
 
 func colorToHex(c color.Color) string {

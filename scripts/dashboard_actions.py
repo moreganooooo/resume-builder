@@ -271,7 +271,7 @@ def main() -> int:
 
     # Unlike the actions above, "export" takes no jd_path: it writes the
     # whole evaluation export. The Go dashboard calls this at startup when
-    # it was launched without -jobs-path (a bare `dashboard -profile X`
+    # it was launched without --jobs-path (a bare `dashboard --profile X`
     # rather than via the Python menu), which used to leave Browse & Manage
     # Jobs silently empty -- LoadJobs was simply never called.
     export_parser = subparsers.add_parser("export")
@@ -317,6 +317,29 @@ _ACTION_CONTEXTS = {
     "export": "loading your evaluated jobs",
 }
 
+# What survived a cancel, for the actions where that is known. Same
+# sentences as menu._CANCEL_RECOVERY: an overwhelmed user closes a run
+# rather than debugging it, and "Cancelled." alone reads as "start over".
+# Only actions whose work is saved incrementally are listed -- a claim
+# that nothing was lost has to be true.
+_CANCEL_RECOVERY = {
+    "tailor": (
+        "Nothing was lost -- an interrupted build resumes from its checkpoint, "
+        "so re-running it picks up where this one stopped."
+    ),
+    "scan": (
+        "Nothing was lost -- roles found before you stopped are already saved, "
+        "and the next scan skips the ones it has."
+    ),
+    "batch_evaluate": "Nothing was lost -- scores are saved as each role finishes.",
+}
+
+
+def _cancelled_message(action: str) -> str:
+    """The USER_ERROR line for a cancel, with its recovery sentence if any."""
+    recovery = _CANCEL_RECOVERY.get(action)
+    return f"Cancelled. {recovery}" if recovery else "Cancelled."
+
 
 def _run() -> int:
     """main() with a catch-all so an unexpected exception still honors the
@@ -339,7 +362,7 @@ def _run() -> int:
         # would corrupt clean --help output.
         raise
     except KeyboardInterrupt:
-        _user_error("Cancelled.")
+        _user_error(_cancelled_message(sys.argv[1] if len(sys.argv) > 1 else ""))
         return 130
     except BaseException as exc:
         traceback.print_exc()

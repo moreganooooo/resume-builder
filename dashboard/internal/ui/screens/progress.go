@@ -218,7 +218,6 @@ func (m ProgressModel) renderBody() string {
 			m.renderFunnelDrilldown(),
 			m.renderScoreVsCoverage(),
 			m.renderCompanyConcentration(),
-			m.renderMissionControl(),
 		}
 	}
 
@@ -542,25 +541,6 @@ func (m ProgressModel) renderRates() string {
 		m.metrics.ActiveApps, m.metrics.TotalOffers,
 	))
 	lines = append(lines, padStyle.Render(m.truncateRow(activeInfo)))
-
-	return strings.Join(lines, "\n")
-}
-
-func (m ProgressModel) renderMissionControl() string {
-	padStyle := theme.PadHorizontal(lipgloss.NewStyle())
-	sectionTitle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.Sky)
-
-	var lines []string
-	lines = append(lines, padStyle.Render(sectionTitle.Render("Mission Control (Heatmap & Trends)")))
-	lines = append(lines, "")
-
-	// 1. Calendar Heatmap
-	lines = append(lines, m.renderHeatmap())
-	lines = append(lines, "")
-
-	// 2. Sparklines
-	trendLines := m.renderSparklines()
-	lines = append(lines, trendLines)
 
 	return strings.Join(lines, "\n")
 }

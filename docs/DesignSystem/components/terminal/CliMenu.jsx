@@ -1,8 +1,8 @@
 import React from "react";
 
 // The CLI's grouped select list. Groups print a Mauve caps heading with a
-// rule running to a fixed column; the cursor row is Green and carries the
-// same one-cell `┃` bar the dashboard uses — a full-height border spanning
+// rule running to a fixed column; the cursor row is Green (huh's selected
+// option) and carries the same one-cell Mauve `┃` bar the dashboard uses — a full-height border spanning
 // the label AND its description, so the two lines read as one selected unit.
 // The old `> >` gutter is gone: two chevrons cost four columns, pointed at
 // nothing, and named a different selection language than the rest of the
@@ -37,7 +37,7 @@ export function CliMenu({ groups = [], cursor = 0, onSelect, hook = true }) {
                   display: "flex", gap: "8.4px", cursor: onSelect ? "pointer" : "default",
                   marginBottom: it.hint ? 10 : 4,
                   paddingLeft: on ? "7.4px" : "8.4px",
-                  borderLeft: on ? "1px solid var(--tui-green)" : "1px solid transparent",
+                  borderLeft: on ? "1px solid var(--tui-mauve)" : "1px solid transparent",
                   color: on ? "var(--tui-green)" : "var(--tui-text)", fontWeight: on ? 700 : 400,
                 }}>
                 <span style={{ color: on ? "var(--tui-green)" : "var(--tui-subtext)", width: 14, flex: "0 0 auto" }}>{it.icon || ""}</span>

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"charm.land/fang/v2"
+	"context"
 	"errors"
-	"flag"
 	"fmt"
+	"github.com/spf13/cobra"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -593,7 +595,7 @@ func (m appModel) runSkillsTool(action string) tea.Cmd {
 
 // generateJobsExport writes a JD evaluation export to a temp file by
 // invoking the same Python bridge scripts/dashboard.py uses, and returns
-// its path. Used only as the startup fallback when -jobs-path was not
+// its path. Used only as the startup fallback when --jobs-path was not
 // supplied; the export is a fresh snapshot either way, so regenerating it
 // here matches what the menu launch path would have handed us.
 //
@@ -625,17 +627,85 @@ func generateJobsExport(pythonPath, projectRoot string) (string, error) {
 	return path, nil
 }
 
+// cliOptions are the dashboard binary's flags. They were stdlib flag
+// values; they are Cobra flags now so fang can style --help, --version and
+// errors in the design system's CLI palette (guidelines/cli-fang.card.html).
+type cliOptions struct {
+	path, jobsPath, pythonPath, projectRoot, profile, theme, view, job string
+	backlog                                                            int
+}
+
 func main() {
-	pathFlag := flag.String("path", ".", "Path to career-ops directory")
-	jobsPathFlag := flag.String("jobs-path", "", "Path to the JD evaluation export JSON (see scripts/dashboard.py)")
-	pythonPathFlag := flag.String("python-path", "python3", "Path to the Python interpreter for dashboard actions (see scripts/dashboard.py)")
-	projectRootFlag := flag.String("project-root", ".", "Path to the resume-builder project root (for locating scripts/dashboard_actions.py)")
-	profileFlag := flag.String("profile", "morgan", "Active user profile name")
-	backlogFlag := flag.Int("backlog", 0, "Pending roles not yet evaluated (see picker.count_unevaluated_roles); 0 hides the readout")
-	themeFlag := flag.String("theme", "resume-builder", "Theme name: resume-builder, catppuccin-mocha, catppuccin-latte, or auto")
-	viewFlag := flag.String("view", "", "Initial view: answers")
-	jobFlag := flag.String("job", "", "Job path or ID for the answers view")
-	flag.Parse()
+	var o cliOptions
+	root := &cobra.Command{
+		Use:           "dashboard",
+		Short:         "The resume-builder terminal dashboard.",
+		Long:          "The resume-builder terminal dashboard: pipeline, progress, insights, jobs, documents and knowledge base.\nUsually launched by `resume dashboard`, which supplies the export and interpreter flags.",
+		Example:       "  dashboard --profile morgan\n  dashboard --view answers --job jds/morgan/example.json",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkProfile(o.projectRoot, o.profile); err != nil {
+				return err
+			}
+			return runDashboard(o)
+		},
+	}
+	f := root.Flags()
+	f.StringVar(&o.path, "path", ".", "Path to career-ops directory")
+	f.StringVar(&o.jobsPath, "jobs-path", "", "Path to the JD evaluation export JSON (see scripts/dashboard.py)")
+	f.StringVar(&o.pythonPath, "python-path", "python3", "Python interpreter for dashboard actions")
+	f.StringVar(&o.projectRoot, "project-root", ".", "The resume-builder project root")
+	f.StringVar(&o.profile, "profile", "morgan", "Active user profile name")
+	f.IntVar(&o.backlog, "backlog", 0, "Pending roles not yet evaluated; 0 hides the readout")
+	f.StringVar(&o.theme, "theme", "resume-builder", "Theme: resume-builder, catppuccin-mocha, catppuccin-latte, or auto")
+	f.StringVar(&o.view, "view", "", "Initial view: answers")
+	f.StringVar(&o.job, "job", "", "Job path or ID for the answers view")
+	f.Bool("no-color", false, "Disable colour output (NO_COLOR does the same)")
+
+	// Stdlib flag accepted -profile as well as --profile, and older scripts and
+	// docs still say `dashboard -profile morgan`; Cobra would read that as -p
+	// -r -o... so single-dash long names are promoted before it parses.
+	for i, a := range os.Args[1:] {
+		name, _, _ := strings.Cut(strings.TrimPrefix(a, "-"), "=")
+		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && len(name) > 1 && f.Lookup(name) != nil {
+			os.Args[i+1] = "-" + a
+		}
+	}
+
+	// --no-color has to take effect before fang builds its writer, which
+	// happens before Cobra parses anything -- so it is read off argv here and
+	// turned into NO_COLOR, the one switch colorprofile already honours.
+	for _, a := range os.Args[1:] {
+		if a == "--no-color" {
+			_ = os.Setenv("NO_COLOR", "1")
+		}
+	}
+
+	themeName := "resume-builder"
+	for i, a := range os.Args[1:] {
+		if a == "--theme" && i+2 < len(os.Args) {
+			themeName = os.Args[i+2]
+		} else if v, ok := strings.CutPrefix(a, "--theme="); ok {
+			themeName = v
+		}
+	}
+	t := theme.NewTheme(themeName)
+
+	if err := fang.Execute(context.Background(), root,
+		fang.WithTheme(fangColorScheme(t)),
+		fang.WithErrorHandler(fangErrorHandler(t)),
+		fang.WithoutManpage(),
+		fang.WithoutCompletions(),
+	); err != nil {
+		os.Exit(1)
+	}
+}
+
+func runDashboard(o cliOptions) error {
+	pathFlag, jobsPathFlag, pythonPathFlag, projectRootFlag := &o.path, &o.jobsPath, &o.pythonPath, &o.projectRoot
+	profileFlag, backlogFlag, themeFlag, viewFlag, jobFlag := &o.profile, &o.backlog, &o.theme, &o.view, &o.job
 
 	// The theme is resolved here rather than just before the first screen is
 	// built, because the warnings below this point are the earliest thing the
@@ -701,8 +771,8 @@ func main() {
 
 	// Browse & Manage Jobs reads a JSON export produced by the Python
 	// side, not the database directly. scripts/dashboard.py writes one
-	// per launch and passes -jobs-path; a dashboard started straight from
-	// the binary (`dashboard -profile morgan`) has no such flag, and used
+	// per launch and passes --jobs-path; a dashboard started straight from
+	// the binary (`dashboard --profile morgan`) has no such flag, and used
 	// to render a permanently empty Jobs screen with no indication why.
 	// Generate our own export in that case rather than showing nothing.
 	jm := screens.NewJobsModel(t, jobRows, 120, 40).WithActionConfig(jobsPath, *pythonPathFlag, *projectRootFlag).WithBacklog(*backlogFlag)
@@ -744,6 +814,7 @@ func main() {
 
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil && !errors.Is(err, tea.ErrInterrupted) {
-		log.Fatalf("%v", err)
+		return err
 	}
+	return nil
 }

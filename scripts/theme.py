@@ -130,6 +130,8 @@ _NERD_ICONS = {
     "evaluate": "",  # nf-fa-bar_chart
     "build": "",  # nf-fa-wrench
     "utility": "",  # nf-fa-cog
+    "updates": "\uf021",  # nf-fa-refresh
+    "profiles": "\uf2c0",  # nf-fa-user_o
     "bullet_bank": "",  # nf-fa-database
     "skip": "",  # nf-fa-ban
     "save": "",  # nf-fa-save
@@ -148,6 +150,8 @@ _NERD_ICONS = {
     # unticked box beside "success"'s check, which is what keeps the state
     # legible with the color stripped.
     "pending": "\uf10c",
+    # nf-fa-comments -- the Application Answers chat. Escaped like "pending".
+    "chat": "\uf086",
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
@@ -174,6 +178,8 @@ _UNICODE_ICONS = {
     "discovery": "⌖",  # U+2316 position indicator (was the magnifier emoji)
     "evaluate": "▤",  # U+25A4 square with horizontal fill (was the bar-chart emoji)
     "build": "⚒",  # U+2692 hammer and pick -- construct (was the gear, now on "utility")
+    "updates": "↻",  # U+21BB -- was "next" (❯), which read as a cursor
+    "profiles": "◐",  # U+25D0 -- was "prev" (❮), which read as Back
     "utility": "⚙",  # U+2699 gear -- settings (was the hammer-and-wrench emoji)
     "bullet_bank": "◈",  # U+25C8 diamond in diamond (was the gem emoji)
     "skip": "⊘",  # U+2298 circled division slash
@@ -201,6 +207,9 @@ _UNICODE_ICONS = {
     "back": "❮",  # U+276E angle quote left, same as prev
     "exit": "✕",  # U+2715 multiplication x (was U+23FB power symbol)
     "pending": "○",  # U+25CB white circle -- not yet run, an unticked box
+    # U+00B6 pilcrow -- written answers. The menu asked for "chat" with no
+    # entry here, and questionary_icon_tuple() printed the literal name.
+    "chat": "¶",
 }
 
 
@@ -263,6 +272,8 @@ _ICON_COLORS = {
     "discovery": INFO,  # light blue
     "evaluate": BRAND_ACCENT,  # purple
     "build": SUCCESS,  # green
+    "updates": BRAND,
+    "profiles": BRAND_ACCENT,
     "utility": BRAND_ACCENT,  # purple
     "bullet_bank": BRAND,  # blue
     "skip": ERROR,  # red
@@ -278,6 +289,7 @@ _ICON_COLORS = {
     "next": BRAND_ACCENT,  # purple, matches existing pagination style
     "back": BRAND_ACCENT,  # purple, matches existing pagination style
     "exit": ERROR,  # red -- distinct from "utility" (Settings & Upkeep) it used to share
+    "chat": BRAND_ACCENT,
     "pending": MUTED,  # gray -- "not yet run" is an absence, not a warning
 }
 

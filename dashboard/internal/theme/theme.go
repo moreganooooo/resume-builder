@@ -12,6 +12,10 @@ import (
 	"github.com/muesli/termenv"
 )
 
+// SelectionBar is the one-cell selection marker shared by every list: a
+// thick left bar plus a space, the same width as huh's default "> ".
+const SelectionBar = "┃ "
+
 func c(ansi, ansi256, truecolor string) color.Color {
 	return lipgloss.Color(truecolor)
 }
@@ -127,7 +131,13 @@ func (t Theme) HuhTheme() huh.Theme {
 		// it.
 		ht := huh.ThemeCatppuccin(true)
 		ht.Focused.Title = ht.Focused.Title.Foreground(t.Token.Mauve)
-		ht.Focused.SelectSelector = ht.Focused.SelectSelector.Foreground(t.Token.Mauve)
+		// huh's default cursor is "> ", a second selection language next
+		// to the one-cell Mauve bar every other list in the product uses
+		// (design system: States / Selection & dimming). Same width as
+		// "> ", so huh's unselected-row padding still lines up.
+		ht.Focused.SelectSelector = lipgloss.NewStyle().SetString(SelectionBar).Foreground(t.Token.Mauve)
+		ht.Focused.MultiSelectSelector = lipgloss.NewStyle().SetString(SelectionBar).Foreground(t.Token.Mauve)
+		ht.Blurred.SelectSelector = lipgloss.NewStyle().SetString("  ")
 		ht.Blurred.Title = ht.Blurred.Title.Foreground(t.Token.Subtext)
 		return ht
 	})

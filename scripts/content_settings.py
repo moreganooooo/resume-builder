@@ -294,7 +294,7 @@ def describe_scoring_weights(weights: dict | None) -> str:
         for key in _SCORING_WEIGHTS_KEYS
         if key in weights and weights[key] != DEFAULT_SCORING_WEIGHTS[key]
     ]
-    return ", ".join(changed) if changed else "defaults (unedited)"
+    return ", ".join(changed) if changed else "defaults"
 
 
 def describe(settings: dict) -> str:
@@ -334,6 +334,32 @@ def describe(settings: dict) -> str:
             )
         )
     return "; ".join(parts)
+
+
+def describe_short(settings: dict) -> str:
+    """A menu-row summary naming only the limits actually set.
+
+    describe() spells out every dimension, "any" included, which ran
+    past the terminal edge and got cut off mid-word in the Settings menu.
+    The full line still shows inside the editor itself."""
+    parts = []
+    languages = settings.get("languages")
+    if languages:
+        parts.append(", ".join(LANGUAGE_LABELS.get(code) or code for code in languages))
+    ceiling = settings.get("max_travel_percent")
+    if ceiling is not None:
+        parts.append(f"travel ≤{ceiling}%")
+    employment = settings.get("employment_type")
+    if employment:
+        parts.append(
+            f"{len(employment)} job type" + ("s" if len(employment) != 1 else "")
+        )
+    pay = describe_pay(settings.get("compensation"))
+    if pay:
+        parts.append(f"pay {pay}")
+    if (settings.get("role_track") or {}).get("exclude_manager"):
+        parts.append("IC-only")
+    return " · ".join(parts) if parts else "no limits"
 
 
 def describe_pay(pay: dict | None) -> str:

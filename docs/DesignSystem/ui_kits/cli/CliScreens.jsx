@@ -100,7 +100,7 @@ const BUILD_GROUPS = [
     { icon: "✂", label: "Build Full Application Package (Resume + Cover Letter)" },
     { icon: "▶", label: "Customize Resume for Specific Role(s)" },
     { icon: "⌸", label: "Write Cover Letter for Specific Role(s)" },
-    { icon: "▪", label: "Application Answers for a Specific Role" },
+    { icon: "¶", label: "Application Answers for a Specific Role" },
   ] },
   { label: "MANY ROLES", items: [{ icon: "▤", label: "Customize Resume for All Pending Roles (Batch Run)" }] },
   { label: "REFINE", items: [
@@ -119,8 +119,8 @@ const SETTINGS_GROUPS = [
   ] },
   { label: "JOB SEARCH PREFERENCES", items: [
     { icon: "⌂", label: "Location & Commute Radius (14068 — 5 mi, hybrid+onsite+remote)" },
-    { icon: "▽", label: "Role, Language & Travel Limits (languages: English; travel: up to 0%; types: Full-time, Part-time, Contract / free…" },
-    { icon: "✦", label: "Scoring Weights & Preferences (defaults (unedited))" },
+    { icon: "▽", label: "Role, Language & Travel Limits (English · travel ≤0% · 4 job types)" },
+    { icon: "✦", label: "Scoring Weights & Preferences (defaults)" },
   ] },
   { label: "JOB SOURCES", items: [
     { icon: "✥", label: "Manage Scraping, Boards & Search Queries" },
@@ -136,8 +136,8 @@ const SETTINGS_GROUPS = [
   ] },
   { label: "SYSTEM & PROFILES", items: [
     { icon: "⚙", label: "Run Doctor Checks (last run: 2026-09-20)" },
-    { icon: "❯", label: "Check for GitHub Updates" },
-    { icon: "❮", label: "Manage Profiles (Rename / Delete)" },
+    { icon: "↻", label: "Check for GitHub Updates" },
+    { icon: "◐", label: "Manage Profiles (Rename / Delete)" },
     { label: "Back", hook: false, back: true },
   ] },
 ];

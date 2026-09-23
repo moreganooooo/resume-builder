@@ -1,7 +1,7 @@
 const { TuiHeaderBar, TuiFooterBar, FunnelBar, Sparkline, ProgressBar, HelpOverlay } = window.ResumeBuilderDesignSystem_2d03b1;
 
 const INSIGHTS_HELP = [
-  { label: "Navigation", bindings: [{ key: "↑ ↓ / j k", desc: "Scroll one line" }, { key: "PgUp / PgDn", desc: "Scroll one page" }] },
+  { label: "Navigation", bindings: [{ key: "↑ ↓ / j k", desc: "Scroll" }, { key: "PgUp / PgDn", desc: "Page up / down" }] },
   { label: "Exit", bindings: [{ key: "Esc", desc: "Back to Main Menu" }, { key: "q", desc: "Quit dashboard" }] },
 ];
 

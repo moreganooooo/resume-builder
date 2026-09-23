@@ -50,7 +50,7 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `morgan` if unset). `scripts/profile_paths.py` is the single source of
   truth for every profile-scoped path; route new code through it rather
   than hand-rolling a `profiles/<name>/...` join. The Go dashboard also
-  supports a direct CLI flag (`dashboard -profile <name>`) and displays the
+  supports a direct CLI flag (`dashboard --profile <name>`) and displays the
   active user profile and title in the main menu banner.
   `profile_paths.active_profile()`'s `"morgan"` fallback is a plain
   string, not guaranteed to match a renamed profile folder's exact
@@ -107,6 +107,10 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   suite, plain-English summary with a suggested fix per problem.
 - `resume activate` — cd into the project and activate `.venv/` in the
   current shell (stays active, unlike `run`/`test` which use a subshell).
+- `scripts/cli.py`'s help and errors are styled by `scripts/cli_help.py`
+  (`StyledGroup`): the Go dashboard CLI's fang palette applied to Click's
+  formatter, plus "✗ Error" and a fix line. Subcommands and subgroups
+  inherit it automatically; don't pass `cls=` to them.
 - Defined in `scripts/resume-cli.sh`, sourced from your shell profile
   (`~/.zshrc` or `~/.bashrc`).
 
@@ -207,7 +211,7 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
 - **The Go dashboard never reads SQLite.** Every screen is fed by a
   Python-produced file, not `data.db`: Browse & Manage Jobs reads a
   per-launch JSON export (`scripts/dashboard.py` ->
-  `picker.list_all_evaluated_jds()`, passed as `-jobs-path`), and
+  `picker.list_all_evaluated_jds()`, passed as `--jobs-path`), and
   Pipeline parses `data/<profile>/applications.md`. That is why the two
   screens disagree about which jobs exist. Two consequences worth
   knowing before touching either: (1) a field added to the export needs a
@@ -215,7 +219,7 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   document and `LoadJobs` returns zero rows -- this silently emptied the
   Jobs screen on every launch path until `skills` was fixed to decode the
   exporter's `{skill, score, type}` objects (`model.JobSkill`); (2) a
-  dashboard started straight from the binary gets no `-jobs-path`, so
+  dashboard started straight from the binary gets no `--jobs-path`, so
   `main.go` regenerates one via `dashboard_actions.py export`.
 - **`db.upsert_job` must accept both key spellings.** Scraped JD JSON
   carries `job_title`/`company_name` and keeps its score under

@@ -21,7 +21,7 @@
 <div style="padding:3px 0 3px 7.4px;border-left:1px solid var(--tui-mauve);cursor:pointer;margin-bottom:6px" onClick="{{ c.select }}"><div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.title }}</div><div style="color:var(--tui-subtext)">{{ c.state }}</div></div>
 </sc-if>
 <sc-if value="{{ c.unselected }}" hint-placeholder-val="{{ true }}">
-<div style="padding:3px 0 3px 8.4px;border-left:1px solid transparent;cursor:pointer;margin-bottom:6px;opacity:.55" onClick="{{ c.select }}"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.title }}</div><div style="color:var(--tui-subtext)">{{ c.state }}</div></div>
+<div style="padding:3px 0 3px 8.4px;border-left:1px solid transparent;cursor:pointer;margin-bottom:6px;opacity:calc(1 - var(--dim-fraction))" onClick="{{ c.select }}"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.title }}</div><div style="color:var(--tui-subtext)">{{ c.state }}</div></div>
 </sc-if>
 </sc-for>
 </x-import>

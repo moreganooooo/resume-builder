@@ -96,44 +96,6 @@ plus a `ds-base.js` that links this system's stylesheet and bundle.
 | `report-archive` | Glow's stashed-document browser as a sortable table beside the reader — the columns are the longitudinal story |
 | `settings-profile` | A Huh form page: grouped fields, blocking inline validation, secrets masked |
 
-**Which of these have a real screen behind them (audited 2026-09-22).**
-`dashboard`, `tui-screen`, `pipeline-board`, `job-scorecard`, `glamour-report`,
-`onboarding-wizard`, `resume` and `cover-letter` all map to shipped surfaces.
-`cli-script-menu` is likewise already the shape every Python CLI screen uses --
-`cli_art.display_compact_banner()` is the mode bar, `display_footer_commands()`
-the nav footer and `display_execution_footer()` the running-script state, and
-`menu.py`, `bullet_bank_menu.py` and `skills_menu.py` all draw themselves with
-them. The other three are recorded honestly rather than ticked off:
-
-- **`tailoring-review` -- the component landed, the screen has no host.** See
-  the `DiffLine` row below: the before/after redline now prints in the rewrite
-  loop, but per-rewrite accept/reject/undo has nothing to adopt into, because
-  rewrite acceptance is headless end to end.
-- **`report-archive` -- declined; its premise does not exist here.** The
-  template is a longitudinal table of WEEKLY reports sorted by response rate.
-  This product has no periodic report: a report is per-application
-  (`CareerApplication.ReportPath`, batch-summarised in `main.go` and read in
-  `viewer.go`), there is no weekly generator anywhere in `scripts/`, and no
-  response-rate-per-week series for the columns to carry. Building one is a
-  reporting feature, not a restyle, and a table whose columns are the
-  longitudinal story cannot be adopted before the story is being recorded.
-- **`settings-profile` -- adopted where it was actually being violated.** The
-  screen it specifies already exists (Settings & Upkeep, plus the bootstrap
-  wizard's real `huh` groups), so the value here was the template's four rules,
-  and two of them were broken in the same place: `resume doctor`'s auto-repair
-  read `GEMINI_API_KEY` through a raw `questionary.text()`, so the key was
-  **echoed in plaintext** into scrollback and any VHS capture, and -- being raw
-  questionary under `_run_with_chain`'s clamped scroll region -- it could draw
-  nothing at all. It is `charm_prompt.password()` now, and the success line
-  confirms the key by its **last four characters**, which is the question a
-  user with two projects' keys actually has. Auditing the rest turned up one
-  more instance of the second half of that bug: `add_manual_jd` runs raw
-  questionary prompts, including a MULTILINE paste field `charm_prompt` has no
-  equivalent for, under the clamp -- so the "paste a job link by hand" path the
-  empty state itself recommends looked like a hang. It now joins
-  `tailor_pick`/`coverletter_pick` in `_skip_scroll_region`.
-
-
 The rules each one encodes are written as comments in its logic class — read
 those before changing layout, since most of them exist because a specific
 version of the surface failed somebody.
@@ -538,44 +500,26 @@ rather than re-derive the look.
 
 **Designed here, ready to adopt.**
 
-| Charm library | Component | Replaces | Status |
-| --- | --- | --- | --- |
-| `lipgloss/table`, `bubbles/table` | `DataTable` | hand-computed column widths in `bars.go`; the KB and Jobs lists | **Evaluated; adopted where it is a table, declined where it is not.** `viewer.go` renders real markdown tables through `lipgloss/table` and stays the adoption. The other two named surfaces are not tables and converting them would lose behaviour: `bars.go`'s `renderSidebarRowTagged` is a two-line CARD whose width math is a PRIORITY order -- it drops the employment tag before it truncates the company name, and falls back to a minimum before either -- which `lipgloss/table` cannot express (it distributes width, it does not rank columns); the Jobs and KB lists are `SidebarRow`s carrying their own zone marks and scroll rail, not rows of aligned cells. What the audit did surface here is the Python side: `CliStatusTable`'s rule that every status pairs its colour with a GLYPH was unmet (`cli_art.render_bullet_bank_status` coloured the status and nothing else, so the state vanished in a monochrome terminal or a filtered screenshot) and two of the spec's four statuses had no entry at all -- `Locked` rendered dim instead of Yellow. `_STAGE_STATUS_STYLES` now maps all four plus this codebase's real fifth, `Stale`, each to a distinct glyph (a new `pending` ○ token in `theme.ICONS`), with tests asserting the glyphs render, that no two statuses share one, and that a `Locked` row carries the reason the spec requires. |
-| `lipgloss/tree` | `ClusterTree` | `↳`-prefixed bullet clusters, skills matrix, KB hierarchy | **Done, and pointed somewhere other than where the spec aimed it.** `screens/clustertree.go`'s `RenderClusterTree` draws the spec as written — `tree.RoundedEnumerator` in Overlay (structure must never out-weigh content), Blue group labels, Text entries, a Mauve `┃` gutter on the cursor's row, and the entry count in Subtext or **Peach + "— thin"** under 3. It returns LINES, not a block: every host has a scroll window, and a host that had to re-split the block would be deriving the tree's structure a second time. Three findings. (1) The spec's named target, **bullet-bank clusters, has no TUI surface to adopt into** — clustering is a CSV pipeline (`cluster_bullet_bank.py` → `bullet-bank-cluster-map.csv`, reviewed through `bullet_bank_menu.py`'s stages), so adopting it there would mean inventing a screen, not restyling one. Said plainly here rather than marked done against a screen that does not exist. (2) The surface that genuinely "prints flat" is the **KB "All" tab**, where the grouping was carried only by a truncated 4-char `[Cate]` badge on every row — the reader reconstructed the structure line by line. It now renders as a tree; every other tab is already one category, where a tree is a single root over a list it adds nothing to, so they keep the flat list. (3) The Peach thin flag transfers with its meaning intact: for clusters it means the extractor mis-grouped, for the KB it means a category has nearly emptied out — which is the visible face of the verified-ledger collapses this project has already had twice. Two implementation notes for anyone extending it: the cursor stays an index into the ITEMS (the detail pane, arrow keys and mouse hit-test all read it), so `kbClusterNodes` returns a row→item map and the group rows are translated into that numbering, never out of it; and setting `EnumeratorStyle` REPLACES Lip Gloss's default, which carried the space after `├──` — `PaddingRight(1)` restores it. |
-| `bubbles/paginator` | `Paginator` | no paging affordance at all on 60+ role result sets | **Done, scoped.** `screens/paginator.go`'s `RenderPaginator` draws dots (an `n/m` readout past 12 pages, where counting dots is slower than reading a number) plus the item range, as one centered caption under the Jobs sidebar and the KB list. Deliberately NOT a conversion to real pagination: these lists are triaged a row at a time, and paging would make `j` at a window's edge jump the eye a whole screen. What was missing is the affordance, not the interaction -- 286 roles and 12 looked identical until a key was pressed. `PageState` derives the page from the SCROLL OFFSET rather than keeping a second cursor, so the caption cannot claim a page the list is not on, and an offset past the last full window still reports the last page. The caption costs a body line, so both hosts reserve it in the function that sizes the window (`sidebarViewportLines`, KB's `listHeight`), never in the renderer alone -- a line the renderer took back quietly would let the cursor sit behind the caption. Hidden entirely when the list fits, same rule as the scroll rail. |
-| `bubbles/viewport` | `ScrollIndicator` | scrollable panes with no evidence they scroll | **Done.** `dashboard/internal/ui/screens/scrollindicator.go` implements the spec's two halves as one shared component — `ScrollRail` (Overlay track, Mauve thumb, one cell, hidden when the content fits) and `ScrollReadout`/`ScrollCountReadout` (Subtext, clamped to 0/100) — wired into Viewer, Progress (which also gained the percent readout in its header) and both detail panes. `AttachScrollRail` pads and truncates each line to the pane's own inner width before appending the rail cell: a full-width line plus a rail cell wraps, which adds a line and pushes the footer off. For a bordered pane, that inner width is `width - detailPaneChrome(8) - 1`, since lipgloss counts border and padding inside `Width`. |
-| `bubbles/help` | `HelpBar` | the hand-built footer and its duplicate help overlay | **Done, scoped.** `screens/helpbar.go`'s `RenderHelpBar` caps the footer at five bindings and always ends `? more`, with the `?` overlay kept as the complete reference — the two are complementary, which is the point: the four bindings that matter no longer compete with the twelve that do not. Adopted by Jobs, Pipeline, Progress and Viewer, each with its own zone prefix, so every hint is clickable and `HelpBarClicked` dispatches through `helpBarKeyMsg` — a click travels the identical code path as the key. Deliberately NOT adopted on two screens: KB already uses `RenderHierarchicalFooter` and has no `?` overlay at all, so a `? more` suffix would be a lie; Answers' footer is a chat status line, not a keybinding footer, and its keystrokes belong to a textarea. |
-| `huh` | `HuhField` | three ad-hoc input surfaces — status picker, search, onboarding prompts | **Done, two of three; the third was already done.** `screens/huhfield.go` implements the spec's `select` kind as `RenderSelectField` (four-state `FieldState`, a rail in the state's accent, a Mauve `┃` on the current row, that row alone in Text while the rest step back to Subtext). It replaces the status picker's all-Blue list marked by `"> "` and a filled Overlay background — same information, but found by reading the brightest row instead of spotting a rectangle — and since Pipeline and Jobs share `renderStatusPickerOverlay`, one change covered both. The search bars were near-verbatim duplicates of each other (the drift `bars.go`'s own header warns about) and are now one `RenderSearchBar`, which fixes two things at once: the focused accent was **Blue**, so the one surface where the user is actually typing was the only one whose focus color disagreed with TuiPanel, the picker rail and the ClusterTree cursor — it is Mauve now — and an empty box shows a `company or title` placeholder in Overlay rather than a lone cursor that reads as a hung screen. Onboarding already runs on real `huh` fields via the bootstrap wizard, so it needed nothing. Declined with reasons: the spec's bordered `input`/`text` box, because both screens budget the search bar as a single row (`rows++`) and a border costs two more, which would silently eat list rows on both; and `multiselect`, which belongs to the multi-file FilePicker mode this huh version does not have. |
-| `glamour` | `assets/glamour-resumebuilder.json` | Glamour's default dark theme, which is near our palette but not it | **Done, differently.** `dashboard/internal/theme/glamour.go`'s `GlamourConfig(t Theme)` already derives every Glamour style dynamically from the live `Theme` struct instead of a static JSON theme — CLI theme switches (including light-mode Catppuccin Latte) carry the Glamour styling along automatically, with no second hex-value source to drift out of sync. A static `assets/glamour-resumebuilder.json` would be a regression from this; the asset listed above is not needed. |
-| `bubblezone` | `guidelines/layout-mouse.card.html` | nothing — mouse support does not exist yet | **Done.** `dashboard/internal/ui/zone` wraps it, and six surfaces now mark clickable regions: the main menu (`zoneMenuDelegate` in `menu/list.go`), Jobs, Pipeline, the Pipeline board's cards, the KB category tabs and the KB Skills tools. Two of the three screens this row listed as unmarked already were, through their footers: `RenderHelpBar`/`HelpBarClicked` are zone-backed, and Progress/Insights (`progressHelpZone`) and Report (`viewerHelpZone`) both route through them — and neither screen has any other clickable element, since both are read-only scrolls with no selection and no tabs. Answers was the real gap: it had a wheel handler and a hand-rolled footer string, so nothing on it could be clicked at all. Its footer is now a real HelpBar (`answersHelpZone`), which forced the other half of that component's contract — the bar always ends in "? more", so the screen needed the `?` reference overlay it had never had. Two rules fall out of this screen being a text box rather than a list: `?` opens the overlay **only while the input is empty**, because mid-question a question mark is punctuation (the same rule `q` already followed here); and a click that is *not* a footer hint falls through to the textarea rather than being swallowed, or the one box on the screen would be the one thing a mouse could not reach. The footer's bindings are deliberately limited to keys `helpBarKeyMsg` can synthesise a real `Code` for — the chords (Ctrl+R regenerate, Ctrl+S shorten) are reference-only in the overlay, since a hint for them would render as a button that does nothing. |
-| `bubbles/filepicker` | `FilePicker` | onboarding stage one, which asks for documents with no designed picker | **Already adopted; tightened.** The premise is out of date: `internal/ui/bootstrap/wizard.go` stage one has used `huh.NewFilePicker()` (bubbles' `filepicker.Model` underneath) since it replaced a text Input demanding a typed absolute path. Two spec rules were missing and are now applied — `ShowSize(true)` for the right-aligned size column, and the permitted extensions STATED in the description rather than discovered by trying (huh renders a disallowed file as unselectable, so a user who does not know the rule just meets a file that refuses to be picked and can conclude nothing from it). Three spec details are not reachable through huh's field API and are declined rather than forked: multi-select (no multi-file picker exists in this huh version, confirmed via `go doc` — already handled Python-side as pick-one-then-loop-and-confirm-another, see `prompt.go`'s `runFilePicker`), greyed-but-visible unreadable entries, and the path header truncating from the left. |
-| `bubbles/textarea` | `TextEditor` | the cover letter and hand-corrected bullets, with no editing surface at all | **Done in half, and the other half has no host.** The counter is built: `screens/charcount.go`'s `RenderCharCount`/`SoftCharLimit` implement the spec's rules — characters (runes, so an em dash costs one, not three), Subtext by default, Yellow past a soft limit at 90%, Red past the hard one, each with the reason in words so a monochrome capture still carries it. Wired into `answers.go`'s per-turn line, which rendered `chars 412/500` as plain uncolored text: an answer 80 characters over the limit the ATS form will silently cut looked exactly like one comfortably under. Deliberately NOT added to the input box — that holds the QUESTION being pasted while the limit governs the ANSWER, so a live count there would be a confident wrong number. The numbered gutter and `↳` soft-wrap marks are declined for want of a host: no multi-line prose EDITING surface exists in Go or Python (every `cli_art.text()` call site is a single-line short value, and Answers' 3-line paste box is not review material — the spec's gutter exists to make "line 6 is too long" actionable). Building one is a feature, not an adoption: `scripts/application_answers.py` has only `turn`/`load`/`finalize` and no save-an-edited-answer path to persist into. |
-| (none — plain Rich) | `DiffLine` | the rewrite loop's one-sided `Rewritten: …` line; the `tailoring-review` screen | **The component is done and wired; the SCREEN it was drawn for has no host.** `scripts/diffline.py` is the CLI half, printed through `cli_art.console` from `rewrite_bullets.py`'s attempt loop, which until now showed only the NEW bullet — truncated at 80 characters with an ASCII `...` — so the one thing in that loop worth a human judgment could not be judged, because the text it replaced was never on screen. It now prints the pair: a Red `-` original, a Green `+` rewrite with the newly-introduced words **bold**, and the model's own `reasoning` on the Mauve `┃` note line the loop already had in hand. The spec's rules are kept for their stated reasons, not as styling: the **sign column is present on every line including unchanged ones**, so the diff stays aligned and survives being copied out of the terminal into a plain-text email where the color does not travel — which is also why color is never the only signal; removed text is **not** struck through, because strikethrough renders unreliably across terminals and where it does render it obscures exactly the text the user needs in order to judge the trade; emphasis is bold and never a background fill, which reads as redaction; and nothing is truncated, since a truncated bullet cannot be judged. Bullet text is escaped before rendering — a bullet containing `[Adobe]` would otherwise be read as Rich markup. Declined, with the reason: the **`tailoring-review` screen itself**, whose contract is per-rewrite accept/reject/`u`-undo with nothing written until `w`. There is no surface to adopt it into — rewrite acceptance is entirely headless (`decide_action()` decides, `bullet_feedback.queue_accepted_rewrite()` appends to `needs-review.csv`, and `triage_needs_review.py` has no interactive prompt at all), so building it means building a review workflow and a persistence path, which is a feature and not an adoption — the same call already recorded for ClusterTree's bullet-cluster target and TextEditor's gutter half. |
-| `bubbles/stopwatch`, `timer` | `ElapsedTimer` | the "still going after 7m" sentence, currently prose rather than a component | **Evaluated and declined.** Attempted against `jobs.go`'s long-running-job hint (2026-09-22): `bubbles/stopwatch` v2.1.1's `Interval` field defaults to Go's zero value unless `WithInterval(...)` is passed explicitly (the package doc's claimed 1s default doesn't hold), and — the blocking issue — `StartStopMsg.running` and `TickMsg.tag` are unexported, and `Start()` returns a `tea.Cmd` wrapping an unexported `sequenceMsg`, so no external test can construct a "running" stopwatch or fast-forward its elapsed time without executing the real Bubble Tea runtime and waiting real wall-clock minutes. That's incompatible with this codebase's existing test pattern (`jobs_test.go`'s `TestStalledHintOnlyFiresPastTheThreshold` backdates a plain `time.Time`), so the hand-rolled `actionStartedAt time.Time` approach stays. Revisit only if a future Bubbles release exports those fields. |
-| `lipgloss/list` | `EnumList` | the remaining hand-written `↳` and `•` prefixes across the screens | **Done, scoped.** Audited 2026-09-22: only 3 non-test occurrences exist codebase-wide. `progress.go`'s "Write Bullets For (High Fit, Low Coverage)" block (a genuine one-item-per-line list, capped at 4) now builds a `lipgloss/list.List` with a custom `↳` enumerator instead of hand-formatting the prefix. The other two were left as plain styled text, deliberately: `progress.go`'s `renderFunnelDrilldown()` composes `"• "+Friction` as one column inside a larger multi-column row string (stage/volume/conversion%/friction) — a decorative glyph inside a table cell, not an enumerated list item, so `lipgloss/list` doesn't fit it. `viewer.go`'s `"- "`/`"* "` Markdown bullet rendering is part of a custom line-by-line Markdown renderer (`renderListItem` handles per-line wrapping/indent) fed one source line at a time; `lipgloss/list.List` expects to own a whole list's layout at construction time, so swapping it in there would mean restructuring the Markdown renderer to buffer and detect list-line runs first — out of proportion to what's a purely cosmetic difference (both render as a "- "-style bullet already). |
-| `tea.Printf` | `Toast` | success messages that steal a pane to say something that needed no answer | **Done.** `screens/toast.go`'s `ToastStack`: one line per toast, newest nearest the footer, at most three with the rest collapsed into `+N earlier`, success/info self-dismissing (4s/6s) while warning/error wait for a keypress. `OverlayBottomRight` splices it over the bottom-right WITHOUT changing the view's line count — a toast that reflowed the layout under it would interrupt more than the thing it reports. Wired to the two outcomes that previously showed nothing at all: a completed Jobs action (the progress bar simply vanished, so a long scan and a no-op looked alike) and a committed Pipeline status change (the row moving was the only evidence). Failures deliberately stay in the action-error panel, because `d for details` is a decision and a toast that expires would take the user's only chance to act with it. Rendered one line at a time rather than in a rounded box: `one line each` is the load-bearing rule and a border costs three terminal rows per toast. |
-| `fang` | `guidelines/cli-fang.card.html` | three separately hand-styled things: `--help`, version output, error formatting | **Evaluated and declined, twice over.** fang wraps a **cobra** root command, and `dashboard/go.mod` has no cobra — `main.go` parses stdlib `flag` across 10 call sites, so adopting fang means first restructuring the entry point onto a CLI framework it does not otherwise need. That alone would be a cost worth paying if the payoff were a user-facing `--help`; it is not. The Go binary is **not** the CLI the user meets. `resume` is a shell function (`scripts/resume-cli.sh`) delegating to Python `cli.py`, and the dashboard binary is launched *by* `scripts/dashboard.py` with flags the Python side computes (`-jobs-path`, `-profile`, `-theme`) — a human typing `dashboard --help` is a developer, not a user. Styling a developer-only help screen by restructuring the program's entry point is the same trade already refused for ClusterTree's bullet-cluster target and TextEditor's gutter half: a feature wearing an adoption's clothes. Revisit only if the Go binary ever becomes a directly-invoked CLI in its own right. |
+| Charm library | Component | Replaces |
+| --- | --- | --- |
+| `lipgloss/table`, `bubbles/table` | `DataTable` | hand-computed column widths in `bars.go`; the KB and Jobs lists |
+| `lipgloss/tree` | `ClusterTree` | `↳`-prefixed bullet clusters, skills matrix, KB hierarchy |
+| `bubbles/paginator` | `Paginator` | no paging affordance at all on 60+ role result sets |
+| `bubbles/viewport` | `ScrollIndicator` | scrollable panes with no evidence they scroll |
+| `bubbles/help` | `HelpBar` | the hand-built footer and its duplicate help overlay |
+| `huh` | `HuhField` | three ad-hoc input surfaces — status picker, search, onboarding prompts |
+| `glamour` | `assets/glamour-resumebuilder.json` | Glamour's default dark theme, which is near our palette but not it |
+| `bubblezone` | `guidelines/layout-mouse.card.html` | nothing — mouse support does not exist yet |
+| `bubbles/filepicker` | `FilePicker` | onboarding stage one, which asks for documents with no designed picker |
+| `bubbles/textarea` | `TextEditor` | the cover letter and hand-corrected bullets, with no editing surface at all |
+| `bubbles/stopwatch`, `timer` | `ElapsedTimer` | the "still going after 7m" sentence, currently prose rather than a component |
+| `lipgloss/list` | `EnumList` | the remaining hand-written `↳` and `•` prefixes across the screens |
+| `tea.Printf` | `Toast` | success messages that steal a pane to say something that needed no answer |
+| `fang` | `guidelines/cli-fang.card.html` | three separately hand-styled things: `--help`, version output, error formatting |
 
 Two things are new rather than replacements. A fuzzy **command palette**
 (`CommandPalette`, `ctrl-k` or `:`) answers recall, not navigation: nine screens
 and roughly forty bindings have made remembering the binding the bottleneck.
-**Done** (`screens/palette.go`, wired in `main.go`). Two things make it worth
-having rather than a second menu: matched characters render Mauve and bold
-inside an otherwise plain label, so a row's reason for matching is visible;
-and every action row carries the binding it stands for, so the palette teaches
-the shortcut it replaces and works to make itself unnecessary. The rows are
-DERIVED, never re-listed -- navigation rows are `menu.MenuSelectMsg` commands
-dispatched through the same `navigateTo()` the menu now uses, and action rows
-come from the current screen's own `helpCategory` list and are replayed as the
-keypress they advertise, so the palette cannot teach a key the screen no longer
-has or reimplement an action that then drifts. Scoped to the current screen's
-actions deliberately (a key is dispatched to whatever is showing, so another
-screen's `b` would do nothing or the wrong thing), and multi-key movement
-legends (`↑ ↓ / j k`) are skipped since there is no one key to send. Not
-offered on the Menu, which IS the navigation it stands in for, nor on Answers,
-where `:` and most letters are text being typed. `OverlayCentered` composites
-it over the screen without changing the view's line count, the same no-reflow
-rule `Toast` follows.
 And `DiffLine` with the **tailoring review** screen makes the rewrite itself
 visible — the product's core value previously happened with no surface showing
 it, which meant trusting it was the only option.
@@ -586,89 +530,19 @@ debugging aid, not product surface.
 
 **Things Charm does that the product does not do at all yet.**
 
-- **VHS** — **done.** 30 tapes live in `dashboard/tapes/` (every dashboard
-  screen and its `?` overlay, the Python CLI menu and each of its submenus,
-  the light theme, the matrix, the KB tabs and mobile), run through
-  `scripts/capture_tui_visuals.py`, which writes `artifacts/tui_*.png|gif`.
-  `dashboard/CLAUDE.md` carries the current list. The gap this bullet used to
-  record is closed: `insights`, `pipeline_board` and `kb_skills` were written
-  and recorded, and each was checked against its own screenshot rather than
-  assumed from a clean exit. The fourth, the Documents entry, was declined for
-  the same reason as `fang` and the ClusterTree bullet-cluster target — it is
-  a door, not a screen: the dashboard's Documents item suspends into the
-  Python Build Documents submenu, which `cli_build_documents` already records,
-  so a second tape would capture the same pixels reached another way.
-
-  Writing them surfaced a live defect worth keeping in mind here, since it is
-  a property of the tool rather than of any one tape: **a tape types menu
-  positions, so inserting a menu item silently invalidates every tape below
-  it.** Adding "Insights" at slot 3 shifted Jobs 3→4, Documents 4→5 and the KB
-  5→6, and ten existing tapes went on typing the old numbers — the five
-  `jobs*`/`matrix` tapes were opening Insights and the five `kb_*` tapes were
-  opening Jobs. All ten are repointed, and two were re-recorded to prove it
-  rather than to assume it. What kept this from becoming ten wrong
-  screenshots in the design system's own evidence is the
-  `Wait+Screen@30s /SCREEN NAME/` guard after each menu keypress: it turns a
-  wrong destination into a timeout. Every new tape here keeps it.
+- **VHS** — scripted terminal recordings as GIFs. The README and the docs have
+  no motion in them, and a `.tape` file makes the onboarding flow demonstrable
+  and reproducible instead of screenshotted once and left to rot.
 - **Freeze** — renders terminal output to PNG/SVG. A scored pipeline view or a
   single job's scorecard exported as an image is a genuinely useful artifact
   for a job search, and it is the only sanctioned way a TUI screen should ever
   leave the terminal (the print palette stays for the resume — see The
   No-Bleed Rule).
-  **Freeze is deferred, with the reason.** `freeze` is not installed on this
-  machine (`vhs` is), so any export path would ship untested and fail at the
-  moment a user reached for it. More to the point, the honest target is a
-  SCORECARD — a composed artifact with a job's score, gaps and blockers laid
-  out for the artifact's own sake — and that does not exist as a screen yet;
-  freezing the Jobs detail pane would export a pane sized for a terminal, with
-  its own footer legend and filter state in it. Building the scorecard first is
-  the prerequisite, and it is a feature. Recorded here so the next pass starts
-  from the blocker rather than rediscovering it.
-- **charmbracelet/log** — **done, on both sides.**
-  `dashboard/internal/theme/logstyles.go` adds `Theme.LogStyles()` /
-  `ApplyLogStyles()`, applied in `main.go` immediately after `flag.Parse()`
-  rather than just before the first screen is built — the warnings about an
-  unreadable jobs export are the earliest thing the program can print, so
-  until now the first thing a user saw when something went wrong was the one
-  line that did not look like this program. Only colors change; the level tags
-  keep the library's own `DEBU`/`INFO`/`WARN`/`ERRO`/`FATA` labels, because
-  the level is what a reader greps for. **The v1/v2 trap runs both ways and is
-  now guarded in both directions**: `log@v1.0.0`'s `Styles` are
-  `github.com/charmbracelet/lipgloss` **v1** styles while this theme's tokens
-  are v2 `image/color.Color`, so a token cannot be handed over directly — it
-  is converted through the package's existing `ColorToHex` and rebuilt as a v1
-  color, in exactly one place. `logstyles_test.go` reads the colors back out
-  as hex, since a wrong-version color is a valid non-nil value that merely
-  resolves to black — the same reason `TestHuhThemeTitleIsNotBlack` cannot be
-  a nil check. Python side: `scripts/logstyle.py` writes the same text format,
-  and `bootstrap_menu.py`'s `bootstrap-error.log` is no longer a raw
-  `traceback.format_exc()` under one English sentence. A traceback says where
-  Python was; it does not say when, at which of express setup's eight stages,
-  or for which profile — and express setup fails with partial state on disk,
-  so those are the three questions actually being asked. They are structured
-  fields now, logfmt-quoted so a multi-word stage name survives being parsed
-  back. Two deliberate choices: the file is **appended**, not truncated (a
-  re-run that dies further along makes the previous failure the context for
-  this one, and it was being thrown away), and the traceback is written
-  INDENTED beneath its record rather than quoted into a field, because one
-  record per line is the property that makes the rest of the file greppable.
-  No color in the file — the Go logger colorizes because it writes to a
-  terminal; in a file an escape sequence is something to strip before you can
-  read it. The shared thing is the structure, not the ANSI.
-- **Gum** — **done, optionally.** `scripts/build_mobile.sh` now renders its
-  banner, per-target progress and completion through `gum style` / `gum spin`
-  via four helpers (`ui_header`, `ui_note`, `ui_ok`, `ui_run`). Gum is **not**
-  a dependency and is not installed here, so every helper falls back to the
-  plain `echo` it replaced — the same graceful-degradation shape as
-  `scripts/dashboard.py` falling back when Go is missing, and for the same
-  reason: a build script that refuses to build because a cosmetic tool is
-  absent is a worse script than the unstyled one. `ui_run` returns the
-  command's own exit status either way, so `set -euo pipefail` still stops the
-  build on a failed cross-compile whether or not gum is doing the waiting, and
-  the compile environment is passed through `env` rather than as a variable
-  prefix, which does not reliably stay scoped to a shell function. The three
-  hex values are literals with their source of truth named in a comment
-  (`scripts/theme.py`), since bash cannot import `dashboard/internal/theme`.
+- **charmbracelet/log** — `bootstrap-error.log` is currently a raw Python
+  traceback. On the Go side, structured levelled logging with the same palette
+  would make the log file look like the program that wrote it.
+- **Gum** — for the shell scripts around the edges (`build_mobile.sh`), which
+  today have no styling at all while everything they sit next to does.
 
 **Crush and Ultraviolet** are worth reading rather than adopting: Crush is the
 reference for how far this stack goes visually, and Ultraviolet is the
@@ -722,7 +596,7 @@ behind it:
   AI, and conversational polish — isn't about any one role, so it got its
   own **Documents** menu entry rather than living nowhere.
 - **Progress split into Progress and Insights.** One screen had grown into
-  fifteen render sections and would not fit a 24-row terminal. The split follows a
+  eleven sections and would not fit a 24-row terminal. The split follows a
   real question boundary: Progress answers *where do things stand* (funnel,
   conversion rates, coverage gaps, top employers) — the screen you check
   often, so it stays fast to scan. Insights answers *what's working and what
@@ -782,26 +656,12 @@ right now instead of asking the user to derive it from a list.
   main menu — even just "3 jobs are worth a look" pointing at Jobs — would
   put the answer to "what do I do right now" at the first screen instead of
   the third.
-  **Done.** `menu.MenuModel.WithNextBestMoves` renders `★ N jobs are worth a
-  look — open Jobs to see which` above the menu, counted by
-  `screens.CountNextBestMoves` so the first screen can only ever promise the
-  roles Jobs would go on to name. Deliberately a count, not a role: naming
-  one here would duplicate the banner rather than lead to it, and `t` is not
-  bound on the menu. It renders nothing at zero — an empty line there would
-  be a permanent reminder that there is nothing to do.
 - **Density on Progress and Insights.** Both are built for someone who
   already wants the numbers. Someone in a low-focus moment is more likely to
-  bounce off fifteen sections of tables than read them. The split helps, but
+  bounce off eleven sections of tables than read them. The split helps, but
   neither screen currently orders itself "most actionable first" — that's
   worth a second pass if this persona is the primary one, not a secondary
   audience.
-  **Done.** `ProgressModel.renderBody` now orders each half by how directly a
-  section answers that screen's own question: Insights leads with source
-  yield, then the score histogram, weekly activity, heatmap, sparklines and
-  the strategy radar; Progress leads with the funnel, then conversion rates,
-  the drilldown, score-vs-coverage, company concentration and mission
-  control. The wall of tables is the same length — what changed is that the
-  part worth reading first is above the fold rather than somewhere in it.
 - **Recovery language matters more than usual.** The bootstrap failure
   copy — *"Your profile still exists -- fix the problem and re-run setup to
   resume from where it stopped"* — is exactly the right instinct: it says
@@ -847,7 +707,8 @@ in `dashboard/internal/theme/icons.go`:
    | location | `⌂` | clock | `◷` |
    | filter | `▽` | graph | `▨` |
    | knowledge | `⇪` | quit / exit | `✕` |
-   | prev / next | `❮` `❯` | | |
+   | prev / next / back | `❮` `❯` | answers / chat | `¶` |
+   | check for updates | `↻` | manage profiles | `◐` |
 
 **Structural glyphs** (not part of either icon set, always literal): box-drawing
 `╭─╮│╰─╯` for panels, `┃` for the selection bar, `━`/`─` for active/inactive tab
@@ -869,9 +730,12 @@ cell.
 **The only raster assets** are `assets/app_icon.png` and `assets/macos_icon.png`
 — the app icon, a neon outlined terminal-document with a diamond, in the
 product's own Sky/Mauve/Pink range on near-black. That icon is the brand mark;
-this system uses it as the logo wherever a mark is needed. There is no wordmark,
-no logotype, and no alternate lockup in the sources — render "resume-builder" in
-plain type (lowercase, hyphenated, monospace) wherever a wordmark is needed. The
+this system uses it as the logo wherever a mark is needed. The one wordmark is the
+CLI launcher banner (`CliBanner`): "RESUME BUILDER" in figlet ANSI Shadow block
+letters (`cli_art.MAIN_BANNER_LINES`), painted with a single diagonal gradient
+from Sky to Mauve inside a double-ruled Sky panel, with a sparkle field to its
+right. Use it only there — it is a launch moment, not a logo. Everywhere else,
+render "resume-builder" in plain type (lowercase, hyphenated, monospace). The
 footer of every dashboard screen does exactly that, in Subtext:
 `resume-builder dashboard`.
 

@@ -191,6 +191,15 @@ class TestIconSetsAgree(unittest.TestCase):
     def test_every_icon_has_a_color(self):
         self.assertEqual(set(theme._UNICODE_ICONS), set(theme._ICON_COLORS))
 
+    def test_every_menu_icon_name_is_defined(self):
+        """menu.py asked for "chat" with no entry in either set, so the
+        Application Answers row printed the literal word as its icon."""
+        import re
+
+        with open(os.path.join(SCRIPTS_DIR, "menu.py"), encoding="utf-8") as f:
+            names = set(re.findall(r'_icon_title\(\s*"([a-z_]+)"', f.read()))
+        self.assertEqual(names - set(theme._UNICODE_ICONS), set())
+
 
 if __name__ == "__main__":
     unittest.main()

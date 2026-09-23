@@ -885,27 +885,27 @@ func TestLayerScoreRendersMissingAsDash(t *testing.T) {
 func TestStalledHintOnlyFiresPastTheThreshold(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("resume-builder"), testJobRows(), 100, 30)
 
-	if got := m.stalledHint(); got != "" {
+	if got := m.actionClock().OverrunLine(DefaultElapsedTimerStyles(m.theme)); got != "" {
 		t.Errorf("no action in flight should give no hint, got %q", got)
 	}
 
 	m.actionInProgress = "tailor"
 	m.actionStartedAt = time.Now().Add(-2 * time.Minute)
-	if got := m.stalledHint(); got != "" {
+	if got := m.actionClock().OverrunLine(DefaultElapsedTimerStyles(m.theme)); got != "" {
 		t.Errorf("a 2-minute tailor is normal, want no hint, got %q", got)
 	}
 
 	m.actionStartedAt = time.Now().Add(-stalledTailorAfter - time.Minute)
-	if !strings.Contains(m.stalledHint(), "longer than usual") {
-		t.Errorf("an over-threshold tailor should warn, got %q", m.stalledHint())
+	if !strings.Contains(m.actionClock().OverrunLine(DefaultElapsedTimerStyles(m.theme)), "longer than the usual") {
+		t.Errorf("an over-threshold tailor should warn, got %q", m.actionClock().OverrunLine(DefaultElapsedTimerStyles(m.theme)))
 	}
 
 	// Liveness is a bounded network call and gets a much shorter leash,
 	// so the same elapsed time that's fine for a tailor is not fine here.
 	m.actionInProgress = "liveness"
 	m.actionStartedAt = time.Now().Add(-2 * time.Minute)
-	if !strings.Contains(m.stalledHint(), "longer than usual") {
-		t.Errorf("a 2-minute liveness check should warn, got %q", m.stalledHint())
+	if !strings.Contains(m.actionClock().OverrunLine(DefaultElapsedTimerStyles(m.theme)), "longer than the usual") {
+		t.Errorf("a 2-minute liveness check should warn, got %q", m.actionClock().OverrunLine(DefaultElapsedTimerStyles(m.theme)))
 	}
 }
 

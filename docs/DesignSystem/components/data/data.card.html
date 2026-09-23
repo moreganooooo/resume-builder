@@ -27,7 +27,7 @@ return (<>
 <div className="lbl">ProgressBar — determinate work (3 rows for tailor) and indeterminate</div>
 <ProgressBar value={62} thickness={3} label="Tailoring resume... (esc to cancel)" width={38} />
 <div style={{height:6}} />
-<ProgressBar mode="indeterminate" width={38} label="Scanning job boards..." />
+<ProgressBar mode="indeterminate" width={38} label="Scanning job boards…" />
 <div className="lbl">FunnelBar — pipeline funnel</div>
 {stages.map((s,i)=><FunnelBar key={s[0]} label={s[0]} count={s[1]} max={128} pct={i?(s[1]/stages[i-1][1])*100:undefined} color={FUNNEL_COLORS[i]} width={34} />)}
 <div className="lbl">Sparkline</div>
