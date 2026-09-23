@@ -294,14 +294,16 @@ printf "${BOLD}${BRAND}✦ ─────────────────�
 # expression expected" if the user typed anything non-numeric at the mode
 # prompt.
 if [ "$IS_MOBILE" -eq 1 ] && [ "$mode_choice" = "1" ]; then
+    # Use the already-configured profile name if available, otherwise a placeholder.
+    SYNC_PROFILE="${RESUME_PROFILE:-<your-profile>}"
     printf "${BOLD}${ACCENT}▯ MOBILE SYNCING COMPANION STRATEGY ACTIVATED:${RESET}\n"
-    printf "  1. Install ${BOLD}Syncthing${RESET} on your Desktop and your Pixel 10.\n"
+    printf "  1. Install ${BOLD}Syncthing${RESET} on your Desktop and this device.\n"
     printf "  2. Pair devices and share your active profile directories:\n"
-    printf "     - ${BOLD}profiles/morgan/${RESET}\n"
-    printf "     - ${BOLD}jds/morgan/${RESET}\n"
-    printf "     - ${BOLD}output/morgan/${RESET}\n"
-    printf "     - ${BOLD}data/morgan/${RESET}\n"
-    printf "  3. When you run a scan/tailoring on your Pixel 10, the tiny state JSONs\n"
+    printf "     - ${BOLD}profiles/${SYNC_PROFILE}/${RESET}\n"
+    printf "     - ${BOLD}jds/${SYNC_PROFILE}/${RESET}\n"
+    printf "     - ${BOLD}output/${SYNC_PROFILE}/${RESET}\n"
+    printf "     - ${BOLD}data/${SYNC_PROFILE}/${RESET}\n"
+    printf "  3. When you run a scan/tailoring on this device, the tiny state JSONs\n"
     printf "     will automatically sync to your desktop in <1 second.\n"
     printf "  4. Your desktop compilation daemon will instantly output the polished PDFs,\n"
     printf "     syncing them right back to your phone! No mobile storage bloat!\n\n"
