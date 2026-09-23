@@ -662,6 +662,77 @@ class TestLoadVerifiedSkillReferenceVectors(unittest.TestCase):
         self.assertEqual(result.shape, (3, 768))
 
 
+class TestLoadVerifiedSkillAnchoredMask(unittest.TestCase):
+
+    def _write_meta(self, tmpdir, content):
+        path = os.path.join(tmpdir, "verified_skill_vectors_ge2_d768.meta")
+        with open(path, "w") as f:
+            json.dump(content, f)
+        return path
+
+    @patch("os.path.exists", return_value=False)
+    def test_returns_none_when_sidecar_missing(self, _):
+        self.assertIsNone(dashboard_actions._load_verified_skill_anchored_mask())
+
+    def test_returns_none_when_anchored_field_absent(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._write_meta(d, {"model": "ge2", "dim": 768})
+            with patch("profile_paths.kb_dir", return_value=d):
+                self.assertIsNone(dashboard_actions._load_verified_skill_anchored_mask())
+
+    def test_returns_none_when_anchored_is_empty_list(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._write_meta(d, {"anchored": []})
+            with patch("profile_paths.kb_dir", return_value=d):
+                self.assertIsNone(dashboard_actions._load_verified_skill_anchored_mask())
+
+    def test_returns_bool_array_from_sidecar(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._write_meta(d, {"anchored": [True, False, True]})
+            with patch("profile_paths.kb_dir", return_value=d):
+                result = dashboard_actions._load_verified_skill_anchored_mask()
+        self.assertIsNotNone(result)
+        self.assertEqual(result.dtype, np.dtype(bool))
+        np.testing.assert_array_equal(result, [True, False, True])
+
+
+class TestCoverageReferenceWithAnchoredMask(unittest.TestCase):
+    """When an anchored_mask is provided, _coverage_reference uses only
+    employer-anchored rows to build the calibration distribution."""
+
+    def _unit_vecs(self, n, dim=16, seed=7):
+        rng = np.random.default_rng(seed)
+        v = rng.normal(size=(n, dim)).astype(np.float32)
+        v /= np.linalg.norm(v, axis=1, keepdims=True)
+        return v
+
+    def test_anchored_mask_all_true_matches_unmasked(self):
+        vecs = self._unit_vecs(10)
+        mask = np.ones(10, dtype=bool)
+        ref_masked = dashboard_actions._coverage_reference(vecs, anchored_mask=mask)
+        ref_plain = dashboard_actions._coverage_reference(vecs)
+        np.testing.assert_array_almost_equal(ref_masked, ref_plain)
+
+    def test_anchored_mask_filters_reference_rows(self):
+        """Reference with 3 anchored rows is smaller than reference with 10 rows."""
+        vecs = self._unit_vecs(10)
+        mask = np.array([True, True, True, False, False, False, False, False, False, False])
+        ref_masked = dashboard_actions._coverage_reference(vecs, anchored_mask=mask)
+        ref_full = dashboard_actions._coverage_reference(vecs)
+        # Both are sorted 1-D arrays but the masked reference has only 3 entries.
+        self.assertEqual(len(ref_masked), 3)
+        self.assertEqual(len(ref_full), 10)
+
+    def test_fewer_than_min_anchored_falls_back_to_all(self):
+        """If anchored count < _MIN_ANCHORED_FOR_REFERENCE, fall back to full."""
+        vecs = self._unit_vecs(10)
+        # Only 2 anchored — below the minimum-3 threshold.
+        mask = np.array([True, True, False, False, False, False, False, False, False, False])
+        ref_masked = dashboard_actions._coverage_reference(vecs, anchored_mask=mask)
+        ref_full = dashboard_actions._coverage_reference(vecs)
+        np.testing.assert_array_almost_equal(ref_masked, ref_full)
+
+
 class TestCancelledMessage(unittest.TestCase):
     """A dashboard cancel says what survived, where that is known."""
 

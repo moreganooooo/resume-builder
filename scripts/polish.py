@@ -36,9 +36,12 @@ from render_html import render_html
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
-OUTPUT_JSON_DIR = os.path.join(profile_paths.output_dir(), "json")
-OUTPUT_HTML_DIR = os.path.join(profile_paths.output_dir(), "html")
-OUTPUT_PDF_DIR = os.path.join(profile_paths.output_dir(), "pdf")
+OUTPUT_JSON_DIR = profile_paths.output_resume_dir("json")
+OUTPUT_CL_JSON_DIR = profile_paths.output_cl_dir("json")
+OUTPUT_HTML_DIR = profile_paths.output_resume_dir("html")
+OUTPUT_CL_HTML_DIR = profile_paths.output_cl_dir("html")
+OUTPUT_PDF_DIR = profile_paths.output_resume_dir("pdf")
+OUTPUT_CL_PDF_DIR = profile_paths.output_cl_dir("pdf")
 
 RESUME_SUFFIX = "_Resume.json"
 COVERLETTER_SUFFIX = "_CoverLetter.json"
@@ -315,8 +318,10 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
 
     stem = stem_from_json_path(json_path, doc_type)
     suffix = "_Resume" if doc_type == "resume" else "_CoverLetter"
-    html_path = os.path.join(OUTPUT_HTML_DIR, f"{stem}{suffix}.html")
-    pdf_path = os.path.join(OUTPUT_PDF_DIR, f"{stem}{suffix}.pdf")
+    _html_dir = OUTPUT_HTML_DIR if doc_type == "resume" else OUTPUT_CL_HTML_DIR
+    _pdf_dir = OUTPUT_PDF_DIR if doc_type == "resume" else OUTPUT_CL_PDF_DIR
+    html_path = os.path.join(_html_dir, f"{stem}{suffix}.html")
+    pdf_path = os.path.join(_pdf_dir, f"{stem}{suffix}.pdf")
     os.makedirs(os.path.dirname(html_path), exist_ok=True)
     os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
 
@@ -406,8 +411,10 @@ def render_existing_json(json_path: str, doc_type: str) -> dict:
 
     stem = stem_from_json_path(json_path, doc_type)
     suffix = "_Resume" if doc_type == "resume" else "_CoverLetter"
-    html_path = os.path.join(OUTPUT_HTML_DIR, f"{stem}{suffix}.html")
-    pdf_path = os.path.join(OUTPUT_PDF_DIR, f"{stem}{suffix}.pdf")
+    _html_dir = OUTPUT_HTML_DIR if doc_type == "resume" else OUTPUT_CL_HTML_DIR
+    _pdf_dir = OUTPUT_PDF_DIR if doc_type == "resume" else OUTPUT_CL_PDF_DIR
+    html_path = os.path.join(_html_dir, f"{stem}{suffix}.html")
+    pdf_path = os.path.join(_pdf_dir, f"{stem}{suffix}.pdf")
     os.makedirs(os.path.dirname(html_path), exist_ok=True)
     os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
 
@@ -459,7 +466,8 @@ def pick_polish_target(page_size: int = _POLISH_PAGE_SIZE) -> str | None:
     need. Returns None if there's nothing to pick (empty dir, or the
     user cancels)."""
     paths = sorted(
-        glob.glob(os.path.join(OUTPUT_JSON_DIR, "*.json")),
+        glob.glob(os.path.join(OUTPUT_JSON_DIR, "*.json"))
+        + glob.glob(os.path.join(OUTPUT_CL_JSON_DIR, "*.json")),
         key=os.path.getmtime,
         reverse=True,
     )

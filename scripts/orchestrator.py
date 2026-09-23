@@ -904,7 +904,7 @@ SKILLS_CONTEXT_FILTER_MIN = 120
 # inflating overlap or the filter under-crediting synonyms is unresolved;
 # a profile owner happy with its calibration should not get either change
 # silently. CLAUDE.md records the A/B method and the bar a revision must clear.
-SKILLS_CONTEXT_FILTER_ENABLED = False
+SKILLS_CONTEXT_FILTER_ENABLED = True
 # A token shared by at least this many ledger names ("marketing", "data",
 # "campaign") says nothing about any one skill, so it can't match alone.
 _GENERIC_SKILL_TOKEN_DF = 4
@@ -1045,7 +1045,13 @@ def build_verified_skills_context(
     try:
         for t in (skills_menu._load_verified_tools() or {}).get("tools", []):
             name = (t.get("name") or "").strip()
-            if name:
+            employer = (t.get("employer") or "").strip()
+            # Exclude scanner-absorbed JD phrases: only tools confirmed at a
+            # real employer (or hand-added without an employer) reach the
+            # evaluator.  The "Self / Profile" sentinel is written by the
+            # skill-gap scanner and may carry verbatim JD requirements rather
+            # than the candidate's actual demonstrated experience.
+            if name and employer.lower() != "self / profile":
                 names.add(name)
     except Exception:
         pass
@@ -1065,9 +1071,11 @@ def build_verified_skills_context(
         return ""
 
     instructions = (
-        "This is the candidate's own confirmed toolset -- ground `tools_process_overlap` "
-        "in this list rather than inferring it from narrative alone, and do not list "
-        "something here as a `capability_gaps`/`stretch_evidence` item.\n"
+        "This is the candidate's own confirmed toolset (employer-verified entries "
+        "and profile skills only -- scanner-absorbed job-posting language is excluded). "
+        "Ground `tools_process_overlap` in this list rather than inferring it from "
+        "narrative alone, and do not list something here as a "
+        "`capability_gaps`/`stretch_evidence` item.\n"
     )
     if (
         not SKILLS_CONTEXT_FILTER_ENABLED
@@ -1075,7 +1083,8 @@ def build_verified_skills_context(
         or not str(jd_text).strip()
     ):
         return (
-            "=== VERIFIED SKILLS & TOOLS (from verified_tools.json + profile.yml) ===\n"
+            "=== VERIFIED SKILLS & TOOLS (employer-verified, from verified_tools.json"
+            " + profile.yml) ===\n"
             + instructions
             + ", ".join(sorted(names, key=str.lower))
         )
@@ -4708,7 +4717,7 @@ def _read_matching_resume_tagline(stem: str) -> str:
     for this JD, or if its JSON can't be parsed -- a cover letter can
     always be generated standalone."""
     resume_path = os.path.join(
-        profile_paths.output_dir(), "json", f"{stem}_Resume.json"
+        profile_paths.output_resume_dir("json"), f"{stem}_Resume.json"
     )
     if not os.path.exists(resume_path):
         return ""
@@ -5186,17 +5195,39 @@ _ABORT_BUILD = object()
 
 class ResumeEngine:
 
-    def __init__(self):
+    def __init__(self, output_category: str | None = None):
         self.engine_dir = os.path.join(PROJECT_ROOT, "resume-engine")
         self.prompts_dir = os.path.join(self.engine_dir, "prompts")
         self.rules_dir = os.path.join(self.engine_dir, "rules")
         self.scoring_dir = os.path.join(self.engine_dir, "scoring")
         self.kb_dir = profile_paths.kb_dir()
         self.templates_dir = os.path.join(self.engine_dir, "templates")
-        self.output_json_dir = os.path.join(profile_paths.output_dir(), "json")
-        self.output_html_dir = os.path.join(profile_paths.output_dir(), "html")
-        self.output_pdf_dir = os.path.join(profile_paths.output_dir(), "pdf")
-        self.output_docx_dir = os.path.join(profile_paths.output_dir(), "docx")
+        if output_category == "sample":
+            _dir_fn = profile_paths.output_samples_dir
+        elif output_category == "recruiter":
+            _dir_fn = profile_paths.output_recruiter_dir
+        else:
+            _dir_fn = None
+        if _dir_fn is not None:
+            _resume_dir = _dir_fn("resume")
+            _cl_dir = _dir_fn("cover_letter")
+            self.output_json_dir = _resume_dir
+            self.output_html_dir = _resume_dir
+            self.output_pdf_dir = _resume_dir
+            self.output_docx_dir = _resume_dir
+            self.output_cl_json_dir = _cl_dir
+            self.output_cl_html_dir = _cl_dir
+            self.output_cl_pdf_dir = _cl_dir
+            self.output_cl_docx_dir = _cl_dir
+        else:
+            self.output_json_dir = profile_paths.output_resume_dir("json")
+            self.output_html_dir = profile_paths.output_resume_dir("html")
+            self.output_pdf_dir = profile_paths.output_resume_dir("pdf")
+            self.output_docx_dir = profile_paths.output_resume_dir("docx")
+            self.output_cl_json_dir = profile_paths.output_cl_dir("json")
+            self.output_cl_html_dir = profile_paths.output_cl_dir("html")
+            self.output_cl_pdf_dir = profile_paths.output_cl_dir("pdf")
+            self.output_cl_docx_dir = profile_paths.output_cl_dir("docx")
         self.jds_dir = profile_paths.jds_dir()
         os.makedirs(self.output_json_dir, exist_ok=True)
         self._segment_cache: dict = {}
@@ -7649,9 +7680,9 @@ class ResumeEngine:
         stem = _build_output_stem(jd_path)
         letter_data["tagline"] = _read_matching_resume_tagline(stem)
         letter_data["role_title"] = role_title
-        json_out = os.path.join(self.output_json_dir, f"{stem}_CoverLetter.json")
-        html_out = os.path.join(self.output_html_dir, f"{stem}_CoverLetter.html")
-        pdf_out = os.path.join(self.output_pdf_dir, f"{stem}_CoverLetter.pdf")
+        json_out = os.path.join(self.output_cl_json_dir, f"{stem}_CoverLetter.json")
+        html_out = os.path.join(self.output_cl_html_dir, f"{stem}_CoverLetter.html")
+        pdf_out = os.path.join(self.output_cl_pdf_dir, f"{stem}_CoverLetter.pdf")
 
         os.makedirs(os.path.dirname(json_out), exist_ok=True)
         with open(json_out, "w", encoding="utf-8") as f:
@@ -7686,7 +7717,7 @@ class ResumeEngine:
             return False
         cli_art.print_subprocess_output(pdf_result.stdout)
 
-        docx_out = os.path.join(self.output_docx_dir, f"{stem}_CoverLetter.docx")
+        docx_out = os.path.join(self.output_cl_docx_dir, f"{stem}_CoverLetter.docx")
         try:
             render_coverletter_docx(letter_data, docx_out)
         except Exception as e:

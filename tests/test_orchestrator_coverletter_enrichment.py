@@ -70,7 +70,7 @@ class TestReadMatchingResumeTagline(unittest.TestCase):
         self._persona_sandbox.__enter__()
         self.addCleanup(self._persona_sandbox.__exit__, None, None, None)
 
-        self.resume_dir = os.path.join(profile_paths.output_dir(), "json")
+        self.resume_dir = profile_paths.output_resume_dir("json")
         os.makedirs(self.resume_dir, exist_ok=True)
         self.resume_path = os.path.join(
             self.resume_dir, "_tmp_enrichment_stem_Resume.json"

@@ -553,6 +553,37 @@ def output_dir(profile: str | None = None) -> str:
     return os.path.join(OUTPUT_ROOT, profile or active_profile())
 
 
+def output_resume_dir(fmt: str, profile: str | None = None) -> str:
+    """Tailored-resume output for one format (pdf/docx/json/html).
+
+    Mirrors the convention that every output format gets its own top-level
+    folder, then a resume/ subfolder so resumes and cover letters can be
+    browsed and sent separately rather than mixed in one flat pile."""
+    return os.path.join(output_dir(profile), fmt, "resume")
+
+
+def output_cl_dir(fmt: str, profile: str | None = None) -> str:
+    """Tailored cover-letter output for one format (pdf/docx/json/html)."""
+    return os.path.join(output_dir(profile), fmt, "cover_letter")
+
+
+def output_samples_dir(doc_type: str, profile: str | None = None) -> str:
+    """Sample-build output directory (all formats together under one roof).
+
+    doc_type is 'resume' or 'cover_letter'.  Unlike the tailored output
+    above, sample builds produce a single document in all formats at once --
+    grouping by document type rather than by format makes those files easier
+    to find and send together."""
+    return os.path.join(output_dir(profile), "samples", doc_type)
+
+
+def output_recruiter_dir(doc_type: str, profile: str | None = None) -> str:
+    """Recruiter-resume output directory (all formats together under one roof).
+
+    Same all-formats-in-one-place convention as output_samples_dir."""
+    return os.path.join(output_dir(profile), "recruiter", doc_type)
+
+
 def checkpoints_dir(profile: str | None = None) -> str:
     return os.path.join(output_dir(profile), "checkpoints")
 

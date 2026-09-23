@@ -50,6 +50,32 @@ def _add_bold_markdown_runs(paragraph, text: str) -> None:
         docx_theme.style_run(paragraph.add_run(part), bold=i % 2 == 1)
 
 
+_CTRL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _sanitize_str(s: str) -> str:
+    """Strip XML-illegal control characters from a string.
+
+    python-docx serialises text directly into XML, so characters in the
+    C0 range (other than \t, \n, \r) cause python-lxml to raise
+    "All strings must be XML compatible".  Replace them with a visually
+    safe substitute (U+FFFD REPLACEMENT CHARACTER) rather than deleting
+    silently, so the spot is at least visible in the rendered output.
+    """
+    return _CTRL_CHAR_RE.sub("�", s)
+
+
+def _sanitize(obj):
+    """Recursively sanitize every string in a nested dict/list."""
+    if isinstance(obj, str):
+        return _sanitize_str(obj)
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
 def _is_blank_or_null(value: str) -> bool:
     return not value or value.strip().lower() == "null"
 
@@ -264,6 +290,7 @@ def render_resume_docx(resume_data: dict, output_path: str) -> str:
     Builds an ATS-optimized .docx from resume_data and writes it to
     output_path. Returns output_path on success.
     """
+    resume_data = _sanitize(resume_data)
     doc = Document()
     # Before any content: apply_document_theme() rewrites the shared Normal
     # / Title / Heading 1 / List Bullet styles and the page margins, so the

@@ -470,7 +470,7 @@ class TestSaveAndRender(unittest.TestCase):
         )
 
         expected_html = os.path.join(
-            polish.OUTPUT_HTML_DIR, "AlexRivera_Title_Company_CoverLetter.html"
+            polish.OUTPUT_CL_HTML_DIR, "AlexRivera_Title_Company_CoverLetter.html"
         )
         mock_render.assert_called_once_with({"greeting": "Hi,"}, expected_html)
         self.assertEqual(result["html"], expected_html)
@@ -480,15 +480,23 @@ class TestPickPolishTarget(unittest.TestCase):
 
     def setUp(self):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_picker")
+        self.tmp_cl_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_picker_cl")
         os.makedirs(self.tmp_dir, exist_ok=True)
+        os.makedirs(self.tmp_cl_dir, exist_ok=True)
         self._real_json_dir = polish.OUTPUT_JSON_DIR
+        self._real_cl_json_dir = polish.OUTPUT_CL_JSON_DIR
         polish.OUTPUT_JSON_DIR = self.tmp_dir
+        polish.OUTPUT_CL_JSON_DIR = self.tmp_cl_dir
 
     def tearDown(self):
         polish.OUTPUT_JSON_DIR = self._real_json_dir
+        polish.OUTPUT_CL_JSON_DIR = self._real_cl_json_dir
         for name in os.listdir(self.tmp_dir):
             os.remove(os.path.join(self.tmp_dir, name))
         os.rmdir(self.tmp_dir)
+        for name in os.listdir(self.tmp_cl_dir):
+            os.remove(os.path.join(self.tmp_cl_dir, name))
+        os.rmdir(self.tmp_cl_dir)
 
     def _touch(self, name, mtime_offset):
         path = os.path.join(self.tmp_dir, name)

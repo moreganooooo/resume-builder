@@ -442,12 +442,14 @@ def _compute_skill_matrix_for_jd(path: str) -> None:
             "Refresh Skill Embeddings first."
         )
 
+    anchored_mask = _load_verified_skill_anchored_mask()
+
     skill_vecs = []
     for i in range(0, len(skill_names), BATCH_SIZE):
         batch = skill_names[i : i + BATCH_SIZE]
         skill_vecs.extend(embed_batch(batch))
 
-    reference = _coverage_reference(verified_vecs)
+    reference = _coverage_reference(verified_vecs, anchored_mask)
 
     skill_matrix = []
     for name, vec in zip(skill_names, skill_vecs):
@@ -566,7 +568,43 @@ def _load_verified_skill_reference_vectors():
     return vecs if len(vecs) > 0 else None
 
 
-def _coverage_reference(verified_skill_vecs):
+def _load_verified_skill_anchored_mask():
+    """Bool array parallel to the verified-skill vector matrix: True for
+    tools that have at least one real-employer entry (not "Self / Profile"
+    and not blank).  Loaded from the meta sidecar written by
+    embed_verified_skills.py.  Returns None when the sidecar is missing or
+    predates the anchored field -- callers fall back to treating all tools
+    as anchored.
+    """
+    import json
+    import os
+
+    import numpy as np
+    import profile_paths
+
+    meta_path = os.path.join(
+        profile_paths.kb_dir(), "verified_skill_vectors_ge2_d768.meta"
+    )
+    if not os.path.exists(meta_path):
+        return None
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        flags = meta.get("anchored")
+        if not flags:
+            return None
+        return np.array(flags, dtype=bool)
+    except Exception:
+        return None
+
+
+# Minimum number of employer-anchored tools required to use the anchored-only
+# reference distribution.  Below this the profile is too thin to calibrate
+# against and we fall back to the full set.
+_MIN_ANCHORED_FOR_REFERENCE = 3
+
+
+def _coverage_reference(verified_skill_vecs, anchored_mask=None):
     """Distribution of best-match similarity a SKILL PHRASE should be
     ranked against: each verified skill's own best match against every
     OTHER verified skill (diagonal masked so a skill never matches
@@ -576,10 +614,25 @@ def _coverage_reference(verified_skill_vecs):
     the bullet bank at all (a skill counting as "covered" here means the
     candidate has claimed it as a verified skill, not that a bullet
     happens to demonstrate it -- those are different questions).
+
+    When anchored_mask is supplied, the reference distribution is built
+    from employer-anchored tools only (tools with a real employer entry,
+    not the "Self / Profile" sentinel the skill-gap scanner writes).  This
+    prevents a dense cluster of 1,800+ scanner-absorbed JD phrases from
+    raising the reference floor so high that cross-domain skills always
+    score 0%.  JD skills are still compared against ALL vectors for the
+    max_score lookup; only the calibration changes.
     """
     import numpy as np
 
-    sims = verified_skill_vecs @ verified_skill_vecs.T
+    ref_vecs = verified_skill_vecs
+    if (
+        anchored_mask is not None
+        and anchored_mask.sum() >= _MIN_ANCHORED_FOR_REFERENCE
+    ):
+        ref_vecs = verified_skill_vecs[anchored_mask]
+
+    sims = ref_vecs @ ref_vecs.T
     np.fill_diagonal(sims, -1.0)
     return np.sort(sims.max(axis=1))
 

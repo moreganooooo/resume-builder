@@ -66,6 +66,9 @@ CHECKPOINT_PATH = os.path.join(
 )
 
 
+_SELF_PROFILE_EMPLOYER = "self / profile"
+
+
 def _names_sha(names: list) -> str:
     return hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest()
 
@@ -84,6 +87,23 @@ def load_verified_skill_names() -> list:
             seen.add(name.lower())
             names.append(name)
     return sorted(names)
+
+
+def load_anchored_flags(names: list) -> list[bool]:
+    """Parallel bool list to `names`: True when at least one entry for that
+    tool name has a real employer (i.e. employer is not blank and not the
+    scanner-absorbed "Self / Profile" sentinel).  Used to build an
+    employer-grounded calibration reference in the skills-gap matrix."""
+    with open(TOOLS_JSON_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    tools = data.get("tools", []) if isinstance(data, dict) else data
+    anchored: set[str] = set()
+    for t in tools or []:
+        name = (t.get("name") or "").strip()
+        employer = (t.get("employer") or "").strip()
+        if name and employer.lower() not in ("", _SELF_PROFILE_EMPLOYER):
+            anchored.add(name.lower())
+    return [n.lower() in anchored for n in names]
 
 
 def load_checkpoint(expected_sha: str):
@@ -123,6 +143,7 @@ def main():
         raise FileNotFoundError(f"Verified tools file not found: {TOOLS_JSON_PATH}")
 
     names = load_verified_skill_names()
+    anchored = load_anchored_flags(names)
     total = len(names)
     cli_art.console.print(
         f"{theme.colorize_icon('bullet_bank')} Loaded {total} unique verified skill/tool names",
@@ -175,6 +196,7 @@ def main():
         "rows": total,
         "source": TOOLS_JSON_PATH,
         "names_sha": current_sha,
+        "anchored": anchored,
     }
     with atomic_write(META_PATH) as f:
         json.dump(meta, f, indent=2)

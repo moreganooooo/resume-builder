@@ -18,6 +18,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 
 import docx_theme
 import profile_paths
@@ -47,11 +48,27 @@ def _build_recipient_lines(
     return lines
 
 
+_CTRL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def _sanitize(obj):
+    """Strip XML-illegal C0 control characters from every string in a
+    nested dict/list (same guard as render_resume_docx._sanitize)."""
+    if isinstance(obj, str):
+        return _CTRL_CHAR_RE.sub("�", obj)
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
+
+
 def render_coverletter_docx(cover_letter_data: dict, output_path: str) -> str:
     """
     Builds an ATS-optimized .docx from cover_letter_data and writes it to
     output_path. Returns output_path on success.
     """
+    cover_letter_data = _sanitize(cover_letter_data)
     contact = profile_paths.fixed_content_module().CONTACT_INFO
     doc = Document()
     # The letter is set a notch larger and looser than the resume -- see

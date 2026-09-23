@@ -35,6 +35,46 @@ class TestBuildVerifiedSkillsContext(unittest.TestCase):
         # Deduped, not listed twice.
         self.assertEqual(block.count("HubSpot"), 1)
 
+    def test_self_profile_tools_excluded_from_context(self):
+        """Tools written by the skill-gap scanner under "Self / Profile" are
+        scanner-absorbed JD language, not the candidate's confirmed experience.
+        They must not reach the evaluator's context."""
+        with (
+            patch(
+                "skills_menu._load_verified_tools",
+                return_value={
+                    "tools": [
+                        {"name": "Salesforce", "employer": "Acme Corp"},
+                        {"name": "Design and develop GenAI apps", "employer": "Self / Profile"},
+                        {"name": "Python", "employer": ""},
+                    ]
+                },
+            ),
+            patch("profile_paths.profile_yaml", return_value={}),
+        ):
+            block = orchestrator.build_verified_skills_context()
+
+        self.assertIn("Salesforce", block)
+        self.assertIn("Python", block)
+        self.assertNotIn("Design and develop GenAI apps", block)
+
+    def test_all_self_profile_yields_empty(self):
+        """A ledger populated entirely by the scanner has nothing real to say."""
+        with (
+            patch(
+                "skills_menu._load_verified_tools",
+                return_value={
+                    "tools": [
+                        {"name": "Build AI agents", "employer": "Self / Profile"},
+                        {"name": "Deploy LLM apps", "employer": "Self / Profile"},
+                    ]
+                },
+            ),
+            patch("profile_paths.profile_yaml", return_value={}),
+        ):
+            block = orchestrator.build_verified_skills_context()
+        self.assertEqual(block, "")
+
     def test_empty_when_nothing_verified(self):
         with (
             patch("skills_menu._load_verified_tools", return_value={"tools": []}),

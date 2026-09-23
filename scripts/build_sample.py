@@ -120,7 +120,7 @@ def build_sample() -> dict:
     job_key = jd_manager.compute_job_key(sample_jd_path)
     jd_manager.delete_checkpoint(job_key)
 
-    engine = orchestrator.ResumeEngine()
+    engine = orchestrator.ResumeEngine(output_category="sample")
 
     cli_art.console.rule("Building Sample Resume", style="dim")
     resume_result = engine.build_tailored_resume(

@@ -256,7 +256,7 @@ def build_recruiter_resume(interactive: bool | None = None, fresh: bool = True) 
     else:
         cli_art.print_literal("  Resuming from the existing checkpoint.")
 
-    engine = orchestrator.ResumeEngine()
+    engine = orchestrator.ResumeEngine(output_category="recruiter")
 
     cli_art.console.rule("Building Recruiter Resume", style="dim")
     resume_result = engine.build_tailored_resume(

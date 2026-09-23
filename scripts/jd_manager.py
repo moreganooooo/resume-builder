@@ -203,7 +203,7 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
 # buckets (tools_process_overlap 0.10->0.15 within fit_subscores,
 # funnel_friction 0.10->0.15 within interview_odds_subscores). A
 # pre-v7 composite_score was computed under the old weights.
-SCORING_VERSION = 8
+SCORING_VERSION = 9
 
 
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
