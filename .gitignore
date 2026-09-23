@@ -61,35 +61,13 @@ MorganEscott_*.pdf
 *_resume.pdf
 *.npy
 *.npz
-# Globs, not per-name lines -- see the note in the JD section above. Every
-# profile's knowledge base and data/ is personal by default; the board_scanner
-# YAML below is the one deliberately-tracked exception (committed scaffold,
-# shareable reference data), so it needs both the directory re-included and
-# the file re-included -- except scan_filters.yml, see below.
-# profiles/*/* (contents), NOT profiles/*/ (the directory). Git cannot
-# re-include a file whose PARENT DIRECTORY is excluded, so with the
-# directory-form pattern both negations below were dead: a new or renamed
-# profile's board_scanner YAML was silently ignored and could never be
-# committed. morgan/'s three files only survived because they were already
-# tracked, and gitignore does not apply to tracked files -- which is why
-# this went unnoticed. Verified with `git check-ignore -v --no-index`.
+# All profile contents are personal data that sync via Syncthing, not git.
+# profiles/*/* (contents form, NOT profiles/*/ directory form) -- git cannot
+# re-include a file whose parent directory is excluded, so never use the
+# directory form here. Verified with `git check-ignore -v --no-index`.
 profiles/*/*
-!profiles/*/board_scanner/
-!profiles/*/board_scanner/*.yml
-# ...but NOT scan_filters.yml. Unlike tracked_companies.yml and
-# search_queries.yml (company names and job keywords -- shareable), this one
-# holds the answers to "where do you live and what will you accept": a home
-# ZIP and city, a commute radius measured from it, and salary/hours floors.
-# It is regenerated from an in-code template by
-# bootstrap_profile.seed_scan_filters_from_target_roles(), so a new user
-# loses nothing by it being absent. Removed from history 2026-09-09.
-profiles/*/board_scanner/scan_filters.yml
-# Timestamped backups the ledger/company-discovery scripts write next to
-# the file they are editing (tracked_companies.yml.bak-20260821-131134).
-# Only visible once the pattern above started working; they are local
-# safety copies, never something to commit.
+# Timestamped backups written by ledger/company-discovery scripts.
 profiles/*/board_scanner/*.bak-*
-profiles/morgan/board_scanner/tracked_companies.yml
 data/*/
 
 
