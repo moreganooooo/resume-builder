@@ -142,8 +142,21 @@ class TestSelect(unittest.TestCase):
         )
         args = mock_run.call_args[0][0]
         spec = json.loads(args[3])
-        values = [opt["value"] for opt in spec["options"]]
-        self.assertEqual(values, ["a", "b"])
+        # The separator now travels as a spacer -- a blank row the Go menu
+        # draws between groups and the cursor skips -- never as a
+        # selectable option.
+        selectable = [o["value"] for o in spec["options"] if not o.get("spacer")]
+        self.assertEqual(selectable, ["a", "b"])
+        self.assertEqual(spec["options"][1], {"label": "", "value": "", "spacer": True})
+
+    def test_only_blank_or_rule_separators_become_spacers(self):
+        self.assertTrue(charm_prompt._is_spacer(questionary.Separator(" ")))
+        self.assertTrue(charm_prompt._is_spacer(questionary.Separator()))
+        self.assertFalse(
+            charm_prompt._is_spacer(questionary.Separator("──✦ resume ✦──"))
+        )
+        self.assertFalse(charm_prompt._is_spacer(charm_prompt.Heading("Group")))
+        self.assertTrue(charm_prompt._is_spacer(charm_prompt.Heading("  ")))
 
     @patch("charm_prompt._compile_prompt_if_needed", return_value=None)
     @patch("charm_prompt.interactive_subprocess.run")
@@ -167,6 +180,7 @@ class TestSelect(unittest.TestCase):
             [
                 {"label": "Group", "value": "", "heading": True},
                 {"label": "A", "value": "a"},
+                {"label": "", "value": "", "spacer": True},
             ],
         )
 

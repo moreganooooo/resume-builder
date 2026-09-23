@@ -145,7 +145,9 @@ class TestBuildChoices(unittest.TestCase):
         choices = [
             c
             for c in bootstrap_menu._build_choices()
+            # Headings and spacers are Separators (a Choice subclass).
             if isinstance(c, questionary.Choice)
+            and not isinstance(c, questionary.Separator)
         ]
         keys = [c.value for c in choices]
         self.assertEqual(keys[0], "phase0")

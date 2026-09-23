@@ -48,6 +48,10 @@ type Option struct {
 	Value string `json:"value"`
 	// Heading marks a non-selectable section title (select only).
 	Heading bool `json:"heading,omitempty"`
+	// Spacer marks a blank, non-selectable row between groups of options
+	// (select only) -- a questionary.Separator on the Python side. Groups
+	// read as groups only when white space sits between them.
+	Spacer bool `json:"spacer,omitempty"`
 	// Description is a supporting line rendered under the label, dimmer
 	// than it (select only). It carries what used to be an inline
 	// parenthetical on the label itself: at a glance the menu is then six
@@ -103,10 +107,10 @@ func Run(t theme.Theme, spec Spec) (Result, error) {
 	case "confirm":
 		return runConfirm(t, spec)
 	case "select":
-		if needsSectionModel(spec) {
-			return runSections(t, spec)
-		}
-		return runSelect(t, spec)
+		// Every single-choice menu goes through one renderer, so a menu
+		// with headings and one without look like the same family (the
+		// Find Jobs look). huh's own Select drew flat lists differently.
+		return runSections(t, spec)
 	case "checkbox":
 		return runCheckbox(t, spec)
 	case "grid":
@@ -130,23 +134,6 @@ func runConfirm(t theme.Theme, spec Spec) (Result, error) {
 		return Result{}, err
 	}
 	return Result{Confirmed: &answer}, nil
-}
-
-func runSelect(t theme.Theme, spec Spec) (Result, error) {
-	answer := spec.DefaultValue
-	opts := make([]huh.Option[string], len(spec.Options))
-	for i, o := range spec.Options {
-		opts[i] = huh.NewOption(o.Label, o.Value)
-	}
-	field := huh.NewSelect[string]().
-		Title(spec.Message).
-		Options(opts...).
-		Value(&answer)
-	form := newForm(t, huh.NewGroup(field))
-	if err := form.Run(); err != nil {
-		return Result{}, err
-	}
-	return Result{Value: answer}, nil
 }
 
 // runText renders a free-text input field -- the one prompt type

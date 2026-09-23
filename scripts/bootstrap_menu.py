@@ -18,6 +18,7 @@ import os
 import bootstrap_bullet_bank
 import bootstrap_profile
 import bullet_bank_menu
+import charm_prompt
 import cli_art
 import logstyle
 import profile_paths
@@ -369,6 +370,7 @@ def _build_choices(include_express: bool = False) -> list:
         )
 
     choices += [
+        charm_prompt.Heading("Set Up Your Profile"),
         questionary.Choice(
             title=[
                 ("class:text", "Upload Your Documents  "),
@@ -384,6 +386,7 @@ def _build_choices(include_express: bool = False) -> list:
             value="phase05",
         ),
     ]
+    choices.append(charm_prompt.Heading("Build Your Bullet Bank"))
     for stage in bullet_bank_menu.STAGES:
         choices.append(
             questionary.Choice(
@@ -394,6 +397,7 @@ def _build_choices(include_express: bool = False) -> list:
                 value=stage["key"],
             )
         )
+    choices.append(questionary.Separator(" "))
     choices.append(questionary.Choice(title="Back to Main Menu", value="__back__"))
     return choices
 

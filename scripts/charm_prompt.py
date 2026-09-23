@@ -61,9 +61,25 @@ class Heading(questionary.Separator):
         super().__init__(text)
 
 
+def _is_spacer(choice) -> bool:
+    """A Separator that only divides groups -- blank, or a bare rule of
+    dashes (questionary's default) -- rather than one carrying text. The Go
+    menu draws it as one empty line, the design system's gap between
+    groups; a decorative separator with text (the exit flourish) is still
+    dropped."""
+    if not isinstance(choice, questionary.Separator):
+        return False
+    # A heading with no text is a gap, not a title (skills_menu uses one
+    # before its Cancel row).
+    return not str(choice.title or "").strip(" -─━")
+
+
 def _select_option(choice):
-    """Options for a select spec: headings kept as headings, every other
-    non-selectable row dropped (see _is_selectable)."""
+    """Options for a select spec: headings kept as headings, group
+    separators kept as spacers, every other non-selectable row dropped
+    (see _is_selectable)."""
+    if _is_spacer(choice):
+        return {"label": "", "value": "", "spacer": True}
     if isinstance(choice, Heading):
         return {"label": choice.title, "value": "", "heading": True}
     if _is_selectable(choice):
@@ -102,7 +118,9 @@ def _split_styled_title(parts: list) -> tuple[str, str]:
             desc_parts.append(text)
         else:
             label_parts.append(text)
-    desc = " ".join(d.strip() for d in desc_parts).strip()
+    # Whitespace collapsed: a description wrapped with "\n" in its source
+    # would otherwise end at the first line break in the one-line render.
+    desc = " ".join(" ".join(desc_parts).split())
     # The parentheses were there to set the aside apart on a shared line; on
     # a line of its own, in its own tone, they are just noise.
     if desc.startswith("(") and desc.endswith(")"):

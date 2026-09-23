@@ -105,7 +105,7 @@ def _build_choices() -> list:
         questionary.Choice(
             title=[("class:new_user", "--> New User? Start Here!")], value="bootstrap"
         ),
-        questionary.Separator(" "),
+        charm_prompt.Heading("Your Job Search"),
         questionary.Choice(
             title=[
                 *_icon_title("discovery", "Find Jobs  "),
@@ -168,7 +168,7 @@ def _build_choices() -> list:
             ],
             value="settings_upkeep",
         ),
-        questionary.Separator(" "),
+        charm_prompt.Heading("More"),
         questionary.Choice(title=_icon_title("hint", "Help"), value="help"),
         questionary.Choice(title=_icon_title("exit", "Exit"), value="exit"),
     ]
@@ -857,9 +857,11 @@ def _menu_choices() -> list:
 def _build_scan_source_choices() -> list:
     """Built fresh per call -- see _build_choices()'s docstring for why."""
     return [
+        charm_prompt.Heading("Everything"),
         questionary.Choice(
             title=_icon_title("discovery", "All (default)"), value="all"
         ),
+        charm_prompt.Heading("One Source"),
         questionary.Choice(
             title=_icon_title("discovery", "JobRight only"), value="jobright"
         ),
@@ -883,6 +885,12 @@ def _build_scan_source_choices() -> list:
                 "discovery", "Indeed only (role search, Tesla, company watchlist)"
             ),
             value="indeed_all",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "discovery", "Staffing agency boards only (from your scan settings)"
+            ),
+            value="staffing_boards",
         ),
     ]
 

@@ -391,6 +391,18 @@ class TestHandleScan(unittest.TestCase):
         menu._handle_scan()
         mock_run.assert_called_once_with(["linkedin"])
 
+    @patch("menu.scan_module.run_scan", return_value=1)
+    @patch("menu.questionary.select")
+    def test_staffing_boards_choice_runs_only_that_source(self, mock_select, mock_run):
+        mock_select.return_value.ask.return_value = "staffing_boards"
+        menu._handle_scan()
+        mock_run.assert_called_once_with(["staffing_boards"])
+
+    def test_staffing_boards_is_a_menu_choice_and_a_registered_source(self):
+        values = [c.value for c in menu._build_scan_source_choices()]
+        self.assertIn("staffing_boards", values)
+        self.assertIn("staffing_boards", menu.scan_module.SOURCE_FETCHERS)
+
 
 class TestHandleScanPendingSkills(unittest.TestCase):
     @patch("menu._pause_and_return")

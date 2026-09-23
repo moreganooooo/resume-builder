@@ -650,7 +650,7 @@ def _handle_choice(choice: str) -> None:
 
 
 def _build_choices() -> list:
-    choices = []
+    choices: list = [charm_prompt.Heading("Build Your Bullet Bank")]
     for stage in STAGES:
         choices.append(
             questionary.Choice(
@@ -666,11 +666,11 @@ def _build_choices() -> list:
                 choices.append(
                     questionary.Choice(
                         title=[
+                            ("class:text", f"   ↳ {entry['label']}  "),
                             (
                                 "class:description",
-                                f"      ↳ {entry['label']} (optional follow-up: ",
+                                f"(optional follow-up: {entry['description']})",
                             ),
-                            ("class:description", f"{entry['description']})"),
                         ],
                         value=entry["key"],
                     )
@@ -678,7 +678,6 @@ def _build_choices() -> list:
 
     standalone = [entry for entry in MAINTENANCE if entry["after_stage"] is None]
     if standalone:
-        choices.append(questionary.Separator(" "))
         choices.append(
             charm_prompt.Heading("Ongoing Maintenance (optional, run anytime)")
         )

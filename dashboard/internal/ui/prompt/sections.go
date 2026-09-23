@@ -13,22 +13,10 @@ import (
 	"github.com/moreganooooo/resume-builder/dashboard/internal/theme"
 )
 
-// needsSectionModel reports whether a select spec needs the custom renderer
-// below rather than huh's own Select: huh has neither a non-selectable row
-// (a heading) nor a per-option second line (a description), and both are
-// presentation this menu depends on.
-func needsSectionModel(spec Spec) bool {
-	for _, o := range spec.Options {
-		if o.Heading || o.Description != "" {
-			return true
-		}
-	}
-	return false
-}
-
 // runSections renders a single-choice menu grouped under headings, styled
 // from the same huh theme as every other prompt so it reads as one family.
-// Headings are skipped by the cursor, so they can never be submitted.
+// Headings and spacers are skipped by the cursor, so they can never be
+// submitted.
 func runSections(t theme.Theme, spec Spec) (Result, error) {
 	m := newSectionModel(t, spec)
 	p := tea.NewProgram(m,
@@ -64,7 +52,7 @@ func newSectionModel(t theme.Theme, spec Spec) sectionModel {
 		width: 100, height: 40, cursor: -1,
 	}
 	for i, o := range m.opts {
-		if o.Heading {
+		if !o.selectable() {
 			continue
 		}
 		if m.cursor < 0 || (spec.DefaultValue != "" && o.Value == spec.DefaultValue) {
@@ -74,6 +62,9 @@ func newSectionModel(t theme.Theme, spec Spec) sectionModel {
 	return m
 }
 
+// selectable is false for the rows the cursor passes over.
+func (o Option) selectable() bool { return !o.Heading && !o.Spacer }
+
 func (m sectionModel) Init() tea.Cmd { return nil }
 
 // move steps to the next selectable row in dir, wrapping around.
@@ -81,7 +72,7 @@ func (m *sectionModel) move(dir int) {
 	n := len(m.opts)
 	for i := 1; i <= n; i++ {
 		j := ((m.cursor+dir*i)%n + n) % n
-		if !m.opts[j].Heading {
+		if m.opts[j].selectable() {
 			m.cursor = j
 			return
 		}
@@ -128,11 +119,20 @@ func (m sectionModel) lines() (out []string, cursorLine int) {
 	w := max(20, m.width-4)
 	heading := lipgloss.NewStyle().Foreground(m.st.Focused.Title.GetForeground()).Bold(true)
 	rule := lipgloss.NewStyle().Foreground(m.st.Focused.Description.GetForeground())
+	// blank adds one empty line between groups: never at the top, never
+	// two in a row (a spacer followed by a heading is still one gap).
+	blank := func() {
+		if len(out) > 0 && out[len(out)-1] != "" {
+			out = append(out, "")
+		}
+	}
 	for i, o := range m.opts {
+		if o.Spacer {
+			blank()
+			continue
+		}
 		if o.Heading {
-			if i > 0 {
-				out = append(out, "")
-			}
+			blank()
 			label := strings.ToUpper(strings.TrimSpace(o.Label))
 			fill := max(0, min(w, 48)-ansi.StringWidth(label)-1)
 			out = append(out, heading.Render(label)+" "+rule.Render(strings.Repeat("─", fill)))
@@ -141,7 +141,10 @@ func (m sectionModel) lines() (out []string, cursorLine int) {
 		label := ansi.Truncate(o.Label, w-2, "…")
 		if i == m.cursor {
 			cursorLine = len(out)
-			out = append(out, m.st.Focused.SelectSelector.Render("> ")+m.st.Focused.SelectedOption.Render(label))
+			// The selector style carries the Mauve bar as its own string
+			// (theme.SelectionBar); rendering it WITH an argument appended
+			// that argument, which is how a stray "> " sat beside the bar.
+			out = append(out, m.st.Focused.SelectSelector.Render()+m.st.Focused.SelectedOption.Render(label))
 		} else {
 			out = append(out, "  "+m.st.Focused.UnselectedOption.Render(label))
 		}
@@ -154,6 +157,9 @@ func (m sectionModel) lines() (out []string, cursorLine int) {
 			// keypress, which reads as the list moving under you.
 			out = append(out, "    "+rule.Render(ansi.Truncate(o.Description, w-4, "…")))
 		}
+	}
+	for len(out) > 0 && out[len(out)-1] == "" {
+		out = out[:len(out)-1]
 	}
 	return out, cursorLine
 }
