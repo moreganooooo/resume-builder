@@ -94,6 +94,14 @@ type JobsModel struct {
 	// found by a scanner. Same VIEW-time, reversible narrowing as the
 	// two filters above.
 	manualFilter bool
+	// freshFilter ([h]) narrows to postings whose PostedDate is today or
+	// yesterday (within the last 24 hours). PostedDate is a YYYY-MM-DD
+	// string produced by jd_manager.compute_posting_date(), so the
+	// comparison is a string >= check against yesterday's ISO date.
+	// Rows with no PostedDate are excluded when the filter is active --
+	// absence is not evidence of freshness. Same VIEW-time, reversible
+	// narrowing as the filters above.
+	freshFilter bool
 	// distanceSort orders by measured distance ascending instead of the
 	// default composite-score ordering.
 	distanceSort bool
@@ -346,6 +354,11 @@ func (m *JobsModel) applyFilter() {
 
 		// Narrow to manually-added postings only.
 		if m.manualFilter && !r.AddedManually {
+			continue
+		}
+
+		// Narrow to postings whose date falls within the last 24 hours.
+		if m.freshFilter && !isFreshPosting(r.PostedDate) {
 			continue
 		}
 
@@ -689,6 +702,19 @@ func nextPayFilter(current string) string {
 }
 
 var payFilterCycle = []string{"", "stated", "unstated"}
+
+// isFreshPosting reports whether a YYYY-MM-DD PostedDate string falls within
+// the last 24 hours. Because PostedDate has no time component, "within 24
+// hours" is interpreted as today or yesterday in the local timezone -- a
+// posting from 11 pm last night is one hour old, not 23. Rows with a blank
+// PostedDate are excluded: absence is not evidence of freshness.
+func isFreshPosting(postedDate string) bool {
+	if postedDate == "" {
+		return false
+	}
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	return postedDate >= yesterday
+}
 
 // payFilterLabel names the active [$] mode for the status bar.
 func payFilterLabel(current string) string {
@@ -1370,6 +1396,10 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.manualFilter = !m.manualFilter
 			m.cursor = 0
 			m.applyFilter()
+		case "h":
+			m.freshFilter = !m.freshFilter
+			m.cursor = 0
+			m.applyFilter()
 		case "d":
 			// Reachable only in the normal state: the actionError branch
 			// above intercepts "d" for its raw-detail toggle and returns
@@ -1601,6 +1631,7 @@ var jobsHelpCategories = []helpCategory{
 		{"c", "Toggle experience/degree blocker roles only"},
 		{"i", "Cycle category: all / hide AI training / AI training only / staffing boards"},
 		{"n", "Toggle manually-added roles only"},
+		{"h", "Toggle posted within last 24 hours only"},
 	}},
 	{"Quick Reference", []helpBinding{
 		{"v", "View terminology definitions"},
@@ -1931,6 +1962,9 @@ func (m JobsModel) renderHeader() string {
 	}
 	if m.manualFilter {
 		info += modeStyle.Render("  " + m.theme.Icons.Filter + " manually added")
+	}
+	if m.freshFilter {
+		info += modeStyle.Render("  " + m.theme.Icons.Filter + " posted ≤24h")
 	}
 	if m.distanceSort {
 		info += modeStyle.Render("  ↕ nearest")
