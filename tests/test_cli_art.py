@@ -979,7 +979,9 @@ class TestBootstrapLockedRowsExplainThemselves(unittest.TestCase):
     def test_phase05_locked_row_carries_a_reason(self):
         import bootstrap_menu
 
-        with patch.object(bootstrap_menu, "_phase0_status", return_value=("Never run", "")):
+        with patch.object(
+            bootstrap_menu, "_phase0_status", return_value=("Never run", "")
+        ):
             status, detail = bootstrap_menu._phase05_status()
 
         self.assertEqual(status, "Locked")

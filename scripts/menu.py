@@ -3671,11 +3671,11 @@ def run_build_documents_menu() -> None:
 # mapping, so the two surfaces cannot drift into running different things
 # under the same label.
 _SKILLS_TOOLS = {
-    "manage_skills": lambda: skills_menu.run_skills_menu(),
-    "scan_pending_skills": lambda: _handle_scan_pending_skills(),
-    "refresh_skill_embeddings": lambda: _handle_refresh_skill_embeddings(),
-    "clear_stale_skill_matrices": lambda: _handle_clear_stale_skill_matrices(),
-    "discover_employers": lambda: _handle_discover_employers(),
+    "manage_skills": skills_menu.run_skills_menu,
+    "scan_pending_skills": _handle_scan_pending_skills,
+    "refresh_skill_embeddings": _handle_refresh_skill_embeddings,
+    "clear_stale_skill_matrices": _handle_clear_stale_skill_matrices,
+    "discover_employers": _handle_discover_employers,
 }
 
 
