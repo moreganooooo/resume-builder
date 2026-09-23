@@ -89,6 +89,55 @@ type JobRow struct {
 	// all), so this is shown for eyeballing only until a category earns a
 	// scored subscore. See docs/superpowers/specs/2026-09-01-stress-challenge-scoring-design.md.
 	StressSignals []string `json:"stress_signals"`
+
+	// AITraining marks contract work producing training/evaluation data
+	// for AI labs (scripts/ai_training.py); AITrainingEvidence is what
+	// fired. StaffingAgency names the watched agency board a posting came
+	// from (scripts/staffing_boards.py), "" for every other source. All
+	// three are labels for the [i] category view filter, never a score.
+	AITraining         bool     `json:"ai_training"`
+	AITrainingEvidence []string `json:"ai_training_evidence"`
+	StaffingAgency     string   `json:"staffing_agency"`
+}
+
+// Category filter stops shared by Jobs and Pipeline ([i]). "" shows all.
+const (
+	CategoryHideAITraining = "hide_ai"
+	CategoryAITrainingOnly = "ai_only"
+	CategoryStaffingOnly   = "staffing"
+)
+
+// CategoryFilterCycle is the order [i] steps through.
+var CategoryFilterCycle = []string{"", CategoryHideAITraining, CategoryAITrainingOnly, CategoryStaffingOnly}
+
+// CategoryFilterLabels names each non-default stop for status bars.
+var CategoryFilterLabels = map[string]string{
+	CategoryHideAITraining: "hide AI training",
+	CategoryAITrainingOnly: "AI training only",
+	CategoryStaffingOnly:   "staffing boards",
+}
+
+// NextCategoryFilter returns the stop after current, wrapping to "".
+func NextCategoryFilter(current string) string {
+	for i, v := range CategoryFilterCycle {
+		if v == current {
+			return CategoryFilterCycle[(i+1)%len(CategoryFilterCycle)]
+		}
+	}
+	return ""
+}
+
+// MatchesCategory reports whether a posting passes the category filter.
+func MatchesCategory(filter string, aiTraining bool, staffingAgency string) bool {
+	switch filter {
+	case CategoryHideAITraining:
+		return !aiTraining
+	case CategoryAITrainingOnly:
+		return aiTraining
+	case CategoryStaffingOnly:
+		return staffingAgency != ""
+	}
+	return true
 }
 
 // HasStressSignals reports whether any stress-phrase category was detected.

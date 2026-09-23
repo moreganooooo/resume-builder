@@ -11,6 +11,7 @@ import re
 import sys
 from typing import cast
 
+import ai_training
 import batch_evaluate
 import cli_art
 import compensation
@@ -492,6 +493,29 @@ def _stress_fields(data: dict) -> dict:
     return {"stress_signals": stress_signals.categories(data.get("description") or "")}
 
 
+def _category_fields(data: dict) -> dict:
+    """Which kind of opportunity this is, beyond its employment type.
+
+    `ai_training` flags contract work producing training data for AI labs
+    (see ai_training.py); computed live, so postings saved before the
+    classifier existed are labeled too. `ai_training_evidence` is what
+    fired, shown in the detail pane so a wrong label is visible.
+    `staffing_agency` is the watched agency board the posting came from
+    (see staffing_boards.py), "" for every other source. Both are view
+    filters in the dashboard and never change a score.
+    """
+    evidence = ai_training.classify(
+        data.get("job_title") or data.get("title") or "",
+        data.get("company_name") or data.get("company") or "",
+        data.get("description") or "",
+    )
+    return {
+        "ai_training": bool(evidence),
+        "ai_training_evidence": evidence,
+        "staffing_agency": data.get("staffing_agency") or "",
+    }
+
+
 def _location_fields(data: dict, settings: dict) -> dict:
     """Location, workplace mode, and distance for one JD's export row.
 
@@ -585,6 +609,7 @@ def _file_row(path: str, status: str, location_settings_block: dict) -> dict | N
         **_employment_fields(jd_data),
         **_compensation_fields(jd_data),
         **_stress_fields(jd_data),
+        **_category_fields(jd_data),
     }
 
 
@@ -700,6 +725,7 @@ def _db_row_entry(record, data: dict, evaluation, job_id: str, settings: dict) -
         **_employment_fields(data),
         **_compensation_fields(data),
         **_stress_fields(data),
+        **_category_fields(data),
     }
 
 

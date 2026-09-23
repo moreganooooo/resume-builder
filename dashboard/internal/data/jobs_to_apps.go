@@ -66,6 +66,9 @@ func JobRowsToApplications(rows []model.JobRow) []model.CareerApplication {
 			RoleTrack:           row.Evaluation.RoleTrack,
 			RoleTrackConfidence: row.Evaluation.RoleTrackConfidence,
 			ExperienceBlockers:  row.Evaluation.ExperienceBlockers,
+			AITraining:          row.AITraining,
+			AITrainingEvidence:  row.AITrainingEvidence,
+			StaffingAgency:      row.StaffingAgency,
 		}
 		if row.Coverage != nil {
 			app.Coverage = row.Coverage.Score

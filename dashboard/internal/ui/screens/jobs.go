@@ -84,6 +84,11 @@ type JobsModel struct {
 	// narrowing, same reversibility guarantee as roleTrackFilter -- this
 	// was the one Pipeline already had that Jobs itself was missing.
 	experienceBlockerFilter bool
+	// categoryFilter ([i]) cycles all -> hide AI training -> AI training
+	// only -> staffing boards only (model.CategoryFilterCycle). AI-training
+	// gigs are real and often score at the top, crowding out permanent
+	// roles; hiding them is a view choice, never a drop.
+	categoryFilter string
 	// manualFilter narrows to postings added by hand via "Add Job
 	// Description Manually" (model.JobRow.AddedManually), rather than
 	// found by a scanner. Same VIEW-time, reversible narrowing as the
@@ -332,6 +337,10 @@ func (m *JobsModel) applyFilter() {
 
 		// Narrow to postings carrying a years_experience/degree blocker.
 		if m.experienceBlockerFilter && len(r.Evaluation.ExperienceBlockers) == 0 {
+			continue
+		}
+
+		if !model.MatchesCategory(m.categoryFilter, r.AITraining, r.StaffingAgency) {
 			continue
 		}
 
@@ -1353,6 +1362,10 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			m.experienceBlockerFilter = !m.experienceBlockerFilter
 			m.cursor = 0
 			m.applyFilter()
+		case "i":
+			m.categoryFilter = model.NextCategoryFilter(m.categoryFilter)
+			m.cursor = 0
+			m.applyFilter()
 		case "n":
 			m.manualFilter = !m.manualFilter
 			m.cursor = 0
@@ -1586,6 +1599,7 @@ var jobsHelpCategories = []helpCategory{
 		{"/", "Search company/title (narrows within active filter)"},
 		{"r", "Toggle manager-track roles only"},
 		{"c", "Toggle experience/degree blocker roles only"},
+		{"i", "Cycle category: all / hide AI training / AI training only / staffing boards"},
 		{"n", "Toggle manually-added roles only"},
 	}},
 	{"Quick Reference", []helpBinding{
@@ -1911,6 +1925,9 @@ func (m JobsModel) renderHeader() string {
 	}
 	if m.experienceBlockerFilter {
 		info += modeStyle.Render("  " + m.theme.Icons.Filter + " experience blockers")
+	}
+	if m.categoryFilter != "" {
+		info += modeStyle.Render("  " + m.theme.Icons.Filter + " " + model.CategoryFilterLabels[m.categoryFilter])
 	}
 	if m.manualFilter {
 		info += modeStyle.Render("  " + m.theme.Icons.Filter + " manually added")
@@ -2402,6 +2419,17 @@ func (m JobsModel) jobDetailContentLines(job model.JobRow, width, height int) []
 		for _, b := range eval.ExperienceBlockers {
 			content = append(content, "  • "+b.Text)
 		}
+	}
+	if job.AITraining {
+		content = append(content, "")
+		content = append(content, accent.Render("AI-training gig (contract data work for AI labs)"))
+		for _, e := range job.AITrainingEvidence {
+			content = append(content, "  • "+e)
+		}
+	}
+	if job.StaffingAgency != "" {
+		content = append(content, "")
+		content = append(content, accent.Render("Via staffing agency: ")+job.StaffingAgency)
 	}
 	// Rendered separately from and below hard blockers, never merged
 	// with them: a gap is something to address in an application, a

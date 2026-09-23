@@ -1597,3 +1597,23 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   non-destructive -- excluded roles are left out of that run, not
   archived; this script's own `--apply` mode (or a manual re-run) is
   still what archives them for good after review.
+- **AI-training gigs and staffing-agency boards are LABELS, surfaced as one
+  `[i]` category view filter on Jobs and Pipeline (`model.CategoryFilterCycle`:
+  all / hide AI training / AI training only / staffing boards).**
+  `scripts/ai_training.py` flags a posting by a known platform employer, a
+  gig-shaped title, or a phrase describing the work itself; single keywords
+  ("RLHF", "annotation", "improve AI") were measured as noise from real
+  engineering roles (2026-09-23: 17 of 387 of one profile's pending
+  postings flagged, all genuine), and `employment_type` is no signal (an "AI
+  Trainer" can be tagged Full-time). It is computed live in
+  `picker._category_fields()`, so it never needs a backfill and never
+  changes a score. `scripts/staffing_boards.py` is a `scan.SOURCE_FETCHERS`
+  source driven by `scan_filters.yml` `staffing_boards:` (name, url,
+  `type: jsonld|hmg`, optional `link_pattern`); results pass
+  `scan_indeed._admit_indeed_job()`'s title/location gates and carry
+  `staffing_agency`. The `hmg` type (Haley Marketing hmg-jb boards) needs
+  headless Chromium (`scan-hmg-board.mjs`): its posting endpoint is ticketed
+  by the page's own scripts and answers "Ticket Mismatch!" to any replay from
+  outside, so the page's own request is observed and re-issued in-page. Add
+  a new board TYPE by adding an adapter to `staffing_boards.ADAPTERS`, not a
+  new scan source.

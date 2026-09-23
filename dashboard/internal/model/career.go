@@ -50,6 +50,9 @@ type CareerApplication struct {
 	RoleTrack           string
 	RoleTrackConfidence string
 	ExperienceBlockers  []HardBlocker
+	AITraining          bool
+	AITrainingEvidence  []string
+	StaffingAgency      string
 }
 
 // EmploymentLabel renders the employment type for a list cell, mirroring

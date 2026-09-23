@@ -177,6 +177,7 @@ type PipelineModel struct {
 	payFilter               string
 	roleTrackFilter         bool
 	experienceBlockerFilter bool
+	categoryFilter          string // [i], same stops as Jobs' [i]
 
 	// notice explains why a keypress was a no-op (e.g. "o" with no saved
 	// URL) instead of silently doing nothing. Cleared on the next keypress,
@@ -608,6 +609,12 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 		m.cursor = 0
 		m.scrollOffset = 0
 
+	case "i":
+		m.categoryFilter = model.NextCategoryFilter(m.categoryFilter)
+		m.applyFilterAndSort()
+		m.cursor = 0
+		m.scrollOffset = 0
+
 	case "enter":
 		if app, ok := m.CurrentApp(); ok && app.ReportPath != "" {
 			fullPath := filepath.Join(m.careerOpsPath, app.ReportPath)
@@ -958,6 +965,9 @@ func matchesPipelineFilters(app model.CareerApplication, m PipelineModel) bool {
 	if m.experienceBlockerFilter && len(app.ExperienceBlockers) == 0 {
 		return false
 	}
+	if !model.MatchesCategory(m.categoryFilter, app.AITraining, app.StaffingAgency) {
+		return false
+	}
 	return true
 }
 
@@ -1102,6 +1112,7 @@ var pipelineHelpCategories = []helpCategory{
 		{"$", "Cycle pay-disclosure mode"},
 		{"t", "Toggle manager-track only"},
 		{"x", "Toggle years/degree blocker only"},
+		{"i", "Cycle category: all / hide AI training / AI only / staffing boards"},
 		{"", "ALL / EVALUATED hide scored roles under 3.5; LOW <3.5 shows them"},
 		{"", "Roles you have applied to are never hidden by that bar"},
 	}},
@@ -1368,6 +1379,12 @@ func (m PipelineModel) pipelineDetailContentLines(app model.CareerApplication, w
 			texts[i] = b.Text
 		}
 		content = append(content, styles.Subtext.Render("Experience blockers: ")+styles.Value.Render(strings.Join(texts, "; ")))
+	}
+	if app.AITraining {
+		content = append(content, styles.Subtext.Render("AI-training gig: ")+styles.Value.Render(strings.Join(app.AITrainingEvidence, "; ")))
+	}
+	if app.StaffingAgency != "" {
+		content = append(content, styles.Subtext.Render("Staffing agency: ")+styles.Value.Render(app.StaffingAgency))
 	}
 	content = append(content, "")
 
@@ -1638,6 +1655,9 @@ func (m PipelineModel) renderSortBar() string {
 	}
 	if m.experienceBlockerFilter {
 		parts = append(parts, "[years/degree blocker]")
+	}
+	if m.categoryFilter != "" {
+		parts = append(parts, "["+model.CategoryFilterLabels[m.categoryFilter]+"]")
 	}
 	parts = append(parts, count)
 

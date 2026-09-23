@@ -25,6 +25,7 @@ import scan_boards
 import scan_indeed
 import scan_jobright
 import scan_linkedin
+import staffing_boards
 import theme
 from atomic_write import atomic_write
 
@@ -99,6 +100,9 @@ SOURCE_FETCHERS: dict[str, Callable[..., Any]] = {
     "indeed_watchlist": scan_indeed.fetch_indeed_watchlist_jobs,
     "boards": scan_boards.fetch_board_jobs,
     "ats": scan_ats.fetch_ats_jobs,
+    # Staffing-agency boards from scan_filters.yml's staffing_boards; a
+    # no-op for a profile without one. See staffing_boards.py.
+    "staffing_boards": staffing_boards.fetch_staffing_board_jobs,
 }
 
 
