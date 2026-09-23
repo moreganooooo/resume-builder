@@ -20,6 +20,7 @@ import jd_manager
 import jd_source
 import orchestrator
 import theme
+from gemini_client import SustainedFailureError
 
 # Keeps evaluate_fit() calls under this account's Gemini API tier (15 RPM
 # for gemini-3.1-flash-lite / EVAL_MODEL). evaluate_fit() now makes TWO
@@ -39,6 +40,13 @@ SECONDS_BETWEEN_CALLS = (
     )
     else 9.0
 )
+
+# Consecutive roles that came back with no evaluation before the batch stops.
+# Each failed role has already spent 2 calls x 6 retries of up to ~90s
+# backoff, so on a day when every scoring model is 503ing, grinding through
+# the rest of a 100+ role backlog costs hours and scores nothing. Unscored
+# roles stay pending, so the next run picks up exactly where this one quit.
+CONSECUTIVE_FAILURE_LIMIT = 3
 
 
 def _sort_key(result: dict) -> tuple:
@@ -174,6 +182,17 @@ def _archive_copies_of(archive_fn) -> None:
         logging.warning(f"batch_evaluate: could not archive duplicate copies: {exc}")
 
 
+def _report_early_stop(remaining: int) -> None:
+    """Tells the user why the batch quit and that nothing was lost."""
+    cli_art.print_literal(
+        "Stopped early: Gemini kept failing, several calls in a row came "
+        "back with no score. Google's servers are likely overloaded. "
+        f"{remaining} role(s) were not attempted, and every unscored role is "
+        "still pending -- run this again later and it picks up where it "
+        "left off."
+    )
+
+
 def evaluate_all_pending(
     pending_paths: list | None = None,
     skip_evaluated: bool = True,
@@ -266,6 +285,8 @@ def evaluate_all_pending(
 
     engine = orchestrator.ResumeEngine()
     results = []
+    consecutive_failures = 0
+    stopped_after = None
 
     with cli_art.new_progress() as progress:
         task = progress.add_task(
@@ -281,8 +302,26 @@ def evaluate_all_pending(
                     description=f"[{index + 1}/{len(pending_paths)}] Weighing the fit for {name}...",
                 )
 
-            results.append(_evaluate_one(engine, identifier, on_label=label))
+            try:
+                result = _evaluate_one(engine, identifier, on_label=label)
+            except SustainedFailureError:
+                # generate() raises this after back-to-back exhausted calls.
+                # Here that is the same signal as the counter below, so it
+                # stops the batch the same way instead of escaping as a
+                # traceback that throws away every result collected so far.
+                stopped_after = i + 1
+                break
+            results.append(result)
             progress.advance(task)
+            consecutive_failures = (
+                consecutive_failures + 1 if result.get("error") else 0
+            )
+            if consecutive_failures >= CONSECUTIVE_FAILURE_LIMIT:
+                stopped_after = i + 1
+                break
+
+    if stopped_after is not None:
+        _report_early_stop(len(pending_paths) - stopped_after)
 
     results.sort(key=_sort_key)
     return results

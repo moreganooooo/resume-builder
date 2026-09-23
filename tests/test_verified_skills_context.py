@@ -465,7 +465,7 @@ class TestEvaluateFitPopulatesSkillMatrix(unittest.TestCase):
     @patch("orchestrator.compute_skill_coverage_matrix")
     @patch("orchestrator.gather_jd_skill_names", return_value=["Python"])
     @patch("orchestrator.warm_jd_keyword_cache")
-    @patch("orchestrator.GeminiClient.parse_json", return_value={})
+    @patch("orchestrator.GeminiClient.parse_json", return_value={"why": "ok"})
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.jd_manager.read_jd_text", return_value="A job description.")
     def test_skill_matrix_is_attached_to_the_evaluation(
@@ -495,7 +495,7 @@ class TestEvaluateFitPopulatesSkillMatrix(unittest.TestCase):
     @patch("orchestrator.compute_skill_coverage_matrix", side_effect=Exception("boom"))
     @patch("orchestrator.gather_jd_skill_names", return_value=["Python"])
     @patch("orchestrator.warm_jd_keyword_cache")
-    @patch("orchestrator.GeminiClient.parse_json", return_value={})
+    @patch("orchestrator.GeminiClient.parse_json", return_value={"why": "ok"})
     @patch("orchestrator.GeminiClient.generate")
     @patch("orchestrator.jd_manager.read_jd_text", return_value="A job description.")
     def test_matrix_failure_does_not_break_evaluation(

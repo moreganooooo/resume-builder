@@ -443,5 +443,56 @@ class TestEvaluateDatabaseOnlyJobs(unittest.TestCase):
         self.assertEqual(row["status"], "archived")
 
 
+class TestEvaluateAllPendingCircuitBreaker(unittest.TestCase):
+    """A run of roles with no score means the models are down; the batch
+    stops instead of spending ~6 minutes of retries on every remaining role."""
+
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_stops_after_consecutive_failures(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save
+    ):
+        evaluate = mock_engine_cls.return_value.evaluate_fit
+        evaluate.return_value = None
+        paths = [f"jds/{i}.json" for i in range(10)]
+        results = batch_evaluate.evaluate_all_pending(paths)
+        limit = batch_evaluate.CONSECUTIVE_FAILURE_LIMIT
+        self.assertEqual(evaluate.call_count, limit)
+        self.assertEqual(len(results), limit)
+
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_a_success_resets_the_count(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save
+    ):
+        ok = {"composite_score": 4.0, "recommendation": "Pursue"}
+        evaluate = mock_engine_cls.return_value.evaluate_fit
+        evaluate.side_effect = [None, None, ok, None, None, ok]
+        results = batch_evaluate.evaluate_all_pending(
+            [f"jds/{i}.json" for i in range(6)]
+        )
+        self.assertEqual(len(results), 6)
+
+    @patch("batch_evaluate.jd_manager.save_evaluation")
+    @patch("batch_evaluate.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
+    @patch("batch_evaluate.jd_manager.compute_job_key", return_value="key1")
+    @patch("batch_evaluate.orchestrator.ResumeEngine")
+    def test_sustained_failure_stops_without_raising(
+        self, mock_engine_cls, mock_key, mock_meta, mock_save
+    ):
+        ok = {"composite_score": 4.0, "recommendation": "Pursue"}
+        evaluate = mock_engine_cls.return_value.evaluate_fit
+        evaluate.side_effect = [ok, batch_evaluate.SustainedFailureError("down"), ok]
+        results = batch_evaluate.evaluate_all_pending(
+            [f"jds/{i}.json" for i in range(3)]
+        )
+        self.assertEqual(len(results), 1)
+        self.assertEqual(evaluate.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -7017,7 +7017,7 @@ class ResumeEngine:
         )
         return "\n\n".join(sections)
 
-    def evaluate_fit(self, jd_path: str) -> dict:
+    def evaluate_fit(self, jd_path: str) -> dict | None:
         """
         Ultra-Premium grounded two-stage fit evaluation check for a JD.
         Loads profile.yml dynamically to apply custom deal-breaker skips and
@@ -7109,6 +7109,14 @@ class ResumeEngine:
             fallbacks=SCORING_FALLBACKS,
         )
         recruiter_data = GeminiClient.parse_json(rec_text or "") or {}
+
+        # Either stage coming back empty (a 503 streak that outlasted every
+        # retry, usually) means there is nothing to score. Synthesizing from
+        # {} anyway saved a hollow evaluation -- default subscores, a
+        # made-up recommendation -- and the role left the backlog as if it
+        # had been judged. Returning None keeps it pending for the next run.
+        if not capability_data or not recruiter_data:
+            return None
 
         # 4. Synthesize Split Results into the unified FitEvaluationSchema format
         evaluation = _synthesize_evaluation(capability_data, recruiter_data)
