@@ -496,9 +496,9 @@ def _retry_sleep_secs(attempt: int, server_delay: float | None = None) -> float:
         # curve -- a small buffer on top since the hint is the earliest safe
         # retry time, not a guarantee, and free-tier quota windows are
         # unforgiving.
-        return server_delay + random.uniform(1, 4)
+        return server_delay + random.uniform(1, 4)  # nosec B311
     backoff = cast(float, min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS))
-    return backoff + random.uniform(1, 4)
+    return backoff + random.uniform(1, 4)  # nosec B311
 
 
 def _pace_gemma(model: str) -> None:
@@ -807,7 +807,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                                 tzinfo=timezone.utc,
                             )
                             expiry = dt.timestamp()
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                 cls._cache_map[key] = {"cache_name": cache_name, "expiry": expiry}
                 cli_art.console.print(
@@ -1248,7 +1248,7 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                         or os.environ.get("RESUME_BUILDER_TESTING") == "1"
                     )
                     else min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS)
-                    + random.uniform(1, 4)
+                    + random.uniform(1, 4)  # nosec B311
                 )
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed network error ({30}s timeout): {type(e).__name__}. "
@@ -1287,11 +1287,11 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                 ):
                     sleep_dur = 0
                 elif server_delay is not None:
-                    sleep_dur = server_delay + random.uniform(1, 4)
+                    sleep_dur = server_delay + random.uniform(1, 4)  # nosec B311
                 else:
                     sleep_dur = min(
                         BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
-                    ) + random.uniform(1, 4)
+                    ) + random.uniform(1, 4)  # nosec B311
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed HTTP 429. Waiting {sleep_dur:.1f}s"
                     f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
@@ -1319,11 +1319,11 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                 ):
                     sleep_dur = 0
                 elif server_delay is not None:
-                    sleep_dur = server_delay + random.uniform(1, 4)
+                    sleep_dur = server_delay + random.uniform(1, 4)  # nosec B311
                 else:
                     sleep_dur = min(
                         BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
-                    ) + random.uniform(1, 4)
+                    ) + random.uniform(1, 4)  # nosec B311
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s"
                     f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
