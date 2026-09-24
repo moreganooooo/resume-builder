@@ -423,8 +423,8 @@ class TestGemmaPacing(unittest.TestCase):
 
         mock_sleep.assert_called_once()
         self.assertAlmostEqual(
-            mock_sleep.call_args.args[0], 55.0
-        )  # 65s cap - 10s elapsed
+            mock_sleep.call_args.args[0], 65.0
+        )  # 75s cap - 10s elapsed
 
     @patch("gemini_client.time.sleep")
     @patch("gemini_client.time.time")
@@ -435,7 +435,7 @@ class TestGemmaPacing(unittest.TestCase):
         mock_post.return_value = _success_response()
         gemini_client.GeminiClient._last_gemma_call_ts = 1000.0
         mock_time.return_value = (
-            1070.0  # 70s since the last Gemma call -- past the 65s floor
+            1080.0  # 80s since the last Gemma call -- past the 75s floor
         )
 
         gemini_client.GeminiClient.generate(

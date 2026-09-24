@@ -853,7 +853,11 @@ class GeminiClient(metaclass=_GeminiClientMeta):
     # rather than gambling on retry/backoff to recover an avoidable 429.
     # Lives here (not in rewrite_bullets.py) so orchestrator.py's Gemma
     # calls -- which go through this same shared client -- get it too.
-    GEMMA_MIN_INTERVAL_SECS = 65
+    # 75s (not 65s): _last_gemma_call_ts is set before the request fires,
+    # so a 10-15s Gemma response can push output tokens into the next
+    # 60s window alongside the following call's input tokens. The extra
+    # 10s absorbs typical Gemma latency and keeps calls safely separated.
+    GEMMA_MIN_INTERVAL_SECS = 75
     _last_gemma_call_ts = 0.0
 
     @staticmethod
