@@ -178,6 +178,7 @@ type PipelineModel struct {
 	roleTrackFilter         bool
 	experienceBlockerFilter bool
 	categoryFilter          string // [i], same stops as Jobs' [i]
+	showTerminal            bool   // [d], toggles display of expired/skipped roles
 
 	// notice explains why a keypress was a no-op (e.g. "o" with no saved
 	// URL) instead of silently doing nothing. Cleared on the next keypress,
@@ -615,6 +616,13 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 		m.cursor = 0
 		m.scrollOffset = 0
 
+	case "d":
+		// Toggle display of expired/skipped/archived roles (terminal statuses)
+		m.showTerminal = !m.showTerminal
+		m.applyFilterAndSort()
+		m.cursor = 0
+		m.scrollOffset = 0
+
 	case "enter":
 		if app, ok := m.CurrentApp(); ok && app.ReportPath != "" {
 			fullPath := filepath.Join(m.careerOpsPath, app.ReportPath)
@@ -947,6 +955,10 @@ func (m *PipelineModel) applyFilterAndSort() {
 // filters, same predicates as jobs.go's applyFilter. Empty/false means no
 // restriction, same "opt-in, never a permanent gate" convention as Jobs.
 func matchesPipelineFilters(app model.CareerApplication, m PipelineModel) bool {
+	// Filter out terminal statuses unless explicitly showing them
+	if !m.showTerminal && data.IsTerminalStatus(app.Status) {
+		return false
+	}
 	if m.workplaceFilter != "" && app.Workplace != m.workplaceFilter {
 		return false
 	}
@@ -1113,6 +1125,7 @@ var pipelineHelpCategories = []helpCategory{
 		{"t", "Toggle manager-track only"},
 		{"x", "Toggle years/degree blocker only"},
 		{"i", "Cycle category: all / hide AI training / AI only / staffing boards"},
+		{"d", "Toggle display of expired/skipped roles"},
 		{"", "ALL / EVALUATED hide scored roles under 3.5; LOW <3.5 shows them"},
 		{"", "Roles you have applied to are never hidden by that bar"},
 	}},

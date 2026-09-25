@@ -34,14 +34,21 @@ func IsTerminalStatus(status string) bool {
 // export the single source of truth for both while leaving Pipeline's UI
 // untouched.
 //
-// Terminal-status jobs are dropped. Ordering is preserved: the exporter
-// already sorts best-score-first, and Pipeline applies its own sort on
-// top.
+// Terminal-status jobs (archived, expired, discarded, skip) are included
+// by default but can be filtered by the caller. Ordering is preserved: the
+// exporter already sorts best-score-first, and Pipeline applies its own
+// sort on top.
 func JobRowsToApplications(rows []model.JobRow) []model.CareerApplication {
+	return jobRowsToApplicationsFiltered(rows, false)
+}
+
+// JobRowsToApplicationsFiltered is like JobRowsToApplications but allows
+// optionally filtering out terminal statuses.
+func jobRowsToApplicationsFiltered(rows []model.JobRow, excludeTerminal bool) []model.CareerApplication {
 	apps := make([]model.CareerApplication, 0, len(rows))
 
 	for _, row := range rows {
-		if IsTerminalStatus(row.Status) {
+		if excludeTerminal && IsTerminalStatus(row.Status) {
 			continue
 		}
 

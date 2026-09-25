@@ -4283,27 +4283,15 @@ def _split_blockers(blockers: list) -> tuple[list, list]:
 
     years_experience/degree blockers never force a Skip/zero -- see
     EXPERIENCE_BLOCKER_CATEGORIES above. Every other category keeps the
-    original unconditional behavior.
-
-    A years_experience entry tagged direction="over_qualified" is a real
-    recruiting concern (see docs/hard_blockers.md's
-    overqualification-conflation finding) but not what that list is meant
-    to represent -- only a candidate falling BELOW a stated floor is a
-    blocker. Excluded here rather than in the prompt: telling the model
-    not to notice overqualification collided with an instinct it clearly
-    has, so the signal is allowed to surface and is filtered out
-    downstream instead. degree/other categories carry no direction concept
-    and are never affected by this filter.
+    original unconditional behavior. All years_experience entries (including
+    over_qualified) are treated as soft blockers that don't zero the score,
+    allowing them to surface as filter-only signals in the dashboard.
     """
     experience_blockers = [
         b
         for b in blockers
         if isinstance(b, dict)
         and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
-        and not (
-            b.get("category") == "years_experience"
-            and b.get("direction") == "over_qualified"
-        )
     ]
     disqualifying_blockers = [
         b
@@ -10172,12 +10160,27 @@ class ResumeEngine:
             f"[bold {theme.BRAND}]Generating Tailored Resume[/bold {theme.BRAND}]",
             style="dim",
         )
+        # Skip company research (and Why section) for staffing agency postings
+        # since the actual hiring company is hidden behind the staffing board
+        skip_why_for_staffing = False
+        try:
+            with open(jd_path, 'r') as f:
+                jd_data = json.load(f)
+                if jd_data.get("staffing_agency"):
+                    skip_why_for_staffing = True
+                    cli_art.print_literal(
+                        "  Staffing agency posting detected -- skipping Why section."
+                    )
+        except (json.JSONDecodeError, KeyError):
+            pass
+
         resume_result = self.build_tailored_resume(
             jd_path=jd_path,
             master_resume=master_resume if master_resume is not None else {},
             output_filename=output_filename,
             job_key=job_key,
             interactive=interactive,
+            skip_company_research=skip_why_for_staffing,
         )
         if not resume_result:
             cli_art.console.print(
