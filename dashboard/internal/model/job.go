@@ -309,17 +309,26 @@ type Coverage struct {
 // Research mirrors the _research key persisted by
 // scripts/jd_manager.py's save_research().
 type Research struct {
-	OverallToneAdjective    string   `json:"overall_tone_adjective"`
-	ToneRegister            string   `json:"tone_register"`
-	PronounFraming          string   `json:"pronoun_framing"`
-	SentenceStyle           string   `json:"sentence_style"`
-	JargonDensity           string   `json:"jargon_density"`
-	RecurringKeywords       []string `json:"recurring_keywords"`
-	CompanyFacts            []string `json:"company_facts"`
-	CompanyHQLocation       string   `json:"company_hq_location"`
-	NotableHighlights       []string `json:"notable_highlights"`
-	VocabularySubstitutions []string `json:"vocabulary_substitutions"`
-	ResearchedAt            string   `json:"researched_at"`
+	OverallToneAdjective    string                 `json:"overall_tone_adjective"`
+	ToneRegister            string                 `json:"tone_register"`
+	PronounFraming          string                 `json:"pronoun_framing"`
+	SentenceStyle           string                 `json:"sentence_style"`
+	JargonDensity           string                 `json:"jargon_density"`
+	RecurringKeywords       []string               `json:"recurring_keywords"`
+	CompanyFacts            []string               `json:"company_facts"`
+	CompanyHQLocation       string                 `json:"company_hq_location"`
+	NotableHighlights       []string               `json:"notable_highlights"`
+	VocabularySubstitutions []VocabSubstitution    `json:"vocabulary_substitutions"`
+	ResearchedAt            string                 `json:"researched_at"`
+}
+
+// VocabSubstitution is one entry in Research.VocabularySubstitutions —
+// a company-preferred term that replaces a generic one in resume bullets.
+// Mirrors scripts/company_research.py's apply_vocabulary_substitutions()
+// pair shape: {"generic_term": "customers", "company_term": "guests"}.
+type VocabSubstitution struct {
+	GenericTerm string `json:"generic_term"`
+	CompanyTerm string `json:"company_term"`
 }
 
 // HardBlocker mirrors scripts/schemas.py's HardBlockerSchema. Direction is

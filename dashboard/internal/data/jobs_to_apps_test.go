@@ -8,10 +8,10 @@ import (
 
 func ptr(s string) *string { return &s }
 
-func TestJobRowsToApplications_DropsTerminalStatuses(t *testing.T) {
-	// Archived and expired jobs used to render in Pipeline as scoreless
-	// rows indistinguishable from live applications -- the "scary red 0"
-	// problem. They are terminal states and must not appear.
+func TestJobRowsToApplications_IncludesTerminalStatuses(t *testing.T) {
+	// JobRowsToApplications now includes terminal statuses so the Pipeline
+	// [d] toggle can show/hide them in the UI. The filter happens in
+	// matchesPipelineFilters (showTerminal=false by default), not here.
 	rows := []model.JobRow{
 		{Title: "Live", Company: "A", Status: "pending"},
 		{Title: "Archived", Company: "B", Status: "archived"},
@@ -26,8 +26,8 @@ func TestJobRowsToApplications_DropsTerminalStatuses(t *testing.T) {
 	for _, a := range apps {
 		got = append(got, a.Role)
 	}
-	if len(got) != 2 || got[0] != "Live" || got[1] != "Applied" {
-		t.Fatalf("got %v, want [Live Applied]", got)
+	if len(got) != 5 {
+		t.Fatalf("got %v (len=%d), want all 5 rows including terminal", got, len(got))
 	}
 }
 

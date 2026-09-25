@@ -955,8 +955,16 @@ func (m *PipelineModel) applyFilterAndSort() {
 // filters, same predicates as jobs.go's applyFilter. Empty/false means no
 // restriction, same "opt-in, never a permanent gate" convention as Jobs.
 func matchesPipelineFilters(app model.CareerApplication, m PipelineModel) bool {
-	// Filter out terminal statuses unless explicitly showing them
-	if !m.showTerminal && data.IsTerminalStatus(app.Status) {
+	// Filter out terminal statuses unless the active tab is specifically for
+	// a terminal status (REJECTED, DISCARDED, SKIP) or the [d] toggle is on.
+	// A terminal-specific tab must be able to show its own rows regardless of
+	// showTerminal, or pressing [d] would be required to use those tabs.
+	currentFilter := ""
+	if m.activeTab >= 0 && m.activeTab < len(pipelineTabs) {
+		currentFilter = pipelineTabs[m.activeTab].filter
+	}
+	tabIsTerminal := currentFilter == filterSkip || currentFilter == filterRejected || currentFilter == filterDiscarded
+	if !m.showTerminal && !tabIsTerminal && data.IsTerminalStatus(app.Status) {
 		return false
 	}
 	if m.workplaceFilter != "" && app.Workplace != m.workplaceFilter {
@@ -1590,7 +1598,15 @@ func (m PipelineModel) renderTabs() string {
 
 func (m PipelineModel) countForFilter(filter string) int {
 	count := 0
+	// Mirror matchesPipelineFilters' terminal-status gate: skip the gate
+	// for terminal-specific tabs (they must count their own rows).
+	tabIsTerminal := filter == filterSkip || filter == filterRejected || filter == filterDiscarded
 	for _, app := range m.apps {
+		// Apply terminal-status gate the same way applyFilterAndSort does,
+		// so count and list never disagree.
+		if !m.showTerminal && !tabIsTerminal && data.IsTerminalStatus(app.Status) {
+			continue
+		}
 		norm := data.NormalizeStatus(app.Status)
 		// This switch must stay in step with applyFilterAndSort's: a tab
 		// count that disagrees with the list it labels reads as missing
