@@ -1,12 +1,12 @@
 """
-render_coverletter_docx.py — Builds an ATS-optimized .docx export of a
-tailored cover letter directly from cover_letter_data (the same
-lowercase-keyed dict render_coverletter.py consumes), using python-docx.
+render_coverletter_docx.py — Builds a .docx export of a tailored cover
+letter directly from cover_letter_data (the same lowercase-keyed dict
+render_coverletter.py consumes), using python-docx.
 
-No embedded signature image (ATS-optimized fidelity call -- see
-docs/superpowers/specs/2026-08-17-docx-exporter-design.md): typed name
-only, matching what build_signature_block_html() degrades to anyway when a
-profile has no signature.png.
+Includes the profile's signature PNG when one exists at
+profiles/<name>/signature.{png,jpg,jpeg}, degrading gracefully to typed
+name only when none is present — the same fallback as
+build_signature_block_html() in render_coverletter.py.
 
 Usage (standalone):
     python scripts/render_coverletter_docx.py output/json/my_letter_coverletter.json output/docx/my_letter_coverletter.docx
@@ -145,16 +145,20 @@ def render_coverletter_docx(cover_letter_data: dict, output_path: str) -> str:
         paragraph = docx_theme.body_paragraph(doc, paragraph_text, size_pt=body_pt)
         docx_theme.space(paragraph, after=7)
 
-    # --- Sign-off (typed name only -- no embedded signature image) ---
+    # --- Sign-off ---
     sign_off = cover_letter_data.get("sign_off", "")
     if sign_off:
         paragraph = docx_theme.body_paragraph(doc, sign_off, size_pt=body_pt)
         docx_theme.space(paragraph, before=13, after=0)
+
+    sig_path = profile_paths.signature_path()
+    if sig_path:
+        sig_p = doc.add_paragraph()
+        sig_p.add_run().add_picture(sig_path, width=docx_theme.Inches(1.5))
+        docx_theme.space(sig_p, before=8, after=0)
+
     name_line = docx_theme.body_paragraph(doc, contact["NAME"], size_pt=body_pt)
-    # The PDF has a signature image here; this export deliberately does
-    # not (see the module docstring), so the typed name takes its place
-    # with the same breathing room above it.
-    docx_theme.space(name_line, before=8, after=0)
+    docx_theme.space(name_line, before=(2 if sig_path else 8), after=0)
     docx_theme.body_paragraph(
         doc, f"{contact['EMAIL']} | {contact['PHONE']}", size_pt=body_pt
     )
