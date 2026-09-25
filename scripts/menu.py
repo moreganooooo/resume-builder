@@ -1908,7 +1908,7 @@ def _handle_career_dashboard() -> bool:
     (dashboard/) -- unlike every other handler here, this isn't
     questionary-driven; the dashboard is its own full-screen TUI that
     takes over stdio until the user quits it (`q`)."""
-    success, message = dashboard_module.run()  # type: ignore[attr-defined]
+    success, message = dashboard_module.run(profile_paths.active_profile())  # type: ignore[attr-defined]
     if not success:
         cli_art.display_error(message)
     return False
