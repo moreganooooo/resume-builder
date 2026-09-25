@@ -3502,9 +3502,11 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
             # Clean up: restore the scroll region back to the entire screen window
             sys.stdout.write("\x1b[r")
             sys.stdout.flush()
-        if suspended_alt_screen:
-            sys.stdout.write("\x1b[?1049h\x1b[H")
-            sys.stdout.flush()
+        # Alt-screen re-entry is deferred until AFTER the pause below so the
+        # user can read the action's output. The finally block only restores
+        # what needs restoring unconditionally (scroll region); alt-screen
+        # re-entry is safe to defer because nothing between here and the
+        # re-entry writes to the terminal in a way that requires alt-screen.
 
     if did_something:
         label = _SESSION_LABELS.get(value)
@@ -3512,13 +3514,22 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
             session_stats[label] = session_stats.get(label, 0) + 1
 
     if is_interactive:
+        if suspended_alt_screen:
+            sys.stdout.write("\x1b[?1049h\x1b[H")
+            sys.stdout.flush()
         return
 
     if not did_something or not _CHAIN.get(value):
         _pause_and_return()
+        if suspended_alt_screen:
+            sys.stdout.write("\x1b[?1049h\x1b[H")
+            sys.stdout.flush()
         return
 
     offer_next_steps(value, session_stats)
+    if suspended_alt_screen:
+        sys.stdout.write("\x1b[?1049h\x1b[H")
+        sys.stdout.flush()
 
 
 def _session_summary(session_stats: dict) -> str:
