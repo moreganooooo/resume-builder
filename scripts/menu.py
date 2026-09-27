@@ -251,6 +251,12 @@ def _build_build_documents_choices() -> list:
             ),
             value="rerender",
         ),
+        questionary.Choice(
+            title=_icon_title(
+                "ai", "↳ Re-generate Resume from Scratch (Full AI rebuild)"
+            ),
+            value="regenerate_from_scratch",
+        ),
         questionary.Choice(title="Back", value="back"),
     ]
 
@@ -1964,6 +1970,104 @@ def _handle_rerender() -> bool:
     return False
 
 
+def _handle_regenerate_from_scratch() -> bool:
+    """Re-generates a resume from scratch using AI for an existing JD.
+    This rebuilds the resume using the full AI pipeline, not just re-rendering
+    the existing JSON."""
+    import os
+
+    # Get all JDs that have had resumes generated
+    # Use the JD tracker to find JDs marked as completed (have had resumes built)
+    tracker = jd_manager.JDTracker()
+    all_jds = (
+        jd_manager.get_completed_jds()
+        + jd_manager.get_pending_jds()
+        + jd_manager.get_archived_jds()
+    )
+
+    # Filter to only those marked as completed in the tracker
+    jds_with_resumes = []
+    for jd_path in all_jds:
+        try:
+            job_key = jd_manager.compute_job_key(jd_path)
+            if tracker.is_completed(job_key):
+                jds_with_resumes.append(jd_path)
+        except Exception:
+            # If we can't get the job_key or check completion, skip this JD
+            continue
+
+    if not jds_with_resumes:
+        cli_art.cli_info(
+            "No JDs with generated resumes found. Please generate a resume first."
+        )
+        return False
+
+    jd_path = picker.pick_and_return(
+        jds_with_resumes,
+        "Pick a JD to regenerate resume for",
+    )
+    if not jd_path:
+        cli_art.cli_info("No JD selected -- regeneration canceled.")
+        return False
+
+    # Get the existing output JSON path (resume or cover letter)
+    doc_type = "resume"  # Default to resume
+    base_name = os.path.splitext(os.path.basename(jd_path))[0]
+    output_dir = os.path.join(
+        profile_paths.output_dir(),
+        profile_paths.active_profile() if profile_paths.active_profile() else "",
+        "resume",
+    )
+    os.makedirs(output_dir, exist_ok=True)
+    json_path = os.path.join(output_dir, f"{base_name}_resume.json")
+
+    # Check if JSON exists
+    if not os.path.exists(json_path):
+        # Try to find any existing JSON for this JD
+        import glob
+
+        possible_paths = glob.glob(
+            os.path.join(
+                profile_paths.output_dir(),
+                (
+                    profile_paths.active_profile()
+                    if profile_paths.active_profile()
+                    else ""
+                ),
+                "*",
+                f"*{base_name}*.json",
+            )
+        )
+        if possible_paths:
+            json_path = possible_paths[0]
+            doc_type = polish_module.detect_doc_type(json_path) or "resume"
+        else:
+            cli_art.console.print(
+                f"{cli_art.WARNING} No existing JSON found for {jd_path}. "
+                "Creating new resume from scratch."
+            )
+            doc_type = "resume"
+
+    with cli_art.thinking_status("Regenerating resume with AI..."):
+        # Use orchestrator to build a new resume from scratch
+        engine = orchestrator.ResumeEngine()
+        result = engine.build_tailored_resume(
+            jd_path=jd_path,
+            master_resume=None,
+            interactive=True,  # Full interactive build with skills/recruiter prompts
+            skip_company_research=False,
+        )
+
+    if result and result.get("status") == "completed":
+        cli_art.console.print(f"{cli_art.SUCCESS} Resume regenerated!")
+        cli_art.render_application_package_hud(result)
+    else:
+        cli_art.cli_info("Resume regeneration failed or returned no result.")
+
+    _pause_and_return()
+    return False
+
+
 def _handle_bullet_bank() -> bool:
     bullet_bank_menu.run_bullet_bank_menu()
     return False
@@ -3156,6 +3260,7 @@ _HANDLERS = {
     "career_dashboard": _handle_career_dashboard,
     "polish": _handle_polish,
     "rerender": _handle_rerender,
+    "regenerate_from_scratch": _handle_regenerate_from_scratch,
     "stale_sweep": _handle_stale_sweep,
     "help": _handle_help,
     "check_updates": _handle_check_updates,

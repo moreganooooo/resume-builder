@@ -101,10 +101,14 @@ def _resolve_paths(paths: list[str], profile: str) -> list[str]:
                 [
                     os.path.join(profile_paths.PROJECT_ROOT, value),
                     os.path.join(profile_paths.jds_dir(profile), value),
-                    os.path.join(profile_paths.jds_dir(profile), os.path.basename(value)),
+                    os.path.join(
+                        profile_paths.jds_dir(profile), os.path.basename(value)
+                    ),
                 ]
             )
-        found = next((os.path.abspath(p) for p in candidates if os.path.isfile(p)), None)
+        found = next(
+            (os.path.abspath(p) for p in candidates if os.path.isfile(p)), None
+        )
         if found is None:
             raise FileNotFoundError(value)
         resolved.append(found)
@@ -197,7 +201,11 @@ def _run_once(engine, path: str, candidate: str, stage_models: list[str]) -> dic
                 "temperature",
             )
             call.update(dict(zip(positional, args)))
-        stage = "capability" if len(calls) == 0 else "recruiter" if len(calls) == 1 else "extra"
+        stage = (
+            "capability"
+            if len(calls) == 0
+            else "recruiter" if len(calls) == 1 else "extra"
+        )
         requested = str(call.get("model", ""))
         selected_provider = "gemini"
         if stage in stage_models:
@@ -246,8 +254,9 @@ def _run_once(engine, path: str, candidate: str, stage_models: list[str]) -> dic
         sandbox_path = os.path.join(sandbox, os.path.basename(path))
         shutil.copy2(path, sandbox_path)
         try:
-            with _read_only_evaluator(), _patch_attribute(
-                orchestrator.GeminiClient, "generate", _generate
+            with (
+                _read_only_evaluator(),
+                _patch_attribute(orchestrator.GeminiClient, "generate", _generate),
             ):
                 result = engine.evaluate_fit(sandbox_path)
             status = "ok" if result is not None else "empty"
@@ -279,7 +288,9 @@ def _reference_by_jd(attempts: list[dict], control: str) -> dict[str, dict]:
     for jd_hash, rows in grouped.items():
         ref: dict[str, Any] = {}
         for metric in NUMERIC_METRICS:
-            vals = [r.get(metric) for r in rows if isinstance(r.get(metric), (int, float))]
+            vals = [
+                r.get(metric) for r in rows if isinstance(r.get(metric), (int, float))
+            ]
             if vals:
                 ref[metric] = statistics.median(vals)
         for metric in CATEGORICAL_METRICS:
@@ -301,7 +312,9 @@ def _summarize(report: dict) -> dict:
             "attempts": len(rows),
             "successes": len(ok),
             "success_rate": len(ok) / len(rows) if rows else None,
-            "median_elapsed_seconds": statistics.median(r["elapsed_seconds"] for r in ok) if ok else None,
+            "median_elapsed_seconds": (
+                statistics.median(r["elapsed_seconds"] for r in ok) if ok else None
+            ),
             "metrics": {},
         }
         for metric in NUMERIC_METRICS:
@@ -310,7 +323,9 @@ def _summarize(report: dict) -> dict:
             for row in ok:
                 value = row["evaluation"].get(metric)
                 reference = references.get(row["jd_sha256"], {}).get(metric)
-                if isinstance(value, (int, float)) and isinstance(reference, (int, float)):
+                if isinstance(value, (int, float)) and isinstance(
+                    reference, (int, float)
+                ):
                     signed.append(value - reference)
                     deltas.append(abs(value - reference))
             if deltas:
@@ -342,19 +357,25 @@ def _attempt_key(model: str, run: int, jd_hash: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("paths", nargs="*", help="JD files; defaults to five varied stored JDs")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "paths", nargs="*", help="JD files; defaults to five varied stored JDs"
+    )
     parser.add_argument("--profile", default=os.environ.get("RESUME_PROFILE"))
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_CANDIDATES))
-    parser.add_argument(
-        "--control-model", default=f"gemini:{orchestrator.EVAL_MODEL}"
-    )
+    parser.add_argument("--control-model", default=f"gemini:{orchestrator.EVAL_MODEL}")
     parser.add_argument("--control-runs", type=int, default=2)
     parser.add_argument("--candidate-runs", type=int, default=1)
-    parser.add_argument("--stage", choices=("both", "capability", "recruiter"), default="both")
+    parser.add_argument(
+        "--stage", choices=("both", "capability", "recruiter"), default="both"
+    )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--output", default="eval-model-benchmark.json")
-    parser.add_argument("--resume", action="store_true", help="Resume matching attempts from --output")
+    parser.add_argument(
+        "--resume", action="store_true", help="Resume matching attempts from --output"
+    )
     args = parser.parse_args(argv)
 
     if not args.profile:
@@ -395,7 +416,8 @@ def main(argv: list[str] | None = None) -> int:
             "jd_sandboxed": True,
         },
         "jds": [
-            {"path": path, "name": _short_name(path), "sha256": _sha256(path)} for path in paths
+            {"path": path, "name": _short_name(path), "sha256": _sha256(path)}
+            for path in paths
         ],
         "attempts": [],
         "summary": {},
@@ -408,14 +430,17 @@ def main(argv: list[str] | None = None) -> int:
         report["attempts"] = prior.get("attempts", [])
 
     completed = {
-        _attempt_key(r["model"], r["run"], r["jd_sha256"])
-        for r in report["attempts"]
+        _attempt_key(r["model"], r["run"], r["jd_sha256"]) for r in report["attempts"]
     }
     engine = orchestrator.ResumeEngine()
 
     for jd in report["jds"]:
         for model in args.models:
-            run_count = args.control_runs if model == args.control_model else args.candidate_runs
+            run_count = (
+                args.control_runs
+                if model == args.control_model
+                else args.candidate_runs
+            )
             for run in range(1, run_count + 1):
                 key = _attempt_key(model, run, jd["sha256"])
                 if key in completed:

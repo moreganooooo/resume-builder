@@ -65,6 +65,23 @@ def should_proceed(count: int, skip_confirm: bool, action: str = "evaluate") -> 
     )
 
 
+def pick_and_return(paths: list, prompt: str) -> str:
+    """Simple single-selection picker from a list of paths.
+    Returns the selected path, or empty string if cancelled.
+    """
+    if not paths:
+        cli_art.console.print("No items to pick from.")
+        return ""
+
+    choices = [questionary.Choice(title=p, value=p) for p in paths]
+    choices.append(questionary.Choice(title="[Cancel]", value=""))
+
+    selected = questionary.select(
+        prompt, choices=choices, style=cli_art.QUESTIONARY_STYLE
+    ).ask()
+    return selected if selected else ""
+
+
 def _truncate(text: str, max_len: int) -> str:
     """Ellipsize text to at most max_len characters, "..." included --
     pagination already bounds how many checkbox rows show at once, but a
@@ -567,13 +584,14 @@ def _file_row(path: str, status: str, location_settings_block: dict) -> dict | N
     """One list_all_evaluated_jds() row from a JD file on disk.
 
     Returns None when the JD carries no usable evaluation, or one the user
-    has already said to skip.
+    has already said to skip (unless it's explicitly archived, in which case
+    we include it so it can be viewed/reinstated via the dashboard).
     """
     evaluation = jd_manager.read_evaluation(path)
     if (
         evaluation is None
         or not isinstance(evaluation, dict)
-        or evaluation.get("recommendation") == "Skip"
+        or (evaluation.get("recommendation") == "Skip" and status != "Archived")
     ):
         return None
     title, company = jd_manager.extract_job_meta(path)
@@ -615,18 +633,16 @@ def _file_row(path: str, status: str, location_settings_block: dict) -> dict | N
 
 def list_all_evaluated_jds(statuses: list | None = None) -> list:
     """Every JD (pending or completed) carrying a persisted _evaluation,
-    each as {"path", "status" ("Pending"/"Completed"), "evaluation",
+    each as {"path", "status" ("Pending"/"Completed"/"Archived"), "evaluation",
     "liveness", "application", "title", "company"}, sorted best
     composite_score first. "application" is the real-world application
     progress (see jd_manager.save_application_status()) -- None until
-    someone's marked it. Archived JDs are never included --
-    jd_manager.get_pending_jds()/get_completed_jds() only scan their own
-    directory, and jds/archived/ is a third, separate one neither
-    touches. statuses restricts which of "Pending"/"Completed" get
-    scanned at all (default: both) -- for callers whose action only
-    makes sense against one status (e.g. tailoring only applies to
-    Pending, a cover letter only to Completed)."""
-    statuses = statuses or ["Pending", "Completed"]
+    someone's marked it. statuses restricts which of "Pending"/"Completed"/
+    "Archived" get scanned at all (default: all three) -- for callers whose
+    action only makes sense against one status (e.g. tailoring only applies
+    to Pending, a cover letter only to Completed). Archived JDs are now
+    included so they can be viewed and reinstated via the dashboard."""
+    statuses = statuses or ["Pending", "Completed", "Archived"]
     location_settings_block = _read_location_settings()
     rows = []
     if "Pending" in statuses:
@@ -637,6 +653,11 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
     if "Completed" in statuses:
         for path in jd_manager.get_completed_jds():
             row = _file_row(path, "Completed", location_settings_block)
+            if row:
+                rows.append(row)
+    if "Archived" in statuses:
+        for path in jd_manager.get_archived_jds():
+            row = _file_row(path, "Archived", location_settings_block)
             if row:
                 rows.append(row)
     if "Pending" in statuses:
@@ -853,12 +874,33 @@ def _evaluation_is_stale(evaluation, evaluated_before: str) -> bool:
     before that field existed, so they fall back to comparing evaluated_at
     against evaluated_before -- and an evaluation with neither is treated
     as stale, since its absence dates the record rather than excusing it.
+
+    skills_ledger_hash: if the evaluation recorded the names_sha from the
+    verified skill vectors .meta sidecar and that hash no longer matches
+    the current sidecar (i.e. embed_verified_skills.py was re-run since),
+    the evaluation is stale. A missing saved hash or a missing .meta file
+    does not trigger staleness -- it just means the embed was never run or
+    the evaluation predates the feature.
     """
     if not isinstance(evaluation, dict):
         return True
     version = evaluation.get("scoring_version")
     if version is not None:
-        return cast("bool", version < jd_manager.SCORING_VERSION)
+        if cast("bool", version < jd_manager.SCORING_VERSION):
+            return True
+        # Version is current -- also check if the skills ledger was re-embedded.
+        saved_hash = evaluation.get("skills_ledger_hash")
+        if saved_hash is not None:
+            current_hash = jd_manager._current_skills_hash()
+            if current_hash is not None and saved_hash != current_hash:
+                return True
+        return False
+    # No scoring_version: check skills hash, then fall back to date.
+    saved_hash = evaluation.get("skills_ledger_hash")
+    if saved_hash is not None:
+        current_hash = jd_manager._current_skills_hash()
+        if current_hash is not None and saved_hash != current_hash:
+            return True
     return (evaluation.get("evaluated_at") or "")[:10] < evaluated_before
 
 

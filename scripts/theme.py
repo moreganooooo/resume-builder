@@ -152,6 +152,8 @@ _NERD_ICONS = {
     "pending": "\uf10c",
     # nf-fa-comments -- the Application Answers chat. Escaped like "pending".
     "chat": "\uf086",
+    # nf-fa-magic -- AI rebuild / full regeneration.
+    "ai": "\uf0d0",
 }
 
 # Plain Unicode fallback -- renders correctly with no special font. See
@@ -210,6 +212,8 @@ _UNICODE_ICONS = {
     # U+00B6 pilcrow -- written answers. The menu asked for "chat" with no
     # entry here, and questionary_icon_tuple() printed the literal name.
     "chat": "¶",
+    # U+2295 CIRCLED PLUS -- AI rebuild / full regeneration.
+    "ai": "⊕",
 }
 
 
@@ -290,6 +294,7 @@ _ICON_COLORS = {
     "back": BRAND_ACCENT,  # purple, matches existing pagination style
     "exit": ERROR,  # red -- distinct from "utility" (Settings & Upkeep) it used to share
     "chat": BRAND_ACCENT,
+    "ai": BRAND_ACCENT,  # purple -- same family as resume/build actions
     "pending": MUTED,  # gray -- "not yet run" is an absence, not a warning
 }
 

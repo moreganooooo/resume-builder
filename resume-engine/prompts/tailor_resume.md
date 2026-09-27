@@ -137,7 +137,7 @@ Analyze the target company's business stage (from JD and COMPANY RESEARCH) and s
 - Skills appears immediately after Summary — it is the most important ATS signal
 - Include every tool, platform, methodology, and framework from the JD that the candidate genuinely knows
 - Include logically implied skills (JD mentions a CRM platform → include "CRM" if true)
-- NO soft skills unless the JD explicitly lists them as requirements
+- Include soft skills from the JD as well as those that can be logically implied
 - Source your tool/platform names from verified_tools.json (in your knowledge base context) --
   don't invent tools or platforms the candidate hasn't verifiably used
 - Lines up to 110 characters fit on one line; wrapping to a 2nd line is fine as long as it doesn't
@@ -335,7 +335,7 @@ Max 5 lines. First sentence wrapped in `<strong>` tags. Follow the ROLE RULES bl
 
 ## SKILLS (array of strings)
 
-Each string is one category line. Format: `**Category Label:** Item, Item, Item`
+Each string is 1-2 category lines. Format: `**Category Label:** Item, Item, Item`
 Example:
 
 ```json

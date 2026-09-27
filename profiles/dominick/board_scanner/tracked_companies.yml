@@ -1,0 +1,507 @@
+# board_scanner's ats source: companies to check directly on their own
+# ATS (Greenhouse/Ashby/Lever/Recruitee/SmartRecruiters/Workable/Workday).
+# Empty to start -- add companies as you find them worth tracking. Each
+# entry needs a name and a careers_url and/or api URL; provider is
+# auto-detected from the URL (see scan_ats.py's _resolve_provider_id) --
+# only set it explicitly for a non-obvious case. See
+# profiles/morgan/board_scanner/tracked_companies.yml for a real
+# worked example with 400 entries.
+#
+# - name: Acme Corp
+#   careers_url: https://boards.greenhouse.io/acme
+#   enabled: true
+tracked_companies:
+- name: The Hearst Corporation
+  careers_url: https://boards.greenhouse.io/hearst
+  api: https://boards-api.greenhouse.io/v1/boards/hearst/jobs
+  enabled: true
+- name: Smith Arnold Partners
+  careers_url: https://careers.smartrecruiters.com/smitharnoldpartners
+  api: https://api.smartrecruiters.com/v1/companies/smitharnoldpartners/postings
+  enabled: true
+- name: Instacart
+  careers_url: https://boards.greenhouse.io/instacart
+  api: https://boards-api.greenhouse.io/v1/boards/instacart/jobs
+  enabled: true
+- name: Quora
+  careers_url: https://jobs.ashbyhq.com/quora
+  api: https://api.ashbyhq.com/posting-api/job-board/quora
+  enabled: true
+- name: Bespoke Labs
+  careers_url: https://jobs.ashbyhq.com/bespokelabs
+  api: https://api.ashbyhq.com/posting-api/job-board/bespokelabs
+  enabled: true
+- name: jobgether
+  careers_url: https://jobs.lever.co/jobgether
+  api: https://api.lever.co/v0/postings/jobgether?mode=json
+  enabled: true
+- name: Lyra Health
+  careers_url: https://jobs.lever.co/lyrahealth
+  api: https://api.lever.co/v0/postings/lyrahealth?mode=json
+  enabled: true
+- name: Snowflake
+  careers_url: https://jobs.ashbyhq.com/snowflake
+  api: https://api.ashbyhq.com/posting-api/job-board/snowflake
+  enabled: true
+- name: Binance
+  careers_url: https://jobs.lever.co/binance
+  api: https://api.lever.co/v0/postings/binance?mode=json
+  enabled: true
+- name: Coinbase
+  careers_url: https://boards.greenhouse.io/coinbase
+  api: https://boards-api.greenhouse.io/v1/boards/coinbase/jobs
+  enabled: true
+- name: Moniepoint
+  careers_url: https://boards.greenhouse.io/moniepoint
+  api: https://boards-api.greenhouse.io/v1/boards/moniepoint/jobs
+  enabled: true
+- name: ciandt
+  careers_url: https://jobs.lever.co/ciandt
+  api: https://api.lever.co/v0/postings/ciandt?mode=json
+  enabled: true
+- name: Pinterest
+  careers_url: https://boards.greenhouse.io/pinterest
+  api: https://boards-api.greenhouse.io/v1/boards/pinterest/jobs
+  enabled: true
+- name: Xsolla
+  careers_url: https://jobs.lever.co/xsolla
+  api: https://api.lever.co/v0/postings/xsolla?mode=json
+  enabled: true
+- name: Airbnb
+  careers_url: https://boards.greenhouse.io/airbnb
+  api: https://boards-api.greenhouse.io/v1/boards/airbnb/jobs
+  enabled: true
+- name: Reddit
+  careers_url: https://boards.greenhouse.io/reddit
+  api: https://boards-api.greenhouse.io/v1/boards/reddit/jobs
+  enabled: true
+- name: Valtech
+  careers_url: https://boards.greenhouse.io/valtech
+  api: https://boards-api.greenhouse.io/v1/boards/valtech/jobs
+  enabled: true
+- name: Vanta
+  careers_url: https://jobs.ashbyhq.com/vanta
+  api: https://api.ashbyhq.com/posting-api/job-board/vanta
+  enabled: true
+- name: Deepgram
+  careers_url: https://jobs.ashbyhq.com/deepgram
+  api: https://api.ashbyhq.com/posting-api/job-board/deepgram
+  enabled: true
+- name: Upstart
+  careers_url: https://boards.greenhouse.io/upstart
+  api: https://boards-api.greenhouse.io/v1/boards/upstart/jobs
+  enabled: true
+- name: Caseware
+  careers_url: https://jobs.lever.co/caseware
+  api: https://api.lever.co/v0/postings/caseware?mode=json
+  enabled: true
+- name: Mercury
+  careers_url: https://boards.greenhouse.io/mercury
+  api: https://boards-api.greenhouse.io/v1/boards/mercury/jobs
+  enabled: true
+- name: SentiLink
+  careers_url: https://jobs.ashbyhq.com/sentilink
+  api: https://api.ashbyhq.com/posting-api/job-board/sentilink
+  enabled: true
+- name: Avalere Health
+  careers_url: https://jobs.lever.co/avalerehealth
+  api: https://api.lever.co/v0/postings/avalerehealth?mode=json
+  enabled: true
+- name: Axle
+  careers_url: https://boards.greenhouse.io/axle
+  api: https://boards-api.greenhouse.io/v1/boards/axle/jobs
+  enabled: true
+- name: Empower Pharmacy
+  careers_url: https://boards.greenhouse.io/empowerpharmacy
+  api: https://boards-api.greenhouse.io/v1/boards/empowerpharmacy/jobs
+  enabled: true
+- name: SecurityScorecard
+  careers_url: https://boards.greenhouse.io/securityscorecard
+  api: https://boards-api.greenhouse.io/v1/boards/securityscorecard/jobs
+  enabled: true
+- name: Precision AQ
+  careers_url: https://boards.greenhouse.io/precisionaq
+  api: https://boards-api.greenhouse.io/v1/boards/precisionaq/jobs
+  enabled: true
+- name: KoBold Metals
+  careers_url: https://boards.greenhouse.io/koboldmetals
+  api: https://boards-api.greenhouse.io/v1/boards/koboldmetals/jobs
+  enabled: true
+- name: SmithRx
+  careers_url: https://boards.greenhouse.io/smithrx
+  api: https://boards-api.greenhouse.io/v1/boards/smithrx/jobs
+  enabled: true
+- name: PatientPoint
+  careers_url: https://boards.greenhouse.io/patientpoint
+  api: https://boards-api.greenhouse.io/v1/boards/patientpoint/jobs
+  enabled: true
+- name: Sonatype
+  careers_url: https://jobs.lever.co/sonatype
+  api: https://api.lever.co/v0/postings/sonatype?mode=json
+  enabled: true
+- name: Dataiku
+  careers_url: https://boards.greenhouse.io/dataiku
+  api: https://boards-api.greenhouse.io/v1/boards/dataiku/jobs
+  enabled: true
+- name: Imprint
+  careers_url: https://jobs.ashbyhq.com/imprint
+  api: https://api.ashbyhq.com/posting-api/job-board/imprint
+  enabled: true
+- name: Coderio
+  careers_url: https://jobs.lever.co/coderio
+  api: https://api.lever.co/v0/postings/coderio?mode=json
+  enabled: true
+- name: JumpCloud
+  careers_url: https://jobs.lever.co/jumpcloud
+  api: https://api.lever.co/v0/postings/jumpcloud?mode=json
+  enabled: true
+- name: Nextdoor
+  careers_url: https://boards.greenhouse.io/nextdoor
+  api: https://boards-api.greenhouse.io/v1/boards/nextdoor/jobs
+  enabled: true
+- name: EnergyHub
+  careers_url: https://boards.greenhouse.io/energyhub
+  api: https://boards-api.greenhouse.io/v1/boards/energyhub/jobs
+  enabled: true
+- name: Extend
+  careers_url: https://boards.greenhouse.io/extend
+  api: https://boards-api.greenhouse.io/v1/boards/extend/jobs
+  enabled: true
+- name: Precision Medicine Group
+  careers_url: https://boards.greenhouse.io/precisionmedicine
+  api: https://boards-api.greenhouse.io/v1/boards/precisionmedicine/jobs
+  enabled: true
+- name: FourKites
+  careers_url: https://boards.greenhouse.io/fourkites
+  api: https://boards-api.greenhouse.io/v1/boards/fourkites/jobs
+  enabled: true
+- name: Doximity
+  careers_url: https://boards.greenhouse.io/doximity
+  api: https://boards-api.greenhouse.io/v1/boards/doximity/jobs
+  enabled: true
+- name: Apollo Research
+  careers_url: https://jobs.lever.co/apolloresearch
+  api: https://api.lever.co/v0/postings/apolloresearch?mode=json
+  enabled: true
+- name: Material Bank
+  careers_url: https://boards.greenhouse.io/materialbank
+  api: https://boards-api.greenhouse.io/v1/boards/materialbank/jobs
+  enabled: true
+- name: prosper
+  careers_url: https://jobs.lever.co/prosper
+  api: https://api.lever.co/v0/postings/prosper?mode=json
+  enabled: true
+- name: Descript
+  careers_url: https://boards.greenhouse.io/descript
+  api: https://boards-api.greenhouse.io/v1/boards/descript/jobs
+  enabled: true
+- name: Shakepay
+  careers_url: https://boards.greenhouse.io/shakepay
+  api: https://boards-api.greenhouse.io/v1/boards/shakepay/jobs
+  enabled: true
+- name: Overstory
+  careers_url: https://boards.greenhouse.io/overstory
+  api: https://boards-api.greenhouse.io/v1/boards/overstory/jobs
+  enabled: true
+- name: Phaidra
+  careers_url: https://boards.greenhouse.io/phaidra
+  api: https://boards-api.greenhouse.io/v1/boards/phaidra/jobs
+  enabled: true
+- name: termgrid
+  careers_url: https://jobs.lever.co/termgrid
+  api: https://api.lever.co/v0/postings/termgrid?mode=json
+  enabled: true
+- name: Evolve
+  careers_url: https://jobs.ashbyhq.com/evolve
+  api: https://api.ashbyhq.com/posting-api/job-board/evolve
+  enabled: true
+- name: FloatMe
+  careers_url: https://jobs.ashbyhq.com/floatme
+  api: https://api.ashbyhq.com/posting-api/job-board/floatme
+  enabled: true
+- name: Samsara
+  careers_url: https://boards.greenhouse.io/samsara
+  api: https://boards-api.greenhouse.io/v1/boards/samsara/jobs
+  enabled: true
+- name: GitLab
+  careers_url: https://boards.greenhouse.io/gitlab
+  api: https://boards-api.greenhouse.io/v1/boards/gitlab/jobs
+  enabled: true
+- name: Zapier
+  careers_url: https://jobs.ashbyhq.com/zapier
+  api: https://api.ashbyhq.com/posting-api/job-board/zapier
+  enabled: true
+- name: ACV Auctions
+  careers_url: https://jobs.dayforcehcm.com/en-US/acv/CANDIDATEPORTAL
+  enabled: true
+- name: M&T Bank
+  careers_url: https://mtb.wd5.myworkdayjobs.com/MTB
+  enabled: true
+- name: Moog
+  careers_url: https://moog.wd5.myworkdayjobs.com/MOOG_External_Career_Site
+  enabled: true
+- name: Calspan
+  careers_url: https://careers-calspan.icims.com/
+  enabled: true
+- name: PostProcess Technologies
+  careers_url: https://www.postprocess.com/careers/
+  scan_method: websearch
+  scan_query: site:postprocess.com/career
+  enabled: true
+- name: Livingston International
+  careers_url: https://careers.smartrecruiters.com/livingstoninternational
+  api: https://api.smartrecruiters.com/v1/companies/livingstoninternational/postings
+  enabled: true
+- name: KeyBank
+  careers_url: https://keybank.wd5.myworkdayjobs.com/External_Career_Site
+  enabled: true
+- name: US Foods
+  careers_url: https://usfoods.wd1.myworkdayjobs.com/usfoodscareersExternal
+  enabled: true
+- name: Citi
+  careers_url: https://citi.wd5.myworkdayjobs.com/2
+  enabled: true
+- name: Deloitte
+  careers_url: https://apply.deloitte.com/en_US/careers
+  enabled: true
+- name: KPMG UStr
+  careers_url: https://us-talentcommunity.kpmg.com
+  enabled: true
+- name: ThermoFisher Scientific
+  careers_url: https://jobs.thermofisher.com/global/en
+  enabled: true
+- name: Rich's Foods
+  careers_url: https://careers.rich.com/
+  enabled: true
+- name: Univera Healthcare
+  careers_url: https://careers.univerahealthcare.com/us/en
+  enabled: true
+- name: National Fuel Gas
+  careers_url: https://www.nationalfuel.com/corporate/careers
+  enabled: true
+
+# --- IoT/industrial, energy, water/pipeline, and local Buffalo-area employers ---
+# Added from dom_companiestotrack.ods (2026-09-23).
+# Entries marked with # URL-NEEDS-VERIFY were inferred from ATS provider name;
+# confirm the slug works before relying on results.
+
+- name: Linde
+  scan_method: websearch
+  scan_query: site:linde.com/en-us/about/careers data automation analytics Tonawanda
+  enabled: true
+
+- name: Stark Tech
+  scan_method: websearch
+  scan_query: site:starktech.com careers OR "Stark Tech" Williamsville jobs controls analytics
+  enabled: true
+
+- name: Buffalo Sewer Authority
+  scan_method: websearch
+  scan_query: site:buffalosewer.org jobs SCADA data GIS instrumentation
+  enabled: true
+
+- name: ITT Flow Technologies
+  scan_method: websearch
+  scan_query: site:ittflowtech.com careers OR "ITT Flow" Getzville jobs automation controls
+  enabled: true
+
+- name: PCB Piezotronics
+  careers_url: https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=59c7b8d0-6bc4-4af3-a1e6-f133756c844b
+  enabled: true
+
+- name: Stellar Technology
+  careers_url: https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=a5cf2c89-6a40-4169-a4e6-ecdf83dcf19a&ccId=19000101_000001&type=JS&lang=en_US
+  enabled: true
+
+- name: National Grid
+  scan_method: websearch
+  scan_query: site:nationalgrid.com/us careers Buffalo data GIS analytics grid SCADA
+  enabled: true
+
+- name: Derrick Corporation
+  scan_method: websearch
+  scan_query: site:derrick.com careers controls automation data applications
+  enabled: true
+
+- name: AECOM
+  careers_url: https://careers.smartrecruiters.com/AECOM2
+  api: https://api.smartrecruiters.com/v1/companies/AECOM2/postings
+  enabled: true
+
+- name: Arcadis
+  scan_method: websearch
+  scan_query: site:arcadis.com/en-us/jobs Buffalo data GIS water asset management
+  enabled: true
+
+- name: GHD
+  scan_method: websearch
+  scan_query: site:ghd.com/en-us/careers Buffalo automation water SCADA data
+  enabled: true
+
+# URL-NEEDS-VERIFY: CDM Smith uses iCIMS; tenant name assumed from company slug
+- name: CDM Smith
+  careers_url: https://cdmsmith.icims.com/jobs/search
+  enabled: true
+
+- name: Wendel
+  careers_url: https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=3173c447-bf10-4b4a-b346-608f258bb0a0&ccId=19000101_000001
+  enabled: true
+
+- name: Erie County Water Authority
+  scan_method: websearch
+  scan_query: site:ecwa.org jobs IT GIS engineering water data
+  enabled: true
+
+- name: Schneider Electric
+  scan_method: websearch
+  scan_query: site:se.com/en/jobs "Buffalo" OR "upstate New York" IoT energy controls analytics
+  enabled: true
+
+- name: Encorus Group
+  careers_url: https://encorus.applytojob.com/
+  scan_method: websearch
+  scan_query: site:encorus.applytojob.com
+  enabled: true
+
+- name: IMA Life North America
+  scan_method: websearch
+  scan_query: site:imagroup.com/careers OR "IMA Life" Buffalo jobs SCADA PLC validation
+  enabled: true
+
+- name: Upstate Niagara Cooperative
+  scan_method: websearch
+  scan_query: site:upstateniagara.coop jobs OR "Upstate Niagara Cooperative" Lancaster automation MES
+  enabled: true
+
+- name: Lactalis American Group
+  careers_url: https://recruiting.paylocity.com/recruiting/jobs/All/6197b9db-7396-41d1-9bab-a64d738c1d73/Select-Division-Career-Page
+  enabled: true
+
+- name: Viridi
+  scan_method: websearch
+  scan_query: site:viridi-be.com careers OR "Viridi" Buffalo battery energy jobs
+  enabled: true
+
+- name: General Motors Lockport
+  scan_method: websearch
+  scan_query: site:gm.com/us/en/our-company/careers Lockport controls PLC manufacturing analytics
+  enabled: true
+
+- name: UFP Industries (Deckorators)
+  scan_method: websearch
+  scan_query: site:ufpi.com careers Buffalo SCADA IIoT MES controls manufacturing
+  enabled: true
+
+- name: Eaton
+  scan_method: websearch
+  scan_query: site:eaton.com/us/en-us/company/careers "Orchard Park" controls software data systems
+  enabled: true
+
+# URL-NEEDS-VERIFY: Delaware North uses iCIMS; tenant name assumed from company slug
+- name: Delaware North
+  careers_url: https://delawarenorth.icims.com/jobs/search
+  enabled: true
+
+- name: University at Buffalo
+  scan_method: websearch
+  scan_query: site:ubjobs.buffalo.edu data research GIS systems analyst programmer bioinformatics
+  enabled: true
+
+- name: Roswell Park Comprehensive Cancer Center
+  scan_method: websearch
+  scan_query: site:roswellpark.org/careers data bioinformatics informatics software research
+  enabled: true
+
+- name: Kaleida Health
+  scan_method: websearch
+  scan_query: site:kaleidahealth.org/careers IT analyst data reporting application clinical
+  enabled: true
+
+- name: Independent Health
+  scan_method: websearch
+  scan_query: site:independenthealth.com/careers data analytics BI reporting systems developer
+  enabled: true
+
+- name: Highmark BCBS WNY
+  scan_method: websearch
+  scan_query: site:highmarkbcbswny.com/careers data analytics technology actuarial reporting
+  enabled: true
+
+- name: Catholic Health (Buffalo)
+  scan_method: websearch
+  scan_query: site:chsbuffalo.org/careers IT data reporting clinical informatics project
+  enabled: true
+
+- name: Erie County Medical Center
+  scan_method: websearch
+  scan_query: site:ecmc.edu/careers IT data healthcare reporting network analyst
+  enabled: true
+
+- name: Frontier Science
+  scan_method: websearch
+  scan_query: site:frontiersci.com/careers data clinical database statistical programming QA
+  enabled: true
+
+- name: CUBRC
+  scan_method: websearch
+  scan_query: site:cubrc.org/careers software DevOps data modeling research systems
+  enabled: true
+
+- name: Northrop Grumman (local Buffalo)
+  scan_method: websearch
+  scan_query: site:northropgrumman.com/jobs "Buffalo" OR "Amherst" systems software data cybersecurity
+  enabled: true
+
+- name: Northrop Grumman (remote)
+  scan_method: websearch
+  scan_query: site:northropgrumman.com/jobs remote systems software data cybersecurity test
+  enabled: true
+
+- name: VOCAL Technologies
+  scan_method: websearch
+  scan_query: site:vocal.com/careers OR "VOCAL Technologies" Amherst software DSP embedded RF
+  enabled: true
+
+- name: 3AM Innovations
+  scan_method: websearch
+  scan_query: '"3AM Innovations" Buffalo jobs software product IoT situational awareness'
+  enabled: true
+
+- name: 43North
+  careers_url: https://jobs.43north.org/jobs
+  scan_method: websearch
+  scan_query: site:jobs.43north.org
+  enabled: true
+
+- name: Odoo (Buffalo)
+  scan_method: websearch
+  scan_query: site:odoo.com/jobs Buffalo implementation CRM ERP business analyst
+  enabled: true
+
+- name: AIS (Buffalo managed IT)
+  scan_method: websearch
+  scan_query: '"AIS" "Buffalo" managed jobs cloud network cybersecurity NOC'
+  enabled: true
+
+# URL-NEEDS-VERIFY: LaBella Associates uses Workable; slug inferred from company name
+- name: LaBella Associates
+  careers_url: https://apply.workable.com/labella-associates/
+  enabled: true
+
+- name: Erie County / City of Buffalo Government
+  careers_url: https://www.governmentjobs.com/careers/erieco/jobs
+  scan_method: websearch
+  scan_query: site:governmentjobs.com/careers/erieco GIS data IT analyst asset management
+  enabled: true
+
+# URL-NEEDS-VERIFY: Centivo uses Ashby; slug inferred from company name
+- name: Centivo
+  careers_url: https://jobs.ashbyhq.com/centivo
+  api: https://api.ashbyhq.com/posting-api/job-board/centivo
+  enabled: true
+
+# URL-NEEDS-VERIFY: Mattel/Fisher-Price uses SmartRecruiters; slug Mattel1 inferred
+- name: Fisher-Price / Mattel
+  careers_url: https://careers.smartrecruiters.com/Mattel1
+  api: https://api.smartrecruiters.com/v1/companies/Mattel1/postings
+  enabled: true

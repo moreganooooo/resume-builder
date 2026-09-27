@@ -1291,7 +1291,9 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                 else:
                     sleep_dur = min(
                         BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
-                    ) + random.uniform(1, 4)  # nosec B311
+                    ) + random.uniform(
+                        1, 4
+                    )  # nosec B311
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed HTTP 429. Waiting {sleep_dur:.1f}s"
                     f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
@@ -1323,7 +1325,9 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                 else:
                     sleep_dur = min(
                         BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
-                    ) + random.uniform(1, 4)  # nosec B311
+                    ) + random.uniform(
+                        1, 4
+                    )  # nosec B311
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s"
                     f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",

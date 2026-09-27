@@ -365,7 +365,7 @@ func TestLPressDispatchesLivenessAction(t *testing.T) {
 	}
 }
 
-func TestTPressDispatchesForCompletedJob(t *testing.T) {
+func TestTPressLaunchesTerminalForCompletedJob(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 	m, _ = m.Update(pressKey("down")) // select the Completed row (Beta)
 	if job, _ := m.CurrentJob(); job.Status != "Completed" {
@@ -374,11 +374,18 @@ func TestTPressDispatchesForCompletedJob(t *testing.T) {
 
 	m, cmd := m.Update(pressKey("t"))
 
-	if m.actionInProgress != "tailor" {
-		t.Fatalf("expected tailor action for a Completed job, got %q", m.actionInProgress)
+	// With the new implementation, 't' launches a new terminal window
+	// instead of running as a background action, so actionInProgress should remain empty
+	if m.actionInProgress != "" {
+		t.Fatalf("expected no actionInProgress (launches new terminal), got %q", m.actionInProgress)
 	}
-	if cmd == nil {
-		t.Fatal("expected tailor command dispatched")
+	// A notice should be set
+	if !strings.Contains(m.notice, "Launched interactive tailoring") {
+		t.Fatalf("expected notice about launching terminal, got %q", m.notice)
+	}
+	// No tea.Cmd should be returned for the dashboard itself
+	if cmd != nil {
+		t.Fatal("expected no command (terminal launched separately)")
 	}
 }
 

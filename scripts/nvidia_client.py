@@ -32,14 +32,15 @@ class TestNetworkBlockedError(RuntimeError):
 
 def _blocked_under_test() -> bool:
     return (
-        ("unittest" in sys.modules or "pytest" in sys.modules)
-        and not os.environ.get(_TEST_NETWORK_ENV)
-    )
+        "unittest" in sys.modules or "pytest" in sys.modules
+    ) and not os.environ.get(_TEST_NETWORK_ENV)
 
 
 def api_key() -> str:
     """Return the hosted-NIM key without caching it or exposing it in metadata."""
-    return (os.environ.get("NVIDIA_API_KEY") or os.environ.get("NGC_API_KEY") or "").strip()
+    return (
+        os.environ.get("NVIDIA_API_KEY") or os.environ.get("NGC_API_KEY") or ""
+    ).strip()
 
 
 def _auth_headers() -> dict[str, str]:
@@ -57,7 +58,9 @@ def _auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
 
-def _schema_dict(response_schema, extra_schema_properties, extra_required) -> dict | None:
+def _schema_dict(
+    response_schema, extra_schema_properties, extra_required
+) -> dict | None:
     if response_schema is None:
         return None
     if hasattr(response_schema, "model_json_schema"):
@@ -69,7 +72,9 @@ def _schema_dict(response_schema, extra_schema_properties, extra_required) -> di
     elif isinstance(response_schema, str):
         raw = json.loads(response_schema)
     else:
-        raise TypeError(f"Unsupported response_schema type: {type(response_schema).__name__}")
+        raise TypeError(
+            f"Unsupported response_schema type: {type(response_schema).__name__}"
+        )
     raw = copy.deepcopy(raw)
     if extra_schema_properties:
         raw["properties"] = {
@@ -77,7 +82,9 @@ def _schema_dict(response_schema, extra_schema_properties, extra_required) -> di
             **extra_schema_properties,
         }
     if extra_required:
-        raw["required"] = list(dict.fromkeys([*raw.get("required", []), *extra_required]))
+        raw["required"] = list(
+            dict.fromkeys([*raw.get("required", []), *extra_required])
+        )
     return cast(dict, raw)
 
 
@@ -122,8 +129,7 @@ def _request_body(
         ],
         "temperature": temperature,
         "max_tokens": int(
-            max_output_tokens
-            or os.environ.get("NVIDIA_MAX_OUTPUT_TOKENS", "8192")
+            max_output_tokens or os.environ.get("NVIDIA_MAX_OUTPUT_TOKENS", "8192")
         ),
         "stream": False,
     }
@@ -154,7 +160,10 @@ def _retry_after(response) -> float | None:
 
 
 def _sleep(attempt: int, response=None) -> None:
-    if os.environ.get("CI") == "true" or os.environ.get("RESUME_BUILDER_TESTING") == "1":
+    if (
+        os.environ.get("CI") == "true"
+        or os.environ.get("RESUME_BUILDER_TESTING") == "1"
+    ):
         return
     hinted = _retry_after(response)
     delay = hinted if hinted is not None else min(2**attempt, 30)
@@ -211,9 +220,7 @@ class NvidiaNimClient:
             raise ValueError("NVIDIA evaluator benchmark calls do not support tools")
         if inline_file is not None:
             raise ValueError("NVIDIA evaluator benchmark calls are text-only")
-        schema = _schema_dict(
-            response_schema, extra_schema_properties, extra_required
-        )
+        schema = _schema_dict(response_schema, extra_schema_properties, extra_required)
         modes: list[str | None] = _structured_modes() if schema else [None]
         last_meta: dict[str, Any] = {
             "provider": "nvidia_nim",
@@ -279,7 +286,9 @@ class NvidiaNimClient:
                     }
 
                 try:
-                    detail = response.json().get("detail") or response.json().get("error")
+                    detail = response.json().get("detail") or response.json().get(
+                        "error"
+                    )
                 except ValueError:
                     detail = response.text[:300]
                 last_meta = {

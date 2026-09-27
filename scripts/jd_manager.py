@@ -205,6 +205,21 @@ def _sync_jd_to_db(jd_path: str, data: dict, profile: str | None = None) -> None
 # pre-v7 composite_score was computed under the old weights.
 SCORING_VERSION = 9
 
+_SKILL_VECTORS_META = "verified_skill_vectors_ge2_d768.meta"
+
+
+def _current_skills_hash() -> str | None:
+    """The names_sha written by embed_verified_skills.py into the verified
+    skill vectors .meta sidecar, or None when the embed hasn't been run or
+    the file is unreadable. Used to detect when the skills ledger has been
+    re-embedded since an evaluation was scored."""
+    meta_path = os.path.join(profile_paths.kb_dir(), _SKILL_VECTORS_META)
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            return json.load(f).get("names_sha")
+    except Exception:
+        return None
+
 
 def save_evaluation(jd_path: str, evaluation: dict) -> None:
     """Persists an evaluate_fit() result into the JD's own JSON file under
@@ -255,6 +270,7 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "ghost_job_probability": evaluation.get("ghost_job_probability"),
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
         "scoring_version": SCORING_VERSION,
+        "skills_ledger_hash": _current_skills_hash(),
     }
     with atomic_write(jd_path, encoding="utf-8") as f:
         json.dump(data, f, indent=2)
@@ -1472,6 +1488,20 @@ def get_completed_jds() -> list:
     )
 
 
+def get_archived_jds() -> list:
+    """
+    Lists JD files sitting in ARCHIVED_DIR -- these are jobs the user has
+    manually archived. Included in pipeline exports so they can be viewed
+    and reinstated via the dashboard's [d] toggle and reinstate action.
+    """
+    os.makedirs(ARCHIVED_DIR, exist_ok=True)
+    return sorted(
+        os.path.join(ARCHIVED_DIR, name)
+        for name in os.listdir(ARCHIVED_DIR)
+        if os.path.isfile(os.path.join(ARCHIVED_DIR, name)) and not name.startswith(".")
+    )
+
+
 def count_completed_resumes() -> int:
     """
     All-time count of resumes actually built, read from the append-only
@@ -1510,6 +1540,30 @@ def archive_jd(jd_path: str) -> str:
         if isinstance(data, dict):
             _sync_jd_to_db(dest, data)
     except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        pass
+
+    return dest
+
+
+def reinstate_jd(jd_path: str) -> str:
+    """Moves a JD file from ARCHIVED_DIR back to JDS_DIR root, reviving
+    it in the active pipeline. Counterpart to archive_jd(). Returns the new
+    path. Reinstated JDs are picked up by get_pending_jds() on the next
+    scan. Also updates data.db to reflect the status change."""
+    if not jd_path.startswith(ARCHIVED_DIR):
+        raise ValueError(f"reinstate_jd only works on archived paths: {jd_path}")
+
+    os.makedirs(JDS_DIR, exist_ok=True)
+    dest = os.path.join(JDS_DIR, os.path.basename(jd_path))
+    shutil.move(jd_path, dest)
+
+    # Update data.db: archived status -> Pending
+    try:
+        import db
+
+        job_id = compute_job_key(dest)
+        db.update_job_status(job_id, "Pending", dest)
+    except Exception:
         pass
 
     return dest

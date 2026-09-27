@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1463,20 +1464,51 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			}
 		case "t":
 			if job, ok := m.CurrentJob(); ok {
-				// Completed jobs are re-tailorable too, not just Pending --
-				// run_pipeline(jd_path=...) processes the given path
-				// directly rather than re-discovering it via
-				// get_pending_jds(), so re-running it against a job
-				// already in completed/ is a normal re-tailor, not an
-				// error state.
-				m.actionInProgress = "tailor"
-				m.actionStartedAt = time.Now()
-				m.actionChan = make(chan tea.Msg)
-				m.progress = progress.New(progress.WithColors(m.theme.Sky, m.theme.Mauve))
-				m.actionStepLabel = ""
-				ctx, cancel := context.WithCancel(context.Background())
-				m.actionCancel = cancel
-				return m, m.runAction(ctx, m.actionChan, "tailor", job.Path)
+				// Launch the full interactive tailoring in a new terminal window
+				// so the user can see and respond to all prompts (skills selection,
+				// recruiter suggestions, etc.)
+				var terminalCmd *exec.Cmd
+				cliPath := filepath.Join(m.projectRoot, "scripts", "cli.py")
+				
+				switch runtime.GOOS {
+				case "darwin":
+					// Use osascript to open a new Terminal window with the command
+					terminalCmd = exec.Command("osascript", "-e",
+						fmt.Sprintf("tell application \"Terminal\" to do script \"cd %q && %s %s run %s\"",
+							m.projectRoot, m.pythonPath, cliPath, job.Path))
+				case "linux":
+					// Try common terminal emulators
+					if _, err := exec.LookPath("gnome-terminal"); err == nil {
+						terminalCmd = exec.Command("gnome-terminal", "--", "bash", "-c",
+							fmt.Sprintf("cd %s && %s %s run %s; exec bash", m.projectRoot, m.pythonPath, cliPath, job.Path))
+					} else if _, err := exec.LookPath("xterm"); err == nil {
+						terminalCmd = exec.Command("xterm", "-e", "bash", "-c",
+							fmt.Sprintf("cd %s && %s %s run %s; exec bash", m.projectRoot, m.pythonPath, cliPath, job.Path))
+					} else if _, err := exec.LookPath("konsole"); err == nil {
+						terminalCmd = exec.Command("konsole", "--noclose", "-e", "bash", "-c",
+							fmt.Sprintf("cd %s && %s %s run %s; exec bash", m.projectRoot, m.pythonPath, cliPath, job.Path))
+					} else {
+						// Fallback: try xdg-open with a terminal URL
+						cmdStr := strings.ReplaceAll(
+							fmt.Sprintf("cd %s && %s %s run %s", m.projectRoot, m.pythonPath, cliPath, job.Path),
+							" ", "%20")
+						terminalCmd = exec.Command("xdg-open", "terminal:///bash:-c/"+cmdStr)
+					}
+				case "windows":
+					terminalCmd = exec.Command("cmd", "/c", "start", "cmd", "/k",
+						fmt.Sprintf("cd /d %s && %s %s run %s", m.projectRoot, m.pythonPath, cliPath, job.Path))
+				default:
+					// Fallback to xdg-open for other Unix-like systems
+					cmdStr := strings.ReplaceAll(
+						fmt.Sprintf("cd %s && %s %s run %s", m.projectRoot, m.pythonPath, cliPath, job.Path),
+						" ", "%20")
+					terminalCmd = exec.Command("xdg-open", "terminal:///bash:-c/"+cmdStr)
+				}
+				
+				if terminalCmd != nil {
+					_ = terminalCmd.Start()
+					m.notice = fmt.Sprintf("Launched interactive tailoring for %s in new terminal", job.Company)
+				}
 			}
 		case "m":
 			if job, ok := m.CurrentJob(); ok {
@@ -1613,7 +1645,7 @@ var jobsHelpCategories = []helpCategory{
 		{"l", "Check posting liveness"},
 		{"m", "Compute Skills Gap Matrix for this job"},
 		{"M", "Compute Skills Gap Matrix for pending jobs missing one (bulk, capped)"},
-		{"t", "Tailor (or re-tailor) resume for this job"},
+		{"t", "Tailor resume in new terminal (full interactive build)"},
 		{"u", "Change application status"},
 		{"a", "Open application answers chat"},
 		{"x", "Archive this job (removes from all filters)"},
@@ -1713,7 +1745,7 @@ func (m JobsModel) renderNextBestMove() string {
 		Background(m.theme.Surface).
 		Padding(0, 2).
 		Width(m.width)
-	msg := fmt.Sprintf("★ NEXT BEST MOVE: High match at %s (%.1f) — Press 't' to tailor now!", best.Company, best.Evaluation.CompositeScore)
+	msg := fmt.Sprintf("★ NEXT BEST MOVE: High match at %s (%.1f) — Press 't' for full interactive build!", best.Company, best.Evaluation.CompositeScore)
 	return bannerStyle.Render(msg)
 }
 

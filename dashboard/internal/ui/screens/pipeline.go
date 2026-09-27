@@ -49,6 +49,11 @@ type URLOpenFailedMsg struct {
 	Err error
 }
 
+// PipelineReinstateMsg is emitted when a user requests to reinstate an archived job.
+type PipelineReinstateMsg struct {
+	JobPath string
+}
+
 // PipelineLoadReportMsg requests lazy loading of a report summary.
 type PipelineLoadReportMsg struct {
 	CareerOpsPath string
@@ -658,6 +663,18 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 	case "r":
 		return m, func() tea.Msg { return PipelineRefreshMsg{} }
 
+	case "R":
+		if len(m.filtered) > 0 {
+			selected := m.filtered[m.cursor]
+			if strings.ToLower(selected.Status) == "archived" {
+				m.notice = fmt.Sprintf("Reinstating %s - %s...", selected.Company, selected.Role)
+				return m, func() tea.Msg {
+					return PipelineReinstateMsg{JobPath: selected.JobPath}
+				}
+			}
+			m.notice = "Only archived jobs can be reinstated"
+		}
+
 	case "c":
 		if len(m.filtered) > 0 {
 			m.statusPicker = true
@@ -1119,6 +1136,7 @@ var pipelineHelpCategories = []helpCategory{
 		{"a", "Open application answers chat"},
 		{"c", "Change application status"},
 		{"r", "Refresh from disk"},
+			{"R", "Reinstate archived job"},
 	}},
 	{"View", []helpBinding{
 		{"/", "Search company/role/notes"},

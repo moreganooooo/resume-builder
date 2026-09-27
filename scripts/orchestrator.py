@@ -4002,13 +4002,11 @@ def fit_composite_score(
 # anything (see docs/hard_blockers.md). These surface only as an opt-in
 # view filter (model.JobRow.IsExperienceBlocked) instead.
 #
-# field_domain (required industry/functional background) is deliberately
-# NOT in this tuple yet -- it's a new category (see evaluate_recruiter.md)
-# carved out of the catch-all `other` bucket specifically so it can be
-# measured (scripts/eval_hard_blocker.py) before it gets the same
-# stop-auto-zeroing treatment. Until it clears its own holdout bar it
-# stays in the unconditional zero-out path below, same as `other`.
-EXPERIENCE_BLOCKER_CATEGORIES = ("years_experience", "degree")
+# field_domain (required industry/functional background) added to soften
+# industry-specific experience requirements. Other category blockers with
+# experience-related text (years, managerial, supervisory) are also treated
+# as soft blockers via _split_blockers logic.
+EXPERIENCE_BLOCKER_CATEGORIES = ("years_experience", "degree", "field_domain")
 
 
 def _blocker_text(blocker) -> str:
@@ -4281,25 +4279,37 @@ def _apply_work_constraints(
 def _split_blockers(blockers: list) -> tuple[list, list]:
     """Splits into (experience_blockers, disqualifying_blockers).
 
-    years_experience/degree blockers never force a Skip/zero -- see
-    EXPERIENCE_BLOCKER_CATEGORIES above. Every other category keeps the
-    original unconditional behavior. All years_experience entries (including
+    years_experience/degree/field_domain blockers never force a Skip/zero -- see
+    EXPERIENCE_BLOCKER_CATEGORIES above. Additionally, 'other' category blockers
+    with experience-related text (years, managerial, supervisory, leadership)
+    are also treated as soft blockers. Every other category keeps the
+    original unconditional behavior. All these entries (including
     over_qualified) are treated as soft blockers that don't zero the score,
     allowing them to surface as filter-only signals in the dashboard.
     """
-    experience_blockers = [
-        b
-        for b in blockers
-        if isinstance(b, dict)
-        and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
-    ]
-    disqualifying_blockers = [
-        b
-        for b in blockers
-        if not (
-            isinstance(b, dict) and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
-        )
-    ]
+    experience_keywords = {
+        "year",
+        "years",
+        "experience",
+        "managerial",
+        "supervisory",
+        "leadership",
+    }
+
+    def _is_experience_blocker(b):
+        if not isinstance(b, dict):
+            return False
+        if b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES:
+            return True
+        # Check if 'other' category has experience-related text
+        if b.get("category") == "other":
+            text = (b.get("text") or "").lower()
+            return any(kw in text for kw in experience_keywords)
+        return False
+
+    experience_blockers = [b for b in blockers if _is_experience_blocker(b)]
+    disqualifying_blockers = [b for b in blockers if not _is_experience_blocker(b)]
+
     return experience_blockers, disqualifying_blockers
 
 
@@ -10164,7 +10174,7 @@ class ResumeEngine:
         # since the actual hiring company is hidden behind the staffing board
         skip_why_for_staffing = False
         try:
-            with open(jd_path, 'r') as f:
+            with open(jd_path, "r") as f:
                 jd_data = json.load(f)
                 if jd_data.get("staffing_agency"):
                     skip_why_for_staffing = True

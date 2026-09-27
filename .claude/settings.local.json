@@ -146,7 +146,13 @@
       "Bash(codespell --version)",
       "Bash(golangci-lint run *)",
       "Bash(golangci-lint *)",
-      "Bash(xargs yamllint -c .yamllint)"
+      "Bash(xargs yamllint -c .yamllint)",
+      "Bash(RESUME_PROFILE=dominick python *)",
+      "Bash(node *)",
+      "Bash(go build *)",
+      "Bash(sqlite3 profiles/dominick/data.db \"SELECT COUNT\\(*\\) as total, company, job_title FROM jobs WHERE company LIKE '%Northrop%' GROUP BY company, job_title;\")",
+      "Bash(RESUME_PROFILE=dominick python3 *)",
+      "Bash(/Users/morganescott/resume-builder/dashboard/bin/dashboard --help)"
     ]
   },
   "enableAllProjectMcpServers": true,

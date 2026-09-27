@@ -78,9 +78,15 @@ class TestNvidiaNimClient(unittest.TestCase):
         unsupported = response(400, {"detail": "response_format unsupported"})
         ok = response(
             200,
-            {"choices": [{"message": {"content": '{"score":3}'}, "finish_reason": "stop"}]},
+            {
+                "choices": [
+                    {"message": {"content": '{"score":3}'}, "finish_reason": "stop"}
+                ]
+            },
         )
-        with patch.object(client.requests, "post", side_effect=[unsupported, ok]) as post:
+        with patch.object(
+            client.requests, "post", side_effect=[unsupported, ok]
+        ) as post:
             text, meta = client.NvidiaNimClient.generate(
                 model="nvidia/nemotron-3.5-lightning-30b-a3b",
                 system_instruction="profile",
@@ -97,9 +103,10 @@ class TestNvidiaNimClient(unittest.TestCase):
         self.assertEqual(text, '{"score":3}')
 
     def test_missing_key_fails_before_network(self):
-        with patch.dict(os.environ, {"NVIDIA_API_KEY": "", "NGC_API_KEY": ""}), patch.object(
-            client.requests, "post"
-        ) as post:
+        with (
+            patch.dict(os.environ, {"NVIDIA_API_KEY": "", "NGC_API_KEY": ""}),
+            patch.object(client.requests, "post") as post,
+        ):
             with self.assertRaisesRegex(RuntimeError, "NVIDIA_API_KEY"):
                 client.NvidiaNimClient.generate(
                     model="openai/gpt-oss-20b",

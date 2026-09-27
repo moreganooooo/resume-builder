@@ -45,7 +45,10 @@ class TestBuildVerifiedSkillsContext(unittest.TestCase):
                 return_value={
                     "tools": [
                         {"name": "Salesforce", "employer": "Acme Corp"},
-                        {"name": "Design and develop GenAI apps", "employer": "Self / Profile"},
+                        {
+                            "name": "Design and develop GenAI apps",
+                            "employer": "Self / Profile",
+                        },
                         {"name": "Python", "employer": ""},
                     ]
                 },

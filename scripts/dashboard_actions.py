@@ -628,6 +628,7 @@ def _coverage_reference(verified_skill_vecs, anchored_mask=None):
     ref_vecs = verified_skill_vecs
     if (
         anchored_mask is not None
+        and len(anchored_mask) == len(verified_skill_vecs)
         and anchored_mask.sum() >= _MIN_ANCHORED_FOR_REFERENCE
     ):
         ref_vecs = verified_skill_vecs[anchored_mask]

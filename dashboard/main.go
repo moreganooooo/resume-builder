@@ -471,6 +471,19 @@ func (m appModel) updateScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.startTransition(m.previousState)
 
+	case screens.PipelineReinstateMsg:
+		// Reinstate archived job by calling the Python reinstate script
+		cmd := exec.Command("python3", "scripts/reinstate_job.py", msg.JobPath)
+		cmd.Dir = m.projectRoot  // Run from project root so imports work
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			m.pipeline.SetNotice(fmt.Sprintf("Failed to reinstate: %v", err))
+
+		} else {
+			m.pipeline.SetNotice(fmt.Sprintf("Reinstated: %s", string(output)))
+		}
+		return m, m.reloadPipelineDataCmd()
+
 	case screens.OpenURLMsg:
 		return m, func() tea.Msg {
 			var err error

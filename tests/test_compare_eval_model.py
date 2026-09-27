@@ -54,22 +54,66 @@ class TestSummary(unittest.TestCase):
                 "models": ["control", "candidate"],
             },
             "attempts": [
-                {"model": "control", "status": "ok", "jd_sha256": "a", "elapsed_seconds": 4, "evaluation": {"composite_score": 3.0, "recommendation": "Pursue", "role_track": "ic"}},
-                {"model": "control", "status": "ok", "jd_sha256": "a", "elapsed_seconds": 6, "evaluation": {"composite_score": 4.0, "recommendation": "Pursue", "role_track": "ic"}},
-                {"model": "candidate", "status": "ok", "jd_sha256": "a", "elapsed_seconds": 3, "evaluation": {"composite_score": 3.7, "recommendation": "Pursue", "role_track": "ic"}},
+                {
+                    "model": "control",
+                    "status": "ok",
+                    "jd_sha256": "a",
+                    "elapsed_seconds": 4,
+                    "evaluation": {
+                        "composite_score": 3.0,
+                        "recommendation": "Pursue",
+                        "role_track": "ic",
+                    },
+                },
+                {
+                    "model": "control",
+                    "status": "ok",
+                    "jd_sha256": "a",
+                    "elapsed_seconds": 6,
+                    "evaluation": {
+                        "composite_score": 4.0,
+                        "recommendation": "Pursue",
+                        "role_track": "ic",
+                    },
+                },
+                {
+                    "model": "candidate",
+                    "status": "ok",
+                    "jd_sha256": "a",
+                    "elapsed_seconds": 3,
+                    "evaluation": {
+                        "composite_score": 3.7,
+                        "recommendation": "Pursue",
+                        "role_track": "ic",
+                    },
+                },
             ],
         }
         summary = bench._summarize(report)
         metric = summary["candidate"]["metrics"]["composite_score"]
         self.assertAlmostEqual(metric["mean_absolute_delta"], 0.2)
-        self.assertEqual(summary["candidate"]["metrics"]["recommendation"]["agreement_rate"], 1.0)
+        self.assertEqual(
+            summary["candidate"]["metrics"]["recommendation"]["agreement_rate"], 1.0
+        )
 
     def test_failures_count_against_feasibility(self):
         report = {
             "config": {"control_model": "control", "models": ["control", "candidate"]},
             "attempts": [
-                {"model": "control", "status": "ok", "jd_sha256": "a", "elapsed_seconds": 1, "evaluation": {"composite_score": 4.0}},
-                {"model": "candidate", "status": "error", "jd_sha256": "a", "elapsed_seconds": None, "evaluation": None},
+                {
+                    "model": "control",
+                    "status": "ok",
+                    "jd_sha256": "a",
+                    "elapsed_seconds": 1,
+                    "evaluation": {"composite_score": 4.0},
+                },
+                {
+                    "model": "candidate",
+                    "status": "error",
+                    "jd_sha256": "a",
+                    "elapsed_seconds": None,
+                    "evaluation": None,
+                },
             ],
         }
         self.assertEqual(bench._summarize(report)["candidate"]["success_rate"], 0.0)
