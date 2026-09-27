@@ -37,7 +37,6 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -135,6 +134,21 @@ def _atomic_json(path: str, payload: dict) -> None:
 
 
 @contextlib.contextmanager
+def _patch_attribute(target, name: str, replacement):
+    """Temporarily replace an attribute without importing unittest.
+
+    Importing unittest.mock in this live benchmark caused the API clients'
+    test-network guards to misclassify ordinary CLI runs as unit tests.
+    """
+    original = getattr(target, name)
+    setattr(target, name, replacement)
+    try:
+        yield
+    finally:
+        setattr(target, name, original)
+
+
+@contextlib.contextmanager
 def _read_only_evaluator():
     """Disable model handoffs and turn every known persistence exit into a trap."""
     original_fallbacks = orchestrator.SCORING_FALLBACKS
@@ -150,7 +164,7 @@ def _read_only_evaluator():
                 targets.append((jd_manager, name))
         with contextlib.ExitStack() as stack:
             for module, name in targets:
-                stack.enter_context(patch.object(module, name, _forbidden))
+                stack.enter_context(_patch_attribute(module, name, _forbidden))
             yield
     finally:
         orchestrator.SCORING_FALLBACKS = original_fallbacks
@@ -232,8 +246,8 @@ def _run_once(engine, path: str, candidate: str, stage_models: list[str]) -> dic
         sandbox_path = os.path.join(sandbox, os.path.basename(path))
         shutil.copy2(path, sandbox_path)
         try:
-            with _read_only_evaluator(), patch.object(
-                orchestrator.GeminiClient, "generate", side_effect=_generate
+            with _read_only_evaluator(), _patch_attribute(
+                orchestrator.GeminiClient, "generate", _generate
             ):
                 result = engine.evaluate_fit(sandbox_path)
             status = "ok" if result is not None else "empty"

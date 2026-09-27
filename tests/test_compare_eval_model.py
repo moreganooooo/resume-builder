@@ -18,6 +18,21 @@ assert spec and spec.loader
 spec.loader.exec_module(bench)
 
 
+class TestPatchAttribute(unittest.TestCase):
+    def test_restores_attribute_after_success_and_failure(self):
+        class Target:
+            value = "original"
+
+        with bench._patch_attribute(Target, "value", "temporary"):
+            self.assertEqual(Target.value, "temporary")
+        self.assertEqual(Target.value, "original")
+
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            with bench._patch_attribute(Target, "value", "temporary"):
+                raise RuntimeError("boom")
+        self.assertEqual(Target.value, "original")
+
+
 class TestReadOnlyEvaluator(unittest.TestCase):
     def test_restores_fallbacks_and_blocks_save(self):
         old_model = orchestrator.EVAL_MODEL
