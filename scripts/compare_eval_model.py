@@ -1,11 +1,12 @@
 """Benchmark evaluator models under the real fit-evaluation code path.
 
 Unlike the old one-model spot check, this harness treats the current evaluator
-as a noisy control rather than ground truth.  Each selected JD is evaluated by
-all candidates and repeated on the control model.  The run uses ResumeEngine's
+as a noisy control rather than ground truth. Each selected JD is evaluated by
+all candidates and repeated on the control model. The run uses ResumeEngine's
 real profile context, prompts, schemas, deterministic commute/stress/stretch
-logic, and final scoring math, while intercepting persistence so no JD or DB
-state can change.
+logic, and final scoring math. Each JD is copied into a temporary sandbox and
+all known persistence exits are blocked, so the real source file and DB remain
+outside the experiment.
 
 Usage:
     RESUME_PROFILE=morgan python scripts/compare_eval_model.py --limit 5
@@ -14,7 +15,7 @@ Usage:
         --control-runs 2 --output /tmp/eval-model-benchmark.json
 
 The JSON report is checkpointed after every attempt and contains raw final
-results, failures, latency, model metadata, and aggregate deltas.  It is the
+results, failures, latency, model metadata, and aggregate deltas. It is the
 experiment artifact; stdout is only a progress view.
 """
 
@@ -22,13 +23,14 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import copy
 import hashlib
 import json
 import math
 import os
+import shutil
 import statistics
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -128,15 +130,13 @@ def _atomic_json(path: str, payload: dict) -> None:
 
 
 @contextlib.contextmanager
-def _read_only_evaluator(model: str):
-    """Select one model and turn every known persistence exit into a trap."""
-    original_eval_model = orchestrator.EVAL_MODEL
+def _read_only_evaluator():
+    """Disable model handoffs and turn every known persistence exit into a trap."""
     original_fallbacks = orchestrator.SCORING_FALLBACKS
 
     def _forbidden(*args, **kwargs):
         raise RuntimeError("benchmark blocked an attempted persistent write")
 
-    orchestrator.EVAL_MODEL = model
     orchestrator.SCORING_FALLBACKS = {}
     try:
         targets = [(jd_manager, "save_evaluation")]
@@ -148,7 +148,6 @@ def _read_only_evaluator(model: str):
                 stack.enter_context(patch.object(module, name, _forbidden))
             yield
     finally:
-        orchestrator.EVAL_MODEL = original_eval_model
         orchestrator.SCORING_FALLBACKS = original_fallbacks
 
 
@@ -159,18 +158,39 @@ def _run_once(engine, path: str, model: str, stage_models: list[str]) -> dict:
     def _generate(*args, **kwargs):
         call = dict(kwargs)
         if args:
-            call["model"] = args[0]
+            positional = (
+                "model",
+                "system_instruction",
+                "contents",
+                "response_schema",
+                "temperature",
+            )
+            call.update(dict(zip(positional, args)))
         stage = "capability" if len(calls) == 0 else "recruiter" if len(calls) == 1 else "extra"
         requested = str(call.get("model", ""))
         if stage in stage_models:
             call["model"] = model
+        record = {
+            "stage": stage,
+            "requested_model": requested,
+            "forced_model": str(call.get("model", "")),
+        }
+        calls.append(record)
         started = time.monotonic()
-        text, meta = original_generate(**call)
-        calls.append(
+        try:
+            text, meta = original_generate(**call)
+        except Exception as exc:
+            record.update(
+                {
+                    "elapsed_seconds": round(time.monotonic() - started, 3),
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "response_present": False,
+                }
+            )
+            raise
+        record.update(
             {
-                "stage": stage,
-                "requested_model": requested,
-                "forced_model": str(call.get("model", "")),
                 "elapsed_seconds": round(time.monotonic() - started, 3),
                 "meta": _clean(meta),
                 "response_present": bool(text),
@@ -178,21 +198,37 @@ def _run_once(engine, path: str, model: str, stage_models: list[str]) -> dict:
         )
         return text, meta
 
-    before_hash = _sha256(path)
+    source_hash = _sha256(path)
     started = time.monotonic()
-    with _read_only_evaluator(model), patch.object(
-        orchestrator.GeminiClient, "generate", side_effect=_generate
-    ):
-        result = engine.evaluate_fit(path)
-    after_hash = _sha256(path)
-    if before_hash != after_hash:
-        raise RuntimeError("JD changed despite the read-only benchmark guard")
-    return {
-        "status": "ok" if result is not None else "empty",
+    status = "error"
+    result = None
+    error: dict[str, str] = {}
+    with tempfile.TemporaryDirectory(prefix="eval-model-benchmark-") as sandbox:
+        sandbox_path = os.path.join(sandbox, os.path.basename(path))
+        shutil.copy2(path, sandbox_path)
+        try:
+            with _read_only_evaluator(), patch.object(
+                orchestrator.GeminiClient, "generate", side_effect=_generate
+            ):
+                result = engine.evaluate_fit(sandbox_path)
+            status = "ok" if result is not None else "empty"
+        except Exception as exc:  # noqa: BLE001 - failures are benchmark data
+            error = {"error_type": type(exc).__name__, "error": str(exc)}
+        sandbox_hash = _sha256(sandbox_path)
+
+    if _sha256(path) != source_hash:
+        raise RuntimeError("source JD changed despite sandboxing")
+    payload = {
+        "status": status,
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "calls": calls,
         "evaluation": _clean(result),
+        "source_sha256_after": source_hash,
+        "sandbox_sha256_after": sandbox_hash,
+        "sandbox_changed": sandbox_hash != source_hash,
     }
+    payload.update(error)
+    return payload
 
 
 def _reference_by_jd(attempts: list[dict], control: str) -> dict[str, dict]:
@@ -304,6 +340,7 @@ def main(argv: list[str] | None = None) -> int:
             "stage": args.stage,
             "fallbacks_disabled": True,
             "persistence_blocked": True,
+            "jd_sandboxed": True,
         },
         "jds": [
             {"path": path, "name": _short_name(path), "sha256": _sha256(path)} for path in paths
@@ -339,20 +376,12 @@ def main(argv: list[str] | None = None) -> int:
                     "model": model,
                     "run": run,
                 }
-                try:
-                    base.update(_run_once(engine, jd["path"], model, stage_models))
-                except Exception as exc:  # noqa: BLE001 - failures are benchmark data
-                    base.update(
-                        {
-                            "status": "error",
-                            "elapsed_seconds": None,
-                            "calls": [],
-                            "evaluation": None,
-                            "error_type": type(exc).__name__,
-                            "error": str(exc),
-                        }
+                base.update(_run_once(engine, jd["path"], model, stage_models))
+                if base["status"] == "error":
+                    print(
+                        f"  ERROR: {base.get('error_type')}: {base.get('error')}",
+                        flush=True,
                     )
-                    print(f"  ERROR: {type(exc).__name__}: {exc}", flush=True)
                 report["attempts"].append(base)
                 report["summary"] = _summarize(report)
                 _atomic_json(args.output, report)
