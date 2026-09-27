@@ -11,7 +11,10 @@ outside the experiment.
 Usage:
     RESUME_PROFILE=morgan python scripts/compare_eval_model.py --limit 5
     RESUME_PROFILE=morgan python scripts/compare_eval_model.py \
-        --models gemini-3.1-flash-lite gemma-4-31b-it gemma-4-26b-a4b-it \
+        --models gemini:gemini-3.1-flash-lite \
+          nvidia:google/gemma-4-31b-it \
+          nvidia:nvidia/nemotron-3.5-lightning-30b-a3b \
+          nvidia:openai/gpt-oss-20b \
         --control-runs 2 --output /tmp/eval-model-benchmark.json
 
 The JSON report is checkpointed after every attempt and contains raw final
@@ -45,11 +48,13 @@ load_dotenv(profile_paths.env_path(), override=True)
 
 import jd_manager  # noqa: E402
 import orchestrator  # noqa: E402
+from nvidia_client import NvidiaNimClient  # noqa: E402
 
 DEFAULT_CANDIDATES = (
-    "gemini-3.1-flash-lite",
-    "gemma-4-31b-it",
-    "gemma-4-26b-a4b-it",
+    "gemini:gemini-3.1-flash-lite",
+    "nvidia:google/gemma-4-31b-it",
+    "nvidia:nvidia/nemotron-3.5-lightning-30b-a3b",
+    "nvidia:openai/gpt-oss-20b",
 )
 DEFAULT_JDS = (
     "jds/morgan/2026-09-13_Allego_SeniorCustomerMarketingCommunityManager.json",
@@ -151,8 +156,20 @@ def _read_only_evaluator():
         orchestrator.SCORING_FALLBACKS = original_fallbacks
 
 
-def _run_once(engine, path: str, model: str, stage_models: list[str]) -> dict:
+def _split_candidate(candidate: str) -> tuple[str, str]:
+    if ":" not in candidate:
+        return "gemini", candidate
+    provider, model = candidate.split(":", 1)
+    if provider not in {"gemini", "nvidia"} or not model:
+        raise ValueError(
+            f"Invalid candidate {candidate!r}; use gemini:model or nvidia:publisher/model"
+        )
+    return provider, model
+
+
+def _run_once(engine, path: str, candidate: str, stage_models: list[str]) -> dict:
     calls: list[dict] = []
+    provider, model = _split_candidate(candidate)
     original_generate = orchestrator.GeminiClient.generate
 
     def _generate(*args, **kwargs):
@@ -168,17 +185,25 @@ def _run_once(engine, path: str, model: str, stage_models: list[str]) -> dict:
             call.update(dict(zip(positional, args)))
         stage = "capability" if len(calls) == 0 else "recruiter" if len(calls) == 1 else "extra"
         requested = str(call.get("model", ""))
+        selected_provider = "gemini"
         if stage in stage_models:
             call["model"] = model
+            selected_provider = provider
         record = {
             "stage": stage,
             "requested_model": requested,
+            "forced_provider": selected_provider,
             "forced_model": str(call.get("model", "")),
         }
         calls.append(record)
         started = time.monotonic()
         try:
-            text, meta = original_generate(**call)
+            generate = (
+                NvidiaNimClient.generate
+                if selected_provider == "nvidia"
+                else original_generate
+            )
+            text, meta = generate(**call)
         except Exception as exc:
             record.update(
                 {
@@ -307,7 +332,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("paths", nargs="*", help="JD files; defaults to five varied stored JDs")
     parser.add_argument("--profile", default=os.environ.get("RESUME_PROFILE"))
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_CANDIDATES))
-    parser.add_argument("--control-model", default=orchestrator.EVAL_MODEL)
+    parser.add_argument(
+        "--control-model", default=f"gemini:{orchestrator.EVAL_MODEL}"
+    )
     parser.add_argument("--control-runs", type=int, default=2)
     parser.add_argument("--candidate-runs", type=int, default=1)
     parser.add_argument("--stage", choices=("both", "capability", "recruiter"), default="both")
@@ -318,8 +345,18 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.profile:
         args.profile = profile_paths.active_profile()
+    try:
+        for candidate in [args.control_model, *args.models]:
+            _split_candidate(candidate)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.control_model not in args.models:
         args.models.insert(0, args.control_model)
+    if any(_split_candidate(item)[0] == "nvidia" for item in args.models):
+        if not (os.environ.get("NVIDIA_API_KEY") or os.environ.get("NGC_API_KEY")):
+            parser.error(
+                "NVIDIA_API_KEY is required when --models includes nvidia:* candidates"
+            )
     if args.control_runs < 1 or args.candidate_runs < 1:
         parser.error("run counts must be positive")
     profile_paths.set_active_profile(args.profile)
@@ -329,7 +366,7 @@ def main(argv: list[str] | None = None) -> int:
     stage_models = ["capability", "recruiter"] if args.stage == "both" else [args.stage]
 
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "config": {
             "profile": args.profile,
@@ -338,6 +375,7 @@ def main(argv: list[str] | None = None) -> int:
             "control_runs": args.control_runs,
             "candidate_runs": args.candidate_runs,
             "stage": args.stage,
+            "candidate_syntax": "provider:model",
             "fallbacks_disabled": True,
             "persistence_blocked": True,
             "jd_sandboxed": True,
@@ -369,11 +407,14 @@ def main(argv: list[str] | None = None) -> int:
                 if key in completed:
                     continue
                 print(f"{jd['name']} | {model} | run {run}/{run_count}", flush=True)
+                provider, raw_model = _split_candidate(model)
                 base = {
                     "jd_path": jd["path"],
                     "jd_name": jd["name"],
                     "jd_sha256": jd["sha256"],
                     "model": model,
+                    "provider": provider,
+                    "provider_model": raw_model,
                     "run": run,
                 }
                 base.update(_run_once(engine, jd["path"], model, stage_models))

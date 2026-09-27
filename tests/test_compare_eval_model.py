@@ -114,8 +114,25 @@ class TestRunOnce(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertEqual(result["error_type"], "ValueError")
         self.assertEqual(result["calls"][0]["forced_model"], "candidate")
+        self.assertEqual(result["calls"][0]["forced_provider"], "gemini")
         self.assertEqual(result["calls"][0]["error_type"], "ValueError")
         self.assertEqual(bench._sha256(path), source_hash)
+
+
+class TestProviderRouting(unittest.TestCase):
+    def test_split_candidate_preserves_publisher_model(self):
+        self.assertEqual(
+            bench._split_candidate("nvidia:nvidia/nemotron-3.5-lightning-30b-a3b"),
+            ("nvidia", "nvidia/nemotron-3.5-lightning-30b-a3b"),
+        )
+        self.assertEqual(
+            bench._split_candidate("gemini-3.1-flash-lite"),
+            ("gemini", "gemini-3.1-flash-lite"),
+        )
+
+    def test_rejects_unknown_provider(self):
+        with self.assertRaisesRegex(ValueError, "Invalid candidate"):
+            bench._split_candidate("other:model")
 
 
 if __name__ == "__main__":
