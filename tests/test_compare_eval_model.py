@@ -19,11 +19,11 @@ spec.loader.exec_module(bench)
 
 
 class TestReadOnlyEvaluator(unittest.TestCase):
-    def test_restores_globals_and_blocks_save(self):
+    def test_restores_fallbacks_and_blocks_save(self):
         old_model = orchestrator.EVAL_MODEL
         old_fallbacks = orchestrator.SCORING_FALLBACKS
-        with bench._read_only_evaluator("candidate"):
-            self.assertEqual(orchestrator.EVAL_MODEL, "candidate")
+        with bench._read_only_evaluator():
+            self.assertEqual(orchestrator.EVAL_MODEL, old_model)
             self.assertEqual(orchestrator.SCORING_FALLBACKS, {})
             with self.assertRaisesRegex(RuntimeError, "persistent write"):
                 bench.jd_manager.save_evaluation("a", {})
@@ -71,17 +71,51 @@ class TestAtomicReport(unittest.TestCase):
 
 
 class TestRunOnce(unittest.TestCase):
-    def test_real_entry_point_is_called_with_writes_blocked(self):
+    def test_real_entry_point_gets_a_sandbox_copy(self):
         engine = unittest.mock.Mock()
         engine.evaluate_fit.return_value = {"composite_score": 4.2}
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
             fh.write("{}")
             path = fh.name
         self.addCleanup(lambda: os.path.exists(path) and os.unlink(path))
-        with patch.object(orchestrator.GeminiClient, "generate", return_value=("{}", {})):
-            result = bench._run_once(engine, path, "candidate", ["capability", "recruiter"])
+        source_hash = bench._sha256(path)
+
+        result = bench._run_once(engine, path, "candidate", ["capability", "recruiter"])
+
         self.assertEqual(result["status"], "ok")
-        engine.evaluate_fit.assert_called_once_with(path)
+        sandbox_path = engine.evaluate_fit.call_args.args[0]
+        self.assertNotEqual(sandbox_path, path)
+        self.assertFalse(os.path.exists(sandbox_path))
+        self.assertEqual(bench._sha256(path), source_hash)
+        self.assertFalse(result["sandbox_changed"])
+
+    def test_records_generate_failure_and_preserves_source(self):
+        class Engine:
+            def evaluate_fit(self, _path):
+                orchestrator.GeminiClient.generate(
+                    model=orchestrator.EVAL_MODEL,
+                    system_instruction="prompt",
+                    contents="context",
+                )
+
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
+            fh.write("{}")
+            path = fh.name
+        self.addCleanup(lambda: os.path.exists(path) and os.unlink(path))
+        source_hash = bench._sha256(path)
+
+        with patch.object(
+            orchestrator.GeminiClient,
+            "generate",
+            side_effect=ValueError("unsupported schema"),
+        ):
+            result = bench._run_once(Engine(), path, "candidate", ["capability"])
+
+        self.assertEqual(result["status"], "error")
+        self.assertEqual(result["error_type"], "ValueError")
+        self.assertEqual(result["calls"][0]["forced_model"], "candidate")
+        self.assertEqual(result["calls"][0]["error_type"], "ValueError")
+        self.assertEqual(bench._sha256(path), source_hash)
 
 
 if __name__ == "__main__":
