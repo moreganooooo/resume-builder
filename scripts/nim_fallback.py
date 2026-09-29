@@ -1,7 +1,7 @@
-"""NIM fallback for fit evaluation when Gemini quota is exhausted.
+"""NIM fallback for evaluation and embedding when Gemini quota is exhausted.
 
-Eval-only: Gemini → Nemotron Super → Nemotron Ultra.
-Triggered after consecutive Gemini generate() failures, not transient blips.
+Eval: Gemini → Nemotron Super → Nemotron Ultra.
+Embedding: Gemini ge2 → ge1 → nemotron-3-embed-1b.
 """
 
 import json
@@ -97,3 +97,50 @@ def generate_with_nim(
 
     logger.error("NIM fallback: all models exhausted")
     return None, ""
+
+
+# ---------------------------------------------------------------------------
+# Embedding via nemotron-3-embed-1b
+# ---------------------------------------------------------------------------
+
+NIM_EMBED_MODEL = "nvidia/nemotron-3-embed-1b"
+NIM_EMBED_DIM = 2048
+NIM_EMBED_FAMILY = "nem1b"
+
+
+def embed_batch_nim(
+    texts: list[str], input_type: str = "passage", max_retries: int = 3
+) -> list[list[float]] | None:
+    """Embed via NIM. input_type is 'passage' for indexing, 'query' for search."""
+    if _is_test_env():
+        return None
+    key = _nvidia_api_key()
+    if not key:
+        return None
+
+    from openai import OpenAI
+
+    client = OpenAI(base_url=NIM_BASE_URL, api_key=key)
+
+    for attempt in range(max_retries):
+        try:
+            resp = client.embeddings.create(
+                model=NIM_EMBED_MODEL,
+                input=texts,
+                extra_body={"input_type": input_type, "truncate": "END"},
+            )
+            vecs = [d.embedding for d in resp.data]
+            if len(vecs) != len(texts):
+                logger.warning(
+                    "NIM embed: sent %d texts, got %d back", len(texts), len(vecs)
+                )
+                return None
+            return vecs
+        except Exception:
+            logger.warning(
+                "NIM embed attempt %d/%d failed",
+                attempt + 1,
+                max_retries,
+                exc_info=True,
+            )
+    return None

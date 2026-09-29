@@ -70,8 +70,10 @@ EMBED_MODEL = "gemini-embedding-2"
 # only against its own index (index_paths()); the two models' vectors are
 # not comparable. Build it with: embed_bullet_bank.py --model gemini-embedding-001
 BACKUP_EMBED_MODEL = "gemini-embedding-001"
-MODEL_FAMILY = {EMBED_MODEL: "ge2", BACKUP_EMBED_MODEL: "ge1"}
-EMBED_DIM = 768  # sweet spot for text-only
+NIM_EMBED_MODEL = "nim-nemotron-3-embed-1b"
+MODEL_FAMILY = {EMBED_MODEL: "ge2", BACKUP_EMBED_MODEL: "ge1", NIM_EMBED_MODEL: "nem1b"}
+MODEL_DIM = {EMBED_MODEL: 768, BACKUP_EMBED_MODEL: 768, NIM_EMBED_MODEL: 2048}
+EMBED_DIM = 768  # sweet spot for text-only (Gemini models)
 BATCH_SIZE = 20  # batchEmbedContents supports up to ~20 requests per call
 EMBED_SLEEP = (
     0
@@ -99,8 +101,10 @@ def index_paths(kb_dir: str, model: str | None = None) -> tuple:
     each model keeps its own index and a query must only ever be compared
     against the index built by the same model. The primary model keeps the
     historical ge2 file names."""
-    family = MODEL_FAMILY[model or EMBED_MODEL]
-    base = os.path.join(kb_dir, f"bullet_vectors_{family}_d{EMBED_DIM}")
+    m = model or EMBED_MODEL
+    family = MODEL_FAMILY[m]
+    dim = MODEL_DIM[m]
+    base = os.path.join(kb_dir, f"bullet_vectors_{family}_d{dim}")
     return f"{base}.npy", f"{base}.meta", f"{base}.checkpoint.npz"
 
 
@@ -111,6 +115,26 @@ def backup_index_for(
     was built from a different bank (content hash / row count). A query
     embedded with BACKUP_EMBED_MODEL may only ever be compared against this."""
     npy, meta_path, _ = index_paths(kb_dir, BACKUP_EMBED_MODEL)
+    if not (os.path.exists(npy) and os.path.exists(meta_path)):
+        return None
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        matrix = np.load(npy)
+    except Exception:
+        return None
+    if bullets_sha_value is not None and meta.get("bullets_sha") != bullets_sha_value:
+        return None
+    if n_rows is not None and len(matrix) != n_rows:
+        return None
+    return matrix if matrix.ndim == 2 else None
+
+
+def nim_index_for(
+    kb_dir: str, bullets_sha_value: str | None = None, n_rows: int | None = None
+):
+    """The NIM model's bullet-bank matrix, or None when missing/stale."""
+    npy, meta_path, _ = index_paths(kb_dir, NIM_EMBED_MODEL)
     if not (os.path.exists(npy) and os.path.exists(meta_path)):
         return None
     try:
@@ -365,6 +389,79 @@ def main(model: str | None = None):
     )
 
 
+def build_nim_index():
+    """Build the NIM embedding index -- separate from main() because it uses
+    nim_fallback.embed_batch_nim instead of the Gemini embed API."""
+    import nim_fallback
+
+    if not nim_fallback.nim_available():
+        cli_art.cli_warning("NVIDIA_API_KEY not set -- skipping NIM index.")
+        return
+
+    if not os.path.exists(CSV_PATH):
+        raise FileNotFoundError(f"Bullet bank not found: {CSV_PATH}")
+
+    df = pd.read_csv(CSV_PATH)
+    bullet_col = None
+    for candidate in ("Bullet Point", "bullet", "achievement"):
+        if candidate in df.columns:
+            bullet_col = candidate
+            break
+    if bullet_col is None:
+        raise ValueError(f"No known bullet column found. Columns: {list(df.columns)}")
+    bullets = df[bullet_col].fillna("").astype(str).tolist()
+    total = len(bullets)
+    current_sha = bullets_sha(bullets)
+
+    nim_npy, nim_meta, _ = index_paths(KB_DIR, NIM_EMBED_MODEL)
+    if index_is_current(nim_npy, nim_meta, current_sha, total):
+        cli_art.cli_info(
+            f"{NIM_EMBED_MODEL} index already matches this bank -- skipping."
+        )
+        return
+
+    nim_dim = nim_fallback.NIM_EMBED_DIM
+    nim_batch_size = 20
+
+    cli_art.console.print(
+        f"{theme.colorize_icon('build')} Embedding with NIM {nim_fallback.NIM_EMBED_MODEL} @ {nim_dim}d",
+        soft_wrap=True,
+    )
+    n_batches = (total + nim_batch_size - 1) // nim_batch_size
+    cli_art.cli_info(f"{n_batches} batches of {nim_batch_size}")
+
+    vectors = []
+    for batch_start in range(0, total, nim_batch_size):
+        batch = bullets[batch_start : batch_start + nim_batch_size]
+        vecs = nim_fallback.embed_batch_nim(batch, input_type="passage", max_retries=3)
+        if vecs is None:
+            raise RuntimeError(f"NIM embed failed at batch starting {batch_start}")
+        vectors.extend(vecs)
+        if batch_start + nim_batch_size < total:
+            time.sleep(1)
+
+    matrix = np.array(vectors, dtype=np.float32)
+    np.save(nim_npy, matrix)
+    cli_art.console.print(
+        f"{theme.colorize_icon('success')} Saved {matrix.shape} NIM vector matrix → {nim_npy}",
+        soft_wrap=True,
+    )
+
+    meta = {
+        "model": nim_fallback.NIM_EMBED_MODEL,
+        "dim": nim_dim,
+        "rows": total,
+        "csv": CSV_PATH,
+        "bullet_col": bullet_col,
+        "bullets_sha": current_sha,
+    }
+    with atomic_write(nim_meta) as f:
+        json.dump(meta, f, indent=2)
+    cli_art.console.print(
+        f"{theme.colorize_icon('save')} Saved NIM metadata → {nim_meta}", soft_wrap=True
+    )
+
+
 def cli(argv: list | None = None) -> int:
     """Command-line entry point -- what the Bullet Bank menu's "Embed" stage
     and bootstrap_bullet_bank's pipeline both run. By default it builds the
@@ -381,7 +478,7 @@ def cli(argv: list | None = None) -> int:
     )
     parser.add_argument(
         "--model",
-        choices=[EMBED_MODEL, BACKUP_EMBED_MODEL],
+        choices=[EMBED_MODEL, BACKUP_EMBED_MODEL, NIM_EMBED_MODEL],
         help="Build only this model's index.",
     )
     parser.add_argument(
@@ -392,7 +489,10 @@ def cli(argv: list | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.model:
-        main(model=args.model)
+        if args.model == NIM_EMBED_MODEL:
+            build_nim_index()
+        else:
+            main(model=args.model)
         return 0
 
     main(model=EMBED_MODEL)
@@ -411,6 +511,20 @@ def cli(argv: list | None = None) -> int:
             f"step later, or `embed_bullet_bank.py --model {BACKUP_EMBED_MODEL}`, "
             "to restore the fallback."
         )
+    # NIM embedding index -- third fallback when both Gemini models are down.
+    if not args.primary_only:
+        try:
+            import nim_fallback
+
+            if nim_fallback.nim_available():
+                cli_art.console.print(
+                    f"\n{theme.colorize_icon('build')} Building NIM index ({NIM_EMBED_MODEL}) "
+                    "-- used when both Gemini embedding models are unavailable.",
+                    soft_wrap=True,
+                )
+                build_nim_index()
+        except Exception as e:
+            cli_art.cli_warning(f"NIM index not built ({e}).")
     return 0
 
 

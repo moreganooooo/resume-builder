@@ -236,6 +236,7 @@ def _check_cliched_openers(cover_letter_data: dict) -> list[str]:
 # bullet-pair similarity; the same percentile on the backup is 0.717.
 GROUNDING_THRESHOLD = 0.60
 GROUNDING_THRESHOLD_BACKUP = 0.72
+GROUNDING_THRESHOLD_NIM = 0.48
 
 
 def _check_semantic_grounding(
@@ -243,6 +244,7 @@ def _check_semantic_grounding(
     keeper_bullets: list[str],
     keeper_embs,
     keeper_embs_backup=None,
+    keeper_embs_nim=None,
 ) -> list[str]:
     """
     Rigorously checks each sentence of the cover letter that makes a professional claim,
@@ -309,6 +311,18 @@ def _check_semantic_grounding(
                     matrix, threshold = keeper_embs_backup, GROUNDING_THRESHOLD_BACKUP
                 except Exception:
                     emb = None
+            if emb is None and keeper_embs_nim is not None:
+                try:
+                    import nim_fallback
+
+                    nim_vec = nim_fallback.embed_batch_nim(
+                        [sentence], input_type="query", max_retries=2
+                    )
+                    if nim_vec:
+                        emb = nim_vec[0]
+                        matrix, threshold = keeper_embs_nim, GROUNDING_THRESHOLD_NIM
+                except Exception:
+                    emb = None
             if emb is None or len(emb) != matrix.shape[1]:
                 continue
 
@@ -349,6 +363,7 @@ def validate(
     keeper_embs=None,
     voice_rules: dict | None = None,
     keeper_embs_backup=None,
+    keeper_embs_nim=None,
     role_title: str = "",
 ) -> list[str]:
     violations = []
@@ -362,7 +377,11 @@ def validate(
     violations.extend(_check_cliched_openers(cover_letter_data))
     violations.extend(
         _check_semantic_grounding(
-            cover_letter_data, keeper_bullets or [], keeper_embs, keeper_embs_backup
+            cover_letter_data,
+            keeper_bullets or [],
+            keeper_embs,
+            keeper_embs_backup,
+            keeper_embs_nim,
         )
     )
     violations.extend(_check_voice_metrics(cover_letter_data, voice_rules))

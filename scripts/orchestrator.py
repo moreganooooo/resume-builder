@@ -3256,6 +3256,29 @@ def compute_skill_coverage_matrix(skill_names: list) -> list:
         except Exception:
             continue
         return _rank_skill_coverage(skill_names, skill_vecs, embs)
+
+    # Third fallback: NIM embedding when both Gemini models are down.
+    try:
+        import nim_fallback
+        from embed_bullet_bank import NIM_EMBED_MODEL, nim_index_for
+
+        nim_npy = index_paths(kb_dir, NIM_EMBED_MODEL)[0]
+        if os.path.exists(nim_npy):
+            embs = np.load(nim_npy)
+            if embs.ndim == 2:
+                skill_vecs = []
+                for i in range(0, len(skill_names), BATCH_SIZE):
+                    batch = skill_names[i : i + BATCH_SIZE]
+                    vecs = nim_fallback.embed_batch_nim(
+                        batch, input_type="query", max_retries=2
+                    )
+                    if vecs is None:
+                        raise RuntimeError("NIM embed failed")
+                    skill_vecs.extend(vecs)
+                if not any(v and len(v) != embs.shape[1] for v in skill_vecs):
+                    return _rank_skill_coverage(skill_names, skill_vecs, embs)
+    except Exception:
+        pass
     return []
 
 
@@ -6688,6 +6711,34 @@ class ResumeEngine:
                         )
         except Exception:
             pass
+        # Third fallback: NIM embedding
+        if result is None:
+            try:
+                import nim_fallback
+                from embed_bullet_bank import (
+                    NIM_EMBED_MODEL,
+                    index_paths,
+                    nim_index_for,
+                )
+
+                nim_idx = nim_index_for(self.kb_dir, current_sha, bank_len)
+                if nim_idx is not None:
+                    nim_vec = nim_fallback.embed_batch_nim(
+                        [jd_text[:8000]], input_type="query", max_retries=2
+                    )
+                    if (
+                        nim_vec
+                        and nim_idx.ndim == 2
+                        and len(nim_vec[0]) == nim_idx.shape[1]
+                    ):
+                        result = (nim_vec[0], nim_idx)
+                        cli_art.console.print(
+                            f"  {theme.colorize_icon('hint')} Both Gemini embeddings unavailable -- "
+                            f"matched against the NIM {NIM_EMBED_MODEL} backup index.",
+                            soft_wrap=True,
+                        )
+            except Exception:
+                pass
         return result
 
     def _mining_excluded_companies(self, df, extra_company_minimums) -> set:
@@ -7492,12 +7543,14 @@ class ResumeEngine:
     def _coverletter_grounding(self):
         """Loads keeper bullets and their embeddings for the semantic grounding check.
 
-        Returns (keeper_bullets, keeper_embs, keeper_embs_backup) -- empty/None
-        when the bank or its index is missing, which just skips that check.
+        Returns (keeper_bullets, keeper_embs, keeper_embs_backup, keeper_embs_nim)
+        -- empty/None when the bank or its index is missing, which just skips
+        that check.
         """
         keeper_bullets: list = []
         keeper_embs = None
         keeper_embs_backup = None
+        keeper_embs_nim = None
         bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
         emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
         if os.path.exists(bank_csv) and os.path.exists(emb_npy):
@@ -7511,14 +7564,17 @@ class ResumeEngine:
                 keeper_embs = np.load(emb_npy)
                 import embed_bullet_bank
 
+                sha = bullets_sha(keeper_bullets)
+                n = len(keeper_bullets)
                 # Used only when the primary model can't embed a sentence;
                 # None unless it matches this exact bank.
                 keeper_embs_backup = embed_bullet_bank.backup_index_for(
-                    self.kb_dir, bullets_sha(keeper_bullets), len(keeper_bullets)
+                    self.kb_dir, sha, n
                 )
+                keeper_embs_nim = embed_bullet_bank.nim_index_for(self.kb_dir, sha, n)
             except Exception:
                 pass
-        return keeper_bullets, keeper_embs, keeper_embs_backup
+        return keeper_bullets, keeper_embs, keeper_embs_backup, keeper_embs_nim
 
     def build_tailored_coverletter(self, jd_path: str) -> dict:
         """
@@ -7633,7 +7689,9 @@ class ResumeEngine:
             return {}
 
         style_rules = self.load_yaml(self.rules_dir, "style_rules.yaml")
-        keeper_bullets, keeper_embs, keeper_embs_backup = self._coverletter_grounding()
+        keeper_bullets, keeper_embs, keeper_embs_backup, keeper_embs_nim = (
+            self._coverletter_grounding()
+        )
 
         def _validate(data):
             # kb_corpus=background_context: the same grounding corpus the model
@@ -7647,6 +7705,7 @@ class ResumeEngine:
                 keeper_bullets=keeper_bullets,
                 keeper_embs=keeper_embs,
                 keeper_embs_backup=keeper_embs_backup,
+                keeper_embs_nim=keeper_embs_nim,
                 voice_rules=self.voice_rules,
                 role_title=role_title,
             )
