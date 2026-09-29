@@ -7172,7 +7172,7 @@ class ResumeEngine:
                         _nim_provenance["recruiter_model"] = rec_nim_model
 
                 if _nim_provenance:
-                    logger.info(
+                    logging.getLogger("resume_pipeline").info(
                         "NIM fallback succeeded for %s: %s", jd_path, _nim_provenance
                     )
 
