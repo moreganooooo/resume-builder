@@ -1,0 +1,99 @@
+"""NIM fallback for fit evaluation when Gemini quota is exhausted.
+
+Eval-only: Gemini → Nemotron Super → Nemotron Ultra.
+Triggered after consecutive Gemini generate() failures, not transient blips.
+"""
+
+import json
+import logging
+import os
+
+logger = logging.getLogger(__name__)
+
+NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
+
+SUPER_MODEL = "nvidia/nemotron-3-super-120b-a12b"
+ULTRA_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"
+
+SUPER_MAX_TOKENS = 8000
+ULTRA_MAX_TOKENS = 16384
+
+NIM_CONSECUTIVE_FAILURE_THRESHOLD = 3
+
+
+def _nvidia_api_key() -> str | None:
+    return os.environ.get("NVIDIA_API_KEY")
+
+
+def nim_available() -> bool:
+    if _is_test_env():
+        return False
+    return bool(_nvidia_api_key())
+
+
+def _is_test_env() -> bool:
+    import sys
+
+    return "unittest" in sys.modules and not os.environ.get("RESUME_ALLOW_TEST_NETWORK")
+
+
+def _make_client():
+    from openai import OpenAI
+
+    key = _nvidia_api_key()
+    if not key:
+        raise RuntimeError("NVIDIA_API_KEY not set")
+    return OpenAI(base_url=NIM_BASE_URL, api_key=key)
+
+
+def generate_with_nim(
+    system_instruction: str,
+    contents: str,
+    response_schema: dict | None = None,
+) -> tuple[str | None, str]:
+    """Try Super, then Ultra. Returns (json_text, model_used) or (None, "")."""
+    client = _make_client()
+
+    schema_instruction = ""
+    if response_schema:
+        try:
+            schema_dict = response_schema.model_json_schema()
+        except AttributeError:
+            schema_dict = response_schema
+        schema_instruction = (
+            "\n\nRespond with valid JSON matching this schema exactly. "
+            "Output ONLY the JSON object, no markdown fences or extra text.\n"
+            f"{json.dumps(schema_dict, indent=2)}"
+        )
+
+    messages = [
+        {"role": "system", "content": system_instruction + schema_instruction},
+        {"role": "user", "content": contents},
+    ]
+
+    for model, max_tokens in [
+        (SUPER_MODEL, SUPER_MAX_TOKENS),
+        (ULTRA_MODEL, ULTRA_MAX_TOKENS),
+    ]:
+        try:
+            logger.info("NIM fallback: trying %s", model)
+            resp = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0,
+                seed=42,
+                max_tokens=max_tokens,
+            )
+            text = resp.choices[0].message.content
+            if text:
+                text = text.strip()
+                if text.startswith("```"):
+                    text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                logger.info("NIM fallback: %s succeeded", model)
+                return text, model
+        except Exception:
+            logger.warning("NIM fallback: %s failed", model, exc_info=True)
+            continue
+
+    logger.error("NIM fallback: all models exhausted")
+    return None, ""

@@ -268,6 +268,8 @@ def save_evaluation(jd_path: str, evaluation: dict) -> None:
         "stretch_evidence": evaluation.get("stretch_evidence") or "",
         "posting_age_days": evaluation.get("posting_age_days"),
         "ghost_job_probability": evaluation.get("ghost_job_probability"),
+        "eval_provider": evaluation.get("_eval_provider") or "gemini",
+        "eval_provider_models": evaluation.get("_nim_models") or {},
         "evaluated_at": datetime.datetime.now().isoformat(timespec="seconds"),
         "scoring_version": SCORING_VERSION,
         "skills_ledger_hash": _current_skills_hash(),

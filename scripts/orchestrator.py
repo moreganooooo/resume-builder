@@ -7144,11 +7144,46 @@ class ResumeEngine:
         # {} anyway saved a hollow evaluation -- default subscores, a
         # made-up recommendation -- and the role left the backlog as if it
         # had been judged. Returning None keeps it pending for the next run.
+        #
+        # NIM fallback: when Gemini is exhausted and NVIDIA_API_KEY is set,
+        # retry the failed stage(s) through Nemotron Super → Ultra.
+        _nim_provenance = {}
         if not capability_data or not recruiter_data:
-            return None
+            import nim_fallback
+
+            if nim_fallback.nim_available():
+                if not capability_data:
+                    cap_text_nim, cap_nim_model = nim_fallback.generate_with_nim(
+                        system_instruction=capability_prompt,
+                        contents=fit_context,
+                        response_schema=CapabilityEvaluationSchema,
+                    )
+                    capability_data = GeminiClient.parse_json(cap_text_nim or "") or {}
+                    if cap_nim_model:
+                        _nim_provenance["capability_model"] = cap_nim_model
+                if not recruiter_data:
+                    rec_text_nim, rec_nim_model = nim_fallback.generate_with_nim(
+                        system_instruction=recruiter_prompt,
+                        contents=fit_context,
+                        response_schema=RecruiterEvaluationSchema,
+                    )
+                    recruiter_data = GeminiClient.parse_json(rec_text_nim or "") or {}
+                    if rec_nim_model:
+                        _nim_provenance["recruiter_model"] = rec_nim_model
+
+                if _nim_provenance:
+                    logger.info(
+                        "NIM fallback succeeded for %s: %s", jd_path, _nim_provenance
+                    )
+
+            if not capability_data or not recruiter_data:
+                return None
 
         # 4. Synthesize Split Results into the unified FitEvaluationSchema format
         evaluation = _synthesize_evaluation(capability_data, recruiter_data)
+        if _nim_provenance:
+            evaluation["_eval_provider"] = "nim"
+            evaluation["_nim_models"] = _nim_provenance
 
         # Read once, used by the funnel-friction calibration below and by
         # the composite-score rescoring at the end of this function -- same
