@@ -471,6 +471,25 @@ func (m appModel) updateScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.startTransition(m.previousState)
 
+	case screens.PipelineFavoriteMsg:
+		// The screen already flipped its own copy and played the star
+		// bloom, so this only has to persist the change and reload. On
+		// failure the reload is what corrects the optimistic star, which
+		// is why the error path still reloads rather than returning early.
+		jobPath := msg.JobPath
+		jobsPath := m.jobsPath
+		projectRoot := m.projectRoot
+		cmd := exec.Command(
+			"python3",
+			filepath.Join(projectRoot, "scripts", "dashboard_actions.py"),
+			"favorite", jobPath, "--jobs-path", jobsPath,
+		)
+		cmd.Dir = projectRoot
+		if _, err := cmd.CombinedOutput(); err != nil {
+			m.pipeline.SetNotice(fmt.Sprintf("Couldn't save the shortlist change: %v", err))
+		}
+		return m, m.reloadPipelineDataCmd()
+
 	case screens.PipelineReinstateMsg:
 		// Reinstate archived job by calling the Python reinstate script
 		cmd := exec.Command("python3", "scripts/reinstate_job.py", msg.JobPath)

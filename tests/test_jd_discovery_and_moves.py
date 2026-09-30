@@ -97,7 +97,10 @@ class TestMoveJdTo(unittest.TestCase):
                     },
                     f,
                 )
-            with patch("jd_manager.ARCHIVED_DIR", os.path.join(d, "archived")):
+            with (
+                patch("jd_manager.ARCHIVED_DIR", os.path.join(d, "archived")),
+                patch("jd_manager.EXPIRED_DIR", os.path.join(d, "expired")),
+            ):
                 jd_manager.archive_jd(src)
         self.assertIn("arch-1", [r["id"] for r in db.get_jobs_by_status("archived")])
         still_pending = db.get_jobs_by_status("Pending") + db.get_jobs_by_status(
@@ -145,7 +148,10 @@ class TestMoveJdTo(unittest.TestCase):
         function that also physically moves a JD's file."""
         with tempfile.TemporaryDirectory() as d:
             src = _write_jd(os.path.join(d, "job.json"))
-            with patch("jd_manager.ARCHIVED_DIR", os.path.join(d, "archived")):
+            with (
+                patch("jd_manager.ARCHIVED_DIR", os.path.join(d, "archived")),
+                patch("jd_manager.EXPIRED_DIR", os.path.join(d, "expired")),
+            ):
                 jd_manager.archive_jd(src)
 
             rows = db.get_jobs_by_status("archived", profile="irrelevant")

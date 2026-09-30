@@ -583,16 +583,18 @@ def _location_fields(data: dict, settings: dict) -> dict:
 def _file_row(path: str, status: str, location_settings_block: dict) -> dict | None:
     """One list_all_evaluated_jds() row from a JD file on disk.
 
-    Returns None when the JD carries no usable evaluation, or one the user
-    has already said to skip (unless it's explicitly archived, in which case
-    we include it so it can be viewed/reinstated via the dashboard).
+    Returns None only when the JD carries no usable evaluation.
+
+    A "Skip" recommendation used to drop the row here, which made those
+    roles unreachable from every dashboard surface. They are now exported
+    and flagged with skip_recommended instead: the Pipeline treats that as
+    a terminal state (behind its [d] toggle and its own SKIP tab), so the
+    default view is unchanged while the role stays reviewable. Deciding
+    visibility in the UI rather than by withholding the row is the same
+    reasoning as the LOW <3.5 tab -- nothing becomes unreachable.
     """
     evaluation = jd_manager.read_evaluation(path)
-    if (
-        evaluation is None
-        or not isinstance(evaluation, dict)
-        or (evaluation.get("recommendation") == "Skip" and status != "Archived")
-    ):
+    if evaluation is None or not isinstance(evaluation, dict):
         return None
     title, company = jd_manager.extract_job_meta(path)
     try:
@@ -623,6 +625,8 @@ def _file_row(path: str, status: str, location_settings_block: dict) -> dict | N
         "coverage": jd_manager.read_coverage(path),
         "location_enrichment": jd_manager.read_location_enrichment(path),
         "posted_date": jd_manager.compute_posting_date(path),
+        "favorite": jd_manager.read_favorite(path),
+        "skip_recommended": evaluation.get("recommendation") == "Skip",
         **_location_fields(jd_data, location_settings_block),
         **_employment_fields(jd_data),
         **_compensation_fields(jd_data),
@@ -633,16 +637,23 @@ def _file_row(path: str, status: str, location_settings_block: dict) -> dict | N
 
 def list_all_evaluated_jds(statuses: list | None = None) -> list:
     """Every JD (pending or completed) carrying a persisted _evaluation,
-    each as {"path", "status" ("Pending"/"Completed"/"Archived"), "evaluation",
+    each as {"path", "status" ("Pending"/"Completed"/"Archived"/"Expired"),
+    "favorite", "skip_recommended", "evaluation",
     "liveness", "application", "title", "company"}, sorted best
     composite_score first. "application" is the real-world application
     progress (see jd_manager.save_application_status()) -- None until
     someone's marked it. statuses restricts which of "Pending"/"Completed"/
-    "Archived" get scanned at all (default: all three) -- for callers whose
-    action only makes sense against one status (e.g. tailoring only applies
-    to Pending, a cover letter only to Completed). Archived JDs are now
-    included so they can be viewed and reinstated via the dashboard."""
-    statuses = statuses or ["Pending", "Completed", "Archived"]
+    "Archived"/"Expired" get scanned at all (default: all four) -- for
+    callers whose action only makes sense against one status (e.g. tailoring
+    only applies to Pending, a cover letter only to Completed). Archived and
+    expired JDs are included so they can be viewed (and archived ones
+    reinstated) from the dashboard; both are terminal, so the Pipeline keeps
+    them behind its [d] toggle rather than in its default view.
+
+    Rows the evaluator recommended skipping are exported too, carrying
+    skip_recommended -- see _file_row() for why that is a flag rather than
+    an omission."""
+    statuses = statuses or ["Pending", "Completed", "Archived", "Expired"]
     location_settings_block = _read_location_settings()
     rows = []
     if "Pending" in statuses:
@@ -658,6 +669,11 @@ def list_all_evaluated_jds(statuses: list | None = None) -> list:
     if "Archived" in statuses:
         for path in jd_manager.get_archived_jds():
             row = _file_row(path, "Archived", location_settings_block)
+            if row:
+                rows.append(row)
+    if "Expired" in statuses:
+        for path in jd_manager.get_expired_jds():
+            row = _file_row(path, "Expired", location_settings_block)
             if row:
                 rows.append(row)
     if "Pending" in statuses:
@@ -742,6 +758,8 @@ def _db_row_entry(record, data: dict, evaluation, job_id: str, settings: dict) -
         "coverage": data.get("_coverage"),
         "location_enrichment": data.get("_location_enrichment"),
         "posted_date": jd_manager.compute_posting_date(job_id),
+        "favorite": bool((data.get("_favorite") or {}).get("favorited")),
+        "skip_recommended": (evaluation or {}).get("recommendation") == "Skip",
         **_location_fields(data, settings or {}),
         **_employment_fields(data),
         **_compensation_fields(data),
@@ -807,11 +825,7 @@ def _database_only_rows(file_rows: list, settings: dict | None = None) -> list:
             continue
 
         evaluation = data.get("_evaluation")
-        if (
-            not evaluation
-            or evaluation.get("recommendation") == "Skip"
-            or evaluation.get("composite_score") == 0.0
-        ):
+        if not evaluation:
             continue
 
         if record["location"] and not data.get("location"):

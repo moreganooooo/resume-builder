@@ -270,12 +270,14 @@ class TestListAllEvaluatedJds(unittest.TestCase):
     @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
     @patch("picker.jd_manager.get_archived_jds", return_value=[])
+    @patch("picker.jd_manager.get_expired_jds", return_value=[])
     @patch("picker.jd_manager.get_completed_jds", return_value=["jds/completed/c.json"])
     @patch("picker.jd_manager.get_pending_jds", return_value=["jds/p.json"])
     def test_combines_pending_and_completed_with_status_tags(
         self,
         mock_pending,
         mock_completed,
+        mock_expired,
         mock_archived,
         mock_read,
         mock_live,
@@ -302,6 +304,7 @@ class TestListAllEvaluatedJds(unittest.TestCase):
     @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
     @patch("picker.jd_manager.get_archived_jds", return_value=[])
+    @patch("picker.jd_manager.get_expired_jds", return_value=[])
     @patch("picker.jd_manager.get_completed_jds", return_value=[])
     @patch(
         "picker.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"]
@@ -310,6 +313,7 @@ class TestListAllEvaluatedJds(unittest.TestCase):
         self,
         mock_pending,
         mock_completed,
+        mock_expired,
         mock_archived,
         mock_read,
         mock_live,
@@ -328,6 +332,7 @@ class TestListAllEvaluatedJds(unittest.TestCase):
     @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
     @patch("picker.jd_manager.get_archived_jds", return_value=[])
+    @patch("picker.jd_manager.get_expired_jds", return_value=[])
     @patch("picker.jd_manager.get_completed_jds", return_value=[])
     @patch(
         "picker.jd_manager.get_pending_jds",
@@ -337,6 +342,7 @@ class TestListAllEvaluatedJds(unittest.TestCase):
         self,
         mock_pending,
         mock_completed,
+        mock_expired,
         mock_archived,
         mock_read,
         mock_live,

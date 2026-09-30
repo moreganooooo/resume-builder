@@ -910,6 +910,60 @@ def save_application_status(
         logging.error(f"Failed to log application status to SQLite: {e}", exc_info=True)
 
 
+def save_favorite(jd_path: str, favorited: bool) -> None:
+    """Persists a shortlist ("favorite") mark into the JD's own JSON file
+    under a _favorite key (favorited, marked_at), matching the same
+    save/read pattern _evaluation, _liveness and _application already use.
+
+    Deliberately stores an explicit False rather than deleting the key when
+    a role is un-favorited: marked_at then still records when the user last
+    touched it, and read_favorite() can distinguish "never considered" from
+    "looked at and passed over".
+
+    No-ops silently on non-JSON-dict JDs, the same as save_liveness()."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    data["_favorite"] = {
+        "favorited": bool(favorited),
+        "marked_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    with atomic_write(jd_path, encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
+
+
+def read_favorite(jd_path: str) -> bool:
+    """Whether this JD is shortlisted (see save_favorite()). False when the
+    JD isn't a JSON dict or was never marked -- callers only ever need the
+    boolean, so unlike read_liveness() this collapses "no record" and
+    "explicitly un-favorited" into the same answer."""
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    record = data.get("_favorite")
+    if not isinstance(record, dict):
+        return False
+    return bool(record.get("favorited"))
+
+
+def toggle_favorite(jd_path: str) -> bool:
+    """Flips the shortlist mark and returns the NEW state, so a caller can
+    report what it did without a second read."""
+    new_state = not read_favorite(jd_path)
+    save_favorite(jd_path, new_state)
+    return new_state
+
+
 def read_application_status(jd_path: str) -> dict | None:
     """Reads back a persisted _application (see save_application_status()),
     or None if the JD isn't a JSON dict or has never had a status set."""
@@ -1501,6 +1555,22 @@ def get_archived_jds() -> list:
         os.path.join(ARCHIVED_DIR, name)
         for name in os.listdir(ARCHIVED_DIR)
         if os.path.isfile(os.path.join(ARCHIVED_DIR, name)) and not name.startswith(".")
+    )
+
+
+def get_expired_jds() -> list:
+    """Lists JD files sitting in EXPIRED_DIR -- postings the liveness
+    checker retired because they no longer exist.
+
+    Exported alongside pending/completed/archived so the dashboard can show
+    them, but kept BEHIND the Pipeline's [d] toggle rather than in its
+    default view: an expired posting is a historical record, not work.
+    """
+    os.makedirs(EXPIRED_DIR, exist_ok=True)
+    return sorted(
+        os.path.join(EXPIRED_DIR, name)
+        for name in os.listdir(EXPIRED_DIR)
+        if os.path.isfile(os.path.join(EXPIRED_DIR, name)) and not name.startswith(".")
     )
 
 

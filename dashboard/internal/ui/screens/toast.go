@@ -40,6 +40,12 @@ const (
 	ToastError
 	ToastWarning
 	ToastInfo
+	// ToastCelebrate marks a deliberate, positive act by the user --
+	// currently only shortlisting a role. Separate from ToastSuccess
+	// because "the thing you asked for worked" and "nice, you picked one"
+	// are different feelings, and a checkmark is the wrong glyph for the
+	// second. It expires on its own, like ToastSuccess.
+	ToastCelebrate
 )
 
 // Seconds each self-dismissing tone survives. Errors and warnings have no
@@ -59,6 +65,8 @@ func (t ToastTone) glyph() string {
 	switch t {
 	case ToastSuccess:
 		return "✓"
+	case ToastCelebrate:
+		return "★"
 	case ToastError:
 		return "✗"
 	case ToastWarning:
@@ -72,6 +80,8 @@ func (t ToastTone) color(th theme.Theme) color.Color {
 	switch t {
 	case ToastSuccess:
 		return th.Green
+	case ToastCelebrate:
+		return th.Peach
 	case ToastError:
 		return th.Red
 	case ToastWarning:
@@ -100,7 +110,7 @@ type ToastStack struct {
 func (s *ToastStack) Push(tone ToastTone, format string, args ...any) {
 	seconds := 0
 	switch tone {
-	case ToastSuccess:
+	case ToastSuccess, ToastCelebrate:
 		seconds = toastSuccessSeconds
 	case ToastInfo:
 		seconds = toastInfoSeconds

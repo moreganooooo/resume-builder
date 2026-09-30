@@ -53,6 +53,17 @@ type CareerApplication struct {
 	AITraining          bool
 	AITrainingEvidence  []string
 	StaffingAgency      string
+
+	// Favorite is the user's shortlist mark (JobRow.Favorite). A
+	// shortlisted role is exempt from the actionable-score bar and from
+	// the terminal-status gate: the user said they want this one, so no
+	// automatic filter may bury it.
+	//
+	// SkipRecommended carries the evaluator's Skip verdict. It is
+	// displayed as a terminal state rather than written into Status, so
+	// the row keeps its real file-derived status.
+	Favorite        bool
+	SkipRecommended bool
 }
 
 // EmploymentLabel renders the employment type for a list cell, mirroring

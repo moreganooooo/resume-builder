@@ -140,6 +140,33 @@ def _status(jd_path: str, new_status: str, jobs_path: str) -> int:
     return 0
 
 
+def _favorite(jd_path: str, jobs_path: str) -> int:
+    """Toggles the shortlist mark on a role and reports the new state.
+
+    Goes through jd_source.resolved_jd like _status does, so a
+    database-only (hash-id) job is favoritable too: the mark is written to
+    a temp JD and synced back into the row on exit, with no permanent file
+    written. Shortlisting is a cheap, reversible act -- unlike tailoring,
+    it has not "earned the disk".
+
+    The printed line is what the dashboard's toast shows, so it names the
+    resulting state rather than the action taken.
+    """
+    try:
+        with jd_source.resolved_jd(jd_path) as (path, _is_db):
+            now_favorited = jd_manager.toggle_favorite(path)
+    except Exception as exc:
+        print(f"favorite failed for {jd_path}: {exc}", file=sys.stderr)
+        _user_error(
+            "Couldn't update the shortlist for this role. "
+            "Check that the posting still exists and try again."
+        )
+        return 1
+    print("SHORTLISTED" if now_favorited else "UNSHORTLISTED")
+    dashboard._export_jobs_to(jobs_path)
+    return 0
+
+
 def _archive_copies(archive_fn) -> None:
     """Archives the other pending copies of a just-archived posting (see
     dedup_pending_roles.archive_copies_of). Best-effort: the posting itself
@@ -253,6 +280,10 @@ def main() -> int:
     archive_parser.add_argument("jd_path")
     archive_parser.add_argument("--jobs-path", required=True)
 
+    favorite_parser = subparsers.add_parser("favorite")
+    favorite_parser.add_argument("jd_path")
+    favorite_parser.add_argument("--jobs-path", required=True)
+
     matrix_parser = subparsers.add_parser("matrix")
     matrix_parser.add_argument("jd_path")
     matrix_parser.add_argument("--jobs-path", required=True)
@@ -287,6 +318,8 @@ def main() -> int:
         return _status(args.jd_path, args.new_status, args.jobs_path)
     if args.command == "archive":
         return _archive(args.jd_path, args.jobs_path)
+    if args.command == "favorite":
+        return _favorite(args.jd_path, args.jobs_path)
     if args.command == "matrix":
         return _matrix(args.jd_path, args.jobs_path)
     if args.command == "batch_matrix":

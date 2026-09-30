@@ -17,6 +17,20 @@ type JobRow struct {
 	SourceURL      string       `json:"source_url"`
 	CompanyWebsite string       `json:"company_website"`
 	AddedManually  bool         `json:"added_manually"`
+
+	// Favorite is the user's shortlist mark, persisted on the JD's own
+	// JSON under _favorite (scripts/jd_manager.save_favorite). It is a
+	// deliberate human act, which is why it outranks score-based hiding:
+	// see the actionable-bar exemption in the Pipeline and Jobs screens.
+	//
+	// SkipRecommended is the evaluator's "Skip" verdict. These rows used
+	// to be withheld from the export entirely; they are now exported and
+	// flagged so the UI can decide, which is why this is a separate field
+	// rather than a Status value -- the row keeps its real file-derived
+	// status (Pending, Completed) and is only *displayed* as terminal.
+	Favorite        bool `json:"favorite"`
+	SkipRecommended bool `json:"skip_recommended"`
+
 	Skills         []JobSkill   `json:"skills"`
 	Research       *Research    `json:"research"`
 	Evaluation     Evaluation   `json:"evaluation"`

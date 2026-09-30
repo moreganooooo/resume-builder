@@ -19,6 +19,23 @@ var terminalStatuses = map[string]bool{
 	"skip":      true,
 }
 
+// IsTerminalApplication reports whether an application should sit behind
+// the Pipeline's [d] toggle. Wider than IsTerminalStatus by one case: a
+// role the evaluator recommended skipping keeps its real status (Pending,
+// Completed) but is not live work, so it is displayed as terminal without
+// that verdict being written into the row's status.
+//
+// A shortlisted role is NEVER terminal here. Favoriting is an explicit
+// human act, and the whole point of a shortlist is that it survives the
+// filters that hide everything else -- the same reasoning that exempts
+// applied/interviewing roles from the actionable bar.
+func IsTerminalApplication(app model.CareerApplication) bool {
+	if app.Favorite {
+		return false
+	}
+	return IsTerminalStatus(app.Status) || app.SkipRecommended
+}
+
 // IsTerminalStatus reports whether a job status means the job should be
 // hidden from the pipeline.
 func IsTerminalStatus(status string) bool {
@@ -76,6 +93,8 @@ func jobRowsToApplicationsFiltered(rows []model.JobRow, excludeTerminal bool) []
 			AITraining:          row.AITraining,
 			AITrainingEvidence:  row.AITrainingEvidence,
 			StaffingAgency:      row.StaffingAgency,
+			Favorite:            row.Favorite,
+			SkipRecommended:     row.SkipRecommended,
 		}
 		if row.Coverage != nil {
 			app.Coverage = row.Coverage.Score
