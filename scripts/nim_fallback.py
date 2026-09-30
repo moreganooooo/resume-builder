@@ -7,6 +7,7 @@ Embedding: Gemini ge2 → ge1 → nemotron-3-embed-1b.
 import json
 import logging
 import os
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +26,27 @@ def _nvidia_api_key() -> str | None:
     return os.environ.get("NVIDIA_API_KEY")
 
 
+def _openai_sdk_importable() -> bool:
+    """Whether the transport this module needs is actually installed.
+
+    NIM speaks the OpenAI-compatible API, so the `openai` package is the
+    transport (no OpenAI service is contacted). It was missing from
+    requirements.txt, so nim_available() answered True on the key alone
+    and every real call then raised ModuleNotFoundError -- at the eval
+    site, which has no handler, that aborted a whole batch run. An
+    availability check has to test the thing it claims is available.
+    """
+    import importlib.util
+
+    return importlib.util.find_spec("openai") is not None
+
+
 def nim_available() -> bool:
     if _is_test_env():
         return False
-    return bool(_nvidia_api_key())
+    if not _nvidia_api_key():
+        return False
+    return _openai_sdk_importable()
 
 
 def _is_test_env() -> bool:
@@ -49,7 +67,11 @@ def _make_client():
 def generate_with_nim(
     system_instruction: str,
     contents: str,
-    response_schema: dict | None = None,
+    # A Pydantic model CLASS (what every caller passes -- the same
+    # `response_schema=` objects the Gemini path takes) or an already-
+    # converted JSON-schema dict. Annotated `dict | None` originally, which
+    # contradicted the .model_json_schema() call below and every call site.
+    response_schema: Any = None,
 ) -> tuple[str | None, str]:
     """Try Super, then Ultra. Returns (json_text, model_used) or (None, "")."""
     client = _make_client()
