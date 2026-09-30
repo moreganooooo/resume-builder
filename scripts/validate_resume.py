@@ -766,6 +766,45 @@ def _check_metric_provenance(
     return violations
 
 
+_NEAR_DUPLICATE_THRESHOLD = 0.75
+
+
+def _bullet_words(text: str) -> set[str]:
+    return set(re.sub(r"[^\w\s]", "", text.lower()).split())
+
+
+def _check_near_duplicate_bullets(resume_data: dict) -> list[str]:
+    """Flag pairs of bullets whose word-level Jaccard similarity exceeds
+    the threshold -- nearly identical text that a reader would perceive as
+    the same accomplishment stated twice."""
+    violations = []
+    bullets = []
+    for container_key, list_key in (
+        ("EXPERIENCE", "achievements"),
+        ("EDUCATION", "bullets"),
+    ):
+        for entry in resume_data.get(container_key, []):
+            company = entry.get("company", entry.get("school", "?"))
+            for b in entry.get(list_key, []):
+                bullets.append((b.strip().lstrip("- "), company))
+    for i in range(len(bullets)):
+        words_i = _bullet_words(bullets[i][0])
+        if not words_i:
+            continue
+        for j in range(i + 1, len(bullets)):
+            words_j = _bullet_words(bullets[j][0])
+            if not words_j:
+                continue
+            intersection = len(words_i & words_j)
+            union = len(words_i | words_j)
+            if union and intersection / union >= _NEAR_DUPLICATE_THRESHOLD:
+                violations.append(
+                    f"Near-duplicate bullets ({intersection}/{union} words shared): "
+                    f"{bullets[i][0]!r} ({bullets[i][1]}) vs {bullets[j][0]!r} ({bullets[j][1]})"
+                )
+    return violations
+
+
 def _check_experience_completeness(resume_data: dict) -> list[str]:
     violations = []
     for i, job in enumerate(resume_data.get("EXPERIENCE", [])):
@@ -2576,6 +2615,7 @@ def validate(
     violations.extend(_check_bullet_trailing_punctuation(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_metric_provenance(resume_data, bullet_tuples))
+    violations.extend(_check_near_duplicate_bullets(resume_data))
     violations.extend(_check_experience_completeness(resume_data))
     violations.extend(_check_role_roster(resume_data, role_roster or []))
     violations.extend(_check_role_order(resume_data, role_roster or []))

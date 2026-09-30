@@ -1303,6 +1303,44 @@ class TestDistinctiveMetricsIgnoreTheContextWord(unittest.TestCase):
         )
 
 
+class TestNearDuplicateBullets(unittest.TestCase):
+
+    def test_flags_near_duplicate_bullets(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme Corp",
+                    "title": "Engineer",
+                    "period": "2024",
+                    "achievements": [
+                        "Improved a physics-informed Random Forest lap-time model from 0.40 to 0.59 R² and cut RMSE from 18s to 13s with SHAP interpretability analysis",
+                        "Refined a physics-informed Random Forest lap-time model from 0.40 to 0.59 R square and cut RMSE from 18s to 13s with SHAP interpretability analysis",
+                    ],
+                }
+            ]
+        }
+        violations = validate_resume._check_near_duplicate_bullets(resume)
+        self.assertTrue(len(violations) == 1)
+        self.assertIn("Near-duplicate", violations[0])
+
+    def test_distinct_bullets_pass(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme Corp",
+                    "title": "Engineer",
+                    "period": "2024",
+                    "achievements": [
+                        "Built a machine learning pipeline for fraud detection",
+                        "Led a team of 5 engineers to deliver the Q3 release",
+                    ],
+                }
+            ]
+        }
+        violations = validate_resume._check_near_duplicate_bullets(resume)
+        self.assertEqual(violations, [])
+
+
 class TestStrictSemanticSkillGuardrail(unittest.TestCase):
 
     def test_allows_verified_skills_and_general_terms(self):

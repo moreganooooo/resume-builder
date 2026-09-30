@@ -3152,6 +3152,69 @@ def _repair_skills_title_case(current_data: dict, violations) -> tuple:
     return current_data, modified
 
 
+def _repair_near_duplicate_bullets(
+    current_data: dict, violations, bullet_tuples
+) -> tuple:
+    """Replace one bullet in a near-duplicate pair with an unused bank bullet
+    for the same company."""
+    dup_violations = [v for v in violations if v.startswith("Near-duplicate bullets")]
+    if not dup_violations or not bullet_tuples:
+        return current_data, False
+
+    used_bullets = set()
+    for entry in current_data.get("EXPERIENCE", []):
+        for b in entry.get("achievements", []):
+            used_bullets.add(b.strip().lstrip("- ").rstrip("."))
+    for entry in current_data.get("EDUCATION", []):
+        for b in entry.get("bullets", []):
+            used_bullets.add(b.strip().lstrip("- ").rstrip("."))
+
+    bank_by_company: dict[str, list[str]] = {}
+    for b, c, _t in bullet_tuples:
+        clean = b.strip().lstrip("- ").rstrip(".")
+        bank_by_company.setdefault(validate_resume._normalize_company(c), []).append(clean)
+
+    modified = False
+    for v in dup_violations:
+        match = re.search(r"vs (.+?) \(([^)]+)\)$", v)
+        if not match:
+            continue
+        dup_text_repr = match.group(1)
+        dup_company = match.group(2)
+        try:
+            dup_text = ast.literal_eval(dup_text_repr)
+        except (ValueError, SyntaxError):
+            continue
+
+        key = validate_resume._normalize_company(dup_company)
+        candidates = bank_by_company.get(key, [])
+        replacement = None
+        for cand in candidates:
+            if cand not in used_bullets:
+                replacement = cand
+                break
+        if not replacement:
+            continue
+
+        for container_key, list_key in (
+            ("EXPERIENCE", "achievements"),
+            ("EDUCATION", "bullets"),
+        ):
+            for entry in current_data.get(container_key, []):
+                texts = entry.get(list_key, [])
+                for idx, bullet in enumerate(texts):
+                    clean = bullet.strip().lstrip("- ").rstrip(".")
+                    if clean == dup_text:
+                        texts[idx] = replacement
+                        used_bullets.add(replacement)
+                        modified = True
+                        break
+                else:
+                    continue
+                break
+    return current_data, modified
+
+
 def _repair_metric_provenance(current_data: dict, violations, bullet_tuples) -> tuple:
     """Surgical repair step; returns (resume_data, modified)."""
     # 10. Targeted Metric Provenance Repair
@@ -3253,6 +3316,9 @@ def repair_violations_surgically(
     current_data, metric_provenance_modified = _repair_metric_provenance(
         current_data, violations, bullet_tuples
     )
+    current_data, near_dup_modified = _repair_near_duplicate_bullets(
+        current_data, violations, bullet_tuples
+    )
 
     # Only re-evaluate if we actually modified something
     if (
@@ -3271,6 +3337,7 @@ def repair_violations_surgically(
         or pronoun_modified
         or title_case_modified
         or metric_provenance_modified
+        or near_dup_modified
     ):
         final_violations = validate_resume.validate(
             current_data,
