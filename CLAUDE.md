@@ -1712,6 +1712,20 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   the profile `.env` but NOTHING reads it -- it is dead config, not a
   wired backup -- and `nvidia_client.py` is reachable only from
   `compare_eval_model.py`, a manual benchmark, not the live path.
+  **`_nvidia_api_key()` loads the profile `.env` itself.** It was a bare
+  `os.environ.get`, which is correct only by ACCIDENT: secrets live in
+  `profiles/<name>/.env`, never the shell, and the only thing that had ever
+  put that key into the environment was `gemini_client.api_keys()` calling
+  `load_dotenv()` on its way to a Gemini call. The eval fallback therefore
+  worked (a Gemini call always precedes it) while
+  `embed_bullet_bank.build_nim_index()`, which calls no Gemini API at all,
+  reported "NVIDIA_API_KEY not set" and skipped the index for a key sitting
+  in `.env` the whole time -- as did any `nim_available()` check made before
+  the first Gemini call. Depending on another module's side effect for your
+  own configuration is the bug. `doctor.check_nvidia_api_key()` was never
+  fooled, because it reads the `.env` FILE directly; treat `resume doctor`
+  as the authoritative answer to "is this key configured", never an ad-hoc
+  `os.environ` probe.
 - **Gemma's 16k TPM cap is a PER-CALL ceiling, not a pacing problem.** The
   cap counts input AND output, so a single request over ~16k tokens can
   never succeed however long the caller waits -- `_pace_gemma`'s
