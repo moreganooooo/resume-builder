@@ -675,6 +675,7 @@ def _metric_signature(number: str, context: str) -> str:
         core.startswith("$")
         or core.endswith(("m", "k", "%"))
         or len(digits) >= 4
+        or "." in core
     )
     # "$20M" and "20M" are the same figure written two ways.
     core = core.replace("$", "").replace(",", "")

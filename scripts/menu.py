@@ -2070,14 +2070,25 @@ def _handle_regenerate_from_scratch() -> bool:
             )
             doc_type = "resume"
 
+    skip_company_research = False
+    try:
+        with open(jd_path, "r") as f:
+            jd_data = json.load(f)
+            if jd_data.get("staffing_agency"):
+                skip_company_research = True
+                cli_art.print_literal(
+                    "  Staffing agency posting detected -- skipping Why section."
+                )
+    except (json.JSONDecodeError, KeyError, OSError):
+        pass
+
     with cli_art.thinking_status("Regenerating resume with AI..."):
-        # Use orchestrator to build a new resume from scratch
         engine = orchestrator.ResumeEngine()
         result = engine.build_tailored_resume(
             jd_path=jd_path,
             master_resume=None,
-            interactive=True,  # Full interactive build with skills/recruiter prompts
-            skip_company_research=False,
+            interactive=True,
+            skip_company_research=skip_company_research,
         )
 
     if result and result.get("status") == "completed":

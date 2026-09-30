@@ -1296,6 +1296,12 @@ class TestDistinctiveMetricsIgnoreTheContextWord(unittest.TestCase):
             & self._sigs("Beat the 22% industry average")
         )
 
+    def test_decimals_are_distinctive_without_context_word(self):
+        self.assertTrue(
+            self._sigs("Improved model from 0.40 to 0.59 R²")
+            & self._sigs("Refined model achieving 0.40 accuracy")
+        )
+
 
 class TestStrictSemanticSkillGuardrail(unittest.TestCase):
 
