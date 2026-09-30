@@ -524,20 +524,25 @@ def _check_thin_skill_categories(resume_data: dict) -> list[str]:
 
 def _title_case_violations_in_phrase(phrase: str) -> list[str]:
     """
-    Flags words (or hyphenated sub-parts, e.g. the "assisted" in "AI-assisted")
-    that aren't capitalized, skipping the standard lowercase minor words
-    (and, of, with, etc.) except when they open the phrase.
+    Flags words (or hyphenated/slash-separated sub-parts) with title-case
+    violations: non-initial minor words that are capitalized ("And" -> "and"),
+    non-minor words that aren't capitalized, and slash-separated parts where
+    the second word isn't capitalized ("Software/service" -> "Software/Service").
     """
     violations = []
     words = phrase.strip().split()
     for word_index, word in enumerate(words):
         if word == "&":
             continue
-        for part in word.split("-"):
-            core = part.strip("(),./")
+        for part in re.split(r"[-/]", word):
+            core = part.strip("(),.")
             if not core or not core[0].isalpha():
                 continue
-            if word_index > 0 and core.lower() in _TITLE_CASE_MINOR_WORDS:
+            is_minor = core.lower() in _TITLE_CASE_MINOR_WORDS
+            if word_index > 0 and is_minor:
+                if core[0].isupper():
+                    violations.append(word)
+                    break
                 continue
             if not core[0].isupper():
                 violations.append(word)
@@ -553,8 +558,7 @@ def _check_skills_title_case(resume_data: dict) -> list[str]:
             continue
         label, items_text = match.groups()
         bad_words = _title_case_violations_in_phrase(label)
-        for item in items_text.split(","):
-            bad_words.extend(_title_case_violations_in_phrase(item))
+        bad_words.extend(_title_case_violations_in_phrase(items_text))
         if bad_words:
             violations.append(
                 f"Skills line has word(s) not in Title Case ({', '.join(bad_words)}): {line!r}"
@@ -668,7 +672,9 @@ def _metric_signature(number: str, context: str) -> str:
     # metric -- two bullets naming the same year aren't citing one figure.
     is_year = len(digits) == 4 and 1900 <= int(digits) <= 2099
     distinctive = not is_year and (
-        core.startswith("$") or core.endswith(("m", "k")) or len(digits) >= 4
+        core.startswith("$")
+        or core.endswith(("m", "k", "%"))
+        or len(digits) >= 4
     )
     # "$20M" and "20M" are the same figure written two ways.
     core = core.replace("$", "").replace(",", "")

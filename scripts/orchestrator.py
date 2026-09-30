@@ -2635,6 +2635,7 @@ def partition_violations(violations: list[str]) -> tuple[list[str], list[str]]:
             # downstream (_fill_thin_skill_categories); it gets a fix attempt,
             # it never fails a build.
             or v.startswith("Skills category")
+            or v.startswith("Skills line has word(s) not in Title Case")
         ):
             soft.append(v)
         else:
@@ -3104,6 +3105,53 @@ def _repair_pronouns(current_data: dict, violations) -> tuple:
     return current_data, pronoun_modified
 
 
+def _repair_skills_title_case(current_data: dict, violations) -> tuple:
+    """Deterministic repair: fix capitalized minor words ('And' -> 'and')
+    and uncapitalized slash-separated parts ('Software/service' ->
+    'Software/Service') in SKILLS lines."""
+    modified = False
+    tc_violations = [
+        v for v in violations if v.startswith("Skills line has word(s) not in Title Case")
+    ]
+    if not tc_violations:
+        return current_data, False
+    for idx, line in enumerate(current_data.get("SKILLS", [])):
+        match = re.match(r"^\*\*(.+?):\*\*\s*(.*)$", line)
+        if not match:
+            continue
+        new_line = line
+        for word in line.split():
+            fixed_parts = []
+            raw_parts = re.split(r"([-/])", word)
+            any_fix = False
+            for pi, part in enumerate(raw_parts):
+                if part in ("-", "/"):
+                    fixed_parts.append(part)
+                    continue
+                core = part.strip("(),.")
+                if not core or not core[0].isalpha():
+                    fixed_parts.append(part)
+                    continue
+                is_minor = core.lower() in validate_resume._TITLE_CASE_MINOR_WORDS
+                if is_minor and core[0].isupper() and word != line.split()[0]:
+                    fixed = part[0].lower() + part[1:]
+                    fixed_parts.append(fixed)
+                    any_fix = True
+                elif not is_minor and not core[0].isupper():
+                    fixed = part[0].upper() + part[1:]
+                    fixed_parts.append(fixed)
+                    any_fix = True
+                else:
+                    fixed_parts.append(part)
+            if any_fix:
+                fixed_word = "".join(fixed_parts)
+                new_line = new_line.replace(word, fixed_word, 1)
+                modified = True
+        if new_line != line:
+            current_data["SKILLS"][idx] = new_line
+    return current_data, modified
+
+
 def _repair_metric_provenance(current_data: dict, violations, bullet_tuples) -> tuple:
     """Surgical repair step; returns (resume_data, modified)."""
     # 10. Targeted Metric Provenance Repair
@@ -3199,6 +3247,9 @@ def repair_violations_surgically(
         current_data, violations, bullet_tuples, role_bullet_maximums
     )
     current_data, pronoun_modified = _repair_pronouns(current_data, violations)
+    current_data, title_case_modified = _repair_skills_title_case(
+        current_data, violations
+    )
     current_data, metric_provenance_modified = _repair_metric_provenance(
         current_data, violations, bullet_tuples
     )
@@ -3218,6 +3269,7 @@ def repair_violations_surgically(
         or density_modified
         or bullet_count_modified
         or pronoun_modified
+        or title_case_modified
         or metric_provenance_modified
     ):
         final_violations = validate_resume.validate(
@@ -9080,9 +9132,20 @@ class ResumeEngine:
         # per-JD variable content, but small enough that keeping them
         # out of the cacheable prefix costs little and keeps the
         # prefix identical across JDs targeting different companies.
+        no_why_block = ""
+        if not research_block:
+            no_why_block = (
+                "\n\n=== NO WHY SECTION ===\n"
+                "No company research is available for this posting (it may be a "
+                "staffing agency or recruiter submission). Do NOT produce "
+                "SECTION_WHY or WHY_TEXT -- leave both keys out of your response "
+                "entirely. The Why section requires verified company research to "
+                "be honest and specific; without it, any Why paragraph would be "
+                "generic filler."
+            )
         builder_system = (
             f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}"
-            f"{role_rules_block}{banned_language_block}\n\n"
+            f"{no_why_block}{role_rules_block}{banned_language_block}\n\n"
             "=== ATS KEYWORD DENSITY INSTRUCTION ===\n"
             "When crafting SUMMARY_TEXT and selecting verified SKILLS, prioritize verbatim phrases "
             "from JD KEYWORDS (e.g. use exact domain titles like 'Cybersecurity' or verbatim tool names) "
@@ -10001,6 +10064,15 @@ class ResumeEngine:
             if _step is None:
                 return {}
             resume_data = _step
+        if skip_company_research and (
+            resume_data.get("SECTION_WHY") or resume_data.get("WHY_TEXT")
+        ):
+            resume_data = dict(resume_data)
+            resume_data["SECTION_WHY"] = ""
+            resume_data["WHY_TEXT"] = ""
+            cli_art.print_literal(
+                "  Stripped Why section generated despite no company research."
+            )
         # --- Step 5: Post-build holistic critique ---
         cli_art.console.rule(
             "Step 5: Running holistic resume critique...", style="dim", align="left"

@@ -668,6 +668,32 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertFalse(any("title case" in v.lower() for v in violations))
 
+    def test_flags_capitalized_minor_word_in_skills(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = [
+            "**Data & Cloud:** Design Scalable, Secure, And Governed Data Solutions"
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("And" in v and "title case" in v.lower() for v in violations))
+
+    def test_flags_uncapitalized_slash_part_in_skills(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = [
+            "**Software & Operations:** Software/service Engineering Principles"
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(
+            any("Software/service" in v and "title case" in v.lower() for v in violations)
+        )
+
+    def test_allows_correct_slash_title_case(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = [
+            "**Software & Operations:** Software/Service Engineering Principles"
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("title case" in v.lower() for v in violations))
+
     def test_flags_forbidden_phrase_in_skills_or_why_section(self):
         resume = _valid_resume()
         resume["SKILLS"] = ["**Marketing:** results-driven campaign management"]
@@ -1264,8 +1290,8 @@ class TestDistinctiveMetricsIgnoreTheContextWord(unittest.TestCase):
             & self._sigs("Retired in 2024 after the merger")
         )
 
-    def test_percentages_still_need_a_matching_context_word(self):
-        self.assertFalse(
+    def test_percentages_are_distinctive_without_context_word(self):
+        self.assertTrue(
             self._sigs("Hit 22% reply rates")
             & self._sigs("Beat the 22% industry average")
         )
