@@ -156,6 +156,14 @@ Analyze the target company's business stage (from JD and COMPANY RESEARCH) and s
   Salesforce Lightning"; "Microsoft Office" may become "Microsoft Word, Microsoft PowerPoint,
   Microsoft Excel" or just "Word, PowerPoint, Excel". Don't invent a tool that isn't already implied
   by the category
+- **Every category must list at least 2 items.** A category with one item reads as a stub rather
+  than a category. Either add another skill from the same category in the candidate's verified
+  material (cv.md's "## Core Skills" groups, summaries-and-skills-clean.csv, verified_tools.json),
+  or drop the label and fold that single item into the category it fits best. The item-wording
+  latitude above is often the cleanest fix: "Microsoft Office Suite" alone under Productivity can
+  become "Microsoft Word, Microsoft Excel, PowerPoint". Never pad a category with a skill the
+  candidate isn't already credited with -- an honest one-item category is better than a fabricated
+  second item, and a later step can still fill it from cv.md
 - Items are comma-separated with a space after each comma; no bullets or pipes inside a category
 - Category labels are bold via the skill-category class; items are plain body font
 - Every category label and every item must be in Title Case (e.g. "AI-Assisted Workflows", "CMS Platforms"), regardless of how the JD capitalizes the term — mirror the JD's exact wording for ATS matching, but always normalize the casing to Title Case rather than copying the JD's lowercase/sentence-case styling verbatim

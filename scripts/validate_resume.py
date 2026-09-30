@@ -494,6 +494,34 @@ def _check_skills_line_lengths(resume_data: dict, style_rules: dict) -> list[str
     return violations
 
 
+MIN_SKILLS_PER_CATEGORY = 2
+
+
+def _check_thin_skill_categories(resume_data: dict) -> list[str]:
+    """A category with a single item reads as a stub, not a category.
+
+    Soft by design (orchestrator.partition_violations): the page is thin,
+    not wrong, and orchestrator._fill_thin_skill_categories repairs it
+    deterministically from cv.md after the fix loop has had its try. A
+    lonely row must never be able to fail a build the way a fabricated
+    skill does."""
+    violations = []
+    for line in resume_data.get("SKILLS", []):
+        match = re.match(r"^\s*\*\*(?P<label>[^*]+?):\*\*\s*(?P<items>.*)$", line or "")
+        if not match:
+            continue
+        items = [i.strip() for i in match.group("items").split(",") if i.strip()]
+        if 0 < len(items) < MIN_SKILLS_PER_CATEGORY:
+            violations.append(
+                f"Skills category {match.group('label').strip()!r} lists only "
+                f"{len(items)} item -- every category needs at least "
+                f"{MIN_SKILLS_PER_CATEGORY}. Add another skill the candidate is "
+                f"already credited with under this category, or fold this item "
+                f"into a neighbouring category and drop the label: {line!r}"
+            )
+    return violations
+
+
 def _title_case_violations_in_phrase(phrase: str) -> list[str]:
     """
     Flags words (or hyphenated sub-parts, e.g. the "assisted" in "AI-assisted")
@@ -2526,6 +2554,7 @@ def validate(
     violations.extend(_check_skills_line_lengths(resume_data, style_rules))
     violations.extend(_check_skills_title_case(resume_data))
     violations.extend(_check_skills_item_fragments(resume_data))
+    violations.extend(_check_thin_skill_categories(resume_data))
     violations.extend(_check_hallucinated_tools(resume_data))
     violations.extend(_check_vague_magnitudes(resume_data, bullet_tuples))
     violations.extend(_check_why_filler(resume_data))

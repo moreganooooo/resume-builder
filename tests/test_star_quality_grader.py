@@ -27,7 +27,7 @@ class TestStarQualityGrader(unittest.TestCase):
     def test_flawless_star_bullet_passes_grader(self):
         resume = {
             "SUMMARY_TEXT": "<strong>Campaign strategist with 8+ years experience.</strong>",
-            "SKILLS": ["**Marketing:** CRM"],
+            "SKILLS": ["**Marketing:** CRM, Email Marketing"],
             "EXPERIENCE": [
                 {
                     "company": "Treering Yearbooks",
@@ -48,7 +48,7 @@ class TestStarQualityGrader(unittest.TestCase):
     def test_weak_bullet_lacking_metric_and_outcome_triggers_star_violation(self):
         resume = {
             "SUMMARY_TEXT": "<strong>Campaign strategist with 8+ years experience.</strong>",
-            "SKILLS": ["**Marketing:** CRM"],
+            "SKILLS": ["**Marketing:** CRM, Email Marketing"],
             "EXPERIENCE": [
                 {
                     "company": "Treering Yearbooks",
@@ -78,7 +78,7 @@ class TestStarQualityGrader(unittest.TestCase):
         assertion should flip to expect a pass."""
         resume = {
             "SUMMARY_TEXT": "<strong>Campaign strategist with 8+ years experience.</strong>",
-            "SKILLS": ["**Marketing:** CRM"],
+            "SKILLS": ["**Marketing:** CRM, Email Marketing"],
             "EXPERIENCE": [
                 {
                     "company": "Treering Yearbooks",
@@ -109,7 +109,7 @@ class TestStarQualityGrader(unittest.TestCase):
         built for."""
         resume = {
             "SUMMARY_TEXT": "<strong>Campaign strategist with 8+ years experience.</strong>",
-            "SKILLS": ["**Marketing:** CRM"],
+            "SKILLS": ["**Marketing:** CRM, Email Marketing"],
             "EXPERIENCE": [
                 {
                     "company": "Treering Yearbooks",
@@ -135,7 +135,7 @@ class TestStarQualityGrader(unittest.TestCase):
         should still fail."""
         resume = {
             "SUMMARY_TEXT": "<strong>Campaign strategist with 8+ years experience.</strong>",
-            "SKILLS": ["**Marketing:** CRM"],
+            "SKILLS": ["**Marketing:** CRM, Email Marketing"],
             "EXPERIENCE": [
                 {
                     "company": "Treering Yearbooks",
@@ -157,7 +157,7 @@ class TestStarQualityGrader(unittest.TestCase):
     def test_detects_ai_cliche_phrases(self):
         resume = {
             "SUMMARY_TEXT": "<strong>Results-oriented professional with a proven track record of driving cross-functional collaboration.</strong>",
-            "SKILLS": ["**Marketing:** CRM"],
+            "SKILLS": ["**Marketing:** CRM, Email Marketing"],
             "EXPERIENCE": [],
             "WHY_TEXT": "",
         }
@@ -169,7 +169,7 @@ class TestStarQualityGrader(unittest.TestCase):
     def test_career_break_entry_skipped_from_star_grading(self):
         resume = {
             "SUMMARY_TEXT": "<strong>Campaign strategist with 8+ years experience.</strong>",
-            "SKILLS": ["**Marketing:** CRM"],
+            "SKILLS": ["**Marketing:** CRM, Email Marketing"],
             "EXPERIENCE": [
                 {
                     "company": "Career Break — Professional Development & Retraining",

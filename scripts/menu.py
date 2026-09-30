@@ -247,6 +247,13 @@ def _build_build_documents_choices() -> list:
         ),
         questionary.Choice(
             title=_icon_title(
+                "recruiter",
+                "↳ View Generated Resumes (fit scores + polish ideas, no AI)",
+            ),
+            value="view_resumes",
+        ),
+        questionary.Choice(
+            title=_icon_title(
                 "utility", "↳ Re-render an Existing Document (PDF from JSON, no AI)"
             ),
             value="rerender",
@@ -1925,6 +1932,21 @@ def _handle_polish() -> bool:
     return False
 
 
+def _handle_view_generated_resumes() -> bool:
+    """Reads the holistic critique back off already-generated resumes.
+
+    Those scores -- fit, skills relevance, top-third, ATS risk -- were
+    computed during the build and printed exactly once, into a scrolling log.
+    They are persisted on the document, so this costs no API call. See
+    resume_report.py for why it insists on dating them.
+    """
+    import resume_report
+
+    resume_report.run()
+    _pause_and_return()
+    return False
+
+
 def _handle_rerender() -> bool:
     """Re-renders an existing output/json document to HTML + PDF with zero
     Gemini calls -- the recovery path when a PDF was deleted (or a renderer
@@ -3259,6 +3281,7 @@ _HANDLERS = {
     "browse_jobs": _handle_browse_jobs,
     "career_dashboard": _handle_career_dashboard,
     "polish": _handle_polish,
+    "view_resumes": _handle_view_generated_resumes,
     "rerender": _handle_rerender,
     "regenerate_from_scratch": _handle_regenerate_from_scratch,
     "stale_sweep": _handle_stale_sweep,
@@ -3513,6 +3536,7 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
         "bullet_bank",
         "settings_upkeep",
         "help",
+        "view_resumes",
     }
 
     action_titles = {
@@ -3526,6 +3550,7 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
         "tailor_pick": "Targeted Resume Customization",
         "coverletter_pick": "Targeted Cover Letter Customization",
         "polish": "Polishing Documents with Gemini",
+        "view_resumes": "Generated Resume Reports",
         "stale_sweep": "Stale Application Sweep",
     }
 
