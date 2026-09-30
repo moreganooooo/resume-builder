@@ -17,6 +17,7 @@ wired up while never running:
 
 import json
 import os
+import tempfile
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -208,6 +209,39 @@ class TestEvalFallbackReachability(unittest.TestCase):
         self.assertIsNotNone(result)
         mock_nim.assert_not_called()
         self.assertNotIn("_eval_provider", result)
+
+
+class TestKeyIsReadFromTheProfileEnv(unittest.TestCase):
+    """Secrets live in profiles/<name>/.env, not the shell.
+
+    Reading os.environ directly was correct only by accident: the eval
+    fallback always follows a Gemini call, and gemini_client.api_keys()
+    load_dotenv()s on its way there. build_nim_index() calls no Gemini API,
+    so it reported "NVIDIA_API_KEY not set" for a key sitting in .env.
+    """
+
+    def test_loads_the_profile_env_before_reading(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env_path = os.path.join(tmp, ".env")
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write("NVIDIA_API_KEY=nvapi-from-the-profile-env\n")
+            previous = os.environ.pop("NVIDIA_API_KEY", None)
+            self.addCleanup(
+                lambda: (
+                    os.environ.__setitem__("NVIDIA_API_KEY", previous)
+                    if previous is not None
+                    else os.environ.pop("NVIDIA_API_KEY", None)
+                )
+            )
+            with patch("profile_paths.env_path", return_value=env_path):
+                self.assertEqual(
+                    nim_fallback._nvidia_api_key(), "nvapi-from-the-profile-env"
+                )
+
+    def test_a_missing_env_file_is_not_an_error(self):
+        with patch("profile_paths.env_path", return_value="/nope/.env"):
+            # Must not raise; the environment may legitimately carry the key.
+            nim_fallback._nvidia_api_key()
 
 
 if __name__ == "__main__":

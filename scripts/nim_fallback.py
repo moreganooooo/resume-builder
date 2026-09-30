@@ -23,6 +23,33 @@ NIM_CONSECUTIVE_FAILURE_THRESHOLD = 3
 
 
 def _nvidia_api_key() -> str | None:
+    """The active profile's NVIDIA key, read the same way every other secret
+    in this program is.
+
+    Loads the profile `.env` first, deliberately. This used to be a bare
+    `os.environ.get`, which is only correct by ACCIDENT: secrets live in
+    profiles/<name>/.env, never the shell, and the only thing that had ever
+    put this key into the environment was `gemini_client.api_keys()` calling
+    load_dotenv() on its way to a Gemini call. So the eval fallback happened
+    to work (a Gemini call always precedes it) while `build_nim_index()`,
+    which calls no Gemini API at all, reported "NVIDIA_API_KEY not set" for a
+    key that was sitting in .env the whole time -- and so did any check run
+    before the first Gemini call. Depending on another module's side effect
+    for your own configuration is the bug; reading it directly is the fix.
+
+    `override=True` matches api_keys() for the same reason given there: a
+    stale key exported in the shell must not beat the one in .env.
+    """
+    try:
+        from dotenv import load_dotenv
+
+        import profile_paths
+
+        load_dotenv(profile_paths.env_path(), override=True)
+    except Exception:
+        # A missing/unreadable .env is not an error here -- the environment
+        # may legitimately carry the key -- so fall through and read it.
+        pass
     return os.environ.get("NVIDIA_API_KEY")
 
 
