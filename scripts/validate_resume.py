@@ -766,6 +766,57 @@ def _check_metric_provenance(
     return violations
 
 
+_FOREIGN_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _numbers_in(text: str) -> set[str]:
+    """Multi-digit numbers in text, commas stripped. Mirrors
+    rewrite_bullets._numbers_in (inlined to avoid import dependency)."""
+    out = set()
+    for raw in _FOREIGN_NUMBER_RE.findall(str(text or "")):
+        n = raw.replace(",", "").rstrip(".")
+        if n.endswith(".0"):
+            n = n[:-2]
+        if len(n.replace(".", "")) >= 2:
+            out.add(n)
+    return out
+
+
+def _check_foreign_numbers(
+    resume_data: dict, bullet_tuples: list[tuple[str, str, str]] | None
+) -> list[str]:
+    """Broader complement to _check_metric_provenance: catches multi-digit
+    numbers in EXPERIENCE and EDUCATION bullets that don't appear anywhere in
+    that company's own bullet-bank source text. Uses the same simple
+    number extraction as rewrite_bullets.foreign_numbers() -- wider net than
+    _extract_metric_signatures, which excludes compound labels and identifier
+    prefixes. Only checks EXPERIENCE bullets (education bullets come from
+    fixed_content / profile.yml, not the bullet bank)."""
+    if not bullet_tuples:
+        return []
+    violations = []
+    company_numbers: dict[str, set[str]] = {}
+    for bullet, company, _tags in bullet_tuples:
+        key = _normalize_company(company)
+        nums = company_numbers.setdefault(key, set())
+        nums |= _numbers_in(bullet)
+    for entry in resume_data.get("EXPERIENCE", []):
+        company = entry.get("company", "")
+        key = _normalize_company(company)
+        allowed = set(company_numbers.get(key, set()))
+        if key:
+            for bank_key, nums in company_numbers.items():
+                if bank_key and (key in bank_key or bank_key in key):
+                    allowed |= nums
+        for bullet_text in entry.get("achievements", []):
+            for num in _numbers_in(bullet_text) - allowed:
+                violations.append(
+                    f"Foreign number '{num}' in a {company} bullet has no "
+                    f"source in {company}'s bullet bank: {bullet_text!r}"
+                )
+    return violations
+
+
 _NEAR_DUPLICATE_THRESHOLD = 0.75
 
 
@@ -2615,6 +2666,7 @@ def validate(
     violations.extend(_check_bullet_trailing_punctuation(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_metric_provenance(resume_data, bullet_tuples))
+    violations.extend(_check_foreign_numbers(resume_data, bullet_tuples))
     violations.extend(_check_near_duplicate_bullets(resume_data))
     violations.extend(_check_experience_completeness(resume_data))
     violations.extend(_check_role_roster(resume_data, role_roster or []))

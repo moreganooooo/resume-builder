@@ -1303,6 +1303,85 @@ class TestDistinctiveMetricsIgnoreTheContextWord(unittest.TestCase):
         )
 
 
+class TestForeignNumbers(unittest.TestCase):
+
+    def test_flags_invented_number(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Nürburgring Racing",
+                    "title": "Data Scientist",
+                    "period": "2024",
+                    "achievements": [
+                        "Improved a Random Forest model from 0.40 to 0.59 R²",
+                    ],
+                }
+            ]
+        }
+        bank = [
+            ("Built a lap-time model achieving ~0.59 R² accuracy", "Nürburgring Racing", "ml"),
+        ]
+        violations = validate_resume._check_foreign_numbers(resume, bank)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("0.40", violations[0])
+        self.assertIn("Foreign number", violations[0])
+
+    def test_allows_numbers_from_bank(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme Corp",
+                    "title": "Engineer",
+                    "period": "2024",
+                    "achievements": [
+                        "Managed 120+ student accounts and drove 15% retention",
+                    ],
+                }
+            ]
+        }
+        bank = [
+            ("Managed 120+ student accounts across 3 campuses", "Acme Corp", "ops"),
+            ("Drove 15% retention improvement via outreach", "Acme Corp", "ops"),
+        ]
+        violations = validate_resume._check_foreign_numbers(resume, bank)
+        self.assertEqual(violations, [])
+
+    def test_education_bullets_not_checked(self):
+        """Education bullets come from fixed_content/profile.yml, not the
+        bullet bank, so foreign_numbers should not flag them."""
+        resume = {
+            "EDUCATION": [
+                {
+                    "school": "State University",
+                    "degree": "BS",
+                    "achievements": [],
+                    "bullets": [
+                        "Mentored 200 students in data science lab",
+                    ],
+                }
+            ]
+        }
+        bank = [
+            ("Mentored 50 students in intro courses", "State University", "edu"),
+        ]
+        violations = validate_resume._check_foreign_numbers(resume, bank)
+        self.assertEqual(violations, [])
+
+    def test_no_bullet_tuples_skips(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme",
+                    "title": "Dev",
+                    "period": "2024",
+                    "achievements": ["Managed 999 projects"],
+                }
+            ]
+        }
+        violations = validate_resume._check_foreign_numbers(resume, None)
+        self.assertEqual(violations, [])
+
+
 class TestNearDuplicateBullets(unittest.TestCase):
 
     def test_flags_near_duplicate_bullets(self):
