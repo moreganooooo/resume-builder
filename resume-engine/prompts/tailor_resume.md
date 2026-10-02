@@ -336,9 +336,9 @@ Example:
 
 ```json
 [
-  "**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns, Lead Scoring",
+  "**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns, Lead Scoring, Nurture",
   "**CRM & Revenue Operations:** Salesforce, Lead Routing, Pipeline Hygiene, Workflow Automation, CRM Hygiene",
-  "**Content & Strategy:** Sales Enablement, Playbook Development, Messaging, Cross-Functional Alignment"
+  "**Content & Strategy:** Sales Enablement, Playbook Development, Messaging, Call Coaching, Alignment"
 ]
   ```
 
