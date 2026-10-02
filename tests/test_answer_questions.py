@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.answer_questions import QuestionKind, classify_question, sensitive_response
+from answer_questions import QuestionKind, classify_question, sensitive_response
 
 
 class TestAnswerQuestions(unittest.TestCase):

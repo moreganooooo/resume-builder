@@ -71,11 +71,11 @@ TARGET_MODELS: dict[str, dict[str, Any]] = {
         "temperature": 0,
         "seed": 42,
         "cap_max_tokens": 5000,
-        "rec_max_tokens": 8000,   # 5000 hit cap mid-doc on rec eval; raised to 8000
+        "rec_max_tokens": 8000,  # 5000 hit cap mid-doc on rec eval; raised to 8000
         "rewrite_max_tokens": 1500,
         # thinking MUST be disabled — default is True and breaks JSON output
         "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
-        "structured_output": False,   # no json_schema support; prompt_only only
+        "structured_output": False,  # no json_schema support; prompt_only only
         "note": "enable_thinking=False required; rec_max_tokens raised 5000→8000 (still failing rec eval)",
     },
     "kimi": {
@@ -86,7 +86,7 @@ TARGET_MODELS: dict[str, dict[str, Any]] = {
         "cap_max_tokens": 10000,
         "rec_max_tokens": 10000,
         "rewrite_max_tokens": 6000,
-        "structured_output": True,   # documented structured output support
+        "structured_output": True,  # documented structured output support
         "note": "reasoning_effort=low with max_tokens=10000; confirmed working",
     },
     "mistral": {
@@ -96,7 +96,7 @@ TARGET_MODELS: dict[str, dict[str, Any]] = {
         "cap_max_tokens": 4096,
         "rec_max_tokens": 4096,
         "rewrite_max_tokens": 1500,
-        "structured_output": False,   # no json_schema; prompt_only only
+        "structured_output": False,  # no json_schema; prompt_only only
         "note": "eval confirmed non-viable (0/6); rewrite baseline for penalty experiment",
     },
     "lightning": {
@@ -108,7 +108,7 @@ TARGET_MODELS: dict[str, dict[str, Any]] = {
         "cap_max_tokens": 8000,
         "rec_max_tokens": 8000,
         "rewrite_max_tokens": 2000,
-        "structured_output": True,   # in STRUCTURED_OUTPUT_MODELS in v2
+        "structured_output": True,  # in STRUCTURED_OUTPUT_MODELS in v2
         "note": "bakeoff 'approved' — first strict hallucination audit; cookie-cutter and JSON-literal-key bugs seen in bakeoff",
     },
     "super": {
@@ -120,7 +120,7 @@ TARGET_MODELS: dict[str, dict[str, Any]] = {
         "cap_max_tokens": 8000,
         "rec_max_tokens": 8000,
         "rewrite_max_tokens": 2000,
-        "structured_output": True,   # in STRUCTURED_OUTPUT_MODELS in v2
+        "structured_output": True,  # in STRUCTURED_OUTPUT_MODELS in v2
         "note": "bakeoff 'approved' — first strict hallucination audit; numeric leakage seen in bakeoff",
     },
 }
@@ -149,9 +149,28 @@ LEGAL_SUFFIXES = re.compile(
 )
 TOOLISH_TERMS = frozenset(
     {
-        "aws", "azure", "gcp", "glue", "sagemaker", "s3", "rds", "snowflake",
-        "databricks", "python", "sql", "spacy", "nlp", "tensorflow", "pytorch",
-        "tableau", "power bi", "salesforce", "hubspot", "marketo", "etl", "api",
+        "aws",
+        "azure",
+        "gcp",
+        "glue",
+        "sagemaker",
+        "s3",
+        "rds",
+        "snowflake",
+        "databricks",
+        "python",
+        "sql",
+        "spacy",
+        "nlp",
+        "tensorflow",
+        "pytorch",
+        "tableau",
+        "power bi",
+        "salesforce",
+        "hubspot",
+        "marketo",
+        "etl",
+        "api",
     }
 )
 # Guard for cookie-cutter: identical rewrites across multiple source bullets.
@@ -165,7 +184,8 @@ def _numbers(text: str) -> set[str]:
 def _tool_audit(rewrite: str, evidence: str) -> list[str]:
     low_ev = evidence.lower()
     return sorted(
-        term for term in TOOLISH_TERMS
+        term
+        for term in TOOLISH_TERMS
         if re.search(rf"\b{re.escape(term)}\b", rewrite, re.I)
         and not re.search(rf"\b{re.escape(term)}\b", low_ev, re.I)
     )
@@ -201,9 +221,11 @@ def _elaboration_flags(source: str, rewrite: str, evidence: str) -> list[str]:
     if OUTCOME_CUES.search(rewrite) and not OUTCOME_CUES.search(source):
         cue_tail = re.split(OUTCOME_CUES, rewrite.lower(), maxsplit=1)[-1]
         evidence_words = set(re.findall(r"[a-z]{4,}", src_ev))
-        novel = list(dict.fromkeys(
-            w for w in re.findall(r"[a-z]{5,}", cue_tail) if w not in evidence_words
-        ))[:6]
+        novel = list(
+            dict.fromkeys(
+                w for w in re.findall(r"[a-z]{5,}", cue_tail) if w not in evidence_words
+            )
+        )[:6]
         if len(novel) >= 3:
             flags.append("outcome elaboration with novel terms: " + ", ".join(novel))
     return flags
@@ -260,6 +282,7 @@ def strict_audit(source: str, rewrite: str, evidence: str, role: str) -> dict[st
 # Structured call with model-specific routing
 # ---------------------------------------------------------------------------
 
+
 def _structured_call(
     client: Any,
     cfg: dict[str, Any],
@@ -269,7 +292,10 @@ def _structured_call(
 ) -> dict[str, Any]:
     """Route through json_schema if supported, else prompt_only."""
     model = cfg["id"]
-    common: dict[str, Any] = {"temperature": cfg["temperature"], "max_tokens": max_tokens}
+    common: dict[str, Any] = {
+        "temperature": cfg["temperature"],
+        "max_tokens": max_tokens,
+    }
     if cfg.get("seed") is not None:
         common["seed"] = cfg["seed"]
     if cfg.get("reasoning_effort"):
@@ -279,13 +305,22 @@ def _structured_call(
 
     routes = []
     if cfg.get("structured_output"):
-        routes.append((
-            "response_format.json_schema",
-            {"response_format": {"type": "json_schema", "json_schema": {
-                "name": "result", "schema": schema, "strict": True,
-            }}},
-            messages,
-        ))
+        routes.append(
+            (
+                "response_format.json_schema",
+                {
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "result",
+                            "schema": schema,
+                            "strict": True,
+                        },
+                    }
+                },
+                messages,
+            )
+        )
     prompt_msgs = nim._append_json_instruction(messages, schema)
     routes.append(("prompt_only", {}, prompt_msgs))
 
@@ -305,6 +340,7 @@ def _structured_call(
 # ---------------------------------------------------------------------------
 # Eval stage
 # ---------------------------------------------------------------------------
+
 
 def run_eval(
     client: Any,
@@ -327,9 +363,12 @@ def run_eval(
 
         started = time.perf_counter()
         cap = _structured_call(
-            client, cfg,
-            [{"role": "system", "content": system},
-             {"role": "user", "content": context}],
+            client,
+            cfg,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": context},
+            ],
             CapabilityEvaluationSchema.model_json_schema(),
             cfg["cap_max_tokens"],
         )
@@ -343,9 +382,12 @@ def run_eval(
 
         system = engine.load_prompt("evaluate_recruiter.md")
         rec = _structured_call(
-            client, cfg,
-            [{"role": "system", "content": system},
-             {"role": "user", "content": context}],
+            client,
+            cfg,
+            [
+                {"role": "system", "content": system},
+                {"role": "user", "content": context},
+            ],
             RecruiterEvaluationSchema.model_json_schema(),
             cfg["rec_max_tokens"],
         )
@@ -364,12 +406,32 @@ def run_eval(
         row: dict[str, Any] = {
             "jd": name,
             "seconds": elapsed,
-            "cap_status": "OK" if cap_valid else f"FAIL {cap.get('diagnosis') or cap.get('schema_error', '')}",
-            "rec_status": "OK" if rec_valid else f"FAIL {rec.get('diagnosis') or rec.get('schema_error', '')}",
-            "recommendation": (rec_data.get("recommendation"), baseline.get("recommendation")),
-            "gaps": (len(cap_data.get("capability_gaps") or []), len(baseline.get("capability_gaps") or [])),
-            "blockers": (len(rec_data.get("hard_blockers") or []), len(baseline.get("hard_blockers") or [])),
-            "role_track": (cap_data.get("role_track"), cap_data.get("role_track_confidence")),
+            "cap_status": (
+                "OK"
+                if cap_valid
+                else f"FAIL {cap.get('diagnosis') or cap.get('schema_error', '')}"
+            ),
+            "rec_status": (
+                "OK"
+                if rec_valid
+                else f"FAIL {rec.get('diagnosis') or rec.get('schema_error', '')}"
+            ),
+            "recommendation": (
+                rec_data.get("recommendation"),
+                baseline.get("recommendation"),
+            ),
+            "gaps": (
+                len(cap_data.get("capability_gaps") or []),
+                len(baseline.get("capability_gaps") or []),
+            ),
+            "blockers": (
+                len(rec_data.get("hard_blockers") or []),
+                len(baseline.get("hard_blockers") or []),
+            ),
+            "role_track": (
+                cap_data.get("role_track"),
+                cap_data.get("role_track_confidence"),
+            ),
             "tokens_cap": (cap.get("tokens") or {}).get("out"),
             "tokens_rec": (rec.get("tokens") or {}).get("out"),
             "modes": (cap.get("mode"), rec.get("mode")),
@@ -388,6 +450,7 @@ def run_eval(
 # ---------------------------------------------------------------------------
 # Rewrite stage (with strict audit)
 # ---------------------------------------------------------------------------
+
 
 def run_rewrite(
     client: Any,
@@ -426,14 +489,19 @@ def run_rewrite(
 
         for attempt_no in range(1, rb.MAX_ATTEMPTS + 1):
             prompt = rb.build_rewrite_prompt(
-                bullet=source, tags=tags, weaknesses=weaknesses,
+                bullet=source,
+                tags=tags,
+                weaknesses=weaknesses,
                 kb_context=kb.context_block_for_bullet(role, tags),
                 attempt=attempt_no,
             )
             result = _structured_call(
-                client, cfg,
-                [{"role": "system", "content": rewrite_system},
-                 {"role": "user", "content": prompt}],
+                client,
+                cfg,
+                [
+                    {"role": "system", "content": rewrite_system},
+                    {"role": "user", "content": prompt},
+                ],
                 schema,
                 cfg["rewrite_max_tokens"],
             )
@@ -449,20 +517,29 @@ def run_rewrite(
             if not result["ok"]:
                 break
             try:
-                final_text = str(json.loads(result["text"]).get("rewritten_bullet", "")).strip()
+                final_text = str(
+                    json.loads(result["text"]).get("rewritten_bullet", "")
+                ).strip()
             except json.JSONDecodeError:
                 final_text = ""
             log["rewritten"] = final_text
 
             production_rejection = (
                 rb._rejection_reason(final_text, evidence, role, kb)
-                if final_text else ("empty rewritten_bullet", "Return a non-empty rewritten_bullet.")
+                if final_text
+                else ("empty rewritten_bullet", "Return a non-empty rewritten_bullet.")
             )
-            log["production_rejected"] = production_rejection[0] if production_rejection else None
+            log["production_rejected"] = (
+                production_rejection[0] if production_rejection else None
+            )
 
             if final_text and not production_rejection:
                 break
-            weaknesses = production_rejection[1] if production_rejection else "Return a non-empty rewritten_bullet."
+            weaknesses = (
+                production_rejection[1]
+                if production_rejection
+                else "Return a non-empty rewritten_bullet."
+            )
 
         audit = strict_audit(source, final_text, evidence, role) if final_text else {}
         record: dict[str, Any] = {
@@ -470,11 +547,14 @@ def run_rewrite(
             "source": source,
             "final_text": final_text,
             "attempts": attempts,
-            "production_rejection": production_rejection[0] if production_rejection else None,
+            "production_rejection": (
+                production_rejection[0] if production_rejection else None
+            ),
             "strict_audit": audit,
             "api_error": (
                 (last_result.get("diagnosis") or last_result.get("error", ""))
-                if (last_result and not last_result["ok"]) else None
+                if (last_result and not last_result["ok"])
+                else None
             ),
         }
         rows.append(record)
@@ -487,7 +567,11 @@ def run_rewrite(
             auto_pass += 1
 
         outcome = "AUTO-PASS" if not production_rejection and final_text else "REJECT"
-        strict_ok = "strict✓" if audit.get("strict_auto_pass") else f"strict✗({audit.get('total_issues', '?')} issues)"
+        strict_ok = (
+            "strict✓"
+            if audit.get("strict_auto_pass")
+            else f"strict✗({audit.get('total_issues', '?')} issues)"
+        )
         print(f"  [{row.get('rewrite_status'):6}] {role[:40]:40} {outcome} {strict_ok}")
         if final_text:
             print(f"    {final_text}")
@@ -498,25 +582,39 @@ def run_rewrite(
         if audit.get("json_literal_key"):
             print(f"    ⚠ JSON literal key returned as output")
 
-    print(f"\n  Summary: auto-pass={auto_pass}/{n}  final-reject={final_reject}/{n}  errors={errors}/{n}")
-    strict_passes = sum(1 for r in rows if r.get("strict_audit", {}).get("strict_auto_pass"))
+    print(
+        f"\n  Summary: auto-pass={auto_pass}/{n}  final-reject={final_reject}/{n}  errors={errors}/{n}"
+    )
+    strict_passes = sum(
+        1 for r in rows if r.get("strict_audit", {}).get("strict_auto_pass")
+    )
     all_issues = [
         issue
         for r in rows
-        for field in ("unsupported_numbers", "unsupported_tools", "unsupported_proper_nouns",
-                      "elaboration_flags", "cookie_cutter", "json_literal_key")
+        for field in (
+            "unsupported_numbers",
+            "unsupported_tools",
+            "unsupported_proper_nouns",
+            "elaboration_flags",
+            "cookie_cutter",
+            "json_literal_key",
+        )
         for issue in (
-            r["strict_audit"].get(field, []) if isinstance(r["strict_audit"].get(field), list)
+            r["strict_audit"].get(field, [])
+            if isinstance(r["strict_audit"].get(field), list)
             else ([r["strict_audit"][field]] if r["strict_audit"].get(field) else [])
         )
     ]
-    print(f"  Strict audit: {strict_passes}/{len(rows)} passed  |  total issues: {len(all_issues)}")
+    print(
+        f"  Strict audit: {strict_passes}/{len(rows)} passed  |  total issues: {len(all_issues)}"
+    )
     return rows
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def _jd_paths(profile: str) -> list[str]:
     jd_dir = os.path.join(nim.PROJECT_ROOT, "jds", profile)
@@ -533,7 +631,8 @@ def _jd_paths(profile: str) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
-        "--model", action="append",
+        "--model",
+        action="append",
         choices=list(TARGET_MODELS),
         help="one or more of: gemma kimi mistral lightning super (default: all)",
     )
@@ -557,9 +656,11 @@ def main() -> None:
         print(f"\n{'='*70}")
         print(f"MODEL: {model_id}")
         print(f"  Note: {cfg['note']}")
-        print(f"  Config: temp={cfg['temperature']}  seed={cfg.get('seed')}  "
-              f"reasoning_effort={cfg.get('reasoning_effort')}  "
-              f"cap_max_tokens={cfg['cap_max_tokens']}  rec_max_tokens={cfg['rec_max_tokens']}")
+        print(
+            f"  Config: temp={cfg['temperature']}  seed={cfg.get('seed')}  "
+            f"reasoning_effort={cfg.get('reasoning_effort')}  "
+            f"cap_max_tokens={cfg['cap_max_tokens']}  rec_max_tokens={cfg['rec_max_tokens']}"
+        )
 
         if not args.no_warmup:
             print("\n  Warm-up:")
@@ -570,12 +671,18 @@ def main() -> None:
         if not args.skip_eval:
             print(f"\n  --- EVAL ---")
             result["eval"] = run_eval(client, cfg, jd_paths)
-            nim._save(model_id, f"retest_eval_{name}", {"ok": True, "rows": result["eval"]})
+            nim._save(
+                model_id, f"retest_eval_{name}", {"ok": True, "rows": result["eval"]}
+            )
 
         if not args.skip_rewrite:
             print(f"\n  --- REWRITE (n={args.n}) ---")
             result["rewrite"] = run_rewrite(client, cfg, args.n)
-            nim._save(model_id, f"retest_rewrite_{name}", {"ok": True, "rows": result["rewrite"]})
+            nim._save(
+                model_id,
+                f"retest_rewrite_{name}",
+                {"ok": True, "rows": result["rewrite"]},
+            )
 
         all_results[name] = result
 
@@ -592,9 +699,15 @@ def main() -> None:
             print(f"    eval: cap {cap_ok}/{len(rows)} OK  rec {rec_ok}/{len(rows)} OK")
         if "rewrite" in result:
             rows = result["rewrite"]
-            ap = sum(1 for r in rows if not r["production_rejection"] and r["final_text"])
-            sp = sum(1 for r in rows if r.get("strict_audit", {}).get("strict_auto_pass"))
-            print(f"    rewrite: production pass {ap}/{len(rows)}  strict pass {sp}/{len(rows)}")
+            ap = sum(
+                1 for r in rows if not r["production_rejection"] and r["final_text"]
+            )
+            sp = sum(
+                1 for r in rows if r.get("strict_audit", {}).get("strict_auto_pass")
+            )
+            print(
+                f"    rewrite: production pass {ap}/{len(rows)}  strict pass {sp}/{len(rows)}"
+            )
 
     path = nim._save(
         "retest-targeted",

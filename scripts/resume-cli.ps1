@@ -97,14 +97,14 @@ function _RbEnsureProfile {
                 Write-Host "    $($i + 1). ${M}○${R} $n"
             }
         }
-        $ans = Read-Host "`n  Which profile for this session? [$default]"
-        if (-not $ans) {
+        $and = Read-Host "`n  Which profile for this session? [$default]"
+        if (-not $and) {
             $choice = $default
-        } elseif ($ans -match '^\d+$') {
-            $idx = [int]$ans - 1
+        } elseif ($and -match '^\d+$') {
+            $idx = [int]$and - 1
             $choice = if ($idx -ge 0 -and $idx -lt $names.Count) { $names[$idx] } else { $default }
-        } elseif ($names -contains $ans) {
-            $choice = $ans
+        } elseif ($names -contains $and) {
+            $choice = $and
         } else {
             $choice = $default
         }

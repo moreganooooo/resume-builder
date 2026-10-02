@@ -85,11 +85,7 @@ from render_resume_docx import render_resume_docx
 # company against each heading, so it works with no manual setup. No
 # circular-import risk: rewrite_bullets imports only profile_paths, and
 # bullet_feedback above already pulls it into this chain.
-from rewrite_bullets import (
-    compact_tools_text,
-    date_anchors,
-    extract_cv_section,
-)
+from rewrite_bullets import compact_tools_text, date_anchors, extract_cv_section
 
 # --- MODEL STRATEGY ---
 # CRITIQUE_MODEL: handles bullet critique (high-frequency) and the post-build
@@ -3111,7 +3107,9 @@ def _repair_skills_title_case(current_data: dict, violations) -> tuple:
     'Software/Service') in SKILLS lines."""
     modified = False
     tc_violations = [
-        v for v in violations if v.startswith("Skills line has word(s) not in Title Case")
+        v
+        for v in violations
+        if v.startswith("Skills line has word(s) not in Title Case")
     ]
     if not tc_violations:
         return current_data, False
@@ -3172,7 +3170,9 @@ def _repair_near_duplicate_bullets(
     bank_by_company: dict[str, list[str]] = {}
     for b, c, _t in bullet_tuples:
         clean = b.strip().lstrip("- ").rstrip(".")
-        bank_by_company.setdefault(validate_resume._normalize_company(c), []).append(clean)
+        bank_by_company.setdefault(validate_resume._normalize_company(c), []).append(
+            clean
+        )
 
     modified = False
     for v in dup_violations:
@@ -5941,7 +5941,6 @@ class ResumeEngine:
             return cached
         try:
             import pandas as pd
-
             import rewrite_bullets
 
             bank = pd.read_csv(rewrite_bullets.KB_AUDITED_BANK, dtype=str).fillna("")
@@ -7160,11 +7159,7 @@ class ResumeEngine:
 
         result = None
         try:
-            from embed_bullet_bank import (
-                BACKUP_EMBED_MODEL,
-                embed_batch,
-                index_paths,
-            )
+            from embed_bullet_bank import BACKUP_EMBED_MODEL, embed_batch, index_paths
 
             b_npy, b_meta, _ = index_paths(self.kb_dir, BACKUP_EMBED_MODEL)
             if os.path.exists(b_npy) and os.path.exists(b_meta):

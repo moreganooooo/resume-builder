@@ -103,7 +103,7 @@ TOOLISH_TERMS = frozenset(
     }
 )
 OUTCOME_CUES = re.compile(
-    r"\b(improv(?:e|ed|ing)|reduc(?:e|ed|ing)|increas(?:e|ed|ing)|"
+    r"\b(improv(?:e|ed|ing)|reduc(?:e|ed|ing)|increase(?:e|ed|ing)|"
     r"enabl(?:e|ed|ing)|accelerat(?:e|ed|ing)|driv(?:e|en|ing)|"
     r"support(?:ed|ing)|deliver(?:ed|ing)|result(?:ed|ing)|leading to)\b",
     re.I,

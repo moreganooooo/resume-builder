@@ -41,9 +41,8 @@ def _nvidia_api_key() -> str | None:
     stale key exported in the shell must not beat the one in .env.
     """
     try:
-        from dotenv import load_dotenv
-
         import profile_paths
+        from dotenv import load_dotenv
 
         load_dotenv(profile_paths.env_path(), override=True)
     except Exception:

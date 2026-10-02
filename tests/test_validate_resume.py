@@ -674,7 +674,9 @@ class TestValidateResume(unittest.TestCase):
             "**Data & Cloud:** Design Scalable, Secure, And Governed Data Solutions"
         ]
         violations = validate_resume.validate(resume, STYLE_RULES)
-        self.assertTrue(any("And" in v and "title case" in v.lower() for v in violations))
+        self.assertTrue(
+            any("And" in v and "title case" in v.lower() for v in violations)
+        )
 
     def test_flags_uncapitalized_slash_part_in_skills(self):
         resume = _valid_resume()
@@ -683,7 +685,10 @@ class TestValidateResume(unittest.TestCase):
         ]
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(
-            any("Software/service" in v and "title case" in v.lower() for v in violations)
+            any(
+                "Software/service" in v and "title case" in v.lower()
+                for v in violations
+            )
         )
 
     def test_allows_correct_slash_title_case(self):
@@ -1319,7 +1324,11 @@ class TestForeignNumbers(unittest.TestCase):
             ]
         }
         bank = [
-            ("Built a lap-time model achieving ~0.59 R² accuracy", "Nürburgring Racing", "ml"),
+            (
+                "Built a lap-time model achieving ~0.59 R² accuracy",
+                "Nürburgring Racing",
+                "ml",
+            ),
         ]
         violations = validate_resume._check_foreign_numbers(resume, bank)
         self.assertEqual(len(violations), 1)

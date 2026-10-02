@@ -28,9 +28,8 @@ from dotenv import load_dotenv
 
 load_dotenv(profile_paths.env_path(), override=False)
 
-from openai import OpenAI  # noqa: E402
-
 import nim_smoke_test_nvidia_v2 as nim  # noqa: E402
+from openai import OpenAI  # noqa: E402
 
 CF_MODELS = {
     "@cf/meta/llama-4-scout-17b-16e-instruct": {
@@ -202,7 +201,9 @@ def main():
     all_choices = list(CF_MODELS.keys()) + list(ALIASES.keys())
 
     rw = subs.add_parser("rewrite", help="Run rewrite comparison")
-    rw.add_argument("--model", choices=all_choices, help="Test one model (default: all four)")
+    rw.add_argument(
+        "--model", choices=all_choices, help="Test one model (default: all four)"
+    )
     rw.add_argument("--n", type=int, default=8, help="Bullets per model")
     rw.add_argument("--attempts", type=int, default=3, help="Max attempts per bullet")
     rw.add_argument("--score", action="store_true", help="Gemini judge scoring")

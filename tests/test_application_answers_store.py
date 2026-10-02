@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts import jd_manager
+import jd_manager
 
 
 class TestApplicationAnswerStore(unittest.TestCase):

@@ -219,9 +219,7 @@ def main() -> None:
             print(f" first shot: {attempts[0]['rejected']}")
         if rejection:
             rejected += 1
-            print(
-                f" GUARD after {len(attempts)} attempts: rejection reason redacted"
-            )
+            print(f" GUARD after {len(attempts)} attempts: rejection reason redacted")
 
         if args.score:
             try:

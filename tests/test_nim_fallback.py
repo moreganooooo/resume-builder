@@ -17,8 +17,8 @@ wired up while never running:
 
 import json
 import os
-import tempfile
 import sys
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 

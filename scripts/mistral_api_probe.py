@@ -34,9 +34,8 @@ from dotenv import load_dotenv
 
 load_dotenv(profile_paths.env_path(), override=False)
 
-from openai import OpenAI  # noqa: E402
-
 import nim_smoke_test_nvidia_v2 as nim  # noqa: E402
+from openai import OpenAI  # noqa: E402
 
 MISTRAL_BASE_URL = "https://api.mistral.ai/v1"
 

@@ -96,9 +96,28 @@ OUTCOME_CUES = re.compile(
 )
 TOOLISH_TERMS = frozenset(
     {
-        "aws", "azure", "gcp", "glue", "sagemaker", "s3", "rds", "snowflake",
-        "databricks", "python", "sql", "spacy", "nlp", "tensorflow", "pytorch",
-        "tableau", "power bi", "salesforce", "hubspot", "marketo", "etl", "api",
+        "aws",
+        "azure",
+        "gcp",
+        "glue",
+        "sagemaker",
+        "s3",
+        "rds",
+        "snowflake",
+        "databricks",
+        "python",
+        "sql",
+        "spacy",
+        "nlp",
+        "tensorflow",
+        "pytorch",
+        "tableau",
+        "power bi",
+        "salesforce",
+        "hubspot",
+        "marketo",
+        "etl",
+        "api",
     }
 )
 
@@ -110,7 +129,8 @@ def _numbers(text: str) -> set[str]:
 def _tool_audit(rewrite: str, evidence: str) -> list[str]:
     low_ev = evidence.lower()
     return sorted(
-        term for term in TOOLISH_TERMS
+        term
+        for term in TOOLISH_TERMS
         if re.search(rf"\b{re.escape(term)}\b", rewrite, re.I)
         and not re.search(rf"\b{re.escape(term)}\b", low_ev, re.I)
     )
@@ -125,9 +145,11 @@ def _elaboration_flags(source: str, rewrite: str, evidence: str) -> list[str]:
     if OUTCOME_CUES.search(rewrite) and not OUTCOME_CUES.search(source):
         cue_tail = re.split(OUTCOME_CUES, rewrite.lower(), maxsplit=1)[-1]
         evidence_words = set(re.findall(r"[a-z]{4,}", src_ev))
-        novel = list(dict.fromkeys(
-            w for w in re.findall(r"[a-z]{5,}", cue_tail) if w not in evidence_words
-        ))[:6]
+        novel = list(
+            dict.fromkeys(
+                w for w in re.findall(r"[a-z]{5,}", cue_tail) if w not in evidence_words
+            )
+        )[:6]
         if len(novel) >= 3:
             flags.append("outcome elaboration with novel terms: " + ", ".join(novel))
     return flags
@@ -158,11 +180,17 @@ def strict_audit(
     elaboration = _elaboration_flags(source, rewrite, evidence)
     cookie = _cookie_cutter_check(rewrite, role, combo_key)
     literal_key = rewrite.strip().lower().strip('"') in {
-        "rewritten_bullet", "bullet_text", "output", "result", "text"
+        "rewritten_bullet",
+        "bullet_text",
+        "output",
+        "result",
+        "text",
     }
 
     issues = (
-        unsupported_numbers + unsupported_tools + elaboration
+        unsupported_numbers
+        + unsupported_tools
+        + elaboration
         + ([cookie] if cookie else [])
         + (["JSON key returned as output value"] if literal_key else [])
     )
@@ -181,17 +209,18 @@ def strict_audit(
 # Single-combo rewrite run
 # ---------------------------------------------------------------------------
 
+
 def run_combo(
     client: Any,
     bullets: pd.DataFrame,
     freq: float,
-    pres: float,
+    press: float,
     rules: rb.RulesBundle,
     kb: rb.KnowledgeBase,
     rewrite_system: str,
     schema: dict[str, Any],
 ) -> dict[str, Any]:
-    combo_key = f"f{freq:.2f}_p{pres:.2f}"
+    combo_key = f"f{freq:.2f}_p{press:.2f}"
     rows: list[dict[str, Any]] = []
     auto_pass = final_reject = errors = 0
 
@@ -209,25 +238,32 @@ def run_combo(
 
         for attempt_no in range(1, rb.MAX_ATTEMPTS + 1):
             prompt = rb.build_rewrite_prompt(
-                bullet=source, tags=tags, weaknesses=weaknesses,
+                bullet=source,
+                tags=tags,
+                weaknesses=weaknesses,
                 kb_context=kb.context_block_for_bullet(role, tags),
                 attempt=attempt_no,
             )
             prompt_msgs = nim._append_json_instruction(
-                [{"role": "system", "content": rewrite_system},
-                 {"role": "user", "content": prompt}],
+                [
+                    {"role": "system", "content": rewrite_system},
+                    {"role": "user", "content": prompt},
+                ],
                 schema,
             )
             result = nim._call(
-                client, MODEL, prompt_msgs,
+                client,
+                MODEL,
+                prompt_msgs,
                 temperature=BASE_TEMP,
                 max_tokens=BASE_MAX_TOKENS,
                 frequency_penalty=freq,
-                presence_penalty=pres,
+                presence_penalty=press,
             )
             last_result = result
             log: dict[str, Any] = {
-                "attempt": attempt_no, "ok": result["ok"],
+                "attempt": attempt_no,
+                "ok": result["ok"],
                 "seconds": result["seconds"],
             }
             attempts.append(log)
@@ -235,30 +271,48 @@ def run_combo(
             if not result["ok"]:
                 break
             try:
-                final_text = str(json.loads(result["text"]).get("rewritten_bullet", "")).strip()
+                final_text = str(
+                    json.loads(result["text"]).get("rewritten_bullet", "")
+                ).strip()
             except json.JSONDecodeError:
                 final_text = ""
             log["rewritten"] = final_text
 
             production_rejection = (
                 rb._rejection_reason(final_text, evidence, role, kb)
-                if final_text else ("empty rewritten_bullet", "Return a non-empty rewritten_bullet.")
+                if final_text
+                else ("empty rewritten_bullet", "Return a non-empty rewritten_bullet.")
             )
-            log["production_rejected"] = production_rejection[0] if production_rejection else None
+            log["production_rejected"] = (
+                production_rejection[0] if production_rejection else None
+            )
 
             if final_text and not production_rejection:
                 break
-            weaknesses = production_rejection[1] if production_rejection else "Return a non-empty rewritten_bullet."
+            weaknesses = (
+                production_rejection[1]
+                if production_rejection
+                else "Return a non-empty rewritten_bullet."
+            )
 
-        audit = strict_audit(source, final_text, evidence, role, combo_key) if final_text else {}
+        audit = (
+            strict_audit(source, final_text, evidence, role, combo_key)
+            if final_text
+            else {}
+        )
         record: dict[str, Any] = {
-            "role": role, "source": source, "final_text": final_text,
+            "role": role,
+            "source": source,
+            "final_text": final_text,
             "attempts": attempts,
-            "production_rejection": production_rejection[0] if production_rejection else None,
+            "production_rejection": (
+                production_rejection[0] if production_rejection else None
+            ),
             "strict_audit": audit,
             "api_error": (
                 (last_result.get("diagnosis") or last_result.get("error", ""))
-                if (last_result and not last_result["ok"]) else None
+                if (last_result and not last_result["ok"])
+                else None
             ),
         }
         rows.append(record)
@@ -270,12 +324,14 @@ def run_combo(
         else:
             auto_pass += 1
 
-    strict_passes = sum(1 for r in rows if r.get("strict_audit", {}).get("strict_auto_pass"))
+    strict_passes = sum(
+        1 for r in rows if r.get("strict_audit", {}).get("strict_auto_pass")
+    )
     cookie_hits = sum(1 for r in rows if r.get("strict_audit", {}).get("cookie_cutter"))
     return {
         "combo": combo_key,
         "freq": freq,
-        "pres": pres,
+        "press": press,
         "n": len(rows),
         "auto_pass": auto_pass,
         "final_reject": final_reject,
@@ -289,6 +345,7 @@ def run_combo(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def _sample_bullets(n: int) -> pd.DataFrame:
     df = pd.read_csv(rb.CLUSTER_MAP_OUT)
@@ -304,22 +361,32 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--n", type=int, default=8, help="bullets per combo")
     parser.add_argument(
-        "--freq", nargs="+", type=float, default=list(DEFAULT_FREQ),
-        metavar="F", help="frequency_penalty values to test",
+        "--freq",
+        nargs="+",
+        type=float,
+        default=list(DEFAULT_FREQ),
+        metavar="F",
+        help="frequency_penalty values to test",
     )
     parser.add_argument(
-        "--pres", nargs="+", type=float, default=list(DEFAULT_PRES),
-        metavar="P", help="presence_penalty values to test",
+        "--pres",
+        nargs="+",
+        type=float,
+        default=list(DEFAULT_PRES),
+        metavar="P",
+        help="presence_penalty values to test",
     )
     parser.add_argument("--no-warmup", action="store_true")
     args = parser.parse_args()
 
     profile = os.environ.get("RESUME_PROFILE", "morgan")
     client = nim._client()
-    combos = list(grid_product(args.freq, args.pres))
+    combos = list(grid_product(args.freq, args.press))
 
     print(f"\nProfile: {profile}  |  Model: {MODEL}")
-    print(f"Grid: freq={args.freq}  pres={args.pres}  ({len(combos)} combos × {args.n} bullets)")
+    print(
+        f"Grid: freq={args.freq}  press={args.press}  ({len(combos)} combos × {args.n} bullets)"
+    )
     print(f"Expected calls: ~{len(combos) * args.n * rb.MAX_ATTEMPTS} (with retries)")
 
     if not args.no_warmup:
@@ -335,16 +402,20 @@ def main() -> None:
     all_results: list[dict[str, Any]] = []
     started = time.perf_counter()
 
-    print(f"\n{'combo':<16} {'prod_pass':>9} {'strict_pass':>11} {'cookie':>6} {'errors':>6}")
+    print(
+        f"\n{'combo':<16} {'prod_pass':>9} {'strict_pass':>11} {'cookie':>6} {'errors':>6}"
+    )
     print("-" * 55)
-    for freq, pres in combos:
+    for freq, press in combos:
         combo_started = time.perf_counter()
-        result = run_combo(client, bullets, freq, pres, rules, kb, rewrite_system, schema)
+        result = run_combo(
+            client, bullets, freq, press, rules, kb, rewrite_system, schema
+        )
         elapsed = round(time.perf_counter() - combo_started, 1)
         all_results.append(result)
         n = result["n"]
         print(
-            f"  f={freq:.2f} p={pres:.2f}   "
+            f"  f={freq:.2f} p={press:.2f}   "
             f"{result['auto_pass']:>4}/{n}"
             f"  {result['strict_pass']:>5}/{n}"
             f"  {result['cookie_cutter_hits']:>4}/{n}"
@@ -374,7 +445,7 @@ def main() -> None:
             "model": MODEL,
             "n_bullets": args.n,
             "freq_values": args.freq,
-            "pres_values": args.pres,
+            "pres_values": args.press,
             "combos": all_results,
         },
     )
