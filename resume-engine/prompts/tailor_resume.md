@@ -26,7 +26,7 @@ Before selecting any content, fill in: "The candidate is an [X] who helps organi
 6. **Add Content (Last Resort Only)** — You may generate new summary statements or bridge transitions. You may not add new hard evidence.
 
 ### STRICT INVARIANT: BULLET-LOCAL SOFTWARE INTEGRITY
-1. ZERO CROSS-ROLE TOOL BLEED: You are strictly forbidden from introducing any software platform, CRM, or named technical tool (e.g., HubSpot, Salesforce, Marketo, Google Analytics) into a bullet unless that exact tool was ALREADY explicitly named in that specific original bullet or verified for that specific employer.
+1. ZERO CROSS-ROLE TOOL BLEED: You are strictly forbidden from introducing any software platform, CRM, or named technical tool (e.g., specific CRMs, marketing automation platforms, analytics tools) into a bullet unless that exact tool was ALREADY explicitly named in that specific original bullet or verified for that specific employer.
 2. DO NOT APPEASE CRITIQUES WITH FAKE TOOLS: If a critique or suggestion recommends adding methodology or tools, and the original bullet did not name a tool, expand on the STRATEGY, METRIC, or OPERATIONAL WORKFLOW (e.g., "designed multi-touch qualification cadences", "standardized cold outreach copy", "built account scoring rubrics")—NEVER insert software from the target JD or another company.
 3. CONTEXT BLEED IS A FATAL FAILURE: Attributing a tool to a role where it was not used violates HF008 and causes an immediate hard failure.
 
@@ -145,7 +145,7 @@ Do NOT limit skills to only the literal keywords mentioned in the job descriptio
   1. Add or remove an item within the category from verified tools/skills.
   2. Use item-wording latitude where natural (e.g., "Salesforce Administration" → "Salesforce", "Microsoft Office Suite" → "Word, Excel, PowerPoint").
   3. Shorten or lengthen the category label itself (e.g., "CRM Strategy & Operations" → "CRM & Operations").
-- Every category must list at least 2-3 items. Never produce a 1-item stub category.
+- Every category must list at least 2 items (target 4 to 7 items for visual density). Never produce a 1-item stub category.
 - Never invent a tool or platform that isn't in `verified_tools.json` or `profile.yml`.
 
 #### Formatting & Ordering
@@ -337,7 +337,7 @@ Example:
 ```json
   [
     "**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns, Lead Scoring, Customer Retention",
-    "**CRM & Revenue Operations:** Salesforce Administration, HubSpot, Pipeline Hygiene, Workflow Automation, Territory Analytics",
+    "**CRM & Revenue Operations:** Salesforce Administration, Lead Routing, Pipeline Hygiene, Workflow Automation, Territory Analytics",
     "**Content & Strategy:** Sales Enablement, Playbook Development, Messaging Frameworks, Cross-Functional Alignment"
   ]
   ```
