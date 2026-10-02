@@ -131,11 +131,11 @@ Analyze the target company's business stage (from JD and COMPANY RESEARCH) and s
 Do NOT limit skills to only the literal keywords mentioned in the job description. Construct each category using these three tiers:
 
 1. TIER 1 — Exact JD Requirements:
-   - Include every tool, platform, methodology, and competency named in the JD that exists in the candidate's verified knowledge base (`verified_tools.json`, `profile.yml`, or `cv.md`).
+   - Include every tool, platform, methodology, and competency named in the JD that exists in the candidate's verified knowledge base (`verified_tools.json` or `profile.yml`).
 2. TIER 2 — Thematic Companion Skills (Inferred Practitioner Depth):
    - For every primary tool or function required by the JD, pull in the candidate's verified companion tools and frameworks that demonstrate practitioner depth.
-   - Example (CRM / RevOps): If the JD asks for "HubSpot", do not just write "HubSpot". Infer and include verified companion capabilities: Lifecycle Marketing, Lead Scoring, Pipeline Architecture, Workflow Automation, CRM Hygiene.
-   - Example (Content / Enablement): If the JD asks for "Sales Enablement", pull in verified competencies: Playbook Development, Call Coaching, Competitor Battlecards, Rep Onboarding.
+   - Example (CRM / RevOps): If the JD asks for a specific CRM or automation platform, do not just name the tool. Infer and include verified companion capabilities: Lifecycle Marketing, Lead Scoring, Pipeline Architecture, Workflow Automation, CRM Hygiene.
+   - Example (Content / Enablement): If the JD asks for Sales Enablement, pull in verified competencies: Playbook Development, Call Coaching, Competitor Battlecards, Rep Onboarding.
 3. TIER 3 — Role Archetype Foundations:
    - Round out categories with verified core competencies that anchor the candidate's senior profile (e.g., A/B Testing & Optimization, Cross-Functional Alignment, Data Storytelling).
 
@@ -145,7 +145,7 @@ Do NOT limit skills to only the literal keywords mentioned in the job descriptio
   1. Add or remove an item within the category from verified tools/skills.
   2. Use item-wording latitude where natural (e.g., "Salesforce Administration" → "Salesforce", "Microsoft Office Suite" → "Word, Excel, PowerPoint").
   3. Shorten or lengthen the category label itself (e.g., "CRM Strategy & Operations" → "CRM & Operations").
-- Every category must list at least 3 items. Never produce a 1-item stub category.
+- Every category must list at least 2-3 items. Never produce a 1-item stub category.
 - Never invent a tool or platform that isn't in `verified_tools.json` or `profile.yml`.
 
 #### Formatting & Ordering
