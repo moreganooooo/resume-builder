@@ -54,6 +54,7 @@ class TestFindAndClear(unittest.TestCase):
             ("JDS_DIR", self.jds_dir),
             ("COMPLETED_DIR", os.path.join(self.jds_dir, "completed")),
             ("ARCHIVED_DIR", os.path.join(self.jds_dir, "archived")),
+            ("EXPIRED_DIR", os.path.join(self.jds_dir, "expired")),
             ("TRACKER_CSV", os.path.join(self.jds_dir, "jd_tracker_log.csv")),
         ):
             patcher = patch.object(jd_manager, attr, value)

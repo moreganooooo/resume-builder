@@ -225,6 +225,12 @@ CRITIQUE_SLEEP = 0 if _IS_TEST_OR_CI else 4
 REWRITE_SLEEP = 0 if _IS_TEST_OR_CI else 4
 RESCORE_SLEEP = 0 if _IS_TEST_OR_CI else 8
 RECOMMENDATION_SLEEP = 0 if _IS_TEST_OR_CI else 8
+# Attempts per critique recommendation, not per build. A recommendation whose
+# first edit introduced a validator violation used to be discarded outright --
+# one try, no feedback, the suggestion lost. The retries are told exactly what
+# they broke, and each restarts from the PRE-EDIT resume, so a bad attempt
+# cannot compound. Only a failing recommendation ever costs more than one call.
+RECOMMENDATION_MAX_ATTEMPTS = 3
 PRE_BUILDER_SLEEP = 0 if _IS_TEST_OR_CI else 15
 # (longer because rescore fires immediately after rewrite)
 
@@ -961,7 +967,7 @@ def relevant_skill_names(names, jd_text: str) -> list:
     return sorted(matched, key=str.lower)
 
 
-# Semantic half of the (disabled, see SKILLS_CONTEXT_FILTER_ENABLED) filter.
+# Semantic half of the skills filter (ON -- see SKILLS_CONTEXT_FILTER_ENABLED).
 # Measured 2026-09-13 on a 1,387-name ledger: two UNRELATED skill names score
 # above 0.806 only 1% of the time, while a skill's nearest other skill has a
 # median of 0.887 -- so 0.82 admits near-synonyms ("CRM platform" ->
@@ -1552,6 +1558,31 @@ Return ONLY the rewritten bullet text with no quotes, commentary, or markdown.""
         return bullet
 
 
+def _carry_build_metadata(previous: dict, candidate: dict) -> dict:
+    """Copies underscore-prefixed build metadata forward onto a model's
+    rewrite of the resume. Returns `candidate`, mutated.
+
+    `normalize_resume.normalize()` builds its result from the MODEL's
+    response, and the model is never sent (or asked for) keys like
+    `_critique` -- they are ours, not the document's. So every step that
+    replaces resume_data with a rewrite silently dropped them. Measured
+    2026-09-30 across a profile's saved resumes: `_critique` survived in
+    exactly the builds where ZERO critique recommendations were applied,
+    and the Step 7 trim loop dropped it again on the post-render re-save.
+    The resumes whose scores are most worth reading -- the ones that were
+    actually edited -- were precisely the ones that lost them.
+
+    Same convention as the JD JSON's `_evaluation`/`_liveness`/`_favorite`
+    keys: underscore-prefixed means "persisted metadata about this
+    document", never document content. An existing key on the candidate
+    always wins, so a step that deliberately sets one is never overwritten
+    by the stale value it replaced."""
+    for key, value in (previous or {}).items():
+        if str(key).startswith("_") and key not in candidate:
+            candidate[key] = value
+    return candidate
+
+
 def _micro_refactor_skills_line(line: str, style_rules: dict) -> str:
     """Uses a lightweight LLM call to rewrite a single skills line out of the dead band."""
     skills_section = style_rules.get("skills_section", {})
@@ -1616,14 +1647,11 @@ def _situational_gate_text(jd_text: str) -> str:
 _SKILLS_LINE_LABEL = re.compile(r"^\s*\*\*(?P<label>[^*]+?):\*\*\s*(?P<items>.*)$")
 
 
-def _parse_cv_skill_groups(cv_text: str) -> dict:
-    """Maps each skill in cv.md's "## Core Skills" block to its own category
-    label, casefolded -> label. That grouping is the only trustworthy source
-    for WHERE a skill belongs: verified_tools.json's `category` is None for
-    the large majority of entries (58 of 71 on the profile this was built
-    for), so routing on it would silently place almost everything nowhere --
-    or, worse, anywhere."""
-    groups: dict[str, str] = {}
+def _iter_cv_skill_items(cv_text: str):
+    """Walks cv.md's "## Core Skills" block, yielding (label, skill) in the
+    order they appear. Both callers below derive from this one traversal, so
+    a fix to the parsing can never reach the label map without also reaching
+    the member lists."""
     in_block = False
     parent = None
     for raw in (cv_text or "").splitlines():
@@ -1658,8 +1686,36 @@ def _parse_cv_skill_groups(cv_text: str) -> dict:
             # they are RENDERED on a skills line ("AWS Glue").
             item = re.sub(r"\s+", " ", item).strip()
             if item:
-                groups.setdefault(item.casefold(), label)
+                yield label, item
+
+
+def _parse_cv_skill_groups(cv_text: str) -> dict:
+    """Maps each skill in cv.md's "## Core Skills" block to its own category
+    label, casefolded -> label. That grouping is the only trustworthy source
+    for WHERE a skill belongs: verified_tools.json's `category` is None for
+    the large majority of entries (58 of 71 on the profile this was built
+    for), so routing on it would silently place almost everything nowhere --
+    or, worse, anywhere."""
+    groups: dict[str, str] = {}
+    for label, item in _iter_cv_skill_items(cv_text):
+        groups.setdefault(item.casefold(), label)
     return groups
+
+
+def _parse_cv_skill_members(cv_text: str) -> dict:
+    """The same grouping read the other way: label -> the skills filed under
+    it, in cv.md's own order and original casing. `_parse_cv_skill_groups`
+    answers "where does this skill belong"; this answers "what else belongs
+    here", which is what filling a thin category needs."""
+    members: dict[str, list] = {}
+    seen: set = set()
+    for label, item in _iter_cv_skill_items(cv_text):
+        key = (label, item.casefold())
+        if key in seen:
+            continue
+        seen.add(key)
+        members.setdefault(label, []).append(item)
+    return members
 
 
 def _skill_tokens(text: str) -> set:
@@ -2175,6 +2231,128 @@ def _top_up_verified_skills(
     return result, added
 
 
+MIN_SKILLS_PER_CATEGORY = 2
+
+
+def _cv_candidates_for_row(
+    members: dict, groups: dict, label: str, items: list
+) -> list:
+    """The cv.md group this SKILLS row is drawn from, as a list of members.
+
+    Resolved from the row's OWN items first, the way _skill_home_rows does:
+    the model routinely renames a row ("Productivity" for cv.md's longer
+    label), so its contents identify the group more reliably than its
+    heading. Falls back to label-token overlap, and returns nothing on a
+    tie -- filling a category from the wrong group is worse than leaving it
+    thin, same reasoning as _top_up_verified_skills skipping a skill with
+    two plausible homes."""
+    # The most common home among the row's items, not the first one: a single
+    # misplaced skill must not redirect the whole row. Ties are unresolved,
+    # and fall through to the label.
+    homes = collections.Counter(
+        groups[i.casefold()] for i in items if i.casefold() in groups
+    ).most_common(2)
+    if len(homes) == 1 or (len(homes) == 2 and homes[0][1] > homes[1][1]):
+        return list(members.get(homes[0][0], []))
+    wanted = _label_tokens(label)
+    if not wanted:
+        return []
+    best, best_overlap, tied = None, 0, False
+    for cv_label in members:
+        overlap = len(wanted & _label_tokens(cv_label))
+        if overlap > best_overlap:
+            best, best_overlap, tied = cv_label, overlap, False
+        elif overlap == best_overlap and overlap:
+            tied = True
+    if tied or not best:
+        return []
+    return list(members.get(best, []))
+
+
+def _fill_thin_skill_categories(
+    resume_data: dict,
+    style_rules: dict,
+    cv_text: str,
+    jd_keywords: dict | None = None,
+) -> tuple:
+    """Brings every SKILLS category up to MIN_SKILLS_PER_CATEGORY items.
+
+    Returns (new_resume_data, added_names); never mutates its input.
+
+    A one-item category reads as a stub rather than a category -- a real
+    2026-09-30 build shipped "Productivity: Microsoft Office Suite" beside
+    rows of six and eight. It is a presentation defect, not a content one:
+    that same profile's cv.md files ELEVEN skills under Productivity, so
+    the page was thin where the evidence was not.
+
+    Deterministic and LLM-free, drawing only from the cv.md group the row
+    is already made of -- there is nothing here to invent, which is what
+    makes this safe where _micro_refactor_skills_line's old "add 1-2
+    relevant skills" prompt was not. Additions are JD-matched first, so a
+    row that must grow anyway grows toward ATS coverage rather than toward
+    whatever cv.md happens to list next.
+
+    Skips rather than guesses, in every direction: a row whose group cannot
+    be identified unambiguously, a group with nothing left to give, and an
+    addition that would break the line geometry are all left alone. A lone
+    item is a cosmetic flaw; a wrong or illegally-wrapped line is a wrong
+    resume."""
+    lines = list(resume_data.get("SKILLS") or [])
+    if not lines:
+        return resume_data, []
+    members = _parse_cv_skill_members(cv_text)
+    if not members:
+        return resume_data, []
+    groups = _parse_cv_skill_groups(cv_text)
+
+    skills_section = (style_rules or {}).get("skills_section", {})
+    max_chars = skills_section.get("line_max_chars", 110)
+    wrap_min = max_chars + skills_section.get("widow_min_chars", 25)
+
+    jd_blob = " ".join(
+        str(k)
+        for key in ("tools", "hard_skills", "core_functions")
+        for k in (jd_keywords or {}).get(key, [])
+    ).casefold()
+    on_page = {item.casefold() for line in lines for item in _skill_line_items(line)[1]}
+
+    added = []
+    for index, line in enumerate(lines):
+        label, items = _skill_line_items(line)
+        if label is None or len(items) >= MIN_SKILLS_PER_CATEGORY:
+            continue
+        candidates = [
+            (position, name)
+            for position, name in enumerate(
+                _cv_candidates_for_row(members, groups, label, items)
+            )
+            if name.casefold() not in on_page
+        ]
+        # JD-matched first, then cv.md's own order -- the same
+        # coverage-before-convenience priority rank_tools_for_prompt applies
+        # everywhere else a list has to be chosen rather than sent whole.
+        candidates.sort(key=lambda c: (c[1].casefold() not in jd_blob, c[0]))
+        for _, name in candidates:
+            if len(items) >= MIN_SKILLS_PER_CATEGORY:
+                break
+            trial = list(lines)
+            trial[index] = _compose_skills_line(label, items + [name])
+            if not _skills_line_legal(trial[index], max_chars, wrap_min):
+                continue
+            if _skills_add_hallucinated_tool(lines, trial):
+                continue
+            lines = trial
+            items = items + [name]
+            on_page.add(name.casefold())
+            added.append(name)
+
+    if not added:
+        return resume_data, []
+    result = dict(resume_data)
+    result["SKILLS"] = lines
+    return result, added
+
+
 def _micro_dedupe_metric(
     text: str, number: str, other_metrics: list[str], field_label: str
 ) -> str:
@@ -2453,6 +2631,11 @@ def partition_violations(violations: list[str]) -> tuple[list[str], list[str]]:
             or v.startswith("Prose rhythm")
             or v.startswith("Date anchor")
             or v.startswith("Advisory word")
+            # A thin category is a layout flaw with a deterministic repair
+            # downstream (_fill_thin_skill_categories); it gets a fix attempt,
+            # it never fails a build.
+            or v.startswith("Skills category")
+            or v.startswith("Skills line has word(s) not in Title Case")
         ):
             soft.append(v)
         else:
@@ -2922,6 +3105,116 @@ def _repair_pronouns(current_data: dict, violations) -> tuple:
     return current_data, pronoun_modified
 
 
+def _repair_skills_title_case(current_data: dict, violations) -> tuple:
+    """Deterministic repair: fix capitalized minor words ('And' -> 'and')
+    and uncapitalized slash-separated parts ('Software/service' ->
+    'Software/Service') in SKILLS lines."""
+    modified = False
+    tc_violations = [
+        v for v in violations if v.startswith("Skills line has word(s) not in Title Case")
+    ]
+    if not tc_violations:
+        return current_data, False
+    for idx, line in enumerate(current_data.get("SKILLS", [])):
+        match = re.match(r"^\*\*(.+?):\*\*\s*(.*)$", line)
+        if not match:
+            continue
+        new_line = line
+        for word in line.split():
+            fixed_parts = []
+            raw_parts = re.split(r"([-/])", word)
+            any_fix = False
+            for pi, part in enumerate(raw_parts):
+                if part in ("-", "/"):
+                    fixed_parts.append(part)
+                    continue
+                core = part.strip("(),.")
+                if not core or not core[0].isalpha():
+                    fixed_parts.append(part)
+                    continue
+                is_minor = core.lower() in validate_resume._TITLE_CASE_MINOR_WORDS
+                if is_minor and core[0].isupper() and word != line.split()[0]:
+                    fixed = part[0].lower() + part[1:]
+                    fixed_parts.append(fixed)
+                    any_fix = True
+                elif not is_minor and not core[0].isupper():
+                    fixed = part[0].upper() + part[1:]
+                    fixed_parts.append(fixed)
+                    any_fix = True
+                else:
+                    fixed_parts.append(part)
+            if any_fix:
+                fixed_word = "".join(fixed_parts)
+                new_line = new_line.replace(word, fixed_word, 1)
+                modified = True
+        if new_line != line:
+            current_data["SKILLS"][idx] = new_line
+    return current_data, modified
+
+
+def _repair_near_duplicate_bullets(
+    current_data: dict, violations, bullet_tuples
+) -> tuple:
+    """Replace one bullet in a near-duplicate pair with an unused bank bullet
+    for the same company."""
+    dup_violations = [v for v in violations if v.startswith("Near-duplicate bullets")]
+    if not dup_violations or not bullet_tuples:
+        return current_data, False
+
+    used_bullets = set()
+    for entry in current_data.get("EXPERIENCE", []):
+        for b in entry.get("achievements", []):
+            used_bullets.add(b.strip().lstrip("- ").rstrip("."))
+    for entry in current_data.get("EDUCATION", []):
+        for b in entry.get("bullets", []):
+            used_bullets.add(b.strip().lstrip("- ").rstrip("."))
+
+    bank_by_company: dict[str, list[str]] = {}
+    for b, c, _t in bullet_tuples:
+        clean = b.strip().lstrip("- ").rstrip(".")
+        bank_by_company.setdefault(validate_resume._normalize_company(c), []).append(clean)
+
+    modified = False
+    for v in dup_violations:
+        match = re.search(r"vs (.+?) \(([^)]+)\)$", v)
+        if not match:
+            continue
+        dup_text_repr = match.group(1)
+        dup_company = match.group(2)
+        try:
+            dup_text = ast.literal_eval(dup_text_repr)
+        except (ValueError, SyntaxError):
+            continue
+
+        key = validate_resume._normalize_company(dup_company)
+        candidates = bank_by_company.get(key, [])
+        replacement = None
+        for cand in candidates:
+            if cand not in used_bullets:
+                replacement = cand
+                break
+        if not replacement:
+            continue
+
+        for container_key, list_key in (
+            ("EXPERIENCE", "achievements"),
+            ("EDUCATION", "bullets"),
+        ):
+            for entry in current_data.get(container_key, []):
+                texts = entry.get(list_key, [])
+                for idx, bullet in enumerate(texts):
+                    clean = bullet.strip().lstrip("- ").rstrip(".")
+                    if clean == dup_text:
+                        texts[idx] = replacement
+                        used_bullets.add(replacement)
+                        modified = True
+                        break
+                else:
+                    continue
+                break
+    return current_data, modified
+
+
 def _repair_metric_provenance(current_data: dict, violations, bullet_tuples) -> tuple:
     """Surgical repair step; returns (resume_data, modified)."""
     # 10. Targeted Metric Provenance Repair
@@ -3017,7 +3310,13 @@ def repair_violations_surgically(
         current_data, violations, bullet_tuples, role_bullet_maximums
     )
     current_data, pronoun_modified = _repair_pronouns(current_data, violations)
+    current_data, title_case_modified = _repair_skills_title_case(
+        current_data, violations
+    )
     current_data, metric_provenance_modified = _repair_metric_provenance(
+        current_data, violations, bullet_tuples
+    )
+    current_data, near_dup_modified = _repair_near_duplicate_bullets(
         current_data, violations, bullet_tuples
     )
 
@@ -3036,7 +3335,9 @@ def repair_violations_surgically(
         or density_modified
         or bullet_count_modified
         or pronoun_modified
+        or title_case_modified
         or metric_provenance_modified
+        or near_dup_modified
     ):
         final_violations = validate_resume.validate(
             current_data,
@@ -3256,6 +3557,29 @@ def compute_skill_coverage_matrix(skill_names: list) -> list:
         except Exception:
             continue
         return _rank_skill_coverage(skill_names, skill_vecs, embs)
+
+    # Third fallback: NIM embedding when both Gemini models are down.
+    try:
+        import nim_fallback
+        from embed_bullet_bank import NIM_EMBED_MODEL, nim_index_for
+
+        nim_npy = index_paths(kb_dir, NIM_EMBED_MODEL)[0]
+        if os.path.exists(nim_npy):
+            embs = np.load(nim_npy)
+            if embs.ndim == 2:
+                skill_vecs = []
+                for i in range(0, len(skill_names), BATCH_SIZE):
+                    batch = skill_names[i : i + BATCH_SIZE]
+                    vecs = nim_fallback.embed_batch_nim(
+                        batch, input_type="query", max_retries=2
+                    )
+                    if vecs is None:
+                        raise RuntimeError("NIM embed failed")
+                    skill_vecs.extend(vecs)
+                if not any(v and len(v) != embs.shape[1] for v in skill_vecs):
+                    return _rank_skill_coverage(skill_names, skill_vecs, embs)
+    except Exception:
+        pass
     return []
 
 
@@ -4002,13 +4326,11 @@ def fit_composite_score(
 # anything (see docs/hard_blockers.md). These surface only as an opt-in
 # view filter (model.JobRow.IsExperienceBlocked) instead.
 #
-# field_domain (required industry/functional background) is deliberately
-# NOT in this tuple yet -- it's a new category (see evaluate_recruiter.md)
-# carved out of the catch-all `other` bucket specifically so it can be
-# measured (scripts/eval_hard_blocker.py) before it gets the same
-# stop-auto-zeroing treatment. Until it clears its own holdout bar it
-# stays in the unconditional zero-out path below, same as `other`.
-EXPERIENCE_BLOCKER_CATEGORIES = ("years_experience", "degree")
+# field_domain (required industry/functional background) added to soften
+# industry-specific experience requirements. Other category blockers with
+# experience-related text (years, managerial, supervisory) are also treated
+# as soft blockers via _split_blockers logic.
+EXPERIENCE_BLOCKER_CATEGORIES = ("years_experience", "degree", "field_domain")
 
 
 def _blocker_text(blocker) -> str:
@@ -4281,37 +4603,37 @@ def _apply_work_constraints(
 def _split_blockers(blockers: list) -> tuple[list, list]:
     """Splits into (experience_blockers, disqualifying_blockers).
 
-    years_experience/degree blockers never force a Skip/zero -- see
-    EXPERIENCE_BLOCKER_CATEGORIES above. Every other category keeps the
-    original unconditional behavior.
-
-    A years_experience entry tagged direction="over_qualified" is a real
-    recruiting concern (see docs/hard_blockers.md's
-    overqualification-conflation finding) but not what that list is meant
-    to represent -- only a candidate falling BELOW a stated floor is a
-    blocker. Excluded here rather than in the prompt: telling the model
-    not to notice overqualification collided with an instinct it clearly
-    has, so the signal is allowed to surface and is filtered out
-    downstream instead. degree/other categories carry no direction concept
-    and are never affected by this filter.
+    years_experience/degree/field_domain blockers never force a Skip/zero -- see
+    EXPERIENCE_BLOCKER_CATEGORIES above. Additionally, 'other' category blockers
+    with experience-related text (years, managerial, supervisory, leadership)
+    are also treated as soft blockers. Every other category keeps the
+    original unconditional behavior. All these entries (including
+    over_qualified) are treated as soft blockers that don't zero the score,
+    allowing them to surface as filter-only signals in the dashboard.
     """
-    experience_blockers = [
-        b
-        for b in blockers
-        if isinstance(b, dict)
-        and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
-        and not (
-            b.get("category") == "years_experience"
-            and b.get("direction") == "over_qualified"
-        )
-    ]
-    disqualifying_blockers = [
-        b
-        for b in blockers
-        if not (
-            isinstance(b, dict) and b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES
-        )
-    ]
+    experience_keywords = {
+        "year",
+        "years",
+        "experience",
+        "managerial",
+        "supervisory",
+        "leadership",
+    }
+
+    def _is_experience_blocker(b):
+        if not isinstance(b, dict):
+            return False
+        if b.get("category") in EXPERIENCE_BLOCKER_CATEGORIES:
+            return True
+        # Check if 'other' category has experience-related text
+        if b.get("category") == "other":
+            text = (b.get("text") or "").lower()
+            return any(kw in text for kw in experience_keywords)
+        return False
+
+    experience_blockers = [b for b in blockers if _is_experience_blocker(b)]
+    disqualifying_blockers = [b for b in blockers if not _is_experience_blocker(b)]
+
     return experience_blockers, disqualifying_blockers
 
 
@@ -5566,7 +5888,109 @@ class ResumeEngine:
 
         return "\n\n".join(sections)
 
-    def build_audit_static_prefix_gemma(self) -> str:
+    # Everything else a Gemma rewrite call carries, measured 2026-09-29 on
+    # a real build rather than estimated. The tools section gets whatever
+    # is left, so these are what the ceiling is DERIVED from -- a fixed
+    # tools cap guessed against an imagined segment is exactly how this
+    # broke the first time (the segment is ~15k chars, not the ~2k a first
+    # pass assumed).
+    GEMMA_SYSTEM_PROMPT_RESERVE_CHARS = 16_000  # Gemma rewrite system prompt
+    GEMMA_SEGMENT_RESERVE_CHARS = 16_000  # worst per-bullet segment bundle
+    GEMMA_PREFIX_OTHER_RESERVE_CHARS = 2_000  # verified facts + voice anchors
+
+    # Slack held back from the budget. The reserves above are measurements
+    # of today's content, and content grows -- this is what turns "grew
+    # past the cap" from a silent wall of 429s into a slightly smaller
+    # tools list.
+    GEMMA_BUDGET_MARGIN_TOKENS = 1_500
+
+    @classmethod
+    def gemma_tools_budget_chars(cls) -> int:
+        """Chars the tools section may occupy in Gemma's slim static prefix.
+
+        DERIVED from gemini_client's own budget math rather than hardcoded,
+        so a change to GEMMA_TPM_LIMIT or CHARS_PER_TOKEN propagates here
+        instead of silently invalidating a constant. Everything else in the
+        call is reserved first; tools take the remainder.
+        """
+        import rewrite_bullets
+
+        budget = gemini_client.gemma_prompt_budget(
+            rewrite_bullets.REWRITE_MAX_OUTPUT_TOKENS
+        )
+        reserved = (
+            gemini_client.estimate_tokens("x" * cls.GEMMA_SYSTEM_PROMPT_RESERVE_CHARS)
+            + gemini_client.estimate_tokens("x" * cls.GEMMA_SEGMENT_RESERVE_CHARS)
+            + gemini_client.estimate_tokens("x" * cls.GEMMA_PREFIX_OTHER_RESERVE_CHARS)
+            + cls.GEMMA_BUDGET_MARGIN_TOKENS
+        )
+        return max(int((budget - reserved) * gemini_client.CHARS_PER_TOKEN), 0)
+
+    def _bank_attested_tool_names(self, tools: list) -> set:
+        """Ledger names the bullet bank actually mentions.
+
+        The ledger cannot say where a tool was used, but the bank can --
+        see rewrite_bullets.build_tool_employer_index(). Returns an empty
+        set if the bank cannot be read, which callers treat as "could not
+        confirm anything" rather than "nothing is attested": ranking then
+        falls back to JD relevance alone, which is still far better than
+        the ledger's arbitrary file order.
+        """
+        cached = getattr(self, "_attested_names_cache", None)
+        if cached is not None:
+            return cached
+        try:
+            import pandas as pd
+
+            import rewrite_bullets
+
+            bank = pd.read_csv(rewrite_bullets.KB_AUDITED_BANK, dtype=str).fillna("")
+            names = [t.get("name") for t in tools if isinstance(t, dict)]
+            result = set(
+                rewrite_bullets.build_tool_employer_index(
+                    names, zip(bank["Bullet Point"], bank["Role / Company"])
+                )
+            )
+        except Exception as exc:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Could not read the bullet bank to rank "
+                f"verified tools ({exc}).",
+                soft_wrap=True,
+            )
+            result = set()
+        self._attested_names_cache = result
+        return result
+
+    def _gemma_tool_subset(self, tools: list, jd_text: str = "") -> list:
+        """The GLOBAL verified-tool subset Gemma's slim static prefix carries.
+
+        Ranking and its rationale live in
+        rewrite_bullets.rank_tools_for_prompt(), shared by every tier that
+        sends tools so the tiers cannot disagree about what matters. This
+        tier is deliberately NOT employer-scoped: it is the candidate's
+        whole ledger, narrowed to what this posting makes relevant, which
+        is what carries ATS keyword coverage. Employer scoping happens in
+        the per-bullet segment instead (see
+        _build_audit_segment_bundle_gemma), where claiming another
+        employer's tool would be cross-company contamination.
+        """
+        cache_key = hash(jd_text or "")
+        cached = getattr(self, "_gemma_tools_cache", None)
+        if cached is not None and cached[0] == cache_key:
+            return cached[1]
+
+        import rewrite_bullets
+
+        selected = rewrite_bullets.rank_tools_for_prompt(
+            tools,
+            jd_text=jd_text,
+            attested_names=self._bank_attested_tool_names(tools),
+            max_chars=self.gemma_tools_budget_chars(),
+        )
+        self._gemma_tools_cache = (cache_key, selected)
+        return selected
+
+    def build_audit_static_prefix_gemma(self, jd_text: str = "") -> str:
         """Slim static tier for Gemma only -- mirrors rewrite_bullets.py's
         KnowledgeBase._build_gemma_static_prefix() exactly (2026-07-16).
         Keeps only guardrails (verified_facts, verified_tools) and
@@ -5596,8 +6020,15 @@ class ResumeEngine:
                         loaded = json.load(f)
                     # Names only -- the whole entries cost ~77k tokens a
                     # call on a large ledger; see compact_tools_text().
+                    # Gemma additionally narrows the names -- to the ones
+                    # this POSTING asks for plus the ones the bullet bank
+                    # attests -- which is what keeps this tier inside the
+                    # 16k TPM cap without dropping the JD's own keywords.
+                    # See _gemma_tool_subset().
                     data = (
-                        compact_tools_text(loaded.get("tools", []))
+                        compact_tools_text(
+                            self._gemma_tool_subset(loaded.get("tools", []), jd_text)
+                        )
                         if fname == "verified_tools.json"
                         else json.dumps(
                             loaded, ensure_ascii=False, separators=(",", ":")
@@ -5814,7 +6245,9 @@ class ResumeEngine:
 
         return "\n\n".join(sections)
 
-    def _build_audit_segment_bundle_gemma(self, company: str, tags: str) -> str:
+    def _build_audit_segment_bundle_gemma(
+        self, company: str, tags: str, jd_text: str = ""
+    ) -> str:
         """Slim segment bundle for Gemma only -- mirrors rewrite_bullets.py's
         KnowledgeBase._build_gemma_segment_bundle() (2026-07-16). cv excerpt
         and background summary are unchanged (already small); claims and,
@@ -5853,6 +6286,47 @@ class ResumeEngine:
         bg_summary = build_background_summary(tags)
         if bg_summary:
             sections.append(f"=== BACKGROUND CONTEXT ===\n{bg_summary}")
+
+        # Employer-scoped tools, ordered by what THIS posting asks for.
+        #
+        # Scoping is a truthfulness rule, not a size one: this section's
+        # header promises the list is what the bullet's own employer can
+        # claim, and pulling in another employer's tool is the same
+        # cross-company contamination foreign_numbers() exists to catch.
+        # So the JD never ADDS to this list -- it only decides which of the
+        # employer's own tools survive MAX_GEMMA_FILTER_ROWS, which
+        # previously kept whichever five came first in the file. ATS
+        # coverage for tools from other employers is carried by the global
+        # static prefix instead (see _gemma_tool_subset).
+        try:
+            import rewrite_bullets
+
+            tools_path = os.path.join(self.kb_dir, "verified_tools.json")
+            if os.path.exists(tools_path):
+                with open(tools_path, "r", encoding="utf-8") as f:
+                    all_tools = json.load(f).get("tools", [])
+                employer_tools = rewrite_bullets.filter_projects_by_employer(
+                    all_tools, company
+                )
+                ranked = rewrite_bullets.rank_tools_for_prompt(
+                    employer_tools,
+                    jd_text=jd_text,
+                    attested_names=self._bank_attested_tool_names(all_tools),
+                    max_rows=MAX_GEMMA_FILTER_ROWS,
+                )
+                if ranked:
+                    sections.append(
+                        f"=== VERIFIED TOOLS ({company} only, HF002 guard) ===\n"
+                        "Never claim proficiency with any tool not present in "
+                        "this list.\n"
+                        + json.dumps(ranked, ensure_ascii=False, separators=(",", ":"))
+                    )
+        except Exception as e:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} _build_audit_segment_bundle_gemma: "
+                f"could not load verified_tools.json: {e}",
+                soft_wrap=True,
+            )
 
         if is_deep_evidence_bullet(company, self.deep_evidence_keywords):
             projects_path = os.path.join(self.kb_dir, "verified_projects.json")
@@ -5971,18 +6445,27 @@ class ResumeEngine:
             )
         return cast("str", self._segment_cache[key])
 
-    def audit_segment_bundle_for_gemma(self, company: str, tags: str) -> str:
+    def audit_segment_bundle_for_gemma(
+        self, company: str, tags: str, jd_text: str = ""
+    ) -> str:
         """Memoized accessor for _build_audit_segment_bundle_gemma (Tier 2,
         Gemma-slim) -- mirrors rewrite_bullets.py's
-        context_block_for_bullet_gemma()."""
+        context_block_for_bullet_gemma().
+
+        jd_text is part of the cache KEY, not just an argument: the bundle
+        now orders the employer's tools by what the posting asks for, so
+        two postings legitimately produce different bundles for the same
+        (company, tags) pair. Keying on company alone would serve the
+        first posting's ordering to every later one in the same process.
+        """
         normalized_tags = self._normalize_tags(tags)
-        key = (company, normalized_tags)
+        key = (company, normalized_tags, hash(jd_text or ""))
         if key not in self._gemma_segment_cache:
             cli_art.detail(
-                f"   {theme.colorize_icon('warning')} Gemma cache miss for {key} — building segment on demand."
+                f"   {theme.colorize_icon('warning')} Gemma cache miss for {key[:2]} — building segment on demand."
             )
             self._gemma_segment_cache[key] = self._build_audit_segment_bundle_gemma(
-                company, normalized_tags
+                company, normalized_tags, jd_text
             )
         return cast("str", self._gemma_segment_cache[key])
 
@@ -5994,7 +6477,9 @@ class ResumeEngine:
         tag_list = re.findall(r"\[([^\]]+)\]", tags_str)
         return "".join(f"[{tag}]" for tag in sorted(tag_list))
 
-    def warm_segment_cache(self, bullet_tuples: List[Tuple[str, str, str]]) -> None:
+    def warm_segment_cache(
+        self, bullet_tuples: List[Tuple[str, str, str]], jd_text: str = ""
+    ) -> None:
         """
         Mirrors rewrite_bullets.py's KnowledgeBase.warm_segment_cache(): pre-builds
         every unique (company, tags) segment bundle before the audit loop starts,
@@ -6016,8 +6501,16 @@ class ResumeEngine:
         for company, tags in pairs:
             bundle = self._build_audit_segment_bundle(company, tags)
             self._segment_cache[(company, tags)] = bundle
-            gemma_bundle = self._build_audit_segment_bundle_gemma(company, tags)
-            self._gemma_segment_cache[(company, tags)] = gemma_bundle
+            gemma_bundle = self._build_audit_segment_bundle_gemma(
+                company, tags, jd_text
+            )
+            # Key must match audit_segment_bundle_for_gemma's, which
+            # includes the JD -- otherwise every warmed entry misses and
+            # each bundle is rebuilt on demand mid-loop, the one thing
+            # this method exists to prevent.
+            self._gemma_segment_cache[(company, tags, hash(jd_text or ""))] = (
+                gemma_bundle
+            )
             deep_evidence_flag = (
                 " [+claims]"
                 if is_deep_evidence_bullet(company, self.deep_evidence_keywords)
@@ -6281,6 +6774,7 @@ class ResumeEngine:
         on_bullet_complete=None,
         vocabulary_substitutions: list | None = None,
         order_out: list | None = None,
+        jd_text: str = "",
     ) -> List[str]:
         """
         Skeptical Editor audit loop.
@@ -6324,7 +6818,7 @@ class ResumeEngine:
         # to build (2 small JSON files + voice-anchors.md), so it's built
         # here rather than threaded through as another caller-supplied
         # parameter the way static_prefix is.
-        static_prefix_gemma = self.build_audit_static_prefix_gemma()
+        static_prefix_gemma = self.build_audit_static_prefix_gemma(jd_text)
         cli_art.detail(
             f"{theme.colorize_icon('hint')} Gemma static prefix (slim): {len(static_prefix_gemma):,} chars — Gemma-only, flash-lite keeps the full tier",
             level=cli_art.NORMAL,
@@ -6360,7 +6854,7 @@ class ResumeEngine:
             level=cli_art.NORMAL,
         )
 
-        self.warm_segment_cache(bullet_tuples)
+        self.warm_segment_cache(bullet_tuples, jd_text)
 
         # Track critique data parallel to refined_bullets (same length, same
         # order, always appended -- including None entries) so no bullet can
@@ -6432,7 +6926,7 @@ class ResumeEngine:
 
                     segment_bundle = self.audit_segment_bundle_for(company, tags)
                     segment_bundle_gemma = self.audit_segment_bundle_for_gemma(
-                        company, tags
+                        company, tags, jd_text
                     )
                     if segment_bundle:
                         cli_art.detail(
@@ -6690,6 +7184,34 @@ class ResumeEngine:
                         )
         except Exception:
             pass
+        # Third fallback: NIM embedding
+        if result is None:
+            try:
+                import nim_fallback
+                from embed_bullet_bank import (
+                    NIM_EMBED_MODEL,
+                    index_paths,
+                    nim_index_for,
+                )
+
+                nim_idx = nim_index_for(self.kb_dir, current_sha, bank_len)
+                if nim_idx is not None:
+                    nim_vec = nim_fallback.embed_batch_nim(
+                        [jd_text[:8000]], input_type="query", max_retries=2
+                    )
+                    if (
+                        nim_vec
+                        and nim_idx.ndim == 2
+                        and len(nim_vec[0]) == nim_idx.shape[1]
+                    ):
+                        result = (nim_vec[0], nim_idx)
+                        cli_art.console.print(
+                            f"  {theme.colorize_icon('hint')} Both Gemini embeddings unavailable -- "
+                            f"matched against the NIM {NIM_EMBED_MODEL} backup index.",
+                            soft_wrap=True,
+                        )
+            except Exception:
+                pass
         return result
 
     def _mining_excluded_companies(self, df, extra_company_minimums) -> set:
@@ -7117,40 +7639,128 @@ class ResumeEngine:
             ),
         )
 
-        # 2. Stage 1 LLM Call: Capability Fit
+        # 2/3. Stage 1 + 2 LLM Calls: Capability Fit, then Recruiter Fit.
+        #
+        # Both run under one SustainedFailureError handler, because that
+        # exception is EXACTLY the condition the NIM fallback below exists
+        # for and it must not escape before that block gets a turn.
+        # GeminiClient.generate() returns (None, {}) on an exhausted call
+        # but RAISES on the second consecutive one
+        # (SUSTAINED_FAILURE_THRESHOLD = 2) -- and these are two
+        # back-to-back calls, so a real quota exhaustion raised out of
+        # evaluate_fit() on the recruiter call and skipped the fallback
+        # entirely. The fallback only ever ran when exactly ONE stage
+        # failed, which is the isolated blip it was least needed for:
+        # precisely inverted from "when Gemini quota is exhausted".
+        #
+        # A raise from the capability call deliberately skips the recruiter
+        # call rather than trying it anyway -- the quota is gone, and a
+        # second doomed request just costs time before NIM is asked.
         capability_prompt = self.load_prompt("evaluate_capability.md")
-        cap_text, _ = GeminiClient.generate(
-            model=EVAL_MODEL,
-            system_instruction=capability_prompt,
-            contents=fit_context,
-            response_schema=CapabilityEvaluationSchema,
-            temperature=0.0,
-            fallbacks=SCORING_FALLBACKS,
-        )
-        capability_data = GeminiClient.parse_json(cap_text or "") or {}
-
-        # 3. Stage 2 LLM Call: Recruiter & Legitimacy Fit
         recruiter_prompt = self.load_prompt("evaluate_recruiter.md")
-        rec_text, _ = GeminiClient.generate(
-            model=EVAL_MODEL,
-            system_instruction=recruiter_prompt,
-            contents=fit_context,
-            response_schema=RecruiterEvaluationSchema,
-            temperature=0.0,
-            fallbacks=SCORING_FALLBACKS,
-        )
-        recruiter_data = GeminiClient.parse_json(rec_text or "") or {}
+        capability_data = {}
+        recruiter_data = {}
+        sustained_failure = None
+        try:
+            cap_text, _ = GeminiClient.generate(
+                model=EVAL_MODEL,
+                system_instruction=capability_prompt,
+                contents=fit_context,
+                response_schema=CapabilityEvaluationSchema,
+                temperature=0.0,
+                fallbacks=SCORING_FALLBACKS,
+            )
+            capability_data = GeminiClient.parse_json(cap_text or "") or {}
+
+            rec_text, _ = GeminiClient.generate(
+                model=EVAL_MODEL,
+                system_instruction=recruiter_prompt,
+                contents=fit_context,
+                response_schema=RecruiterEvaluationSchema,
+                temperature=0.0,
+                fallbacks=SCORING_FALLBACKS,
+            )
+            recruiter_data = GeminiClient.parse_json(rec_text or "") or {}
+        except SustainedFailureError as exc:
+            sustained_failure = exc
 
         # Either stage coming back empty (a 503 streak that outlasted every
         # retry, usually) means there is nothing to score. Synthesizing from
         # {} anyway saved a hollow evaluation -- default subscores, a
         # made-up recommendation -- and the role left the backlog as if it
         # had been judged. Returning None keeps it pending for the next run.
+        #
+        # NIM fallback: when Gemini is exhausted and NVIDIA_API_KEY is set,
+        # retry the failed stage(s) through Nemotron Super → Ultra.
+        _nim_provenance = {}
         if not capability_data or not recruiter_data:
-            return None
+            import nim_fallback
+
+            # Every NIM call is guarded. This site, unlike the embedding
+            # ones, used to have no handler at all, so ANY failure here --
+            # a missing transport, a network error, a malformed response --
+            # propagated out of evaluate_fit() and aborted the whole batch
+            # as a traceback, throwing away every role already scored. A
+            # fallback that fails must degrade to "no evaluation for this
+            # role", which leaves it pending for the next run; it must
+            # never be able to end the run.
+            if nim_fallback.nim_available():
+                _log = logging.getLogger("resume_pipeline")
+                if not capability_data:
+                    try:
+                        cap_text_nim, cap_nim_model = nim_fallback.generate_with_nim(
+                            system_instruction=capability_prompt,
+                            contents=fit_context,
+                            response_schema=CapabilityEvaluationSchema,
+                        )
+                        capability_data = (
+                            GeminiClient.parse_json(cap_text_nim or "") or {}
+                        )
+                        if cap_nim_model:
+                            _nim_provenance["capability_model"] = cap_nim_model
+                    except Exception as exc:
+                        _log.warning(
+                            "NIM capability fallback failed for %s: %s", jd_path, exc
+                        )
+                if not recruiter_data:
+                    try:
+                        rec_text_nim, rec_nim_model = nim_fallback.generate_with_nim(
+                            system_instruction=recruiter_prompt,
+                            contents=fit_context,
+                            response_schema=RecruiterEvaluationSchema,
+                        )
+                        recruiter_data = (
+                            GeminiClient.parse_json(rec_text_nim or "") or {}
+                        )
+                        if rec_nim_model:
+                            _nim_provenance["recruiter_model"] = rec_nim_model
+                    except Exception as exc:
+                        _log.warning(
+                            "NIM recruiter fallback failed for %s: %s", jd_path, exc
+                        )
+
+                if _nim_provenance:
+                    _log.info(
+                        "NIM fallback succeeded for %s: %s", jd_path, _nim_provenance
+                    )
+
+            if not capability_data or not recruiter_data:
+                # NIM could not cover the gap. If Gemini's failure was the
+                # sustained kind, re-raise it now rather than returning
+                # None: batch_evaluate stops the run on this exception, and
+                # continuing to hammer an exhausted quota for every
+                # remaining role is pure waste. Returning None here would
+                # silently convert "quota gone, stop" into "this one role
+                # failed, carry on".
+                if sustained_failure is not None:
+                    raise sustained_failure
+                return None
 
         # 4. Synthesize Split Results into the unified FitEvaluationSchema format
         evaluation = _synthesize_evaluation(capability_data, recruiter_data)
+        if _nim_provenance:
+            evaluation["_eval_provider"] = "nim"
+            evaluation["_nim_models"] = _nim_provenance
 
         # Read once, used by the funnel-friction calibration below and by
         # the composite-score rescoring at the end of this function -- same
@@ -7459,12 +8069,14 @@ class ResumeEngine:
     def _coverletter_grounding(self):
         """Loads keeper bullets and their embeddings for the semantic grounding check.
 
-        Returns (keeper_bullets, keeper_embs, keeper_embs_backup) -- empty/None
-        when the bank or its index is missing, which just skips that check.
+        Returns (keeper_bullets, keeper_embs, keeper_embs_backup, keeper_embs_nim)
+        -- empty/None when the bank or its index is missing, which just skips
+        that check.
         """
         keeper_bullets: list = []
         keeper_embs = None
         keeper_embs_backup = None
+        keeper_embs_nim = None
         bank_csv = os.path.join(self.kb_dir, "bullet-bank-keepers-audited.csv")
         emb_npy = os.path.join(self.kb_dir, "bullet_vectors_ge2_d768.npy")
         if os.path.exists(bank_csv) and os.path.exists(emb_npy):
@@ -7478,14 +8090,17 @@ class ResumeEngine:
                 keeper_embs = np.load(emb_npy)
                 import embed_bullet_bank
 
+                sha = bullets_sha(keeper_bullets)
+                n = len(keeper_bullets)
                 # Used only when the primary model can't embed a sentence;
                 # None unless it matches this exact bank.
                 keeper_embs_backup = embed_bullet_bank.backup_index_for(
-                    self.kb_dir, bullets_sha(keeper_bullets), len(keeper_bullets)
+                    self.kb_dir, sha, n
                 )
+                keeper_embs_nim = embed_bullet_bank.nim_index_for(self.kb_dir, sha, n)
             except Exception:
                 pass
-        return keeper_bullets, keeper_embs, keeper_embs_backup
+        return keeper_bullets, keeper_embs, keeper_embs_backup, keeper_embs_nim
 
     def build_tailored_coverletter(self, jd_path: str) -> dict:
         """
@@ -7600,7 +8215,9 @@ class ResumeEngine:
             return {}
 
         style_rules = self.load_yaml(self.rules_dir, "style_rules.yaml")
-        keeper_bullets, keeper_embs, keeper_embs_backup = self._coverletter_grounding()
+        keeper_bullets, keeper_embs, keeper_embs_backup, keeper_embs_nim = (
+            self._coverletter_grounding()
+        )
 
         def _validate(data):
             # kb_corpus=background_context: the same grounding corpus the model
@@ -7614,6 +8231,7 @@ class ResumeEngine:
                 keeper_bullets=keeper_bullets,
                 keeper_embs=keeper_embs,
                 keeper_embs_backup=keeper_embs_backup,
+                keeper_embs_nim=keeper_embs_nim,
                 voice_rules=self.voice_rules,
                 role_title=role_title,
             )
@@ -7824,106 +8442,173 @@ class ResumeEngine:
             cli_art.print_literal(
                 f"\n  [{i + 1}/{len(recs)}] {cli_art._escape_markup(rec[:70])}..."
             )
-            rec_contents = (
-                f"=== CURRENT RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
-                f"{protected_block}"
-                f"=== RECOMMENDATION TO CONSIDER ===\n{rec}\n\n"
-                f"=== INSTRUCTIONS ===\n"
-                f"Decide whether the recommendation above is a concrete, actionable edit to "
-                f"THIS resume's own content (e.g. naming a specific tool, rewording a title/"
-                f"summary/skills phrase to mirror the JD). If so, apply ONLY this one "
-                f"recommendation and put its exact original text in applied_recommendations. "
-                f"When applying edits to summary/skills/bullets, prioritize using verbatim terminology "
-                f"from the JD keywords and recommendation (e.g. use 'Cybersecurity' instead of generic "
-                f"'Technical SaaS') when truthful to maximize ATS exact-match density. "
-                f"If it describes something outside the document itself -- networking, "
-                f"referrals, applying elsewhere, or any action a person would take rather than "
-                f"an edit to this resume's text -- change nothing and put its exact original "
-                f"text in skipped_recommendations instead. If the recommendation asks you to "
-                f"reveal something personal (e.g. why a project mattered, what felt "
-                f"satisfying) and the provided background context does NOT already contain a "
-                f"grounded, verified answer, do not invent one -- change nothing and put its "
-                f"exact original text in needs_personal_input instead. Return the complete "
-                f"resume JSON with every field -- change only what this one recommendation "
-                f"asked for, if anything; leave everything else untouched."
-            )
-            rec_text, rec_usage = GeminiClient.generate(
-                model=BUILDER_MODEL,
-                # Unlike the fix/trim loops above (deliberately bare
-                # build_prompt, no KB, to stay cheap on structural
-                # fixes), these calls make content-quality edits --
-                # e.g. rewording the Summary -- so they need the same
-                # voice-anchors.md grounding the critique that produced
-                # this recommendation already had (B29,
-                # phase-9-backlog.md). static_prefix is small (~5-10k
-                # tokens, already built above for the audit loop), not
-                # the full ~105k-token kb_context.
-                system_instruction=f"{build_prompt}\n\n{static_prefix}",
-                contents=rec_contents,
-                response_schema=RecommendationApplySchema,
-                # B40: without these, EDU_ACHIEVEMENT_KEY_<n> isn't part
-                # of this call's schema, so the model never echoes back
-                # resume_data's existing choice -- normalize_resume.py
-                # then defaults to "", and fixed_content.build_education()
-                # silently reverts KU/KCKCC to each school's first option
-                # (plus a spurious warning) on every single recommendation
-                # applied, not just ones that touch Education.
-                extra_schema_properties=edu_schema_properties,
-                extra_required=edu_schema_required,
-                temperature=0.0,
-            )
-            _log_cache_stats(rec_usage, 0, 0)
-            rec_result = GeminiClient.parse_json(rec_text or "")
-            if not rec_result:
-                cli_art.console.print(
-                    f"    {cli_art.WARNING} unparseable JSON; leaving resume as-is for this recommendation.",
-                    soft_wrap=True,
+            # One recommendation, up to RECOMMENDATION_MAX_ATTEMPTS tries.
+            # Every attempt starts from the SAME pre-edit resume_data, so a
+            # rejected attempt is discarded whole rather than becoming the
+            # next attempt's starting point -- the opposite of the Step 4 fix
+            # loop's hill-climb, because here there is a known-good state to
+            # return to and the edit is meant to be small and local.
+            outcome = None
+            last_violations: list = []
+            for attempt in range(RECOMMENDATION_MAX_ATTEMPTS):
+                if attempt:
+                    time.sleep(RECOMMENDATION_SLEEP)
+                    cli_art.print_literal(
+                        f"    Retrying ({attempt + 1}/{RECOMMENDATION_MAX_ATTEMPTS}) "
+                        f"with the validator's objection..."
+                    )
+                # Naming the exact violations is what makes a retry worth
+                # more than a reroll: without them the model has no idea
+                # which part of its edit was rejected, and simply produces
+                # the same edit again.
+                retry_block = (
+                    ""
+                    if not last_violations
+                    else (
+                        "=== YOUR PREVIOUS ATTEMPT WAS REJECTED ===\n"
+                        "Applying this recommendation introduced the validator "
+                        "violation(s) below. The resume JSON above is the ORIGINAL, "
+                        "unedited version -- your rejected attempt is gone. Apply the "
+                        "recommendation again in a way that does not cause these:\n"
+                        + "\n".join(f"- {v}" for v in last_violations)
+                        + "\nIf you cannot satisfy the recommendation without breaking "
+                        "one of these rules, change nothing and put the "
+                        "recommendation's exact original text in "
+                        "skipped_recommendations.\n\n"
+                    )
                 )
-            else:
-                this_applied = rec_result.pop("applied_recommendations", [])
-                this_skipped = rec_result.pop("skipped_recommendations", [])
-                this_needs_input = rec_result.pop("needs_personal_input", [])
-                candidate_resume_data = normalize_resume.normalize(rec_result)
-                rec_violations_all = validate_resume.validate(
-                    candidate_resume_data,
-                    style_rules_for_validation,
-                    role_roster,
-                    role_bullet_minimums,
-                    role_bullet_maximums=role_bullet_maximums,
-                    bullet_tuples=bullet_tuples,
+                rec_contents = (
+                    f"=== CURRENT RESUME JSON ===\n{json.dumps(_sanitize_none_for_prompt(resume_data), indent=2)}\n\n"
+                    f"{protected_block}"
+                    f"{retry_block}"
+                    f"=== RECOMMENDATION TO CONSIDER ===\n{rec}\n\n"
+                    f"=== INSTRUCTIONS ===\n"
+                    f"Decide whether the recommendation above is a concrete, actionable edit to "
+                    f"THIS resume's own content (e.g. naming a specific tool, rewording a title/"
+                    f"summary/skills phrase to mirror the JD). If so, apply ONLY this one "
+                    f"recommendation and put its exact original text in applied_recommendations. "
+                    f"When applying edits to summary/skills/bullets, prioritize using verbatim terminology "
+                    f"from the JD keywords and recommendation (e.g. use 'Cybersecurity' instead of generic "
+                    f"'Technical SaaS') when truthful to maximize ATS exact-match density. "
+                    f"If it describes something outside the document itself -- networking, "
+                    f"referrals, applying elsewhere, or any action a person would take rather than "
+                    f"an edit to this resume's text -- change nothing and put its exact original "
+                    f"text in skipped_recommendations instead. If the recommendation asks you to "
+                    f"reveal something personal (e.g. why a project mattered, what felt "
+                    f"satisfying) and the provided background context does NOT already contain a "
+                    f"grounded, verified answer, do not invent one -- change nothing and put its "
+                    f"exact original text in needs_personal_input instead. Return the complete "
+                    f"resume JSON with every field -- change only what this one recommendation "
+                    f"asked for, if anything; leave everything else untouched."
                 )
-                rec_violations = [
-                    v for v in rec_violations_all if v not in baseline_violations
-                ]
-                if rec_violations:
+                rec_text, rec_usage = GeminiClient.generate(
+                    model=BUILDER_MODEL,
+                    # Unlike the fix/trim loops above (deliberately bare
+                    # build_prompt, no KB, to stay cheap on structural
+                    # fixes), these calls make content-quality edits --
+                    # e.g. rewording the Summary -- so they need the same
+                    # voice-anchors.md grounding the critique that produced
+                    # this recommendation already had (B29,
+                    # phase-9-backlog.md). static_prefix is small (~5-10k
+                    # tokens, already built above for the audit loop), not
+                    # the full ~105k-token kb_context.
+                    system_instruction=f"{build_prompt}\n\n{static_prefix}",
+                    contents=rec_contents,
+                    response_schema=RecommendationApplySchema,
+                    # B40: without these, EDU_ACHIEVEMENT_KEY_<n> isn't part
+                    # of this call's schema, so the model never echoes back
+                    # resume_data's existing choice -- normalize_resume.py
+                    # then defaults to "", and fixed_content.build_education()
+                    # silently reverts KU/KCKCC to each school's first option
+                    # (plus a spurious warning) on every single recommendation
+                    # applied, not just ones that touch Education.
+                    extra_schema_properties=edu_schema_properties,
+                    extra_required=edu_schema_required,
+                    temperature=0.0,
+                )
+                _log_cache_stats(rec_usage, 0, 0)
+                rec_result = GeminiClient.parse_json(rec_text or "")
+                if not rec_result:
                     cli_art.console.print(
-                        f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
-                        f"discarding just this recommendation:",
+                        f"    {cli_art.WARNING} unparseable JSON on attempt "
+                        f"{attempt + 1}.",
                         soft_wrap=True,
                     )
-                    for v in rec_violations:
-                        cli_art.print_literal(f"      - {cli_art._escape_markup(v)}")
-                    skipped.append(
-                        f"{rec} (attempted, discarded: introduced a validator violation)"
-                    )
-                elif this_applied:
-                    resume_data = candidate_resume_data
-                    # The accepted edit becomes the new baseline: it may
-                    # have cleared a pre-existing violation (good) or left
-                    # one standing, and the NEXT recommendation must be
-                    # judged against what the resume actually looks like
-                    # now, not against what Step 4 produced.
-                    baseline_violations = rec_violations_all
-                    applied.append(rec)
-                    cli_art.print_literal("    Applied.")
-                elif this_needs_input:
-                    needs_polish.append(rec)
-                    cli_art.print_literal(
-                        "    Needs your input -- left unchanged (try `resume polish`)."
-                    )
+                    continue
                 else:
-                    skipped.append(rec)
-                    cli_art.print_literal("    Skipped (not a resume-content edit).")
+                    this_applied = rec_result.pop("applied_recommendations", [])
+                    this_skipped = rec_result.pop("skipped_recommendations", [])
+                    this_needs_input = rec_result.pop("needs_personal_input", [])
+                    candidate_resume_data = _carry_build_metadata(
+                        resume_data, normalize_resume.normalize(rec_result)
+                    )
+                    rec_violations_all = validate_resume.validate(
+                        candidate_resume_data,
+                        style_rules_for_validation,
+                        role_roster,
+                        role_bullet_minimums,
+                        role_bullet_maximums=role_bullet_maximums,
+                        bullet_tuples=bullet_tuples,
+                    )
+                    rec_violations = [
+                        v for v in rec_violations_all if v not in baseline_violations
+                    ]
+                    if rec_violations:
+                        cli_art.console.print(
+                            f"    {cli_art.WARNING} introduced {len(rec_violations)} validator violation(s); "
+                            f"discarding this attempt:",
+                            soft_wrap=True,
+                        )
+                        for v in rec_violations:
+                            cli_art.print_literal(
+                                f"      - {cli_art._escape_markup(v)}"
+                            )
+                        last_violations = rec_violations
+                        continue
+                    if this_applied:
+                        resume_data = candidate_resume_data
+                        # The accepted edit becomes the new baseline: it may
+                        # have cleared a pre-existing violation (good) or left
+                        # one standing, and the NEXT recommendation must be
+                        # judged against what the resume actually looks like
+                        # now, not against what Step 4 produced.
+                        baseline_violations = rec_violations_all
+                        applied.append(rec)
+                        outcome = "applied"
+                        cli_art.print_literal(
+                            "    Applied."
+                            if not attempt
+                            else f"    Applied (on attempt {attempt + 1})."
+                        )
+                        break
+                    elif this_needs_input:
+                        needs_polish.append(rec)
+                        outcome = "needs_input"
+                        cli_art.print_literal(
+                            "    Needs your input -- left unchanged (try `resume polish`)."
+                        )
+                        break
+                    else:
+                        skipped.append(rec)
+                        outcome = "skipped"
+                        cli_art.print_literal(
+                            "    Skipped (not a resume-content edit)."
+                        )
+                        break
+
+            if outcome is None:
+                # Every attempt broke something. The recommendation is lost
+                # either way, but saying how many tries it got distinguishes
+                # "the model would not engage" from "this genuinely conflicts
+                # with a validator rule", which is the difference between a
+                # prompt problem and a real constraint.
+                cli_art.print_literal(
+                    f"    Discarded after {RECOMMENDATION_MAX_ATTEMPTS} attempts."
+                )
+                skipped.append(
+                    f"{rec} (attempted {RECOMMENDATION_MAX_ATTEMPTS}x, discarded: "
+                    f"introduced a validator violation)"
+                )
 
             checkpoint["recommendation_actions"] = {
                 "resume_data": resume_data,
@@ -8133,7 +8818,12 @@ class ResumeEngine:
                 cli_art.print_literal()
             resume_data["_critique"] = critique_data
             checkpoint["critique_data"] = critique_data
-            jd_manager.save_checkpoint(job_key, checkpoint)
+            # job_key=None means "not part of a build": resume_report's
+            # re-score reuses this method for its rubric assembly, and
+            # checkpointing a critique under a finished job's key would make
+            # a later resumed build reuse a critique of a different draft.
+            if job_key:
+                jd_manager.save_checkpoint(job_key, checkpoint)
         else:
             cli_art.console.print(
                 f"  {cli_art.WARNING} Holistic critique returned empty.",
@@ -8363,7 +9053,9 @@ class ResumeEngine:
                 # deterministic parse failure repeats until attempts run out.
                 stall_streak += 1
                 continue
-            resume_data = normalize_resume.normalize(fixed)
+            resume_data = _carry_build_metadata(
+                resume_data, normalize_resume.normalize(fixed)
+            )
             violations = validate_resume.validate(
                 resume_data,
                 style_rules_for_validation,
@@ -8507,9 +9199,20 @@ class ResumeEngine:
         # per-JD variable content, but small enough that keeping them
         # out of the cacheable prefix costs little and keeps the
         # prefix identical across JDs targeting different companies.
+        no_why_block = ""
+        if not research_block:
+            no_why_block = (
+                "\n\n=== NO WHY SECTION ===\n"
+                "No company research is available for this posting (it may be a "
+                "staffing agency or recruiter submission). Do NOT produce "
+                "SECTION_WHY or WHY_TEXT -- leave both keys out of your response "
+                "entirely. The Why section requires verified company research to "
+                "be honest and specific; without it, any Why paragraph would be "
+                "generic filler."
+            )
         builder_system = (
             f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}"
-            f"{role_rules_block}{banned_language_block}\n\n"
+            f"{no_why_block}{role_rules_block}{banned_language_block}\n\n"
             "=== ATS KEYWORD DENSITY INSTRUCTION ===\n"
             "When crafting SUMMARY_TEXT and selecting verified SKILLS, prioritize verbatim phrases "
             "from JD KEYWORDS (e.g. use exact domain titles like 'Cybersecurity' or verbatim tool names) "
@@ -8975,7 +9678,9 @@ class ResumeEngine:
             trim_attempt += 1
             return resume_data, trim_attempt
 
-        trimmed_resume_data = normalize_resume.normalize(trimmed)
+        trimmed_resume_data = _carry_build_metadata(
+            resume_data, normalize_resume.normalize(trimmed)
+        )
         trim_violations = validate_resume.validate(
             trimmed_resume_data,
             style_rules_for_validation,
@@ -9354,6 +10059,7 @@ class ResumeEngine:
             on_bullet_complete=_save_bullets_checkpoint,
             vocabulary_substitutions=vocabulary_substitutions,
             order_out=audit_order,
+            jd_text=jd_text,
         )
         if audit_order:
             # The audit sorted its output; keep bullet_tuples index-aligned
@@ -9425,6 +10131,15 @@ class ResumeEngine:
             if _step is None:
                 return {}
             resume_data = _step
+        if skip_company_research and (
+            resume_data.get("SECTION_WHY") or resume_data.get("WHY_TEXT")
+        ):
+            resume_data = dict(resume_data)
+            resume_data["SECTION_WHY"] = ""
+            resume_data["WHY_TEXT"] = ""
+            cli_art.print_literal(
+                "  Stripped Why section generated despite no company research."
+            )
         # --- Step 5: Post-build holistic critique ---
         cli_art.console.rule(
             "Step 5: Running holistic resume critique...", style="dim", align="left"
@@ -9478,6 +10193,17 @@ class ResumeEngine:
         )
 
         # --- Step 6: Save output ---
+        # Which posting this document was built for, and when. The resume
+        # JSON otherwise says nothing about its own provenance -- the stem
+        # encodes a company and a role, but nothing points back at the JD --
+        # so a later reader (resume_report.py's viewer) could not tell which
+        # posting a set of fit scores was scored AGAINST, which is most of
+        # what those scores mean.
+        resume_data["_build_meta"] = {
+            "jd_path": jd_path,
+            "job_key": job_key,
+            "built_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        }
         output_path = os.path.join(self.output_json_dir, output_filename)
         try:
             with open(output_path, "w", encoding="utf-8") as f:
@@ -9922,6 +10648,21 @@ class ResumeEngine:
                     + cli_art._escape_markup(", ".join(_topped_up))
                 )
 
+        # After the top-up, never before: a JD-driven addition may well be
+        # what lifts a thin category on its own, and filling first would
+        # spend the row's remaining width on a skill the posting never asked
+        # for. Runs on cv.md alone, so it still works for a profile whose
+        # ledger could not be read above.
+        if _cv_text:
+            resume_data, _filled = _fill_thin_skill_categories(
+                resume_data, style_rules_for_validation, _cv_text, jd_keywords
+            )
+            if _filled:
+                cli_art.print_literal(
+                    "  Filled out thin skill categor(ies) from cv.md: "
+                    + cli_art._escape_markup(", ".join(_filled))
+                )
+
         return resume_data
 
     def _validate_rendered_outputs(
@@ -10172,12 +10913,27 @@ class ResumeEngine:
             f"[bold {theme.BRAND}]Generating Tailored Resume[/bold {theme.BRAND}]",
             style="dim",
         )
+        # Skip company research (and Why section) for staffing agency postings
+        # since the actual hiring company is hidden behind the staffing board
+        skip_why_for_staffing = False
+        try:
+            with open(jd_path, "r") as f:
+                jd_data = json.load(f)
+                if jd_data.get("staffing_agency"):
+                    skip_why_for_staffing = True
+                    cli_art.print_literal(
+                        "  Staffing agency posting detected -- skipping Why section."
+                    )
+        except (json.JSONDecodeError, KeyError):
+            pass
+
         resume_result = self.build_tailored_resume(
             jd_path=jd_path,
             master_resume=master_resume if master_resume is not None else {},
             output_filename=output_filename,
             job_key=job_key,
             interactive=interactive,
+            skip_company_research=skip_why_for_staffing,
         )
         if not resume_result:
             cli_art.console.print(

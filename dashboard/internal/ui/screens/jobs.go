@@ -147,7 +147,11 @@ type JobsModel struct {
 
 	// toasts reports completed actions in the bottom-right without taking a
 	// layout row the way notice/actionError do -- see toast.go.
-	toasts       ToastStack
+	toasts ToastStack
+
+	// bloom is the in-flight star animation for a just-shortlisted row.
+	// See shortlist.go for why it is keyed by row identity, not index.
+	bloom        shortlistBloom
 	statusPicker bool
 	statusCursor int
 	// statusConfirm/pendingStatus hold the inline confirm step between
@@ -194,6 +198,13 @@ type JobsModel struct {
 // (dashboard_actions.py's status subcommand rejects anything else), this
 // is just what the picker offers.
 var jobsApplicationStatuses = []string{"Applied", "Responded", "Interview", "Offer", "Rejected", "Withdrawn"}
+
+// jobsTailorFinishedMsg reports that the interactive tailoring handoff
+// (tea.ExecProcess) returned and the dashboard has the terminal back.
+type jobsTailorFinishedMsg struct {
+	company string
+	err     error
+}
 
 // jobsActionCompleteMsg is emitted when a dashboard_actions.py subprocess
 // jobsSidebarRatio is the fraction of the width given to the sidebar.
@@ -540,6 +551,25 @@ func (m *JobsModel) adjustScroll() {
 	}
 }
 
+// PushToast reports a completed action in the bottom-right stack,
+// returning the heartbeat command that ages it. Mirrors
+// PipelineModel.PushToast so both screens report the same way.
+func (m *JobsModel) PushToast(tone ToastTone, format string, args ...any) tea.Cmd {
+	m.toasts.Push(tone, format, args...)
+	return ToastTick()
+}
+
+// setFavoriteByKey flips the shortlist mark on the backing slice, so the
+// change survives the applyFilter that immediately follows (which rebuilds
+// the filtered view from m.rows).
+func (m *JobsModel) setFavoriteByKey(key string, favorited bool) {
+	for i := range m.rows {
+		if ShortlistKey(m.rows[i].Company, m.rows[i].Title) == key {
+			m.rows[i].Favorite = favorited
+		}
+	}
+}
+
 // matchesPrimaryFilter reports whether one row passes the [f] filter
 // alone, ignoring the [w]/[e]/[$]/[r]/[c] narrowings and the search
 // query. Shared with countForStatusFilter so the list and the "N/M
@@ -570,11 +600,17 @@ func (m JobsModel) matchesPrimaryFilter(r model.JobRow) bool {
 	// role that scored under 3.5 vanished from every stop but "low",
 	// which does not even scope to status -- "roles with a resume
 	// currently disappear from that dashboard" (reported 2026-09-19).
-	if m.filter != "low" && r.Status != "Completed" && r.Evaluation.CompositeScore < ActionableScore {
+	// A shortlisted role is exempt for the same reason a completed one is:
+	// the bar hides roles nobody intends to act on, and a star is the user
+	// saying in their own hand that they do.
+	if m.filter != "low" && r.Status != "Completed" && !r.Favorite &&
+		r.Evaluation.CompositeScore < ActionableScore {
 		return false
 	}
 
 	switch m.filter {
+	case "shortlist":
+		return r.Favorite
 	case "pending", "completed":
 		// "completed" IS "has a resume generated" -- a JD only reaches
 		// completed/ after run_pipeline() succeeds (see the carve-out
@@ -633,6 +669,8 @@ func nextJobsFilter(current string) string {
 	case "recent":
 		return "local"
 	case "local":
+		return "shortlist"
+	case "shortlist":
 		return "low"
 	default:
 		return "all"
@@ -1126,8 +1164,27 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 		// It reports what already happened and asks nothing, which is
 		// exactly what a toast is for -- failures stay in the action-error
 		// panel, because "d for details" is a decision.
-		m.toasts.Push(ToastSuccess, "%s\u2009\u2014 done", actionLabel(finished))
+		// "favorite" is the one action that already reported itself, at
+		// keypress time, with its own celebration toast -- a second
+		// "Shortlisting — done" a moment later is just noise.
+		if finished != "favorite" {
+			m.toasts.Push(ToastSuccess, "%s\u2009\u2014 done", actionLabel(finished))
+		}
 		return m, tea.Batch(reloadJobsCmd(m.jobsPath), ToastTick())
+
+	case jobsTailorFinishedMsg:
+		// The build wrote its own output to the terminal the user was just
+		// looking at, so this only has to say whether it finished and pull
+		// the JD's new state in -- run_pipeline moves it into completed/.
+		if msg.err != nil {
+			m.toasts.Push(ToastError, "Resume build for %s did not finish: %v", msg.company, msg.err)
+		} else {
+			m.toasts.Push(ToastSuccess, "Resume built \u2014 %s", msg.company)
+		}
+		return m, tea.Batch(reloadJobsCmd(m.jobsPath), ToastTick())
+
+	case ShortlistBloomMsg:
+		return m, m.bloom.Advance()
 
 	case ToastTickMsg:
 		return m, m.toasts.Age()
@@ -1463,20 +1520,35 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 			}
 		case "t":
 			if job, ok := m.CurrentJob(); ok {
-				// Completed jobs are re-tailorable too, not just Pending --
-				// run_pipeline(jd_path=...) processes the given path
-				// directly rather than re-discovering it via
-				// get_pending_jds(), so re-running it against a job
-				// already in completed/ is a normal re-tailor, not an
-				// error state.
-				m.actionInProgress = "tailor"
-				m.actionStartedAt = time.Now()
-				m.actionChan = make(chan tea.Msg)
-				m.progress = progress.New(progress.WithColors(m.theme.Sky, m.theme.Mauve))
-				m.actionStepLabel = ""
-				ctx, cancel := context.WithCancel(context.Background())
-				m.actionCancel = cancel
-				return m, m.runAction(ctx, m.actionChan, "tailor", job.Path)
+				// Tailoring is INTERACTIVE -- run_pipeline() asks the user
+				// to confirm missing JD keywords (cli_art.confirm/text),
+				// so it needs a real TTY, which the piped runAction path
+				// used by every other action cannot give it.
+				//
+				// tea.ExecProcess is the handoff: bubbletea releases the
+				// terminal, the build runs in THIS window with the user
+				// answering its prompts directly, and the dashboard
+				// resumes when it exits. The previous code instead tried
+				// to spawn a separate terminal emulator per OS and
+				// discarded the error from Start(), so on any failure it
+				// still reported "Launched ... in new terminal" while
+				// nothing had happened at all.
+				//
+				// Routed through dashboard_actions.py rather than
+				// `cli.py run <path>` because a database-only job's
+				// "path" is a job id with no file: _tailor calls
+				// materialize_permanently() first, and refreshes the
+				// export afterwards.
+				cmd := exec.Command(
+					m.pythonPath,
+					filepath.Join(m.projectRoot, "scripts", "dashboard_actions.py"),
+					"tailor", job.Path, "--jobs-path", m.jobsPath,
+				)
+				cmd.Dir = m.projectRoot
+				company := job.Company
+				return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+					return jobsTailorFinishedMsg{company: company, err: err}
+				})
 			}
 		case "m":
 			if job, ok := m.CurrentJob(); ok {
@@ -1506,6 +1578,38 @@ func (m JobsModel) updateCore(msg tea.Msg) (JobsModel, tea.Cmd) {
 		case "x":
 			if _, ok := m.CurrentJob(); ok {
 				m.showConfirm = true
+			}
+		case "*":
+			if job, ok := m.CurrentJob(); ok {
+				key := ShortlistKey(job.Company, job.Title)
+				// Optimistic, then corrected by the export this action
+				// triggers -- see the Pipeline's identical handler for
+				// why the star must not wait on the subprocess.
+				nowFavorited := !job.Favorite
+				m.setFavoriteByKey(key, nowFavorited)
+
+				var bloomCmd tea.Cmd
+				if nowFavorited {
+					bloomCmd = m.bloom.Start(key)
+				} else {
+					m.bloom.Clear()
+				}
+				m.applyFilter()
+
+				var toastCmd tea.Cmd
+				if nowFavorited {
+					toastCmd = m.PushToast(ToastCelebrate, "Shortlisted · %s — %s", job.Company, job.Title)
+				} else {
+					toastCmd = m.PushToast(ToastInfo, "Removed from shortlist · %s — %s", job.Company, job.Title)
+				}
+
+				m.actionInProgress = "favorite"
+				m.actionStartedAt = time.Now()
+				m.actionChan = make(chan tea.Msg)
+				ctx, cancel := context.WithCancel(context.Background())
+				m.actionCancel = cancel
+				return m, tea.Batch(bloomCmd, toastCmd,
+					m.runAction(ctx, m.actionChan, "favorite", job.Path), m.spinner.Tick)
 			}
 		case "J":
 			if _, ok := m.CurrentJob(); ok {
@@ -1613,14 +1717,16 @@ var jobsHelpCategories = []helpCategory{
 		{"l", "Check posting liveness"},
 		{"m", "Compute Skills Gap Matrix for this job"},
 		{"M", "Compute Skills Gap Matrix for pending jobs missing one (bulk, capped)"},
-		{"t", "Tailor (or re-tailor) resume for this job"},
+		{"t", "Tailor resume (full interactive build, right here)"},
 		{"u", "Change application status"},
 		{"a", "Open application answers chat"},
 		{"x", "Archive this job (removes from all filters)"},
+		{"*", "Shortlist / un-shortlist this role (★)"},
 	}},
 	{"Filters", []helpBinding{
 		{"f", "Cycle filters: All / Pending / Completed / High Fit / Good Fit"},
-		{"", "/ Recent / Local / Low. Only Low shows roles under 3.5"},
+		{"", "/ Recent / Local / Shortlist / Low. Only Low shows roles under 3.5"},
+		{"", "Shortlisted (★) roles are never hidden by that bar"},
 		{"w", "Cycle workplace filter: All → Remote → Hybrid → Onsite"},
 		{"e", "Cycle employment type filter"},
 		{"$", "Cycle pay filter: All → Stated → Unstated"},
@@ -1713,7 +1819,7 @@ func (m JobsModel) renderNextBestMove() string {
 		Background(m.theme.Surface).
 		Padding(0, 2).
 		Width(m.width)
-	msg := fmt.Sprintf("★ NEXT BEST MOVE: High match at %s (%.1f) — Press 't' to tailor now!", best.Company, best.Evaluation.CompositeScore)
+	msg := fmt.Sprintf("★ NEXT BEST MOVE: High match at %s (%.1f) — Press 't' for full interactive build!", best.Company, best.Evaluation.CompositeScore)
 	return bannerStyle.Render(msg)
 }
 
@@ -1803,6 +1909,8 @@ func actionLabel(action string) string {
 		return "Updating status"
 	case "archive":
 		return "Archiving job"
+	case "favorite":
+		return "Saving shortlist"
 	default:
 		return "Working"
 	}
@@ -1993,6 +2101,8 @@ func (m JobsModel) getFilterLabel() string {
 		return "RECENT"
 	case "local":
 		return "LOCAL (60 mi)"
+	case "shortlist":
+		return "★ SHORTLIST"
 	case "low":
 		return "LOW (< 3.5)"
 	default:
@@ -2057,7 +2167,11 @@ func (m JobsModel) renderSidebarList(width, height int) string {
 		// The tag is rendered before it reaches renderSidebarRowTagged, so
 		// it can't be dimmed there with the rest of the row.
 		tags := employmentTags(rowTheme(m.theme, selected), job.EmploymentType)
-		rowContent := renderSidebarRowTagged(m.theme, job.Evaluation.CompositeScore, job.Company, tags, subtitle, sidebarInnerWidth(width), selected)
+		// Always one cell plus a space, shortlisted or not, so the columns
+		// to its right do not shift as the cursor moves down the list.
+		bloomGlyph, _ := m.bloom.frameFor(ShortlistKey(job.Company, job.Title))
+		marker := ShortlistMarker(m.theme, job.Favorite, selected, bloomGlyph)
+		rowContent := withShortlistGutter(marker, renderSidebarRowTagged(m.theme, job.Evaluation.CompositeScore, job.Company, tags, subtitle, shortlistRowWidth(sidebarInnerWidth(width)), selected))
 		lines = append(lines, zone.Mark(fmt.Sprintf("jobs_row_%d", i), rowContent))
 	}
 

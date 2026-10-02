@@ -632,6 +632,179 @@ def load_json_file(path: str, label: str) -> str:
         return ""
 
 
+# Tokens shared by a large share of ledger names, or by nearly every job
+# posting, say nothing about any one skill. Without this, a single JD word
+# ("marketing") would admit hundreds of unrelated ledger entries.
+TOOL_TOKEN_STOPWORDS = frozenset(
+    {
+        "and",
+        "for",
+        "the",
+        "with",
+        "data",
+        "team",
+        "tools",
+        "tool",
+        "management",
+        "manager",
+        "marketing",
+        "digital",
+        "content",
+        "social",
+        "media",
+        "online",
+        "platform",
+        "software",
+        "system",
+        "systems",
+        "strategy",
+        "analytics",
+        "design",
+        "web",
+        "email",
+    }
+)
+
+
+def _all_tokens(text: str) -> set:
+    """Every lowercase word token, generic ones included.
+
+    "+", "#" and "." are inside the character class on purpose -- "C++",
+    "C#", "Node.js" and "ASP.NET" are single tokens. They are stripped from
+    the END, though: sentence punctuation would otherwise ride along, so a
+    posting ending "...and Kubernetes." yielded the token "kubernetes." and
+    never matched the ledger's "Kubernetes".
+    """
+    tokens = re.findall(r"[a-z0-9][a-z0-9+#.]{1,}", str(text or "").lower())
+    return {
+        stripped for stripped in (t.rstrip(".+#") for t in tokens) if len(stripped) >= 3
+    }
+
+
+def tool_tokens(name: str) -> set:
+    """The DISTINCTIVE tokens of a name -- generic words removed.
+
+    Used for two things only: deciding whether a name is specific enough
+    to match at all, and finding adjacent names. It is deliberately NOT
+    what a match is tested with -- see the note in _matches_jd().
+    """
+    return _all_tokens(name) - TOOL_TOKEN_STOPWORDS
+
+
+def _matches_jd(name: str, jd_all_tokens: set) -> bool:
+    """Whether a posting names this tool.
+
+    Matching tests the COMPLETE token set while requiring at least one
+    DISTINCTIVE token. Generic words must still be present when they are
+    part of a name -- they are merely not sufficient on their own.
+
+    Getting this wrong is subtle: "analytics" is a stopword, so
+    "Adobe Analytics" reduces to {"adobe"}, and testing the distinctive
+    set alone let a posting that says only "Adobe" match it -- the exact
+    partial match the all-tokens rule exists to prevent. Requiring a
+    distinctive token separately is what still keeps a pure-boilerplate
+    name like "marketing strategy" from matching everything.
+    """
+    if not jd_all_tokens:
+        return False
+    distinctive = tool_tokens(name)
+    if not distinctive:
+        return False
+    return _all_tokens(name) <= jd_all_tokens
+
+
+def rank_tools_for_prompt(
+    tools: list,
+    jd_text: str = "",
+    attested_names=None,
+    max_chars: int | None = None,
+    max_rows: int | None = None,
+) -> list:
+    """Order a verified-tool list by how much it can earn in a screen, and
+    cut it to whatever the caller's budget allows.
+
+    Used by EVERY tier that sends tools to a model, so the tiers cannot
+    disagree about what matters. Size is only half the point: the tools
+    section is the list a rewrite may NAME, so a tool the POSTING asks for
+    and the candidate actually has must survive the cut, or the rewrite
+    cannot surface the keyword an ATS and a recruiter screen on.
+
+    Priority order, highest first:
+
+    1. JD-matched AND attested -- the posting asks for it and there is
+       evidence behind it. The best keyword available.
+    2. JD-matched -- the posting asks for it and the ledger verifies it.
+       This is the ATS half, and the reason this is not an evidence-only
+       filter.
+    3. Attested -- backed by evidence even if this posting never names it.
+    4. JD-adjacent -- shares a distinctive token with a JD-matched name,
+       so "Salesforce" in a posting also admits "Salesforce Marketing
+       Cloud". How vendor families and near-miss phrasings get through.
+    5. Everything else, in its original order.
+
+    `attested_names` is whatever the CALLER can prove -- the bullet bank
+    for a global tier, one employer's own entries for a per-employer one.
+    Every name still comes from the candidate's own verified ledger, so
+    this only reorders truthful claims; it never invents one.
+
+    Returns the full list, reordered, when no budget is given. Never
+    returns an empty list for a non-empty input: an empty tools section
+    tells a model it may claim no tools at all, which is a worse failure
+    than an oversized prompt (that one merely reroutes to a bigger model).
+    """
+    entries = [t for t in tools or [] if isinstance(t, dict) and t.get("name")]
+    if not entries:
+        return list(tools or [])
+
+    attested = set(attested_names or ())
+    jd_all = _all_tokens(jd_text)
+
+    jd_matched = set()
+    if jd_all:
+        for entry in entries:
+            if _matches_jd(entry["name"], jd_all):
+                jd_matched.add(entry["name"])
+
+    adjacent_tokens = set()
+    for name in jd_matched:
+        adjacent_tokens |= tool_tokens(name)
+
+    def tier(entry) -> int:
+        name = entry["name"]
+        in_jd = name in jd_matched
+        in_attested = name in attested
+        if in_jd and in_attested:
+            return 0
+        if in_jd:
+            return 1
+        if in_attested:
+            return 2
+        if adjacent_tokens and (tool_tokens(name) & adjacent_tokens):
+            return 3
+        return 4
+
+    ranked = sorted(range(len(entries)), key=lambda i: (tier(entries[i]), i))
+    selected = [entries[i] for i in ranked]
+
+    if max_rows is not None and len(selected) > max_rows:
+        selected = selected[:max_rows]
+
+    if max_chars is not None and len(compact_tools_text(selected)) > max_chars:
+        # Binary search rather than popping one at a time: compact_tools_text
+        # is itself O(n^2) (it dedupes names case-insensitively), so a linear
+        # trim over a 2,000-entry ledger would call it ~1,200 times.
+        lo, hi = 1, len(selected)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if len(compact_tools_text(selected[:mid])) <= max_chars:
+                lo = mid
+            else:
+                hi = mid - 1
+        selected = selected[:lo]
+
+    return selected
+
+
 def compact_tools_text(tools: list) -> str:
     """The tool ledger as the prompt needs it: names, grouped by employer.
 
@@ -1117,6 +1290,14 @@ class KnowledgeBase:
             soft_wrap=True,
         )
 
+        # Set by a caller that HAS a posting, so per-employer tool lists can
+        # be ordered by what it asks for. Empty here by default and that is
+        # correct, not an oversight: this class also backs bullet-bank
+        # MAINTENANCE (rewrite_bullets.py's CLI, audit_keepers Stage 4),
+        # which rewrites the bank generically with no JD in play. Ranking
+        # then falls back to evidence-first, still better than file order.
+        self.jd_text = ""
+
         self.static_prefix = self._build_static_prefix()
         cli_art.console.print(
             f"   {theme.colorize_icon('hint')} Static prefix (Tier 1): {len(self.static_prefix):,} chars — shared across ALL bullets",
@@ -1278,9 +1459,19 @@ class KnowledgeBase:
         # FULL (all 58 entries on this profile) in the Gemma STATIC
         # prefix, uncapped, on every single call -- see
         # _build_gemma_static_prefix()'s docstring.
-        filtered_tools = filter_projects_by_employer(self.tools_entries, role_company)[
-            :MAX_GEMMA_FILTER_ROWS
-        ]
+        # Ranked by what THIS posting asks for before the cap, not sliced
+        # in file order: employer scoping decides WHICH tools may be
+        # claimed (a truthfulness rule -- another employer's tool here is
+        # the cross-company contamination foreign_numbers() exists to
+        # catch), and the JD decides which of them are worth the five
+        # slots. Previously whichever five came first in the file won,
+        # which is unrelated to what the posting screens on.
+        filtered_tools = rank_tools_for_prompt(
+            filter_projects_by_employer(self.tools_entries, role_company),
+            jd_text=self.jd_text,
+            attested_names=set(self.tool_employers or {}),
+            max_rows=MAX_GEMMA_FILTER_ROWS,
+        )
         if filtered_tools:
             sections.append(
                 f"=== VERIFIED TOOLS ({role_company} only, HF002 guard) ===\n"

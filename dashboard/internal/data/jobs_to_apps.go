@@ -19,6 +19,23 @@ var terminalStatuses = map[string]bool{
 	"skip":      true,
 }
 
+// IsTerminalApplication reports whether an application should sit behind
+// the Pipeline's [d] toggle. Wider than IsTerminalStatus by one case: a
+// role the evaluator recommended skipping keeps its real status (Pending,
+// Completed) but is not live work, so it is displayed as terminal without
+// that verdict being written into the row's status.
+//
+// A shortlisted role is NEVER terminal here. Favoriting is an explicit
+// human act, and the whole point of a shortlist is that it survives the
+// filters that hide everything else -- the same reasoning that exempts
+// applied/interviewing roles from the actionable bar.
+func IsTerminalApplication(app model.CareerApplication) bool {
+	if app.Favorite {
+		return false
+	}
+	return IsTerminalStatus(app.Status) || app.SkipRecommended
+}
+
 // IsTerminalStatus reports whether a job status means the job should be
 // hidden from the pipeline.
 func IsTerminalStatus(status string) bool {
@@ -34,14 +51,21 @@ func IsTerminalStatus(status string) bool {
 // export the single source of truth for both while leaving Pipeline's UI
 // untouched.
 //
-// Terminal-status jobs are dropped. Ordering is preserved: the exporter
-// already sorts best-score-first, and Pipeline applies its own sort on
-// top.
+// Terminal-status jobs (archived, expired, discarded, skip) are included
+// by default but can be filtered by the caller. Ordering is preserved: the
+// exporter already sorts best-score-first, and Pipeline applies its own
+// sort on top.
 func JobRowsToApplications(rows []model.JobRow) []model.CareerApplication {
+	return jobRowsToApplicationsFiltered(rows, false)
+}
+
+// JobRowsToApplicationsFiltered is like JobRowsToApplications but allows
+// optionally filtering out terminal statuses.
+func jobRowsToApplicationsFiltered(rows []model.JobRow, excludeTerminal bool) []model.CareerApplication {
 	apps := make([]model.CareerApplication, 0, len(rows))
 
 	for _, row := range rows {
-		if IsTerminalStatus(row.Status) {
+		if excludeTerminal && IsTerminalStatus(row.Status) {
 			continue
 		}
 
@@ -69,6 +93,8 @@ func JobRowsToApplications(rows []model.JobRow) []model.CareerApplication {
 			AITraining:          row.AITraining,
 			AITrainingEvidence:  row.AITrainingEvidence,
 			StaffingAgency:      row.StaffingAgency,
+			Favorite:            row.Favorite,
+			SkipRecommended:     row.SkipRecommended,
 		}
 		if row.Coverage != nil {
 			app.Coverage = row.Coverage.Score

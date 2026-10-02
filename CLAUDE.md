@@ -275,10 +275,14 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
 - **Pipeline and Browse & Manage Jobs share one source.** `main.go`
   derives Pipeline's rows from the same JD evaluation export Jobs reads,
   via `data.JobRowsToApplications` (falling back to `applications.md`
-  only when there is no export). That converter also drops terminal
-  statuses -- archived, expired, discarded, skip -- which previously
-  rendered as scoreless rows indistinguishable from live applications,
-  and leaves `ScoreRaw` empty rather than `0.00` for an unevaluated job.
+  only when there is no export). It leaves `ScoreRaw` empty rather than
+  `0.00` for an unevaluated job. Terminal rows -- archived, expired,
+  discarded, skip -- are CONVERTED but hidden by the Pipeline's own `[d]`
+  toggle (`data.IsTerminalApplication`); the converter itself stopped
+  dropping them, so a screen-level toggle is the only thing deciding
+  their visibility and there is exactly one place to change it. They
+  originally rendered as scoreless rows indistinguishable from live
+  applications, which is the thing the toggle exists to prevent.
   `reloadPipelineDataCmd` must read the same source as startup, or a
   mid-session refresh silently swaps the screen back to the old data set.
 - **Tests must not write to the real profile's knowledge base either.**
@@ -1075,8 +1079,9 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   primary-only: the evidence-guide and doc-chunk searches (their own
   ge2-only caches) and `cluster_bullet_bank.py` (an offline, resumable
   batch whose clusters must come from one model).
-- **The verified-skills filter exists but ships OFF
-  (`orchestrator.SKILLS_CONTEXT_FILTER_ENABLED`).** A 1,407-name ledger costs
+- **The verified-skills filter is ON (`orchestrator.SKILLS_CONTEXT_FILTER_ENABLED
+  = True`), and this note records why that was once in doubt.** A 1,407-name
+  ledger costs
   ~7,500 tokens per evaluation, and `relevant_skill_names()` cuts that ~92%
   by sending only skills the posting names. But an A/B on 8 pending roles
   (each scored full, full again, filtered; `evaluate_fit()` returns without
@@ -1089,7 +1094,10 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   Also: two full runs minutes apart agreed almost exactly, but a full run
   hours later differed by 0.3 on the same role -- measure noise across
   separated runs, not back-to-back, before judging any evaluator change.
-  Re-enable only after a revised filter clears that bar.
+  It has since been enabled anyway; the A/B caveat above still stands as
+  the measurement any FURTHER change to it has to beat. (This bullet said
+  "ships OFF" until 2026-09-29, when the flag was found set to True -- so
+  treat the flag, not this file, as the answer to "is it on".)
 - **A posting's body is full of money that is not the salary
   (`scripts/compensation.py`).** Taking the first dollar figure in a body
   was measured against the real 1,761-body corpus at a $40,000 floor and
@@ -1597,6 +1605,370 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   non-destructive -- excluded roles are left out of that run, not
   archived; this script's own `--apply` mode (or a manual re-run) is
   still what archives them for good after review.
+- **A shortlist star is a human act, and it outranks every automatic
+  filter.** `_favorite` is an underscore-prefixed key on the JD's own JSON
+  (`jd_manager.save_favorite`/`read_favorite`/`toggle_favorite`), the same
+  convention `_evaluation`/`_liveness`/`_application` use -- so
+  `read_jd_text()` strips it before a JD reaches a prompt, and a
+  database-only hash-id job is favoritable through
+  `jd_source.resolved_jd()` (temp file, synced back; shortlisting is cheap
+  and reversible, so unlike tailoring it has NOT earned
+  `materialize_permanently()`). Written by `dashboard_actions.py favorite`,
+  exported by `picker` as `favorite`, decoded as `model.JobRow.Favorite` ->
+  `CareerApplication.Favorite`. A starred role is exempt from BOTH the
+  actionable-score bar (`picker.ACTIONABLE_SCORE` / `screens.ActionableScore`,
+  in `belowActionableBar` and `matchesPrimaryFilter`) and the terminal gate
+  (`data.IsTerminalApplication`) -- the bar encodes an INFERRED "will not
+  act on this", and a star is the user saying the opposite in their own
+  hand. Both screens bind `*` (free on each, unlike `f`/`r`/`t`, which
+  already forced a documented per-screen divergence); Pipeline gets a
+  `★ SHORTLIST` tab, Jobs a stop in the `[f]` cycle. Neither footer bar
+  advertises it -- `helpbar_test.go` caps them at five bindings -- so
+  discovery rides on the always-visible tab, the filter label, and the
+  hollow `☆` drawn on the cursor's own row. The save animation
+  (`shortlist.go`) is keyed by `ShortlistKey(company, title)`, NOT by row
+  index: shortlisting re-sorts the list underneath the animation (the bar
+  exemption can surface a row that was hidden a moment ago), and an
+  index-keyed bloom then plays on whichever unrelated role slid into that
+  slot. The marker is drawn through `withShortlistGutter()`, which indents
+  EVERY line of an already-rendered row by `shortlistGutterWidth` -- a
+  sidebar row is two lines (`renderSidebarRowTagged` returns
+  `line1 + "\n" + line2`) and the selected row's hover bar is drawn on
+  both, so prefixing the rendered STRING shifted only the first line and
+  stepped that bar two columns sideways halfway down the row. Anything
+  else rendering into this gutter has to pad continuation lines the same
+  way. Both screens flip their own copy OPTIMISTICALLY and let the
+  post-subprocess reload correct it -- a star that appears a second after
+  the keypress reads as a broken key -- and Jobs suppresses its generic
+  "<action> — done" toast for `favorite` alone, since the celebration toast
+  already fired at keypress time.
+- **Expired and Skip-recommended roles are exported and FLAGGED, not
+  withheld.** `picker.list_all_evaluated_jds()` now walks
+  `jd_manager.get_expired_jds()` as a fourth `"Expired"` status, and
+  `_file_row()`/`_database_only_rows()` no longer drop a role whose
+  evaluation says `recommendation: "Skip"` (or whose composite is 0) --
+  those rows carry `skip_recommended` instead. Both stay BEHIND the
+  Pipeline's `[d]` toggle via `data.IsTerminalApplication`, which is wider
+  than `IsTerminalStatus` by exactly that flag: the Skip verdict is a
+  DISPLAY concern, so the row keeps the real status its directory implies
+  rather than having "skip" written into it. Withholding the row was the
+  bug -- it made those roles unreachable from every surface at once, where
+  a flag lets one screen hide them and another show them, same reasoning
+  as the `LOW <3.5` tab. Note `jd_manager` resolves `EXPIRED_DIR` at MODULE
+  level like its siblings, so a test that patches `JDS_DIR`/`COMPLETED_DIR`/
+  `ARCHIVED_DIR` must patch `EXPIRED_DIR` too or it reads the developer's
+  real expired directory (this broke `test_clear_stale_skill_matrices` and
+  `test_picker` the moment the walk was added).
+- **Tailoring is the one dashboard action that HANDS OVER the terminal,
+  because it is the one that asks questions.** `orchestrator.run_pipeline()`
+  prompts interactively in single-file mode (`cli_art.confirm`/`text`, for
+  missing JD keywords), so it needs a real TTY -- which the piped
+  `runAction` path every other action uses cannot give it. Jobs' `[t]`
+  therefore uses `tea.ExecProcess`: bubbletea releases the terminal, the
+  build runs in THAT window with the user answering its prompts, and the
+  dashboard resumes on exit (`jobsTailorFinishedMsg`, which then reloads --
+  a tailored JD has moved into `completed/`). It previously tried to spawn
+  a separate terminal EMULATOR per OS (osascript/gnome-terminal/xterm/
+  konsole/cmd) and discarded the error from `Start()`, so it reported
+  "Launched interactive tailoring ... in new terminal" unconditionally --
+  including when nothing launched at all, which is what a user saw on
+  macOS. Do not "fix" that path by repairing the AppleScript: an
+  interactive build belongs in the terminal the user is already looking
+  at. It routes through `dashboard_actions.py tailor` rather than
+  `cli.py run <path>` because a database-only job's "path" is a job id
+  with no file -- `_tailor` calls `materialize_permanently()` first (see
+  the jd_source note) and refreshes the export afterwards.
+- **The NIM fallback must be REACHED before it can help, and it was not
+  (`scripts/nim_fallback.py`).** NVIDIA Nemotron (Super -> Ultra) backs up
+  Gemini for evaluation, and `nemotron-3-embed-1b` backs up the two Gemini
+  embedding models. Two defects made it look wired while never running
+  (found 2026-09-29, after a batch evaluation where it never engaged).
+  First, `openai` -- the OpenAI-COMPATIBLE transport NIM speaks, not the
+  OpenAI service -- was missing from `requirements.txt`, so
+  `nim_available()` answered True on the API key alone and every real call
+  raised `ModuleNotFoundError`. An availability check has to test the thing
+  it claims is available, so it now verifies the import too
+  (`_openai_sdk_importable()`). Second, and worse:
+  `GeminiClient.generate()` returns `(None, {})` on an exhausted call but
+  RAISES `SustainedFailureError` on the second CONSECUTIVE one
+  (`SUSTAINED_FAILURE_THRESHOLD = 2`), and `evaluate_fit()` makes two
+  back-to-back calls (capability, then recruiter) -- so a real quota
+  exhaustion raised out of `evaluate_fit` before the fallback block ran.
+  The fallback fired only when exactly ONE stage failed, i.e. the isolated
+  blip it was least needed for: precisely inverted from its own docstring
+  ("when Gemini quota is exhausted"). Both Gemini calls now sit under one
+  `except SustainedFailureError` that records the exception instead of
+  letting it escape; the fallback runs; and it is re-raised ONLY if NIM
+  also could not cover, because `batch_evaluate` stops the run on that
+  exception and returning None there would silently convert "quota gone,
+  stop" into "this one role failed, carry on". A raise from the capability
+  call deliberately skips the recruiter call -- the quota is gone, and a
+  second doomed request just delays asking NIM. Every NIM call at the eval
+  site is now individually guarded: it previously had NO handler (unlike
+  the embedding sites, which use `except Exception: pass`), so any failure
+  there aborted the whole batch as a traceback and discarded every role
+  already scored. Provenance is recorded on the evaluation as
+  `_eval_provider: "nim"` / `_nim_models`. Note `MISTRAL_API_KEY` sits in
+  the profile `.env` but NOTHING reads it -- it is dead config, not a
+  wired backup -- and `nvidia_client.py` is reachable only from
+  `compare_eval_model.py`, a manual benchmark, not the live path.
+  **`_nvidia_api_key()` loads the profile `.env` itself.** It was a bare
+  `os.environ.get`, which is correct only by ACCIDENT: secrets live in
+  `profiles/<name>/.env`, never the shell, and the only thing that had ever
+  put that key into the environment was `gemini_client.api_keys()` calling
+  `load_dotenv()` on its way to a Gemini call. The eval fallback therefore
+  worked (a Gemini call always precedes it) while
+  `embed_bullet_bank.build_nim_index()`, which calls no Gemini API at all,
+  reported "NVIDIA_API_KEY not set" and skipped the index for a key sitting
+  in `.env` the whole time -- as did any `nim_available()` check made before
+  the first Gemini call. Depending on another module's side effect for your
+  own configuration is the bug. `doctor.check_nvidia_api_key()` was never
+  fooled, because it reads the `.env` FILE directly; treat `resume doctor`
+  as the authoritative answer to "is this key configured", never an ad-hoc
+  `os.environ` probe.
+- **Gemma's 16k TPM cap is a PER-CALL ceiling, not a pacing problem.** The
+  cap counts input AND output, so a single request over ~16k tokens can
+  never succeed however long the caller waits -- `_pace_gemma`'s
+  `GEMMA_MIN_INTERVAL_SECS = 75` spreads calls apart, it cannot shrink one.
+  Measured on a real build (2026-09-29): Step 3's rewrite sent a
+  15,985-char system prompt plus a 47,964-char static prefix, ~18,300
+  estimated tokens against a 16,000 budget, and the run logged **not one
+  successful Gemma response** -- `_log_cache_stats` only prints on success
+  and never fired -- just six ~75s pacing waits per bullet before the
+  handoff to flash-lite. That is ~7.5 minutes of guaranteed-fail waiting
+  per bullet, which is why a build "runs fine once it switches to Gemini".
+  `gemini_client.gemma_request_too_large()` now preflights every call
+  BEFORE the retry loop: oversized requests either swap to
+  `fallbacks[model]` (when `model_fallback` is on) or return `(None, {})`
+  at once, so a caller managing its own handoff -- `rewrite_bullets`, whose
+  slim-vs-full context means only IT can rebuild the prompt for another
+  model -- fires immediately instead of after the doomed retries. Grounded
+  calls never swap (quota is per tool family), so they fail fast instead.
+  `estimate_tokens()` is an ESTIMATE, not the tokenizer: `CHARS_PER_TOKEN`
+  is deliberately 3.5 rather than the ~4 English average, because
+  under-estimating lets an oversized call through to a certain 429 while
+  over-estimating only costs a slightly earlier reroute. Gemma's quota WAS
+  once unlimited on this account, which is why it was made a rescue target
+  at all; it is now hard-capped and expected to stay there, so every
+  comment claiming otherwise has been corrected -- a fallback INTO Gemma
+  (`gemini-3.1-flash-lite -> gemma-4-31b-it`, and `SCORING_FALLBACKS` both
+  ways) is only a rescue for a SMALL prompt, and the preflight is what
+  keeps a large one from landing there.
+- **The Gemma slim tier broke because the LEDGER grew, not the code
+  (`orchestrator._bank_attested_tools()`).** The 48,183-char slim prefix
+  was 96% one section: `verified_tools.json`, 2,040 names / 46,321 chars
+  / ~13,234 tokens -- on its own most of the entire 16k per-minute budget.
+  `refresh_verified_ledger.py` is additive, so the ledger grows
+  independently of everything that reads it, and this tier silently
+  crossed the cap; dedupe is NOT the answer (a full
+  `dedupe_verified_ledger.py` dry run collapses exactly 1 of the 2,040).
+  **`_gemma_tool_subset()` picks the subset, and SIZE IS NOT THE ONLY
+  STAKE.** The tools section is the list a rewrite may NAME, so a tool the
+  POSTING asks for and the candidate actually has must be present or the
+  rewrite cannot surface the keyword an ATS and a recruiter screen on --
+  which is why this is not a bank-only filter. Every name comes from the
+  candidate's own verified ledger, so all of them are truthful claims;
+  only the subset varies. Selected in priority order, then cut to
+  `GEMMA_TOOLS_MAX_CHARS` (18,000) lowest-tier-first: (1) JD-matched AND
+  bank-attested, (2) JD-matched -- the ATS half, (3) bank-attested,
+  (4) JD-adjacent, sharing a distinctive token with a JD-matched name, so
+  "Salesforce" in a posting also admits "Salesforce Marketing Cloud".
+  Measured against `fixtures/sample_jd.txt`: 2,040 -> 782 names / 17,988
+  chars, of which **590 are JD keywords no bank bullet cites** and would
+  have been lost to a bank-only filter; prefix 48,183 -> 19,850 chars,
+  ~13,766 -> ~5,671 tokens, projected ~10,809-token call against ~13,952.
+  The char ceiling is what makes JD-driven expansion safe -- without it a
+  keyword-rich posting pushes the section straight back over the cap. The
+  ledger file is untouched and the FULL (flash-lite) tier still sends it
+  whole at 77,928 chars, since that model has a 250k TPM cap. Matching is
+  by TOKEN, and two details are load-bearing: every distinctive token of a
+  ledger name must appear in the posting (so "Adobe Analytics" does not
+  match on "Adobe" alone), and `_TOOL_TOKEN_STOPWORDS` drops generic words
+  ("marketing", "data", "strategy") that appear in nearly every posting
+  and would let one JD word admit hundreds of unrelated entries. `+`, `#`
+  and `.` are inside the token class for "C++"/"C#"/"Node.js" but are
+  STRIPPED from the end, or sentence punctuation rides along and a posting
+  ending "...and Kubernetes." yields `kubernetes.`, which matches nothing.
+  Trimming binary-searches rather than popping one entry at a time:
+  `compact_tools_text` is itself O(n^2) (case-insensitive name dedupe), so
+  a linear trim over a 2,000-entry ledger would call it ~1,200 times.
+  **Matching tests the COMPLETE token set while REQUIRING a distinctive
+  one.** Testing only the distinctive set is subtly wrong: "analytics" is a
+  stopword, so "Adobe Analytics" reduces to `{adobe}` and a posting saying
+  merely "Adobe" matched it -- the exact partial match the all-tokens rule
+  exists to prevent. Generic words must still be PRESENT when they are part
+  of a name; they are only insufficient alone. Requiring a distinctive
+  token separately is what still stops pure boilerplate ("marketing
+  strategy") from matching every posting.
+- **One ranker serves every tier that sends tools
+  (`rewrite_bullets.rank_tools_for_prompt`).** Tiers used to disagree about
+  what mattered: the global Gemma prefix sent the whole ledger, the
+  orchestrator's per-bullet Gemma segment sent NO tools at all, and
+  `rewrite_bullets`'s own segment sliced `filter_projects_by_employer(...)
+  [:MAX_GEMMA_FILTER_ROWS]` -- whichever five came first in the FILE, which
+  is unrelated to what the posting screens on. All three now rank through
+  one function, so ATS relevance cannot be a property of one tier only.
+  The caller supplies `attested_names` (the bullet bank for a global tier,
+  one employer's own entries for a per-employer one) and a `max_chars` or
+  `max_rows` budget; ranking never invents a name, it only reorders the
+  candidate's own verified ledger.
+  **Employer scoping and JD relevance answer different questions and must
+  not be merged.** Scoping is a TRUTHFULNESS rule -- a per-employer
+  section's header promises the list is what that employer can claim, and
+  pulling another employer's tool in is the same cross-company
+  contamination `foreign_numbers()` exists to catch -- so the JD never ADDS
+  to a scoped list, it only decides which of that employer's own tools
+  survive the cap. ATS coverage for tools from OTHER employers is carried
+  by the global static prefix, which makes no employer claim. The
+  standalone `rewrite_bullets.KnowledgeBase` leaves `jd_text` empty on
+  purpose: it also backs bullet-bank MAINTENANCE, which rewrites the bank
+  generically with no posting in play, and ranking then falls back to
+  evidence-first -- still better than file order.
+- **Gemma's tools ceiling is DERIVED, not hardcoded
+  (`ResumeEngine.gemma_tools_budget_chars()`).** It subtracts measured
+  reserves for the system prompt, the per-bullet segment and the rest of
+  the prefix from `gemini_client.gemma_prompt_budget()`, then holds back
+  `GEMMA_BUDGET_MARGIN_TOKENS`. A fixed cap guessed against an imagined
+  segment is exactly how this broke twice: a first pass assumed a
+  ~2,000-char segment when the real one is ~14,965, so every individual
+  piece looked fine while the ASSEMBLED call came out over budget. Judge
+  this by the assembled total, never by one section -- `tests/
+  test_gemma_token_budget.py` asserts the reserves plus the cap still fit,
+  and that halving `GEMMA_TPM_LIMIT` shrinks the allowance rather than
+  leaving a stale constant behind.
+  Fallback is deliberate and one-directional: if NOTHING is selectable the
+  UNFILTERED ledger is sent, never an empty list -- an empty tools section
+  tells the model it may claim no tools at all, whereas an oversized one
+  is merely rerouted to flash-lite by the preflight. Degrading to a bigger
+  model beats degrading to a weaker guardrail. `jd_text` reaches this
+  through `build_tailored_resume` -> `audit_and_refine_bullets(jd_text=)`
+  -> `build_audit_static_prefix_gemma(jd_text)`; with no JD (bullet-bank
+  maintenance runs) it degrades to bank-attested only. Note `build_audit_static_prefix_gemma()`'s docstring
+  claims it "mirrors rewrite_bullets.KnowledgeBase._build_gemma_static_prefix()
+  exactly" and does NOT: that one omits verified_tools from the static
+  tier entirely and injects it per-bullet, employer-filtered. The two have
+  drifted; if this tier ever needs more room, matching that design is the
+  next step, and `build_tool_employer_index()` already provides the map.
+- **The holistic critique is persisted ON the resume, and it must survive
+  every later rewrite (`orchestrator._carry_build_metadata`).** Underscore-
+  prefixed keys on a resume JSON (`_critique`, `_recommendation_actions`,
+  `_build_meta`, `_output_paths`) are persisted metadata about the document,
+  never document content -- the same convention the JD JSON's
+  `_evaluation`/`_liveness`/`_favorite` use. `normalize_resume.normalize()`
+  builds its result from the MODEL's response, and the model is never sent
+  those keys, so every step that replaced resume_data with a rewrite silently
+  dropped them. Measured 2026-09-30 across a profile's saved resumes:
+  `_critique` survived in exactly the builds where ZERO critique
+  recommendations were applied, and the Step 7 trim loop dropped it again on
+  the post-render re-save -- so the resumes whose scores were most worth
+  reading were precisely the ones that lost them. Carry metadata forward at
+  any new site that adopts a model's rewrite of the whole resume; an existing
+  key on the candidate always wins, so a step that deliberately sets one is
+  never clobbered by the stale value it replaced. `_merge_condensed_bullets`
+  needs no call because it deep-copies the ORIGINAL.
+- **A fit score has a VINTAGE, and the viewer says so
+  (`scripts/resume_report.py`, Build Documents -> "View Generated
+  Resumes").** Reads the stored critique back off generated resumes -- fit,
+  skills relevance, top-third, recruiter takeaway, ATS risk, plus polishing
+  opportunities -- and spends NO API call; those numbers were computed during
+  the build and printed once into a scrolling log. The critique necessarily
+  runs BEFORE Step 5.5 applies the critique's own recommendations, because
+  the critique is what produces them, so on an edited resume the stored
+  scores describe the draft that was critiqued rather than the file on disk.
+  `report_is_final()` is that distinction and the renderer LEADS with it:
+  presenting a pre-edit score as final would be a quiet lie, and a fit score
+  the reader cannot date is worse than none. Only APPLIED recommendations
+  count as edits -- a skipped or deferred one changed nothing, so counting it
+  would mark nearly every resume stale and make the flag useless.
+  `rescore()` is the honest answer to "what are the FINAL scores", and the
+  one thing in the module that spends quota: it re-runs
+  `_run_holistic_critique` against the file as it now stands, records
+  `_critique._scored_at_stage = "rescore"`, and `report_is_final()` believes
+  that RECORDED answer over the inferred one. It passes `job_key=None`
+  (which is why that method's checkpoint save is conditional) -- checkpointing
+  a critique under a finished job's key would make a later resumed build
+  reuse a critique of a different draft. It re-scores only; it deliberately
+  does NOT re-run Step 5.5's apply loop, so the fresh recommendations report
+  as not-attempted rather than silently rewriting a document the user may
+  already have sent. It refuses before spending anything when `_build_meta`
+  names no JD or the JD is gone -- scoring against a different posting is
+  meaningless.
+  **Every recommendation is shown with its OUTCOME, including the ones the
+  apply loop filed as not-a-document-edit** (`recommendation_outcomes()`,
+  marked `✓` applied / `?` needs input / `✗` tried-and-discarded / `·`
+  not-an-edit / `○` not attempted). That last verdict is the model's, made in
+  one pass, and it is wrong often enough to matter -- plenty of those ARE
+  document edits it could not resolve -- so they are MARKED rather than
+  dropped: hiding them kept real edits from the only reader who can judge
+  them, while the mark still lets genuine "go network" advice read as noise
+  at a glance. An action recorded against a recommendation the critique no
+  longer lists (a re-score replaced the list) is still shown, or the work
+  already done would vanish with the old list.
+  **Sample-fixture builds are excluded from the list** (`is_sample_resume()`):
+  a sample is a QA smoke test re-run indefinitely against a fixed JD, so its
+  scores describe the pipeline rather than an application. `_build_meta`'s
+  jd_path is the authoritative test and an explicit answer BEATS the
+  heuristic -- a real build that happens to share the fixture's company and
+  role must not be hidden. Documents predating that key fall back to
+  comparing the filename against `orchestrator._build_output_stem()` of the
+  resolved sample JD, derived rather than hardcoded so a profile with its own
+  `sample_jd.txt` is covered too.
+  `resume_json_dir()` resolves per call, never at import -- a module-level
+  constant here would survive a profile switch and show one profile's
+  documents to another (the `JDTracker`/`TRACKER_CSV` bug class, but a
+  privacy one). `_build_meta` (jd_path, job_key, built_at) is stamped at
+  Step 6 so a reader can tell which posting a set of scores was scored
+  AGAINST, which is most of what they mean.
+- **A critique recommendation gets more than one try
+  (`orchestrator.RECOMMENDATION_MAX_ATTEMPTS`, Step 5.5).** Each of
+  `critique_resume.md`'s recommendations is applied in its own call, and the
+  result is kept only if it introduces no NEW validator violation (judged
+  against a rolling baseline, since Step 4 legitimately ships soft ones). A
+  candidate that broke something used to be discarded on the spot -- one try,
+  no feedback -- so a recommendation was lost to a fixable collision it was
+  never told about. Retries name the exact violations they caused, which is
+  what makes a retry worth more than a reroll: without them the model cannot
+  tell which part of its edit was rejected and simply reproduces it. Each
+  attempt restarts from the PRE-EDIT resume, the deliberate opposite of the
+  Step 4 fix loop's hill-climb -- there is a known-good state to return to
+  here, and the edit is meant to be small and local, so a rejected attempt is
+  discarded whole rather than becoming the next attempt's starting point. The
+  retry prompt also offers the escape hatch explicitly (put the
+  recommendation in `skipped_recommendations` rather than break a rule
+  again), so a recommendation that genuinely conflicts with a validator rule
+  stops costing calls instead of burning every attempt. Only a FAILING
+  recommendation ever costs more than one call. An unparseable response is a
+  failed attempt too, not an immediate give-up.
+- **Every skills category needs at least two items, and the fix is
+  deterministic (`orchestrator._fill_thin_skill_categories`).** A 2026-09-30
+  build shipped `Productivity: Microsoft Office Suite` beside rows of six and
+  eight -- a one-item row reads as a stub rather than a category. It is a
+  PRESENTATION defect, not a content one: that profile's cv.md files eleven
+  skills under Productivity, so the page was thin where the evidence was not.
+  Three layers, in the order they get a chance: `tailor_resume.md` states the
+  rule, `validate_resume._check_thin_skill_categories` reports it as a SOFT
+  violation (`partition_violations`, prefix `"Skills category"`) so the fix
+  loop gets a try but a lonely row can never fail a build, and the filler
+  repairs whatever is left at the end of `_finalize_resume_text`. The filler
+  draws ONLY from the cv.md group the row is already made of -- there is
+  nothing to invent, which is what makes it safe where
+  `_micro_refactor_skills_line`'s old "add 1-2 relevant skills" prompt was
+  not. It runs AFTER `_top_up_verified_skills`, deliberately: a JD-driven
+  addition may lift the row on its own, and filling first would spend the
+  row's remaining width on a skill the posting never asked for. Additions are
+  JD-matched first, the same coverage-before-convenience priority
+  `rank_tools_for_prompt` applies. It skips rather than guesses in every
+  direction -- a row whose cv.md group is ambiguous (label tokens tie), a
+  group with nothing left to give, and an addition that would land in the
+  widow dead band are all left alone, because a lone item is cosmetic while a
+  misfiled or illegally-wrapped one is a wrong resume. The row's group is
+  resolved from its own ITEMS before its label (`_cv_candidates_for_row`,
+  same reasoning as `_skill_home_rows`): the model routinely renames a row,
+  so its contents identify the group more reliably than its heading.
+  `_parse_cv_skill_groups` ("where does this skill belong") and
+  `_parse_cv_skill_members` ("what else belongs here") are two readings of
+  ONE traversal (`_iter_cv_skill_items`), so a parsing fix cannot reach one
+  without reaching the other.
 - **AI-training gigs and staffing-agency boards are LABELS, surfaced as one
   `[i]` category view filter on Jobs and Pipeline (`model.CategoryFilterCycle`:
   all / hide AI training / AI training only / staffing boards).**

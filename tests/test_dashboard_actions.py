@@ -238,6 +238,7 @@ class TestMatrix(JDFileTestCase):
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("embed_bullet_bank.embed_batch")
     @patch("dashboard_actions._load_verified_skill_reference_vectors")
+    @patch("dashboard_actions._load_verified_skill_anchored_mask", new=lambda: None)
     def test_matrix_file_backed_success(self, mock_ref_vecs, mock_embed, mock_export):
         mock_ref_vecs.return_value = np.ones((5, 768), dtype=np.float32)
         mock_embed.return_value = [
@@ -266,6 +267,7 @@ class TestMatrix(JDFileTestCase):
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("embed_bullet_bank.embed_batch")
     @patch("dashboard_actions._load_verified_skill_reference_vectors")
+    @patch("dashboard_actions._load_verified_skill_anchored_mask", new=lambda: None)
     @patch("jd_source.resolved_jd")
     def test_matrix_database_backed_success(
         self, mock_resolved, mock_ref_vecs, mock_embed, mock_export
@@ -294,6 +296,7 @@ class TestMatrix(JDFileTestCase):
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("embed_bullet_bank.embed_batch")
     @patch("dashboard_actions._load_verified_skill_reference_vectors")
+    @patch("dashboard_actions._load_verified_skill_anchored_mask", new=lambda: None)
     @patch("orchestrator.get_or_extract_jd_keywords")
     def test_matrix_falls_back_to_extracted_keywords_when_no_scan_skills(
         self, mock_extract, mock_ref_vecs, mock_embed, mock_export
@@ -368,6 +371,7 @@ class TestMatrix(JDFileTestCase):
     @patch("dashboard_actions.dashboard._export_jobs_to")
     @patch("embed_bullet_bank.embed_batch")
     @patch("dashboard_actions._load_verified_skill_reference_vectors")
+    @patch("dashboard_actions._load_verified_skill_anchored_mask", new=lambda: None)
     def test_matrix_batches_large_skill_lists(
         self, mock_ref_vecs, mock_embed, mock_export
     ):
@@ -678,13 +682,17 @@ class TestLoadVerifiedSkillAnchoredMask(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self._write_meta(d, {"model": "ge2", "dim": 768})
             with patch("profile_paths.kb_dir", return_value=d):
-                self.assertIsNone(dashboard_actions._load_verified_skill_anchored_mask())
+                self.assertIsNone(
+                    dashboard_actions._load_verified_skill_anchored_mask()
+                )
 
     def test_returns_none_when_anchored_is_empty_list(self):
         with tempfile.TemporaryDirectory() as d:
             self._write_meta(d, {"anchored": []})
             with patch("profile_paths.kb_dir", return_value=d):
-                self.assertIsNone(dashboard_actions._load_verified_skill_anchored_mask())
+                self.assertIsNone(
+                    dashboard_actions._load_verified_skill_anchored_mask()
+                )
 
     def test_returns_bool_array_from_sidecar(self):
         with tempfile.TemporaryDirectory() as d:
@@ -716,7 +724,9 @@ class TestCoverageReferenceWithAnchoredMask(unittest.TestCase):
     def test_anchored_mask_filters_reference_rows(self):
         """Reference with 3 anchored rows is smaller than reference with 10 rows."""
         vecs = self._unit_vecs(10)
-        mask = np.array([True, True, True, False, False, False, False, False, False, False])
+        mask = np.array(
+            [True, True, True, False, False, False, False, False, False, False]
+        )
         ref_masked = dashboard_actions._coverage_reference(vecs, anchored_mask=mask)
         ref_full = dashboard_actions._coverage_reference(vecs)
         # Both are sorted 1-D arrays but the masked reference has only 3 entries.
@@ -727,7 +737,9 @@ class TestCoverageReferenceWithAnchoredMask(unittest.TestCase):
         """If anchored count < _MIN_ANCHORED_FOR_REFERENCE, fall back to full."""
         vecs = self._unit_vecs(10)
         # Only 2 anchored — below the minimum-3 threshold.
-        mask = np.array([True, True, False, False, False, False, False, False, False, False])
+        mask = np.array(
+            [True, True, False, False, False, False, False, False, False, False]
+        )
         ref_masked = dashboard_actions._coverage_reference(vecs, anchored_mask=mask)
         ref_full = dashboard_actions._coverage_reference(vecs)
         np.testing.assert_array_almost_equal(ref_masked, ref_full)

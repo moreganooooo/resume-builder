@@ -1,0 +1,183 @@
+# board_scanner's "ats" source: Brave-search sweep queries for
+# discovering companies NOT already in tracked_companies.yml. Empty to
+# start -- needs BRAVE_API_KEY in this profile's .env to do anything.
+# See profiles/morgan/board_scanner/search_queries.yml for real worked
+# examples (mostly "site:boards.greenhouse.io ... remote" style
+# per-ATS-platform sweeps scoped to target keywords).
+#
+# - name: Greenhouse sweep
+#   query: 'site:boards.greenhouse.io "your target keyword" remote'
+#   enabled: true
+search_queries:
+
+# --- Local Buffalo-area employers (added 2026-09-23 from dom_companiestotrack.ods) ---
+# DDG is the default backend (no BRAVE_API_KEY needed). Brave is used when the key IS set.
+# Each entry mirrors a scan_method: websearch stub in tracked_companies.yml.
+
+- name: Linde
+  query: site:linde.com/en-us/about/careers data automation analytics Tonawanda
+  enabled: true
+
+- name: Stark Tech
+  query: site:starktech.com careers controls analytics BAS energy Williamsville
+  enabled: true
+
+- name: Buffalo Sewer Authority
+  query: site:buffalosewer.org jobs SCADA data GIS instrumentation
+  enabled: true
+
+- name: ITT Flow Technologies
+  query: site:ittflowtech.com careers automation controls data Getzville
+  enabled: true
+
+- name: National Grid
+  query: site:nationalgrid.com/us/careers data GIS analytics grid SCADA Buffalo
+  enabled: true
+
+- name: Derrick Corporation
+  query: site:derrick.com/careers controls automation data applications Cheektowaga
+  enabled: true
+
+- name: Arcadis
+  query: site:arcadis.com/en-us/jobs Buffalo data GIS water asset management
+  enabled: true
+
+- name: GHD
+  query: site:ghd.com/en-us/careers Buffalo automation water SCADA data
+  enabled: true
+
+- name: Erie County Water Authority
+  query: site:ecwa.org jobs IT GIS engineering water data
+  enabled: true
+
+- name: Schneider Electric Buffalo
+  query: site:se.com/en/jobs Buffalo IoT energy controls analytics
+  enabled: true
+
+- name: Encorus Group
+  query: site:encorus.applytojob.com
+  enabled: true
+
+- name: IMA Life North America
+  query: site:imagroup.com/careers Buffalo SCADA PLC validation data acquisition
+  enabled: true
+
+- name: Upstate Niagara Cooperative
+  query: site:upstateniagara.coop jobs automation MES process data ERP Lancaster
+  enabled: true
+
+- name: Viridi
+  query: site:viridi-be.com careers Buffalo battery energy controls automation
+  enabled: true
+
+- name: General Motors Lockport
+  query: site:gm.com/us/en/our-company/careers Lockport controls PLC manufacturing analytics
+  enabled: true
+
+- name: UFP Industries (Deckorators)
+  query: site:ufpi.com careers Buffalo SCADA IIoT MES controls manufacturing
+  enabled: true
+
+- name: Eaton
+  query: site:eaton.com/us/en-us/company/careers Orchard Park controls software data systems
+  enabled: true
+
+- name: University at Buffalo
+  query: site:ubjobs.buffalo.edu data research GIS systems analyst programmer bioinformatics
+  enabled: true
+
+- name: Roswell Park Cancer Center
+  query: site:roswellpark.org/careers data bioinformatics informatics software research
+  enabled: true
+
+- name: Kaleida Health
+  query: site:kaleidahealth.org/careers IT analyst data reporting application clinical
+  enabled: true
+
+- name: Independent Health
+  query: site:independenthealth.com/careers data analytics BI reporting systems developer
+  enabled: true
+
+- name: Highmark BCBS WNY
+  query: site:highmarkbcbswny.com/careers data analytics technology actuarial reporting
+  enabled: true
+
+- name: Catholic Health Buffalo
+  query: site:chsbuffalo.org/careers IT data reporting clinical informatics project
+  enabled: true
+
+- name: Erie County Medical Center
+  query: site:ecmc.edu/careers IT data healthcare reporting network analyst
+  enabled: true
+
+- name: Frontier Science
+  query: site:frontiersci.com/careers data clinical database statistical programming QA
+  enabled: true
+
+- name: CUBRC
+  query: site:cubrc.org/careers software DevOps data modeling research systems
+  enabled: true
+
+- name: Northrop Grumman Buffalo
+  query: site:northropgrumman.com/jobs Buffalo OR Amherst systems software data cybersecurity
+  enabled: true
+
+- name: Northrop Grumman remote
+  query: site:northropgrumman.com/jobs remote systems software data cybersecurity test
+  enabled: true
+
+- name: VOCAL Technologies
+  query: site:vocal.com/careers software DSP embedded RF test Amherst
+  enabled: true
+
+- name: 3AM Innovations
+  query: '"3AM Innovations" Buffalo jobs software product IoT'
+  enabled: true
+
+- name: 43North
+  query: site:jobs.43north.org
+  enabled: true
+
+- name: Odoo Buffalo
+  query: site:odoo.com/jobs Buffalo implementation CRM ERP business analyst
+  enabled: true
+
+- name: AIS Buffalo managed IT
+  query: '"AIS" Buffalo managed IT jobs cloud network cybersecurity NOC'
+  enabled: true
+
+- name: Erie County / City of Buffalo Government
+  query: site:governmentjobs.com/careers/erieco GIS data IT analyst asset management
+  enabled: true
+
+# --- Dom's manually-added tracked_companies.yml entries that have no supported ATS API ---
+# Their careers_url resolves to a custom portal (SuccessFactors, Taleo, etc.),
+# so scan_ats.py silently skips them without a search_queries.yml entry.
+
+- name: PostProcess Technologies
+  query: site:postprocess.com/career
+  enabled: true
+
+- name: Deloitte
+  query: site:apply.deloitte.com data analytics technology consulting
+  enabled: true
+
+- name: KPMG
+  query: site:us-talentcommunity.kpmg.com data analytics technology consulting
+  enabled: true
+
+- name: ThermoFisher Scientific
+  query: site:jobs.thermofisher.com data scientist analytics automation
+  enabled: true
+
+- name: Rich's Foods
+  query: site:careers.rich.com data technology analytics
+  enabled: true
+
+- name: Univera Healthcare
+  query: site:careers.univerahealthcare.com data IT analytics
+  enabled: true
+
+- name: National Fuel Gas
+  query: site:nationalfuel.com/corporate/careers data technology IT GIS
+  enabled: true

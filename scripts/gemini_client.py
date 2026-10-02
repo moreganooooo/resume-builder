@@ -367,9 +367,14 @@ def _server_retry_delay_secs(resp) -> float | None:
 # retry the one that's struggling. gemini-3.1-flash-lite has a 250k TPM
 # cap and is the model builder/fix/trim calls use directly (with nowhere
 # to fall back to previously, since REWRITE_FALLBACK_MODEL pointed at
-# itself) -- gemma-4-31b-it has TPM Unlimited on this account's quota
-# tiers, making it a real rescue path when flash-lite is under high
-# demand, not just a same-model retry with backoff.
+# itself). gemma-4-31b-it WAS TPM Unlimited on this account's quota tiers,
+# which is why it was made a rescue path rather than a same-model retry
+# with backoff -- but that is no longer true: it is now hard-capped at
+# GEMMA_TPM_LIMIT (16k, confirmed 2026-07-16 and again 2026-09-29), and is
+# expected to stay there. A swap INTO Gemma is therefore only a rescue for
+# a SMALL prompt; anything larger trades a struggling model for a certain
+# 429. gemma_request_too_large() preflights exactly that case, so an
+# oversized call never lands here in the first place.
 # gemini-3.5-flash-lite sits between them (2026-09-15): the old pair was
 # each other's only rescue, and a probe that day found flash-lite 503ing and
 # gemma-4-31b-it 500ing on every call while 3.5-flash-lite answered in <1s
@@ -499,6 +504,72 @@ def _retry_sleep_secs(attempt: int, server_delay: float | None = None) -> float:
         return server_delay + random.uniform(1, 4)  # nosec B311
     backoff = cast(float, min(BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS))
     return backoff + random.uniform(1, 4)  # nosec B311
+
+
+# ---------------------------------------------------------------------------
+# GEMMA TOKEN-BUDGET PREFLIGHT
+# ---------------------------------------------------------------------------
+# gemma-4-31b-it's cap is 16k tokens per MINUTE, and the cap counts input
+# AND output. A single request bigger than that can therefore never succeed,
+# no matter how long the caller waits -- pacing spreads calls out, it does
+# not shrink one. Measured 2026-09-29 on a real resume build: the Gemma
+# rewrite path sent a 15,985-char system prompt plus a 47,964-char static
+# prefix (~64k chars, roughly 16k tokens before the per-bullet segment,
+# schema and output), and EVERY call 429'd -- the run logged not one
+# successful Gemma response, only six pacing waits of ~75s each before
+# handing off to flash-lite. That is ~7.5 minutes of guaranteed-fail
+# waiting per bullet.
+#
+# Note the contradiction this resolves: MODEL_FALLBACKS' comment above
+# once described gemma-4-31b-it as "TPM Unlimited" -- true when written,
+# no longer: the quota was hard-capped at 16k and is expected to stay
+# there. Any fallback INTO Gemma therefore has to be size-checked, or it
+# trades a struggling model for a certain 429.
+GEMMA_TPM_LIMIT = 16_000
+
+# Chars per token, deliberately pessimistic. English prose averages ~4;
+# these prompts are dense with markup, punctuation and short tokens, which
+# pushes the real ratio lower (more tokens per char). Under-estimating size
+# is the dangerous direction -- it lets an oversized call through to a
+# guaranteed 429 -- so this errs toward reporting a request as too big.
+CHARS_PER_TOKEN = 3.5
+
+# Output counts against the same per-minute budget, so a prompt may not
+# claim all of it. Reserved when the caller states no max_output_tokens.
+GEMMA_DEFAULT_OUTPUT_RESERVE = 2_048
+
+
+def estimate_tokens(text: str) -> int:
+    """Rough token count for a string. An ESTIMATE, not the tokenizer --
+    used only to decide whether a request is hopeless before spending a
+    network round-trip and a 75s pacing wait on it."""
+    if not text:
+        return 0
+    return int(len(text) / CHARS_PER_TOKEN)
+
+
+def gemma_prompt_budget(max_output_tokens: int | None) -> int:
+    """Largest prompt (in estimated tokens) a single Gemma call may carry."""
+    reserve = max_output_tokens or GEMMA_DEFAULT_OUTPUT_RESERVE
+    return max(GEMMA_TPM_LIMIT - reserve, 0)
+
+
+def gemma_request_too_large(
+    model: str,
+    system_instruction: str,
+    contents: str,
+    max_output_tokens: int | None,
+) -> tuple[bool, int, int]:
+    """(too_large, estimated_prompt_tokens, budget) for a Gemma-bound call.
+
+    Always (False, 0, 0) for non-Gemma models: every other model this
+    project uses has a 250k TPM cap, which none of these prompts approach.
+    """
+    if "gemma" not in (model or "").lower():
+        return False, 0, 0
+    estimated = estimate_tokens(system_instruction) + estimate_tokens(contents)
+    budget = gemma_prompt_budget(max_output_tokens)
+    return estimated > budget, estimated, budget
 
 
 def _pace_gemma(model: str) -> None:
@@ -1046,6 +1117,38 @@ class GeminiClient(metaclass=_GeminiClientMeta):
             fallbacks = grounded_fallbacks(tools)
         elif fallbacks is None:
             fallbacks = MODEL_FALLBACKS
+        # Gemma preflight: a request larger than the whole 16k TPM budget
+        # cannot succeed on any attempt, so spending retries -- each behind
+        # a 75s pacing wait -- only delays the caller's real fallback. Decide
+        # BEFORE the loop, where the model can still be swapped once.
+        too_large, est_tokens, budget = gemma_request_too_large(
+            model, system_instruction, contents, max_output_tokens
+        )
+        if too_large:
+            swap_to = fallbacks.get(model) if (model_fallback and not tools) else None
+            if swap_to:
+                cli_art.console.print(
+                    f"    {theme.colorize_icon('warning')} Prompt is ~{est_tokens:,} tokens, over {model}'s "
+                    f"{budget:,}-token per-call budget -- using {swap_to} instead.",
+                    soft_wrap=True,
+                )
+                model = swap_to
+                url = f"{BASE_URL}/{model}:generateContent"
+            else:
+                # No swap available here: either the caller manages its own
+                # handoff (model_fallback=False, e.g. rewrite_bullets, whose
+                # slim-vs-full context means only IT can rebuild the prompt
+                # for another model) or this is a grounded call, which may
+                # not leave its quota family. Return empty immediately so
+                # that handoff fires now instead of after ~7.5 minutes of
+                # doomed retries.
+                cli_art.console.print(
+                    f"    {theme.colorize_icon('warning')} Skipping {model}: prompt is ~{est_tokens:,} tokens, "
+                    f"over its {budget:,}-token per-call budget (16k TPM cap).",
+                    soft_wrap=True,
+                )
+                return None, {}
+
         failure_streak = 0
         key_switches = 0
 
@@ -1291,7 +1394,9 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                 else:
                     sleep_dur = min(
                         BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
-                    ) + random.uniform(1, 4)  # nosec B311
+                    ) + random.uniform(
+                        1, 4
+                    )  # nosec B311
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed HTTP 429. Waiting {sleep_dur:.1f}s"
                     f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",
@@ -1323,7 +1428,9 @@ class GeminiClient(metaclass=_GeminiClientMeta):
                 else:
                     sleep_dur = min(
                         BASE_BACKOFF_SECS * (2**attempt), MAX_BACKOFF_SECS
-                    ) + random.uniform(1, 4)  # nosec B311
+                    ) + random.uniform(
+                        1, 4
+                    )  # nosec B311
                 cli_art.console.print(
                     f"    {cli_art.WARNING} Embed HTTP {resp.status_code}. Waiting {sleep_dur:.1f}s"
                     f"{' (server-specified)' if server_delay is not None else ''} (retry {attempt+1}/{max_retries})...",

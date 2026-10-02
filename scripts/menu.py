@@ -247,9 +247,22 @@ def _build_build_documents_choices() -> list:
         ),
         questionary.Choice(
             title=_icon_title(
+                "recruiter",
+                "↳ View Generated Resumes (fit scores + polish ideas, no AI)",
+            ),
+            value="view_resumes",
+        ),
+        questionary.Choice(
+            title=_icon_title(
                 "utility", "↳ Re-render an Existing Document (PDF from JSON, no AI)"
             ),
             value="rerender",
+        ),
+        questionary.Choice(
+            title=_icon_title(
+                "ai", "↳ Re-generate Resume from Scratch (Full AI rebuild)"
+            ),
+            value="regenerate_from_scratch",
         ),
         questionary.Choice(title="Back", value="back"),
     ]
@@ -1908,7 +1921,7 @@ def _handle_career_dashboard() -> bool:
     (dashboard/) -- unlike every other handler here, this isn't
     questionary-driven; the dashboard is its own full-screen TUI that
     takes over stdio until the user quits it (`q`)."""
-    success, message = dashboard_module.run()  # type: ignore[attr-defined]
+    success, message = dashboard_module.run(profile_paths.active_profile())  # type: ignore[attr-defined]
     if not success:
         cli_art.display_error(message)
     return False
@@ -1916,6 +1929,21 @@ def _handle_career_dashboard() -> bool:
 
 def _handle_polish() -> bool:
     polish_module.run(None)
+    return False
+
+
+def _handle_view_generated_resumes() -> bool:
+    """Reads the holistic critique back off already-generated resumes.
+
+    Those scores -- fit, skills relevance, top-third, ATS risk -- were
+    computed during the build and printed exactly once, into a scrolling log.
+    They are persisted on the document, so this costs no API call. See
+    resume_report.py for why it insists on dating them.
+    """
+    import resume_report
+
+    resume_report.run()
+    _pause_and_return()
     return False
 
 
@@ -1960,6 +1988,115 @@ def _handle_rerender() -> bool:
         cli_art.cli_info(
             "The JSON was untouched -- only this render attempt is missing."
         )
+    _pause_and_return()
+    return False
+
+
+def _handle_regenerate_from_scratch() -> bool:
+    """Re-generates a resume from scratch using AI for an existing JD.
+    This rebuilds the resume using the full AI pipeline, not just re-rendering
+    the existing JSON."""
+    import os
+
+    # Get all JDs that have had resumes generated
+    # Use the JD tracker to find JDs marked as completed (have had resumes built)
+    tracker = jd_manager.JDTracker()
+    all_jds = (
+        jd_manager.get_completed_jds()
+        + jd_manager.get_pending_jds()
+        + jd_manager.get_archived_jds()
+    )
+
+    # Filter to only those marked as completed in the tracker
+    jds_with_resumes = []
+    for jd_path in all_jds:
+        try:
+            job_key = jd_manager.compute_job_key(jd_path)
+            if tracker.is_completed(job_key):
+                jds_with_resumes.append(jd_path)
+        except Exception:
+            # If we can't get the job_key or check completion, skip this JD
+            continue
+
+    if not jds_with_resumes:
+        cli_art.cli_info(
+            "No JDs with generated resumes found. Please generate a resume first."
+        )
+        return False
+
+    jd_path = picker.pick_and_return(
+        jds_with_resumes,
+        "Pick a JD to regenerate resume for",
+    )
+    if not jd_path:
+        cli_art.cli_info("No JD selected -- regeneration canceled.")
+        return False
+
+    # Get the existing output JSON path (resume or cover letter)
+    doc_type = "resume"  # Default to resume
+    base_name = os.path.splitext(os.path.basename(jd_path))[0]
+    output_dir = os.path.join(
+        profile_paths.output_dir(),
+        profile_paths.active_profile() if profile_paths.active_profile() else "",
+        "resume",
+    )
+    os.makedirs(output_dir, exist_ok=True)
+    json_path = os.path.join(output_dir, f"{base_name}_resume.json")
+
+    # Check if JSON exists
+    if not os.path.exists(json_path):
+        # Try to find any existing JSON for this JD
+        import glob
+
+        possible_paths = glob.glob(
+            os.path.join(
+                profile_paths.output_dir(),
+                (
+                    profile_paths.active_profile()
+                    if profile_paths.active_profile()
+                    else ""
+                ),
+                "*",
+                f"*{base_name}*.json",
+            )
+        )
+        if possible_paths:
+            json_path = possible_paths[0]
+            doc_type = polish_module.detect_doc_type(json_path) or "resume"
+        else:
+            cli_art.console.print(
+                f"{cli_art.WARNING} No existing JSON found for {jd_path}. "
+                "Creating new resume from scratch."
+            )
+            doc_type = "resume"
+
+    skip_company_research = False
+    try:
+        with open(jd_path, "r") as f:
+            jd_data = json.load(f)
+            if jd_data.get("staffing_agency"):
+                skip_company_research = True
+                cli_art.print_literal(
+                    "  Staffing agency posting detected -- skipping Why section."
+                )
+    except (json.JSONDecodeError, KeyError, OSError):
+        pass
+
+    with cli_art.thinking_status("Regenerating resume with AI..."):
+        engine = orchestrator.ResumeEngine()
+        result = engine.build_tailored_resume(
+            jd_path=jd_path,
+            master_resume=None,
+            interactive=True,
+            skip_company_research=skip_company_research,
+        )
+
+    if result and result.get("status") == "completed":
+        cli_art.console.print(f"{cli_art.SUCCESS} Resume regenerated!")
+        cli_art.render_application_package_hud(result)
+    else:
+        cli_art.cli_info("Resume regeneration failed or returned no result.")
+
     _pause_and_return()
     return False
 
@@ -3155,7 +3292,9 @@ _HANDLERS = {
     "browse_jobs": _handle_browse_jobs,
     "career_dashboard": _handle_career_dashboard,
     "polish": _handle_polish,
+    "view_resumes": _handle_view_generated_resumes,
     "rerender": _handle_rerender,
+    "regenerate_from_scratch": _handle_regenerate_from_scratch,
     "stale_sweep": _handle_stale_sweep,
     "help": _handle_help,
     "check_updates": _handle_check_updates,
@@ -3408,6 +3547,7 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
         "bullet_bank",
         "settings_upkeep",
         "help",
+        "view_resumes",
     }
 
     action_titles = {
@@ -3421,6 +3561,7 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
         "tailor_pick": "Targeted Resume Customization",
         "coverletter_pick": "Targeted Cover Letter Customization",
         "polish": "Polishing Documents with Gemini",
+        "view_resumes": "Generated Resume Reports",
         "stale_sweep": "Stale Application Sweep",
     }
 
@@ -3502,9 +3643,11 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
             # Clean up: restore the scroll region back to the entire screen window
             sys.stdout.write("\x1b[r")
             sys.stdout.flush()
-        if suspended_alt_screen:
-            sys.stdout.write("\x1b[?1049h\x1b[H")
-            sys.stdout.flush()
+        # Alt-screen re-entry is deferred until AFTER the pause below so the
+        # user can read the action's output. The finally block only restores
+        # what needs restoring unconditionally (scroll region); alt-screen
+        # re-entry is safe to defer because nothing between here and the
+        # re-entry writes to the terminal in a way that requires alt-screen.
 
     if did_something:
         label = _SESSION_LABELS.get(value)
@@ -3512,13 +3655,22 @@ def _run_with_chain(value: str, session_stats: dict) -> None:
             session_stats[label] = session_stats.get(label, 0) + 1
 
     if is_interactive:
+        if suspended_alt_screen:
+            sys.stdout.write("\x1b[?1049h\x1b[H")
+            sys.stdout.flush()
         return
 
     if not did_something or not _CHAIN.get(value):
         _pause_and_return()
+        if suspended_alt_screen:
+            sys.stdout.write("\x1b[?1049h\x1b[H")
+            sys.stdout.flush()
         return
 
     offer_next_steps(value, session_stats)
+    if suspended_alt_screen:
+        sys.stdout.write("\x1b[?1049h\x1b[H")
+        sys.stdout.flush()
 
 
 def _session_summary(session_stats: dict) -> str:

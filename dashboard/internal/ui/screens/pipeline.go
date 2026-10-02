@@ -49,6 +49,20 @@ type URLOpenFailedMsg struct {
 	Err error
 }
 
+// PipelineFavoriteMsg asks main.go to toggle the shortlist mark on a role
+// (dashboard_actions.py's "favorite" subcommand, which persists it to the
+// JD's own _favorite key and re-exports). The screen has already flipped
+// its own copy optimistically by the time this is emitted; the reload that
+// follows the subprocess is what makes it authoritative.
+type PipelineFavoriteMsg struct {
+	JobPath string
+}
+
+// PipelineReinstateMsg is emitted when a user requests to reinstate an archived job.
+type PipelineReinstateMsg struct {
+	JobPath string
+}
+
 // PipelineLoadReportMsg requests lazy loading of a report summary.
 type PipelineLoadReportMsg struct {
 	CareerOpsPath string
@@ -104,6 +118,7 @@ const (
 	filterSkip      = "skip"
 	filterRejected  = "rejected"
 	filterDiscarded = "discarded"
+	filterShortlist = "shortlist"
 	filterTop       = "top"
 	filterLow       = "low"
 )
@@ -115,6 +130,7 @@ type pipelineTab struct {
 
 var pipelineTabs = []pipelineTab{
 	{filterAll, "ALL"},
+	{filterShortlist, "★ SHORTLIST"},
 	{filterEvaluated, "EVALUATED"},
 	{filterApplied, "APPLIED"},
 	{filterInterview, "INTERVIEW"},
@@ -178,6 +194,11 @@ type PipelineModel struct {
 	roleTrackFilter         bool
 	experienceBlockerFilter bool
 	categoryFilter          string // [i], same stops as Jobs' [i]
+	showTerminal            bool   // [d], toggles display of expired/skipped roles
+
+	// bloom is the in-flight star animation for a just-shortlisted row.
+	// See shortlist.go for why it is keyed by row identity, not index.
+	bloom shortlistBloom
 
 	// notice explains why a keypress was a no-op (e.g. "o" with no saved
 	// URL) instead of silently doing nothing. Cleared on the next keypress,
@@ -325,6 +346,17 @@ func (m PipelineModel) WithReloadedData(apps []model.CareerApplication, metrics 
 }
 
 // CurrentApp returns the currently selected application, if any.
+// setFavoriteByKey flips the shortlist mark on the backing slice, so the
+// change survives the applyFilterAndSort that immediately follows (which
+// rebuilds m.filtered from m.apps).
+func (m *PipelineModel) setFavoriteByKey(key string, favorited bool) {
+	for i := range m.apps {
+		if ShortlistKey(m.apps[i].Company, m.apps[i].Role) == key {
+			m.apps[i].Favorite = favorited
+		}
+	}
+}
+
 func (m PipelineModel) CurrentApp() (model.CareerApplication, bool) {
 	if m.cursor < 0 || m.cursor >= len(m.filtered) {
 		return model.CareerApplication{}, false
@@ -358,6 +390,9 @@ func (m PipelineModel) Update(msg tea.Msg) (PipelineModel, tea.Cmd) {
 		return m, nil
 	case ToastTickMsg:
 		return m, m.toasts.Age()
+
+	case ShortlistBloomMsg:
+		return m, m.bloom.Advance()
 
 	case starfieldTickMsg:
 		if len(m.filtered) == 0 && !anim.SuppressIdleAnimation() {
@@ -615,6 +650,45 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 		m.cursor = 0
 		m.scrollOffset = 0
 
+	case "*":
+		if app, ok := m.CurrentApp(); ok {
+			key := ShortlistKey(app.Company, app.Role)
+			// Optimistic: flip the local copy and animate now, rather
+			// than waiting for the Python round-trip and re-export. The
+			// reload that follows is authoritative and will correct this
+			// if the write failed -- but a star that appears a second
+			// after the keypress reads as a broken key.
+			nowFavorited := !app.Favorite
+			m.setFavoriteByKey(key, nowFavorited)
+
+			var bloomCmd tea.Cmd
+			if nowFavorited {
+				bloomCmd = m.bloom.Start(key)
+			} else {
+				m.bloom.Clear()
+			}
+			m.applyFilterAndSort()
+
+			var toastCmd tea.Cmd
+			if nowFavorited {
+				toastCmd = m.PushToast(ToastCelebrate, "Shortlisted · %s — %s", app.Company, app.Role)
+			} else {
+				toastCmd = m.PushToast(ToastInfo, "Removed from shortlist · %s — %s", app.Company, app.Role)
+			}
+
+			jobPath := app.JobPath
+			return m, tea.Batch(bloomCmd, toastCmd, func() tea.Msg {
+				return PipelineFavoriteMsg{JobPath: jobPath}
+			})
+		}
+
+	case "d":
+		// Toggle display of expired/skipped/archived roles (terminal statuses)
+		m.showTerminal = !m.showTerminal
+		m.applyFilterAndSort()
+		m.cursor = 0
+		m.scrollOffset = 0
+
 	case "enter":
 		if app, ok := m.CurrentApp(); ok && app.ReportPath != "" {
 			fullPath := filepath.Join(m.careerOpsPath, app.ReportPath)
@@ -649,6 +723,18 @@ func (m PipelineModel) handleKey(msg tea.KeyPressMsg) (PipelineModel, tea.Cmd) {
 
 	case "r":
 		return m, func() tea.Msg { return PipelineRefreshMsg{} }
+
+	case "R":
+		if len(m.filtered) > 0 {
+			selected := m.filtered[m.cursor]
+			if strings.ToLower(selected.Status) == "archived" {
+				m.notice = fmt.Sprintf("Reinstating %s - %s...", selected.Company, selected.Role)
+				return m, func() tea.Msg {
+					return PipelineReinstateMsg{JobPath: selected.JobPath}
+				}
+			}
+			m.notice = "Only archived jobs can be reinstated"
+		}
 
 	case "c":
 		if len(m.filtered) > 0 {
@@ -879,6 +965,13 @@ func hasRealWorldProgress(norm string) bool {
 // and an unevaluated role is precisely one the user has not triaged yet,
 // so hiding it would bury the work rather than the noise.
 func belowActionableBar(app model.CareerApplication, norm string) bool {
+	// A shortlisted role is never hidden by score. The bar encodes "the
+	// user said they will not act on this"; a star says the opposite in
+	// the user's own hand, and an explicit choice outranks an inferred
+	// one.
+	if app.Favorite {
+		return false
+	}
 	if hasRealWorldProgress(norm) {
 		return false
 	}
@@ -911,6 +1004,10 @@ func (m *PipelineModel) applyFilterAndSort() {
 			// so the bar is one keypress away in either direction and
 			// nothing becomes unreachable.
 			if belowActionableBar(app, norm) {
+				filtered = append(filtered, app)
+			}
+		case filterShortlist:
+			if app.Favorite {
 				filtered = append(filtered, app)
 			}
 		case filterTop:
@@ -947,6 +1044,24 @@ func (m *PipelineModel) applyFilterAndSort() {
 // filters, same predicates as jobs.go's applyFilter. Empty/false means no
 // restriction, same "opt-in, never a permanent gate" convention as Jobs.
 func matchesPipelineFilters(app model.CareerApplication, m PipelineModel) bool {
+	// Filter out terminal statuses unless the active tab is specifically for
+	// a terminal status (REJECTED, DISCARDED, SKIP) or the [d] toggle is on.
+	// A terminal-specific tab must be able to show its own rows regardless of
+	// showTerminal, or pressing [d] would be required to use those tabs.
+	currentFilter := ""
+	if m.activeTab >= 0 && m.activeTab < len(pipelineTabs) {
+		currentFilter = pipelineTabs[m.activeTab].filter
+	}
+	// The SHORTLIST tab counts as terminal-permitting for the same reason
+	// the SKIP/REJECTED/DISCARDED tabs do: it must be able to show its own
+	// rows without [d] first being pressed. (IsTerminalApplication already
+	// exempts favorites, so this is belt-and-braces -- but a future change
+	// to that exemption should not silently empty this tab.)
+	tabIsTerminal := currentFilter == filterSkip || currentFilter == filterRejected ||
+		currentFilter == filterDiscarded || currentFilter == filterShortlist
+	if !m.showTerminal && !tabIsTerminal && data.IsTerminalApplication(app) {
+		return false
+	}
 	if m.workplaceFilter != "" && app.Workplace != m.workplaceFilter {
 		return false
 	}
@@ -1098,7 +1213,9 @@ var pipelineHelpCategories = []helpCategory{
 		{"o", "Open job URL in browser"},
 		{"a", "Open application answers chat"},
 		{"c", "Change application status"},
+		{"*", "Shortlist / un-shortlist this role"},
 		{"r", "Refresh from disk"},
+			{"R", "Reinstate archived job"},
 	}},
 	{"View", []helpBinding{
 		{"/", "Search company/role/notes"},
@@ -1113,8 +1230,10 @@ var pipelineHelpCategories = []helpCategory{
 		{"t", "Toggle manager-track only"},
 		{"x", "Toggle years/degree blocker only"},
 		{"i", "Cycle category: all / hide AI training / AI only / staffing boards"},
+		{"d", "Toggle display of expired/skipped roles"},
 		{"", "ALL / EVALUATED hide scored roles under 3.5; LOW <3.5 shows them"},
 		{"", "Roles you have applied to are never hidden by that bar"},
+		{"", "Nor are shortlisted (★) roles -- see the ★ SHORTLIST tab"},
 	}},
 	{"Exit", []helpBinding{
 		{"Esc", "Clear search, or back to Main Menu"},
@@ -1242,7 +1361,11 @@ func (m PipelineModel) renderSidebarList(width, height int) string {
 		// Dimmed alongside the rest of the row -- the tag is already
 		// rendered by the time renderSidebarRowTagged sees it.
 		tags := employmentTags(rowTheme(m.theme, selected), app.EmploymentType)
-		line := renderSidebarRowTagged(m.theme, app.Score, app.Company, tags, app.Role, sidebarInnerWidth(width), selected)
+		// The marker is always one cell plus a space, favorited or not, so
+		// the columns to its right do not shift as the cursor moves.
+		bloomGlyph, _ := m.bloom.frameFor(ShortlistKey(app.Company, app.Role))
+		marker := ShortlistMarker(m.theme, app.Favorite, selected, bloomGlyph)
+		line := withShortlistGutter(marker, renderSidebarRowTagged(m.theme, app.Score, app.Company, tags, app.Role, shortlistRowWidth(sidebarInnerWidth(width)), selected))
 		lines = append(lines, zone.Mark(fmt.Sprintf("pipeline_row_%d", i), line))
 	}
 
@@ -1577,7 +1700,16 @@ func (m PipelineModel) renderTabs() string {
 
 func (m PipelineModel) countForFilter(filter string) int {
 	count := 0
+	// Mirror matchesPipelineFilters' terminal-status gate: skip the gate
+	// for terminal-specific tabs (they must count their own rows).
+	tabIsTerminal := filter == filterSkip || filter == filterRejected ||
+		filter == filterDiscarded || filter == filterShortlist
 	for _, app := range m.apps {
+		// Apply terminal-status gate the same way applyFilterAndSort does,
+		// so count and list never disagree.
+		if !m.showTerminal && !tabIsTerminal && data.IsTerminalApplication(app) {
+			continue
+		}
 		norm := data.NormalizeStatus(app.Status)
 		// This switch must stay in step with applyFilterAndSort's: a tab
 		// count that disagrees with the list it labels reads as missing
@@ -1594,6 +1726,10 @@ func (m PipelineModel) countForFilter(filter string) int {
 			}
 		case filterLow:
 			if belowActionableBar(app, norm) {
+				count++
+			}
+		case filterShortlist:
+			if app.Favorite {
 				count++
 			}
 		case filterTop:

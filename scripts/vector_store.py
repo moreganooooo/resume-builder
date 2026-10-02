@@ -197,6 +197,23 @@ def search_bullet_bank(
                     jd_emb, embs = vec, backup
         except Exception:
             jd_emb = None
+        # Third fallback: NIM embedding when both Gemini models are down.
+        if jd_emb is None:
+            try:
+                import embed_bullet_bank as ebb
+                import nim_fallback
+
+                nim_idx = ebb.nim_index_for(
+                    kb_dir, bullets_sha(df["Bullet Point"].fillna("").tolist()), len(df)
+                )
+                if nim_idx is not None:
+                    nim_vec = nim_fallback.embed_batch_nim(
+                        [jd_text[:8000]], input_type="query", max_retries=2
+                    )
+                    if nim_vec and len(nim_vec[0]) == nim_idx.shape[1]:
+                        jd_emb, embs = nim_vec[0], nim_idx
+            except Exception:
+                pass
     bullets = df["Bullet Point"].fillna("").tolist()
     companies = (
         df["Role / Company"].fillna("").tolist()

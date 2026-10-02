@@ -269,10 +269,19 @@ class TestListAllEvaluatedJds(unittest.TestCase):
     @patch("picker.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
+    @patch("picker.jd_manager.get_archived_jds", return_value=[])
+    @patch("picker.jd_manager.get_expired_jds", return_value=[])
     @patch("picker.jd_manager.get_completed_jds", return_value=["jds/completed/c.json"])
     @patch("picker.jd_manager.get_pending_jds", return_value=["jds/p.json"])
     def test_combines_pending_and_completed_with_status_tags(
-        self, mock_pending, mock_completed, mock_read, mock_live, mock_meta
+        self,
+        mock_pending,
+        mock_completed,
+        mock_expired,
+        mock_archived,
+        mock_read,
+        mock_live,
+        mock_meta,
     ):
         mock_read.side_effect = lambda path: {
             "jds/p.json": {
@@ -294,12 +303,21 @@ class TestListAllEvaluatedJds(unittest.TestCase):
     @patch("picker.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
+    @patch("picker.jd_manager.get_archived_jds", return_value=[])
+    @patch("picker.jd_manager.get_expired_jds", return_value=[])
     @patch("picker.jd_manager.get_completed_jds", return_value=[])
     @patch(
         "picker.jd_manager.get_pending_jds", return_value=["jds/a.json", "jds/b.json"]
     )
     def test_excludes_jds_with_no_evaluation(
-        self, mock_pending, mock_completed, mock_read, mock_live, mock_meta
+        self,
+        mock_pending,
+        mock_completed,
+        mock_expired,
+        mock_archived,
+        mock_read,
+        mock_live,
+        mock_meta,
     ):
         mock_read.side_effect = lambda path: {
             "jds/a.json": {"composite_score": 4.0, "recommendation": "Strong pursue"},
@@ -313,13 +331,22 @@ class TestListAllEvaluatedJds(unittest.TestCase):
     @patch("picker.jd_manager.extract_job_meta", return_value=("Role", "Acme"))
     @patch("picker.jd_manager.read_liveness", return_value=None)
     @patch("picker.jd_manager.read_evaluation")
+    @patch("picker.jd_manager.get_archived_jds", return_value=[])
+    @patch("picker.jd_manager.get_expired_jds", return_value=[])
     @patch("picker.jd_manager.get_completed_jds", return_value=[])
     @patch(
         "picker.jd_manager.get_pending_jds",
         return_value=["jds/low.json", "jds/high.json"],
     )
     def test_sorts_best_score_first(
-        self, mock_pending, mock_completed, mock_read, mock_live, mock_meta
+        self,
+        mock_pending,
+        mock_completed,
+        mock_expired,
+        mock_archived,
+        mock_read,
+        mock_live,
+        mock_meta,
     ):
         mock_read.side_effect = lambda path: {
             "jds/low.json": {

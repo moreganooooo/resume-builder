@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -156,6 +157,10 @@ func TestFilterCyclesAllPendingCompletedAll(t *testing.T) {
 	m, _ = m.Update(pressKey("f"))
 	if m.filter != "local" {
 		t.Fatalf("expected filter to cycle to %q, got %q", "local", m.filter)
+	}
+	m, _ = m.Update(pressKey("f"))
+	if m.filter != "shortlist" {
+		t.Fatalf("expected filter to cycle to %q, got %q", "shortlist", m.filter)
 	}
 	m, _ = m.Update(pressKey("f"))
 	if m.filter != "low" {
@@ -365,7 +370,7 @@ func TestLPressDispatchesLivenessAction(t *testing.T) {
 	}
 }
 
-func TestTPressDispatchesForCompletedJob(t *testing.T) {
+func TestTPressHandsOffToTheInteractiveBuild(t *testing.T) {
 	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
 	m, _ = m.Update(pressKey("down")) // select the Completed row (Beta)
 	if job, _ := m.CurrentJob(); job.Status != "Completed" {
@@ -374,11 +379,41 @@ func TestTPressDispatchesForCompletedJob(t *testing.T) {
 
 	m, cmd := m.Update(pressKey("t"))
 
-	if m.actionInProgress != "tailor" {
-		t.Fatalf("expected tailor action for a Completed job, got %q", m.actionInProgress)
+	// Tailoring is interactive (run_pipeline prompts for missing JD
+	// keywords), so it hands the terminal over via tea.ExecProcess rather
+	// than joining the piped runAction path every other action uses.
+	if m.actionInProgress != "" {
+		t.Fatalf("expected no actionInProgress (the build owns the terminal), got %q", m.actionInProgress)
 	}
 	if cmd == nil {
-		t.Fatal("expected tailor command dispatched")
+		t.Fatal("expected the ExecProcess handoff command, got nil")
+	}
+	// The old implementation set a notice claiming a new terminal window
+	// had been launched -- while discarding the error from Start(), so it
+	// said so even when nothing happened. Nothing should be claimed here:
+	// the user is about to watch the build run in this very window.
+	if m.notice != "" {
+		t.Fatalf("expected no notice, got %q", m.notice)
+	}
+}
+
+// The handoff reports its outcome only once the terminal comes back, and
+// reloads -- run_pipeline moves a tailored JD into completed/.
+func TestTailorFinishedReloadsAndReports(t *testing.T) {
+	m := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+
+	m, cmd := m.Update(jobsTailorFinishedMsg{company: "Acme"})
+	if cmd == nil {
+		t.Fatal("expected a reload command after a finished build")
+	}
+	if m.toasts.Empty() {
+		t.Fatal("expected a toast reporting the finished build")
+	}
+
+	m2 := NewJobsModel(theme.NewTheme("catppuccin-mocha"), testJobRows(), 100, 30)
+	m2, _ = m2.Update(jobsTailorFinishedMsg{company: "Acme", err: errors.New("boom")})
+	if !m2.toasts.HasSticky() {
+		t.Fatal("a failed build should leave a sticky error toast, not a self-expiring one")
 	}
 }
 

@@ -240,6 +240,27 @@ def check_gemini_api_key() -> dict:
     )
 
 
+def check_nvidia_api_key() -> dict:
+    values = _env_values()
+    in_file = bool(values.get("NVIDIA_API_KEY"))
+    has_key = in_file or bool(os.environ.get("NVIDIA_API_KEY"))
+    detail = (
+        f"set in {profile_paths.env_path()}"
+        if in_file
+        else ("set in shell environment" if has_key else "not found (optional)")
+    )
+    if has_key:
+        detail += " -- NIM eval fallback enabled (Gemini → Nemotron Super → Ultra)"
+    else:
+        detail += " -- eval fallback disabled; Gemini quota exhaustion will skip roles"
+    return _check(
+        "NVIDIA_API_KEY",
+        True,  # advisory, never fails
+        detail,
+        f"Add NVIDIA_API_KEY=... to {profile_paths.env_path()} to enable NIM eval fallback.",
+    )
+
+
 def check_jobright_cookie() -> dict:
     # Optional -- only needed for `resume scan --source jobright`, never a
     # hard failure, so this always reports passed=True.
@@ -502,6 +523,7 @@ CHECKS = [
     check_playwright_chromium,
     check_go,
     check_gemini_api_key,
+    check_nvidia_api_key,
     check_jobright_cookie,
     check_fonts,
     check_signature_image,

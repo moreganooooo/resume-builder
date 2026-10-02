@@ -125,6 +125,11 @@ class TestFindCandidatesAndApply(unittest.TestCase):
         )
         jd_manager_patcher_archived.start()
         self.addCleanup(jd_manager_patcher_archived.stop)
+        jd_manager_patcher_expired = patch.object(
+            jd_manager, "EXPIRED_DIR", os.path.join(self.jds_dir, "expired")
+        )
+        jd_manager_patcher_expired.start()
+        self.addCleanup(jd_manager_patcher_expired.stop)
         jd_manager_patcher_tracker = patch.object(
             jd_manager,
             "TRACKER_CSV",

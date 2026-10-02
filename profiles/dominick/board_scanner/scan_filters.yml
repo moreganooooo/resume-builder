@@ -1,0 +1,206 @@
+# board_scanner's "boards"/"ats" sources: title/location prefilter
+# applied before a listing becomes a JD file. positive seeded from your
+# target roles during bootstrap -- add near-miss titles you keep seeing
+# as you scan real postings. Empty negative/block lists are permissive
+# by design. See profiles/morgan/board_scanner/scan_filters.yml for a
+# real worked example (100+ positive terms, 300+ negative terms).
+title_filter:
+  positive:
+    - "Data Scientist"
+    - "Data Engineer"
+    - "Data Analyst"
+    - "Machine Learning"
+    - "Data Engineer"
+    - "Quantitative Analyst"
+    - "Business Intelligence"
+    - "Research Analyst"
+    - "Analytics Engineer"
+    - "Research Scientist"
+    - "Applied Scientist"
+    - "IoT"
+    - "Sensor Data"
+  negative:
+    - "Chief Data Officer"
+    - "Chief Scientist"
+    - "VP of Data"
+    - "VP Data Science"
+    - "Director of Data Science"
+    - "Head of Data Science"
+    - "Director of Analytics"
+    # Staff/Principal: median interview odds 2.95 vs 3.80 for unmarked titles
+    # (2026-09-13). Matching is substring, so "Staff " keeps its trailing
+    # space (not "Staffing ...") and ", Staff" / "(Staff)" catch suffixed titles.
+    - "Principal"
+    # Specific "Staff <role>" phrases rather than "Staff ": the latter also
+    # matched "Member of Technical Staff - ...", an AI-lab title used at
+    # many levels (those rows scored 3.55-3.70 odds, well above staff-level).
+    - "Software Engineer"
+    - "Mobile Developer"
+    - "iOS"
+    - "Android"
+    - "DevOps Engineer"
+    - "Java Developer"
+    - "Salesforce Admin"
+    - "Recruiter"
+    - "HR Manager"
+    - "Human Resources"
+    - "People Operations"
+    - "Employee Relations"
+    - "Talent Acquisition"
+    - "Account Executive"
+    - "Inside Sales"
+    - "Sales Representative"
+    - "Business Development"
+    - "Account Manager"
+    - "Sales Development Representative"
+    - "BDR"
+    - "Customer Support"
+    - "Support Specialist"
+    - "Technical Support"
+    - "Customer Service Representative"
+    - "Call Center"
+    - "Help Desk"
+    - "Legal"
+    - "Finance"
+    - "Accounting"
+    - "Procurement"
+    - "Accountant"
+    - "Bookkeeper"
+    - "Attorney"
+    - "Paralegal"
+    - "Tax"
+    - "Counsel"
+    - "Accounts Payable"
+    - "Accounts Receivable"
+    - "Underwriter"
+    - "Underwriting"
+    - "Collections"
+    - "Fraud"
+    - "Compliance"
+    - "Treasury"
+    - "Regulatory"
+    - "Clinical"
+    - "Medical"
+    - "Patient"
+    - "Psychiatric"
+    - "Psychiatrist"
+    - "Therapist"
+    - "Pharmaceutical"
+    - "Dental"
+    - "Dentist"
+    - "Phlebotomist"
+    - "Mental Health"
+    - "Oncology"
+    - "Dietitian"
+    - "Manufacturing"
+    - "Warehouse"
+    - "Logistics"
+    - "Inventory"
+    - "Machining"
+    - "Distribution"
+    - "Supply Chain"
+    - "Quality Control"
+    - "Shipping"
+    - "Receiving"
+    - "Fulfillment"
+    - "Metrology"
+    - "Mechanical"
+    - "Technician"
+    - "Army"
+    - "Air Force"
+    - "Marine Corps"
+    - "Military"
+    - "Real Estate"
+    - "Retail"
+    - "Hospitality"
+    - "Culinary"
+    - "Food Safety"
+    - "Construction"
+    - "Brand Ambassador"
+    - "Administrative"
+    - "Data Entry"
+    - "Billing"
+    - "Facilities"
+    - "Law Enforcement"
+    - "Security Guard"
+    - "Astronaut"
+    - "Agriculture"
+    - "Ministry"
+    - "Religion"
+    - "EMEA"
+    - "APAC"
+    - "LATAM"
+    - "MENA"
+    - "UK"
+    - "Canada"
+    - "Brazil"
+    - "Africa"
+    - "Turkey"
+    - "India"
+    - "Australia"
+    - "Germany"
+    - "France"
+    - "Singapore"
+    - "Philippines"
+    - "Netherlands"
+    - "Mexico"
+    - "México"
+    - "Berlin"
+    - "Prague"
+    - "Czechia"
+    - "Dubai"
+    - "Karnataka"
+    - "Spanish"
+    - "German"
+    - "Italian"
+    - "Portuguese"
+    - "Arabic"
+    - "French"
+location:
+  city: Getzville
+  state: NY
+  zip: "14068"
+  radius_miles: 20
+  workplace_mode: any
+location_filter:
+  always_allow:
+    - "Remote"
+  block:
+    []
+languages:
+- en
+# scoring_weights override removed 2026-09-13 so scoring matches morgan's
+# (the defaults). It had funnel_friction_nudge: 2, doubling the remote-role
+# penalty on interview odds. Existing evaluations keep the old nudge until
+# re-evaluated -- it is baked into the stored funnel_friction subscore.
+max_travel_percent: 10
+employment_type:
+- full_time
+- part_time
+- contract
+- contract_to_hire
+- temporary
+compensation:
+  annual_floor: 60000.0
+  hourly_floor: 16.0
+
+# Employers with no ATS board to track -- they post only to job boards.
+# Every local Indeed posting from these is kept whatever its title, and
+# reported under the "indeed_watchlist" scan source.
+indeed_watch_companies:
+  - "Sentient Science"
+  - name: "Viridi Parente"
+    aliases: ["Viridi"]
+  - "Tapecon"
+
+# Staffing-agency boards to watch (scan source "staffing_boards"). Their
+# postings are tagged with the agency's name and filterable in the
+# dashboard. type: jsonld (detail pages embed schema.org JobPosting) or
+# hmg (Haley Marketing "hmg-jb" boards). See scripts/staffing_boards.py.
+staffing_boards:
+  - name: "Lighthouse Technology Services"
+    url: "https://jobs.lhtservices.com/"
+    type: hmg
+  - name: "ComputerPeople"
+    url: "https://jobs.cpstaffing.com/?_select_area=cp-buf"
+    type: jsonld

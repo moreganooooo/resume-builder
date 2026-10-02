@@ -494,22 +494,55 @@ def _check_skills_line_lengths(resume_data: dict, style_rules: dict) -> list[str
     return violations
 
 
+MIN_SKILLS_PER_CATEGORY = 2
+
+
+def _check_thin_skill_categories(resume_data: dict) -> list[str]:
+    """A category with a single item reads as a stub, not a category.
+
+    Soft by design (orchestrator.partition_violations): the page is thin,
+    not wrong, and orchestrator._fill_thin_skill_categories repairs it
+    deterministically from cv.md after the fix loop has had its try. A
+    lonely row must never be able to fail a build the way a fabricated
+    skill does."""
+    violations = []
+    for line in resume_data.get("SKILLS", []):
+        match = re.match(r"^\s*\*\*(?P<label>[^*]+?):\*\*\s*(?P<items>.*)$", line or "")
+        if not match:
+            continue
+        items = [i.strip() for i in match.group("items").split(",") if i.strip()]
+        if 0 < len(items) < MIN_SKILLS_PER_CATEGORY:
+            violations.append(
+                f"Skills category {match.group('label').strip()!r} lists only "
+                f"{len(items)} item -- every category needs at least "
+                f"{MIN_SKILLS_PER_CATEGORY}. Add another skill the candidate is "
+                f"already credited with under this category, or fold this item "
+                f"into a neighbouring category and drop the label: {line!r}"
+            )
+    return violations
+
+
 def _title_case_violations_in_phrase(phrase: str) -> list[str]:
     """
-    Flags words (or hyphenated sub-parts, e.g. the "assisted" in "AI-assisted")
-    that aren't capitalized, skipping the standard lowercase minor words
-    (and, of, with, etc.) except when they open the phrase.
+    Flags words (or hyphenated/slash-separated sub-parts) with title-case
+    violations: non-initial minor words that are capitalized ("And" -> "and"),
+    non-minor words that aren't capitalized, and slash-separated parts where
+    the second word isn't capitalized ("Software/service" -> "Software/Service").
     """
     violations = []
     words = phrase.strip().split()
     for word_index, word in enumerate(words):
         if word == "&":
             continue
-        for part in word.split("-"):
-            core = part.strip("(),./")
+        for part in re.split(r"[-/]", word):
+            core = part.strip("(),.")
             if not core or not core[0].isalpha():
                 continue
-            if word_index > 0 and core.lower() in _TITLE_CASE_MINOR_WORDS:
+            is_minor = core.lower() in _TITLE_CASE_MINOR_WORDS
+            if word_index > 0 and is_minor:
+                if core[0].isupper():
+                    violations.append(word)
+                    break
                 continue
             if not core[0].isupper():
                 violations.append(word)
@@ -525,8 +558,7 @@ def _check_skills_title_case(resume_data: dict) -> list[str]:
             continue
         label, items_text = match.groups()
         bad_words = _title_case_violations_in_phrase(label)
-        for item in items_text.split(","):
-            bad_words.extend(_title_case_violations_in_phrase(item))
+        bad_words.extend(_title_case_violations_in_phrase(items_text))
         if bad_words:
             violations.append(
                 f"Skills line has word(s) not in Title Case ({', '.join(bad_words)}): {line!r}"
@@ -640,7 +672,10 @@ def _metric_signature(number: str, context: str) -> str:
     # metric -- two bullets naming the same year aren't citing one figure.
     is_year = len(digits) == 4 and 1900 <= int(digits) <= 2099
     distinctive = not is_year and (
-        core.startswith("$") or core.endswith(("m", "k")) or len(digits) >= 4
+        core.startswith("$")
+        or core.endswith(("m", "k", "%"))
+        or len(digits) >= 4
+        or "." in core
     )
     # "$20M" and "20M" are the same figure written two ways.
     core = core.replace("$", "").replace(",", "")
@@ -728,6 +763,96 @@ def _check_metric_provenance(
                         f"{company}'s own bullet-bank source -- likely fabricated or "
                         f"borrowed from a different company's bullet: {achievement!r}"
                     )
+    return violations
+
+
+_FOREIGN_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _numbers_in(text: str) -> set[str]:
+    """Multi-digit numbers in text, commas stripped. Mirrors
+    rewrite_bullets._numbers_in (inlined to avoid import dependency)."""
+    out = set()
+    for raw in _FOREIGN_NUMBER_RE.findall(str(text or "")):
+        n = raw.replace(",", "").rstrip(".")
+        if n.endswith(".0"):
+            n = n[:-2]
+        if len(n.replace(".", "")) >= 2:
+            out.add(n)
+    return out
+
+
+def _check_foreign_numbers(
+    resume_data: dict, bullet_tuples: list[tuple[str, str, str]] | None
+) -> list[str]:
+    """Broader complement to _check_metric_provenance: catches multi-digit
+    numbers in EXPERIENCE and EDUCATION bullets that don't appear anywhere in
+    that company's own bullet-bank source text. Uses the same simple
+    number extraction as rewrite_bullets.foreign_numbers() -- wider net than
+    _extract_metric_signatures, which excludes compound labels and identifier
+    prefixes. Only checks EXPERIENCE bullets (education bullets come from
+    fixed_content / profile.yml, not the bullet bank)."""
+    if not bullet_tuples:
+        return []
+    violations = []
+    company_numbers: dict[str, set[str]] = {}
+    for bullet, company, _tags in bullet_tuples:
+        key = _normalize_company(company)
+        nums = company_numbers.setdefault(key, set())
+        nums |= _numbers_in(bullet)
+    for entry in resume_data.get("EXPERIENCE", []):
+        company = entry.get("company", "")
+        key = _normalize_company(company)
+        allowed = set(company_numbers.get(key, set()))
+        if key:
+            for bank_key, nums in company_numbers.items():
+                if bank_key and (key in bank_key or bank_key in key):
+                    allowed |= nums
+        for bullet_text in entry.get("achievements", []):
+            for num in _numbers_in(bullet_text) - allowed:
+                violations.append(
+                    f"Foreign number '{num}' in a {company} bullet has no "
+                    f"source in {company}'s bullet bank: {bullet_text!r}"
+                )
+    return violations
+
+
+_NEAR_DUPLICATE_THRESHOLD = 0.75
+
+
+def _bullet_words(text: str) -> set[str]:
+    return set(re.sub(r"[^\w\s]", "", text.lower()).split())
+
+
+def _check_near_duplicate_bullets(resume_data: dict) -> list[str]:
+    """Flag pairs of bullets whose word-level Jaccard similarity exceeds
+    the threshold -- nearly identical text that a reader would perceive as
+    the same accomplishment stated twice."""
+    violations = []
+    bullets = []
+    for container_key, list_key in (
+        ("EXPERIENCE", "achievements"),
+        ("EDUCATION", "bullets"),
+    ):
+        for entry in resume_data.get(container_key, []):
+            company = entry.get("company", entry.get("school", "?"))
+            for b in entry.get(list_key, []):
+                bullets.append((b.strip().lstrip("- "), company))
+    for i in range(len(bullets)):
+        words_i = _bullet_words(bullets[i][0])
+        if not words_i:
+            continue
+        for j in range(i + 1, len(bullets)):
+            words_j = _bullet_words(bullets[j][0])
+            if not words_j:
+                continue
+            intersection = len(words_i & words_j)
+            union = len(words_i | words_j)
+            if union and intersection / union >= _NEAR_DUPLICATE_THRESHOLD:
+                violations.append(
+                    f"Near-duplicate bullets ({intersection}/{union} words shared): "
+                    f"{bullets[i][0]!r} ({bullets[i][1]}) vs {bullets[j][0]!r} ({bullets[j][1]})"
+                )
     return violations
 
 
@@ -2526,6 +2651,7 @@ def validate(
     violations.extend(_check_skills_line_lengths(resume_data, style_rules))
     violations.extend(_check_skills_title_case(resume_data))
     violations.extend(_check_skills_item_fragments(resume_data))
+    violations.extend(_check_thin_skill_categories(resume_data))
     violations.extend(_check_hallucinated_tools(resume_data))
     violations.extend(_check_vague_magnitudes(resume_data, bullet_tuples))
     violations.extend(_check_why_filler(resume_data))
@@ -2540,6 +2666,8 @@ def validate(
     violations.extend(_check_bullet_trailing_punctuation(resume_data))
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_metric_provenance(resume_data, bullet_tuples))
+    violations.extend(_check_foreign_numbers(resume_data, bullet_tuples))
+    violations.extend(_check_near_duplicate_bullets(resume_data))
     violations.extend(_check_experience_completeness(resume_data))
     violations.extend(_check_role_roster(resume_data, role_roster or []))
     violations.extend(_check_role_order(resume_data, role_roster or []))

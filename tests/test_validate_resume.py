@@ -668,6 +668,32 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertFalse(any("title case" in v.lower() for v in violations))
 
+    def test_flags_capitalized_minor_word_in_skills(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = [
+            "**Data & Cloud:** Design Scalable, Secure, And Governed Data Solutions"
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("And" in v and "title case" in v.lower() for v in violations))
+
+    def test_flags_uncapitalized_slash_part_in_skills(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = [
+            "**Software & Operations:** Software/service Engineering Principles"
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(
+            any("Software/service" in v and "title case" in v.lower() for v in violations)
+        )
+
+    def test_allows_correct_slash_title_case(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = [
+            "**Software & Operations:** Software/Service Engineering Principles"
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("title case" in v.lower() for v in violations))
+
     def test_flags_forbidden_phrase_in_skills_or_why_section(self):
         resume = _valid_resume()
         resume["SKILLS"] = ["**Marketing:** results-driven campaign management"]
@@ -1264,11 +1290,134 @@ class TestDistinctiveMetricsIgnoreTheContextWord(unittest.TestCase):
             & self._sigs("Retired in 2024 after the merger")
         )
 
-    def test_percentages_still_need_a_matching_context_word(self):
-        self.assertFalse(
+    def test_percentages_are_distinctive_without_context_word(self):
+        self.assertTrue(
             self._sigs("Hit 22% reply rates")
             & self._sigs("Beat the 22% industry average")
         )
+
+    def test_decimals_are_distinctive_without_context_word(self):
+        self.assertTrue(
+            self._sigs("Improved model from 0.40 to 0.59 R²")
+            & self._sigs("Refined model achieving 0.40 accuracy")
+        )
+
+
+class TestForeignNumbers(unittest.TestCase):
+
+    def test_flags_invented_number(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Nürburgring Racing",
+                    "title": "Data Scientist",
+                    "period": "2024",
+                    "achievements": [
+                        "Improved a Random Forest model from 0.40 to 0.59 R²",
+                    ],
+                }
+            ]
+        }
+        bank = [
+            ("Built a lap-time model achieving ~0.59 R² accuracy", "Nürburgring Racing", "ml"),
+        ]
+        violations = validate_resume._check_foreign_numbers(resume, bank)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("0.40", violations[0])
+        self.assertIn("Foreign number", violations[0])
+
+    def test_allows_numbers_from_bank(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme Corp",
+                    "title": "Engineer",
+                    "period": "2024",
+                    "achievements": [
+                        "Managed 120+ student accounts and drove 15% retention",
+                    ],
+                }
+            ]
+        }
+        bank = [
+            ("Managed 120+ student accounts across 3 campuses", "Acme Corp", "ops"),
+            ("Drove 15% retention improvement via outreach", "Acme Corp", "ops"),
+        ]
+        violations = validate_resume._check_foreign_numbers(resume, bank)
+        self.assertEqual(violations, [])
+
+    def test_education_bullets_not_checked(self):
+        """Education bullets come from fixed_content/profile.yml, not the
+        bullet bank, so foreign_numbers should not flag them."""
+        resume = {
+            "EDUCATION": [
+                {
+                    "school": "State University",
+                    "degree": "BS",
+                    "achievements": [],
+                    "bullets": [
+                        "Mentored 200 students in data science lab",
+                    ],
+                }
+            ]
+        }
+        bank = [
+            ("Mentored 50 students in intro courses", "State University", "edu"),
+        ]
+        violations = validate_resume._check_foreign_numbers(resume, bank)
+        self.assertEqual(violations, [])
+
+    def test_no_bullet_tuples_skips(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme",
+                    "title": "Dev",
+                    "period": "2024",
+                    "achievements": ["Managed 999 projects"],
+                }
+            ]
+        }
+        violations = validate_resume._check_foreign_numbers(resume, None)
+        self.assertEqual(violations, [])
+
+
+class TestNearDuplicateBullets(unittest.TestCase):
+
+    def test_flags_near_duplicate_bullets(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme Corp",
+                    "title": "Engineer",
+                    "period": "2024",
+                    "achievements": [
+                        "Improved a physics-informed Random Forest lap-time model from 0.40 to 0.59 R² and cut RMSE from 18s to 13s with SHAP interpretability analysis",
+                        "Refined a physics-informed Random Forest lap-time model from 0.40 to 0.59 R square and cut RMSE from 18s to 13s with SHAP interpretability analysis",
+                    ],
+                }
+            ]
+        }
+        violations = validate_resume._check_near_duplicate_bullets(resume)
+        self.assertTrue(len(violations) == 1)
+        self.assertIn("Near-duplicate", violations[0])
+
+    def test_distinct_bullets_pass(self):
+        resume = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme Corp",
+                    "title": "Engineer",
+                    "period": "2024",
+                    "achievements": [
+                        "Built a machine learning pipeline for fraud detection",
+                        "Led a team of 5 engineers to deliver the Q3 release",
+                    ],
+                }
+            ]
+        }
+        violations = validate_resume._check_near_duplicate_bullets(resume)
+        self.assertEqual(violations, [])
 
 
 class TestStrictSemanticSkillGuardrail(unittest.TestCase):

@@ -1800,11 +1800,13 @@ class TestBuildCheckpointResume(unittest.TestCase):
         )
         # Step 4's own initial validation call must stay clean (call 1), as
         # must the recommendation pass's pre-loop baseline (call 2 -- the
-        # snapshot each candidate is diffed against); the candidate itself
-        # (call 3) is the one that must fail. A violation absent from the
-        # baseline is genuinely introduced by this recommendation, so it is
-        # still discarded.
-        mock_validate.side_effect = [[], [], ["FAKE VIOLATION FOR TEST"]]
+        # snapshot each candidate is diffed against); every candidate after
+        # that must fail. A violation absent from the baseline is genuinely
+        # introduced by this recommendation, so once EVERY attempt has
+        # introduced one the recommendation is discarded.
+        mock_validate.side_effect = [[], []] + [
+            ["FAKE VIOLATION FOR TEST"]
+        ] * orchestrator.RECOMMENDATION_MAX_ATTEMPTS
 
         with patch.object(self.engine, "mine_bullet_bank"):
             result = self.engine.build_tailored_resume(
@@ -1823,6 +1825,211 @@ class TestBuildCheckpointResume(unittest.TestCase):
         self.assertEqual(actions["applied"], [])
         self.assertEqual(len(actions["skipped"]), 1)
         self.assertIn("introduced a validator violation", actions["skipped"][0])
+        self.assertIn(
+            f"attempted {orchestrator.RECOMMENDATION_MAX_ATTEMPTS}x",
+            actions["skipped"][0],
+        )
+
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_critique_survives_an_applied_recommendation(
+        self, mock_generate, mock_render_html, mock_subprocess_run
+    ):
+        """The holistic critique must reach the saved JSON.
+
+        It used to survive only when NOTHING was applied: Step 5.5 replaces
+        resume_data with normalize_resume.normalize(model_response), and the
+        model is never sent our underscore-prefixed metadata. So the resumes
+        whose scores are most worth reading -- the edited ones -- were exactly
+        the ones that lost them.
+        """
+        jd_manager.save_checkpoint(
+            self.job_key,
+            {
+                "jd_keywords": {"hard_skills": ["python"]},
+                "bullet_tuples": [
+                    ["Shipped a widget platform used by 10k users.", "Acme", "eng"]
+                ],
+            },
+        )
+        base_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>",
+            "SKILLS": [],
+            "EXPERIENCE": [],
+            "WHY_TEXT": "",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
+            "EDU_ACHIEVEMENT_KEY_2": "writing_content",
+        }
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.RecommendationApplySchema:
+                return (
+                    json.dumps(
+                        {
+                            **base_resume,
+                            "SUMMARY_TEXT": "<strong>Now naming ChatGPT.</strong>",
+                            "applied_recommendations": [
+                                "Name the specific AI tools used."
+                            ],
+                            "skipped_recommendations": [],
+                        }
+                    ),
+                    {},
+                )
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps(base_resume), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (
+                    json.dumps(
+                        {
+                            "summary_alignment_score": 91,
+                            "skills_relevance_score": 90,
+                            "overall_fit_score": 93,
+                            "top_third_score": 88,
+                            "flags": [],
+                            "recommendations": ["Name the specific AI tools used."],
+                        }
+                    ),
+                    {},
+                )
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(
+            returncode=0, stdout="\u25a4 Pages: 2\n", stderr=""
+        )
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertEqual(
+            result["_recommendation_actions"]["applied"],
+            ["Name the specific AI tools used."],
+            "precondition: this test is only meaningful if an edit landed",
+        )
+        self.assertEqual(result["_critique"]["overall_fit_score"], 93)
+
+        # And it has to reach DISK, which is what the viewer reads.
+        saved_path = os.path.join(self.engine.output_json_dir, self.output_filename)
+        with open(saved_path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        self.assertEqual(saved["_critique"]["overall_fit_score"], 93)
+        self.assertIn("_build_meta", saved)
+        self.assertEqual(saved["_build_meta"]["job_key"], self.job_key)
+
+    @patch("orchestrator.validate_resume.validate")
+    @patch("orchestrator.subprocess.run")
+    @patch("orchestrator.render_html")
+    @patch("orchestrator.GeminiClient.generate")
+    @patch("orchestrator.time.sleep", lambda *a, **kw: None)
+    def test_recommendation_pass_retries_a_violating_attempt(
+        self, mock_generate, mock_render_html, mock_subprocess_run, mock_validate
+    ):
+        """A first attempt that breaks a rule is retried, not abandoned.
+
+        The retry is told what it broke and restarts from the PRE-EDIT resume,
+        so a rejected attempt cannot become the next attempt's starting point.
+        """
+        jd_manager.save_checkpoint(
+            self.job_key,
+            {
+                "jd_keywords": {"hard_skills": ["python"]},
+                "bullet_tuples": [
+                    ["Shipped a widget platform used by 10k users.", "Acme", "eng"]
+                ],
+            },
+        )
+        base_resume = {
+            "SUMMARY_TEXT": "<strong>A lifecycle marketer.</strong>",
+            "SKILLS": [],
+            "EXPERIENCE": [],
+            "WHY_TEXT": "",
+            "EDU_ACHIEVEMENT_KEY_1": "content_generalist",
+            "EDU_ACHIEVEMENT_KEY_2": "writing_content",
+        }
+        rec_calls = {"n": 0, "contents": []}
+
+        def generate_side_effect(*args, **kwargs):
+            schema = kwargs.get("response_schema")
+            if schema is orchestrator.CritiqueSchema:
+                return (_pass_critique_json(), {})
+            if schema is orchestrator.RecommendationApplySchema:
+                rec_calls["n"] += 1
+                rec_calls["contents"].append(kwargs.get("contents", ""))
+                summary = (
+                    "<strong>Broke something.</strong>"
+                    if rec_calls["n"] == 1
+                    else "<strong>A lifecycle marketer skilled in ChatGPT.</strong>"
+                )
+                return (
+                    json.dumps(
+                        {
+                            **base_resume,
+                            "SUMMARY_TEXT": summary,
+                            "applied_recommendations": [
+                                "Name the specific AI tools used."
+                            ],
+                            "skipped_recommendations": [],
+                        }
+                    ),
+                    {},
+                )
+            if schema is orchestrator.TemplateSchema:
+                return (json.dumps(base_resume), {})
+            if schema is orchestrator.ResumeCritiqueSchema:
+                return (
+                    json.dumps(
+                        {
+                            "summary_alignment_score": 90,
+                            "skills_relevance_score": 90,
+                            "overall_fit_score": 90,
+                            "top_third_score": 90,
+                            "flags": [],
+                            "recommendations": ["Name the specific AI tools used."],
+                        }
+                    ),
+                    {},
+                )
+            raise AssertionError(f"Unexpected response_schema in test: {schema}")
+
+        mock_generate.side_effect = generate_side_effect
+        mock_subprocess_run.return_value = MagicMock(
+            returncode=0, stdout="\u25a4 Pages: 2\n", stderr=""
+        )
+        # Step 4 (call 1), the pre-loop baseline (call 2), the failing first
+        # attempt (call 3), then a clean retry.
+        mock_validate.side_effect = [[], [], ["FAKE VIOLATION FOR TEST"], []]
+
+        with patch.object(self.engine, "mine_bullet_bank"):
+            result = self.engine.build_tailored_resume(
+                jd_path=self.jd_path,
+                master_resume={},
+                output_filename=self.output_filename,
+                job_key=self.job_key,
+            )
+
+        self.assertEqual(rec_calls["n"], 2, "the violating attempt must be retried")
+        self.assertIn("ChatGPT", result["SUMMARY_TEXT"])
+        actions = result["_recommendation_actions"]
+        self.assertEqual(actions["applied"], ["Name the specific AI tools used."])
+        self.assertEqual(actions["skipped"], [])
+
+        retry_prompt = rec_calls["contents"][1]
+        self.assertIn("FAKE VIOLATION FOR TEST", retry_prompt)
+        self.assertIn("PREVIOUS ATTEMPT WAS REJECTED", retry_prompt)
+        # The retry starts from the original, never from the rejected edit.
+        self.assertIn("A lifecycle marketer.", retry_prompt)
+        self.assertNotIn("Broke something", retry_prompt)
 
     @patch("orchestrator.validate_resume.validate")
     @patch("orchestrator.subprocess.run")

@@ -480,7 +480,9 @@ class TestPickPolishTarget(unittest.TestCase):
 
     def setUp(self):
         self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_picker")
-        self.tmp_cl_dir = os.path.join(os.path.dirname(__file__), "_tmp_polish_picker_cl")
+        self.tmp_cl_dir = os.path.join(
+            os.path.dirname(__file__), "_tmp_polish_picker_cl"
+        )
         os.makedirs(self.tmp_dir, exist_ok=True)
         os.makedirs(self.tmp_cl_dir, exist_ok=True)
         self._real_json_dir = polish.OUTPUT_JSON_DIR

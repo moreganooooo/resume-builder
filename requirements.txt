@@ -22,3 +22,4 @@ odfpy
 openpyxl
 python-jobspy
 ddgs
+openai
