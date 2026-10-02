@@ -199,7 +199,7 @@ def main() -> None:
             print(f"  first shot: {attempts_log[0]['rejected']}")
         if rejection:
             rejected += 1
-            print(f"  GUARD (still failing after {len(attempts_log)}): {rejection[0]}")
+            print(f"  GUARD (still failing after {len(attempts_log)} attempt(s))")
         if args.score:
             try:
                 s = rb.score_bullet(rewritten, tags, score_system, role_company=role)
