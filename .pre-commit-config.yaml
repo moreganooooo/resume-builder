@@ -29,7 +29,6 @@ repos:
     hooks:
       - id: mypy
         pass_filenames: false
-        args: ["scripts"]
         additional_dependencies:
           ["types-pyyaml", "types-requests", "pydantic==2.13.5", "numpy==1.26.3"]
 

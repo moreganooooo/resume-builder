@@ -61,7 +61,6 @@ ignore_missing_imports = true
 # other bare (`import cli_art`); both settings are needed for those to resolve.
 mypy_path = "scripts"
 explicit_package_bases = true
-files = ["scripts"]
 exclude = ["dashboard"]
 
 [tool.pyright]
