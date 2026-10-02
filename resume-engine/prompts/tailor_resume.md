@@ -25,6 +25,11 @@ Before selecting any content, fill in: "The candidate is an [X] who helps organi
 5. **Expand Evidence** — If a bullet touches a required JD skill but is too brief, expand on methodology and tools using only verified context from **that same bullet's own source material for that same company**. Never pull a metric, scope, or detail from a DIFFERENT bullet or a different company to fill out a brief one, even if both appear in the verified bullet bank — that is fabrication by cross-contamination, not expansion, and it is exactly as prohibited as inventing a number from nothing.
 6. **Add Content (Last Resort Only)** — You may generate new summary statements or bridge transitions. You may not add new hard evidence.
 
+### STRICT INVARIANT: BULLET-LOCAL SOFTWARE INTEGRITY
+1. ZERO CROSS-ROLE TOOL BLEED: You are strictly forbidden from introducing any software platform, CRM, or named technical tool (e.g., HubSpot, Salesforce, Marketo, Google Analytics) into a bullet unless that exact tool was ALREADY explicitly named in that specific original bullet or verified for that specific employer.
+2. DO NOT APPEASE CRITIQUES WITH FAKE TOOLS: If a critique or suggestion recommends adding methodology or tools, and the original bullet did not name a tool, expand on the STRATEGY, METRIC, or OPERATIONAL WORKFLOW (e.g., "designed multi-touch qualification cadences", "standardized cold outreach copy", "built account scoring rubrics")—NEVER insert software from the target JD or another company.
+3. CONTEXT BLEED IS A FATAL FAILURE: Attributing a tool to a role where it was not used violates HF008 and causes an immediate hard failure.
+
 # Archetype Detection
 
 Detect the primary role archetype from the JD and foreground the corresponding evidence. Each
@@ -37,21 +42,6 @@ example below, which are illustrative only:
 - **B2B Content / Copywriter:** agency training, journalism foundation, brand voice, regulated-industry copy
 - **Marketing Ops / CRM:** CRM hygiene, reporting, QA, territory analytics, pipeline cleanup, process docs
 - **Generalist:** cross-functional range, multi-hat IC capability, adaptability
-
-# Transferable Skills Translation Matrix
-
-When reframing achievements from previous roles into the target role's archetype vocabulary, strictly adhere to the following translation matrix to elevate raw execution tasks into high-impact strategic concepts without fabricating metrics or facts:
-
-- **Raw Task / Historical Experience** $\rightarrow$ **Target Archetype Vocabulary**
-- *Writing blog posts / articles* $\rightarrow$ *Campaign narrative design, conversion copy, content asset creation*
-- *Classroom instruction / tutoring* $\rightarrow$ *Cross-functional content enablement, onboarding infrastructure, training delivery*
-- *Administrative spreadsheet tracking* $\rightarrow$ *Data hygiene, process design, CRM record governance*
-- *Managing customer inquiries / calls* $\rightarrow$ *Multi-channel engagement, retention touchpoint optimization, user feedback loops*
-- *Designing social media graphics* $\rightarrow$ *Brand identity execution, visual campaign collateral, creative asset production*
-- *Email newsletter distribution* $\rightarrow$ *Lifecycle campaign execution, automated drip sequence deployment, audience segmentation*
-- *Coordinating team schedules* $\rightarrow$ *Cross-departmental workflow orchestration, project timeline management*
-
-Never exaggerate or fabricate numerical metrics during translation. Translate the methodology and operational level while maintaining strict fidelity to verified numbers.
 
 
 # Education Achievement Bullet Selection
@@ -132,45 +122,42 @@ Analyze the target company's business stage (from JD and COMPANY RESEARCH) and s
    - Template: `<strong>[Title] with [N]+ years of experience [building something from scratch in the candidate's field].</strong> [Past-tense verb] [the first version of a verified system, program, or asset], [verified result from zero]. [Verb] [Tool/Platform] to [validate or ship, in the JD's own terms].`
 
 
-# Skills Section Rules
+### Skills Section Rules
+- Skills appears immediately after Summary — it is the most important ATS signal.
+- Always produce 3 to 4 categorized rows. Never collapse into 1 or 2 rows.
+- Target a dense, balanced Skills section: 3 to 4 categories, each containing 5 to 8 items, sized to fill 1 full visual line (approx. 90–108 characters per line) without awkward single-word widows.
 
-- Skills appears immediately after Summary — it is the most important ATS signal
-- Include every tool, platform, methodology, and framework from the JD that the candidate genuinely knows
-- Include logically implied skills (JD mentions a CRM platform → include "CRM" if true)
-- Include soft skills from the JD as well as those that can be logically implied
-- Source your tool/platform names from verified_tools.json (in your knowledge base context) --
-  don't invent tools or platforms the candidate hasn't verifiably used
-- Lines up to 110 characters fit on one line; wrapping to a 2nd line is fine as long as it doesn't
-  leave a short widow (a stray few characters alone on that 2nd line) -- if a line is going to wrap
-  awkwardly, you have three ways to fix it, in order of preference:
-  1. Add or remove an item within the category.
-  2. Shorten or lengthen the category label itself, as long as it still fairly describes the items
-     in it and stays relevant to the JD archetype: e.g. "CRM Strategy & Operations" may become "CRM
-     & Operations"; "Content Strategy & Communications" may become "Content & Communications".
-  3. Pull in 1-2 more skills from summaries-and-skills-clean.csv or verified_tools.json (in your
-     knowledge base context) that the candidate genuinely has, even if the JD didn't explicitly ask for
-     them -- as long as they're relevant to the category and archetype. Never invent a skill that
-     isn't in that verified material.
-- You have a small amount of wording latitude on individual items to help a line land well, as long
-  as the underlying tool/skill is unchanged: e.g. "Salesforce Administration" may become "Salesforce,
-  Salesforce Lightning"; "Microsoft Office" may become "Microsoft Word, Microsoft PowerPoint,
-  Microsoft Excel" or just "Word, PowerPoint, Excel". Don't invent a tool that isn't already implied
-  by the category
-- **Every category must list at least 2 items.** A category with one item reads as a stub rather
-  than a category. Either add another skill from the same category in the candidate's verified
-  material (cv.md's "## Core Skills" groups, summaries-and-skills-clean.csv, verified_tools.json),
-  or drop the label and fold that single item into the category it fits best. The item-wording
-  latitude above is often the cleanest fix: "Microsoft Office Suite" alone under Productivity can
-  become "Microsoft Word, Microsoft Excel, PowerPoint". Never pad a category with a skill the
-  candidate isn't already credited with -- an honest one-item category is better than a fabricated
-  second item, and a later step can still fill it from cv.md
-- Items are comma-separated with a space after each comma; no bullets or pipes inside a category
-- Category labels are bold via the skill-category class; items are plain body font
-- Every category label and every item must be in Title Case (e.g. "AI-Assisted Workflows", "CMS Platforms"), regardless of how the JD capitalizes the term — mirror the JD's exact wording for ATS matching, but always normalize the casing to Title Case rather than copying the JD's lowercase/sentence-case styling verbatim
-- Archetype ordering:
-  - Lifecycle roles: Lifecycle/Retention Marketing → CRM/Revenue Operations → Content/Enablement → Creative/Design
-  - Copywriter/Comms roles: Content & Communications Strategy → Writing & Editing → CRM/Analytics → Creative
-- Category name upgrades: "Salesforce Administration" not "Salesforce"; "Revenue Operations" not "Marketing Operations" where appropriate
+#### Three-Tier Assembly Model
+Do NOT limit skills to only the literal keywords mentioned in the job description. Construct each category using these three tiers:
+
+1. TIER 1 — Exact JD Requirements:
+   - Include every tool, platform, methodology, and competency named in the JD that exists in the candidate's verified knowledge base (`verified_tools.json`, `profile.yml`, or `cv.md`).
+2. TIER 2 — Thematic Companion Skills (Inferred Practitioner Depth):
+   - For every primary tool or function required by the JD, pull in the candidate's verified companion tools and frameworks that demonstrate practitioner depth.
+   - Example (CRM / RevOps): If the JD asks for "HubSpot", do not just write "HubSpot". Infer and include verified companion capabilities: Lifecycle Marketing, Lead Scoring, Pipeline Architecture, Workflow Automation, CRM Hygiene.
+   - Example (Content / Enablement): If the JD asks for "Sales Enablement", pull in verified competencies: Playbook Development, Call Coaching, Competitor Battlecards, Rep Onboarding.
+3. TIER 3 — Role Archetype Foundations:
+   - Round out categories with verified core competencies that anchor the candidate's senior profile (e.g., A/B Testing & Optimization, Cross-Functional Alignment, Data Storytelling).
+
+#### Category Sizing & Widow Prevention
+- Lines up to 108 characters fit on one printed line. A line past 108 characters risks wrapping awkwardly to a 2nd line.
+- If a line needs tightening or expanding to land between 90–108 characters:
+  1. Add or remove an item within the category from verified tools/skills.
+  2. Use item-wording latitude where natural (e.g., "Salesforce Administration" → "Salesforce", "Microsoft Office Suite" → "Word, Excel, PowerPoint").
+  3. Shorten or lengthen the category label itself (e.g., "CRM Strategy & Operations" → "CRM & Operations").
+- Every category must list at least 3 items. Never produce a 1-item stub category.
+- Never invent a tool or platform that isn't in `verified_tools.json` or `profile.yml`.
+
+#### Formatting & Ordering
+- Format: `**Category Name:** Skill One, Skill Two, Skill Three, Skill Four, Skill Five, Skill Six`
+- Items are comma-separated with a space after each comma — no bullets, pipes, or slashes inside a category.
+- Category labels are bold (`**Label:**`); items are plain text.
+- Every category label and item must be in Title Case (e.g., "AI-Assisted Workflows", "CMS Platforms").
+- Archetype category ordering:
+  - Lifecycle roles: Lifecycle/Retention Marketing, CRM/Revenue Operations, Content/Enablement, Creative/Design
+  - Copywriter/Comms roles: Content & Communications, Strategy & Writing, Editing, CRM/Analytics, Creative
+  - Category naming upgrades: "Salesforce Administration" not "Salesforce", "Revenue Operations" not "Marketing Operations" where appropriate.
+
 
 # Bullet Rules
 
@@ -343,13 +330,17 @@ Max 5 lines. First sentence wrapped in `<strong>` tags. Follow the ROLE RULES bl
 
 ## SKILLS (array of strings)
 
-Each string is 1-2 category lines. Format: `**Category Label:** Item, Item, Item`
+"Exactly 3 to 4 category strings. Format: `**Category Label:** Item, Item, Item`
+
 Example:
 
 ```json
-["**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns",
- "**CRM & Revenue Operations:** Salesforce Administration, Pipeline Hygiene, Territory Analytics"]
-```
+  [
+    "**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns, Lead Scoring, Customer Retention",
+    "**CRM & Revenue Operations:** Salesforce Administration, HubSpot, Pipeline Hygiene, Workflow Automation, Territory Analytics",
+    "**Content & Strategy:** Sales Enablement, Playbook Development, Messaging Frameworks, Cross-Functional Alignment"
+  ]
+  ```
 
 ## EXPERIENCE (array of objects)
 
