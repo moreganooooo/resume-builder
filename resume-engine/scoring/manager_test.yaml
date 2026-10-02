@@ -38,7 +38,6 @@ hard_fail_conditions:
 # Soft fails — these reduce score but do not auto-reject
 soft_fail_conditions:
   - only_one_question_answered: -20
-  - no_tool_mentioned_when_expected: -10   # e.g., CRM bullet with no Salesforce reference
   - metric_missing_but_estimable: -10      # outcome described qualitatively when a metric exists
   - passive_construction: -10              # "was responsible for" style phrasing
   - opener_on_banned_list: -15             # matches banned_openers in ai_risk.yaml

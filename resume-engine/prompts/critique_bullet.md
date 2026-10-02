@@ -34,7 +34,7 @@ Pass the bullet if:
 - **accuracy_score:** Is the claim specific, grounded, and traceable? Deduct for vague language, unverifiable superlatives, or generic phrasing.
 - **believability_score:** Would a skeptical hiring manager believe this without seeing a resume? Deduct for inflated claims, implausible scale, or overly polished corporate-speak.
 - **clarity_score:** Is the bullet immediately clear on first read? Deduct for jargon overload, long setup before the point, or awkward construction. Also deduct (adjective-padding-level, not a hard fail) if the bullet restates its own Role/Company's name inside its text -- that's redundant with context already established elsewhere, not added specificity. Naming a DIFFERENT company (a client, partner, vendor) is fine and should NOT be penalized -- see REDUNDANCY RULES below for the exact distinction.
-- **ats_value:** Does this bullet contain high-value ATS keywords (tools, methodologies, role-specific terms) without being keyword-stuffed? Deduct for purely soft-skill bullets or zero tool/method mentions.
+- **ats_value:** Does this bullet contain high-value ATS keywords (methodologies, frameworks, domain processes, or relevant tools) without being keyword-stuffed? Deduct for purely generic soft skills with no operational mechanism or methodology. Do NOT penalize for lacking a software tool if a clear business strategy, framework, or operational workflow is present.
 
 ## Believability Rules (from believability.yaml)
 
@@ -43,6 +43,11 @@ Apply all rules from the provided BELIEVABILITY_RULES when scoring believability
 ## Manager Test Rules
 
 Apply all rules from the provided RULES when making the PASS/FAIL decision.
+
+## Tool & Methodology Rules
+- A bullet does NOT need to name a specific software platform to pass. Process, strategy, organizational, leadership, and operational achievements are fully valid on their own merits.
+- NEVER penalize or flag "missing tools or software" if the bullet clearly describes the operational action, strategy, or workflow mechanism.
+- Only critique tool usage if the original bullet explicitly names a tool and describes its execution vaguely.
 
 ## Redundancy Rules (from style_rules.yaml, provided as REDUNDANCY RULES)
 

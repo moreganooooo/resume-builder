@@ -1,4 +1,4 @@
-version: 1.1
+version: 1.2
 severity: critical
 
 fail_conditions:
@@ -7,7 +7,7 @@ fail_conditions:
     description: Resume contains metric not supported by source material.
   - id: HF002
     name: invent_experience
-    description: Resume claims experience, software, or certification not provided.
+    description: Resume claims experience, software, or certification not provided or not verified for that specific employer.
   - id: HF003
     name: invented_leadership
     description: Participation rewritten as ownership.
@@ -23,3 +23,6 @@ fail_conditions:
   - id: HF007
     name: hidden_text
     description: White text or hidden font sizes used to trick ATS.
+  - id: HF008
+    name: cross_role_tool_bleed
+    description: Bullet attributes software, CRM, or technical platforms to a company or role where that tool was not originally used or attested.
