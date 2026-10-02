@@ -335,11 +335,11 @@ Max 5 lines. First sentence wrapped in `<strong>` tags. Follow the ROLE RULES bl
 Example:
 
 ```json
-  [
-    "**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns, Lead Scoring, Customer Retention",
-    "**CRM & Revenue Operations:** Salesforce Administration, Lead Routing, Pipeline Hygiene, Workflow Automation, Territory Analytics",
-    "**Content & Strategy:** Sales Enablement, Playbook Development, Messaging Frameworks, Cross-Functional Alignment"
-  ]
+[
+  "**Lifecycle & Retention Marketing:** Email Automation, Segmentation, Drip Campaigns, Lead Scoring",
+  "**CRM & Revenue Operations:** Salesforce, Lead Routing, Pipeline Hygiene, Workflow Automation, CRM Hygiene",
+  "**Content & Strategy:** Sales Enablement, Playbook Development, Messaging, Cross-Functional Alignment"
+]
   ```
 
 ## EXPERIENCE (array of objects)
