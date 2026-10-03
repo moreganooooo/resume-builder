@@ -539,17 +539,16 @@ def run_checks() -> list:
     return [check() for check in CHECKS]
 
 
-TEST_SUITE_TIMEOUT_SECONDS = 300
+TEST_SUITE_TIMEOUT_SECONDS = 600
 
 
 def run_test_suite() -> tuple:
     """Runs the real test suite for real. Returns (passed: bool, summary:
     str) -- summary is unittest's own final report line(s) (e.g. "Ran 808
     tests in 19.7s" + "OK"/"FAILED (failures=2)"), not the full verbose
-    output. A full run normally takes under two minutes; TEST_SUITE_TIMEOUT_SECONDS
-    exists so a hung test (e.g. one blocking on real stdin) fails loudly
-    instead of leaving the caller's spinner running forever with no way to
-    tell a hang apart from a slow machine."""
+    output. TEST_SUITE_TIMEOUT_SECONDS allows the several-minute full suite
+    to finish on slower machines while still bounding a genuinely hung test
+    (e.g. one blocking on real stdin)."""
     try:
         result = subprocess.run(
             [sys.executable, "-m", "unittest", "discover", "-s", "tests"],

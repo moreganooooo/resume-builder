@@ -216,7 +216,8 @@ def _current_skills_hash() -> str | None:
     meta_path = os.path.join(profile_paths.kb_dir(), _SKILL_VECTORS_META)
     try:
         with open(meta_path, "r", encoding="utf-8") as f:
-            return json.load(f).get("names_sha")
+            names_sha = json.load(f).get("names_sha")
+            return names_sha if isinstance(names_sha, str) else None
     except Exception:
         return None
 

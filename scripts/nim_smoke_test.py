@@ -30,6 +30,7 @@ import re
 import sys
 import time
 from datetime import datetime
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -99,7 +100,7 @@ FIT_SCHEMA = {
 #   max_out  the page's max_tokens ceiling (a larger request 500s/empties)
 #   seed     pinned so reruns are comparable (only where the page lists it)
 #   body     extra_body fields (reasoning_budget, chat_template_kwargs)
-MODEL_SETTINGS = {
+MODEL_SETTINGS: dict[str, dict[str, Any]] = {
     "nvidia/nemotron-3-super-120b-a12b": {
         "effort": "none",
         "max_out": 32768,
@@ -334,7 +335,7 @@ def _structured_call(
     routes are: OpenAI-style response_format, top-level guided_json, and
     finally a prompt-only instruction (parsed and checked in code).
     """
-    routes = (
+    routes: list[tuple[str, dict[str, Any], list[dict[str, Any]]]] = [
         (
             "response_format.json_schema",
             {
@@ -358,8 +359,8 @@ def _structured_call(
                 }
             ],
         ),
-    )
-    attempts = []
+    ]
+    attempts: list[dict[str, Any]] = []
     base_body = kwargs.pop("extra_body", None) or {}
     if model not in STRUCTURED_OUTPUT_MODELS:
         routes = routes[-1:]  # no listed structured-output support: prompt-only

@@ -13,8 +13,8 @@ import orchestrator  # noqa: E402
 
 MODULE_PATH = os.path.join(SCRIPTS, "compare_eval_model.py")
 spec = importlib.util.spec_from_file_location("compare_eval_model", MODULE_PATH)
+assert spec is not None and spec.loader is not None
 bench = importlib.util.module_from_spec(spec)
-assert spec and spec.loader
 spec.loader.exec_module(bench)
 
 

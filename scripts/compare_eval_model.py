@@ -288,15 +288,19 @@ def _reference_by_jd(attempts: list[dict], control: str) -> dict[str, dict]:
     for jd_hash, rows in grouped.items():
         ref: dict[str, Any] = {}
         for metric in NUMERIC_METRICS:
-            vals = [
-                r.get(metric) for r in rows if isinstance(r.get(metric), (int, float))
-            ]
+            vals: list[int | float] = []
+            for row in rows:
+                value = row.get(metric)
+                if isinstance(value, (int, float)):
+                    vals.append(value)
             if vals:
                 ref[metric] = statistics.median(vals)
         for metric in CATEGORICAL_METRICS:
-            vals = [str(r.get(metric)) for r in rows if r.get(metric) is not None]
-            if vals:
-                ref[metric] = statistics.mode(vals)
+            category_values = [
+                str(r.get(metric)) for r in rows if r.get(metric) is not None
+            ]
+            if category_values:
+                ref[metric] = statistics.mode(category_values)
         refs[jd_hash] = ref
     return refs
 
@@ -400,7 +404,7 @@ def main(argv: list[str] | None = None) -> int:
         paths = paths[: args.limit]
     stage_models = ["capability", "recruiter"] if args.stage == "both" else [args.stage]
 
-    report = {
+    report: dict[str, Any] = {
         "schema_version": 2,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "config": {

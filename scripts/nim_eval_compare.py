@@ -23,6 +23,7 @@ import os
 import statistics
 import sys
 import time
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -47,7 +48,7 @@ def _pick_jds(n: int) -> list[str]:
     return [scored[round(i * step)][1] for i in range(n)]
 
 
-def _mean(d: dict) -> float | None:
+def _mean(d: dict[str, Any] | None) -> float | None:
     vals = [v for v in (d or {}).values() if isinstance(v, (int, float))]
     return round(statistics.mean(vals), 2) if vals else None
 
@@ -104,7 +105,7 @@ def main() -> None:
     if not args.no_warmup:
         nim.warmup(client, args.model)
 
-    summary = []
+    summary: list[dict[str, Any]] = []
     for path in paths:
         name = os.path.basename(path).replace(".json", "")[:58]
         base = jd_manager.read_evaluation(path) or {}
@@ -135,13 +136,16 @@ def main() -> None:
         )
         elapsed = round(time.perf_counter() - started, 1)
 
-        row = {"jd": name, "seconds": elapsed}
+        row: dict[str, Any] = {"jd": name, "seconds": elapsed}
         for label, stage in (("capability", cap), ("recruiter", rec)):
             if not stage["ok"]:
                 row[label] = f"FAIL {stage.get('diagnosis')} [{stage['error'][:100]}]"
             elif not stage.get("schema_valid"):
                 row[label] = f"INVALID {stage.get('schema_error', '')[:120]}"
-        cd, rd = cap.get("parsed") or {}, rec.get("parsed") or {}
+        cap_parsed = cap.get("parsed")
+        rec_parsed = rec.get("parsed")
+        cd = cap_parsed if isinstance(cap_parsed, dict) else {}
+        rd = rec_parsed if isinstance(rec_parsed, dict) else {}
         row.update(
             {
                 "fit_mean": (

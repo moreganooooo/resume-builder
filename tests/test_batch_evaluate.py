@@ -4,6 +4,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from typing import Any
 from unittest.mock import patch
 
 SCRIPTS_DIR = os.path.join(
@@ -394,7 +395,7 @@ class TestEvaluateDatabaseOnlyJobs(unittest.TestCase):
         finally:
             conn.close()
 
-    def _row_metadata(self) -> dict:
+    def _row_metadata(self) -> dict[str, Any]:
         conn = db.get_db()
         try:
             raw = conn.execute(
@@ -402,7 +403,9 @@ class TestEvaluateDatabaseOnlyJobs(unittest.TestCase):
             ).fetchone()["metadata_json"]
         finally:
             conn.close()
-        return json.loads(raw or "{}")
+        metadata = json.loads(raw or "{}")
+        assert isinstance(metadata, dict)
+        return metadata
 
     @patch("batch_evaluate.orchestrator.ResumeEngine")
     def test_evaluation_is_synced_back_into_the_row(self, mock_engine_cls):

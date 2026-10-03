@@ -5937,7 +5937,7 @@ class ResumeEngine:
         the ledger's arbitrary file order.
         """
         cached = getattr(self, "_attested_names_cache", None)
-        if cached is not None:
+        if isinstance(cached, set):
             return cached
         try:
             import pandas as pd
@@ -5975,7 +5975,12 @@ class ResumeEngine:
         """
         cache_key = hash(jd_text or "")
         cached = getattr(self, "_gemma_tools_cache", None)
-        if cached is not None and cached[0] == cache_key:
+        if (
+            isinstance(cached, tuple)
+            and len(cached) == 2
+            and cached[0] == cache_key
+            and isinstance(cached[1], list)
+        ):
             return cached[1]
 
         import rewrite_bullets
@@ -9950,7 +9955,7 @@ class ResumeEngine:
     def build_tailored_resume(
         self,
         jd_path: str,
-        master_resume: dict,
+        master_resume: dict | None,
         output_filename: str | None = None,
         job_key: str | None = None,
         interactive: bool = False,

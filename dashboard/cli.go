@@ -20,24 +20,26 @@ import (
 // the program name, Blue for section headings, Peach for flags, Subtext for
 // descriptions (guidelines/cli-fang.card.html). One palette for the TUI and
 // its front door, so --help does not look like a different program.
-func fangColorScheme(t theme.Theme) fang.ColorScheme {
-	return fang.ColorScheme{
-		Base:           t.Text,
-		Title:          t.Blue,
-		Description:    t.Subtext,
-		Codeblock:      t.Surface,
-		Program:        t.Mauve,
-		DimmedArgument: t.Subtext,
-		Comment:        t.Subtext,
-		Flag:           t.Peach,
-		FlagDefault:    t.Subtext,
-		Command:        t.Mauve,
-		QuotedString:   t.Green,
-		Argument:       t.Text,
-		Help:           t.Subtext,
-		Dash:           t.Subtext,
-		ErrorHeader:    [2]color.Color{t.Red, nil},
-		ErrorDetails:   t.Text,
+func fangColorScheme(t theme.Theme) fang.ColorSchemeFunc {
+	return func(_ lipgloss.LightDarkFunc) fang.ColorScheme {
+		return fang.ColorScheme{
+			Base:           t.Text,
+			Title:          t.Blue,
+			Description:    t.Subtext,
+			Codeblock:      t.Surface,
+			Program:        t.Mauve,
+			DimmedArgument: t.Subtext,
+			Comment:        t.Subtext,
+			Flag:           t.Peach,
+			FlagDefault:    t.Subtext,
+			Command:        t.Mauve,
+			QuotedString:   t.Green,
+			Argument:       t.Text,
+			Help:           t.Subtext,
+			Dash:           t.Subtext,
+			ErrorHeader:    [2]color.Color{t.Red, nil},
+			ErrorDetails:   t.Text,
+		}
 	}
 }
 

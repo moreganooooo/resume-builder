@@ -221,7 +221,11 @@ class NvidiaNimClient:
         if inline_file is not None:
             raise ValueError("NVIDIA evaluator benchmark calls are text-only")
         schema = _schema_dict(response_schema, extra_schema_properties, extra_required)
-        modes: list[str | None] = _structured_modes() if schema else [None]
+        modes: list[str | None] = []
+        if schema:
+            modes.extend(_structured_modes())
+        else:
+            modes.append(None)
         last_meta: dict[str, Any] = {
             "provider": "nvidia_nim",
             "model": model,

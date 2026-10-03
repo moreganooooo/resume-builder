@@ -1,17 +1,18 @@
 package main
 
 import (
-	"charm.land/fang/v2"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spf13/cobra"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"charm.land/fang/v2"
+	"github.com/spf13/cobra"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/log"
@@ -493,7 +494,7 @@ func (m appModel) updateScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case screens.PipelineReinstateMsg:
 		// Reinstate archived job by calling the Python reinstate script
 		cmd := exec.Command("python3", "scripts/reinstate_job.py", msg.JobPath)
-		cmd.Dir = m.projectRoot  // Run from project root so imports work
+		cmd.Dir = m.projectRoot // Run from project root so imports work
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			m.pipeline.SetNotice(fmt.Sprintf("Failed to reinstate: %v", err))
@@ -726,7 +727,7 @@ func main() {
 	t := theme.NewTheme(themeName)
 
 	if err := fang.Execute(context.Background(), root,
-		fang.WithTheme(fangColorScheme(t)),
+		fang.WithColorSchemeFunc(fangColorScheme(t)),
 		fang.WithErrorHandler(fangErrorHandler(t)),
 		fang.WithoutManpage(),
 		fang.WithoutCompletions(),

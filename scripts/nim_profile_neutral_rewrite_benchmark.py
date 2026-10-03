@@ -44,7 +44,7 @@ import rewrite_bullets as rb  # noqa: E402
 LIGHTNING = "nvidia/nemotron-3.5-lightning-30b-a3b"
 MUSE = "meta/muse-glimmer-30b"
 
-MODEL_VARIANTS = {
+MODEL_VARIANTS: dict[str, dict[str, Any]] = {
     "lightning": {
         "model": LIGHTNING,
         "temperature": 0.4,
@@ -270,7 +270,7 @@ def _structured_call(
         ),
         ("prompt_only", {}, _prompt_only_messages(messages, schema)),
     ]
-    failures = []
+    failures: list[dict[str, str]] = []
     for mode, additions, route_messages in routes:
         call_kwargs = dict(kwargs)
         call_kwargs.update(additions)
@@ -428,18 +428,18 @@ def _run_variant(
                 {
                     "rewritten": final_text,
                     "production_rejection": (
-                        production_reason[0] if production_reason else None
+                        production_reason[0] if production_reason is not None else None
                     ),
                     "strict_auto_pass": strict["strict_auto_pass"],
                     "elaboration_flags": strict["elaboration_flags"],
-                    "rejected": final_reason[0] if final_reason else None,
+                    "rejected": (final_reason[0] if final_reason is not None else None),
                 }
             )
             if final_text and not final_reason:
                 break
             weaknesses = (
-                final_reason[1]
-                if production_reason
+                production_reason[1]
+                if production_reason is not None
                 else "Return a grounded rewrite using only literal evidence."
             )
 

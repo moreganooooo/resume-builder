@@ -10,6 +10,7 @@ the selected Gemini API model can answer a tiny standalone request.
 import os
 import sys
 import time
+from typing import Any
 
 import profile_paths
 import requests
@@ -34,7 +35,7 @@ url = (
     f"models/{MODEL}:generateContent"
 )
 
-payload = {
+payload: dict[str, Any] = {
     "contents": [
         {
             "role": "user",

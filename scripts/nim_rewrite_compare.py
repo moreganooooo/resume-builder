@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import time
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -104,7 +105,9 @@ def main() -> None:
     print(f"\nModel: {args.model}   bullets: {len(sample)}\n")
     if not args.no_warmup:
         nim.warmup(client, args.model)
-    nim_scores, ref_scores, results = [], [], []
+    nim_scores: list[dict[str, Any]] = []
+    ref_scores: list[dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
     rejected = errors = first_shot_rejected = 0
 
     for _, row in sample.iterrows():
@@ -114,7 +117,14 @@ def main() -> None:
         reference = str(row.get("final_bullet", "")).strip()
         evidence = f"{source}\n{source}\n{kb.company_scoped_context(role, tags)}"
         weaknesses = str(row.get("weaknesses", ""))
-        res, rewritten, rejection, attempts_log = None, "", None, []
+        res: dict[str, Any] = {
+            "ok": False,
+            "diagnosis": "no attempts were requested",
+            "error": "no attempts were requested",
+        }
+        rewritten = ""
+        rejection: tuple[str, str] | None = None
+        attempts_log: list[dict[str, Any]] = []
         for attempt in range(1, args.attempts + 1):
             prompt = rb.build_rewrite_prompt(
                 bullet=source,
@@ -172,7 +182,12 @@ def main() -> None:
         )
         print(f"[{row.get('rewrite_status')}] {role[:50]}")
         print(f"  source:    {source}")
-        record = {"role": role, "source": source, "reference": reference, "nim": res}
+        record: dict[str, Any] = {
+            "role": role,
+            "source": source,
+            "reference": reference,
+            "nim": res,
+        }
 
         if not res["ok"]:
             errors += 1

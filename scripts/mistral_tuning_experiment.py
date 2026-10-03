@@ -146,7 +146,8 @@ def _run_one_bullet(
             best_rejection = None
             candidates: list[str] = []
             try:
-                resp = client.chat.completions.create(
+                create_completion: Any = client.chat.completions.create
+                resp = create_completion(
                     model=MODEL,
                     messages=prompt_msgs,
                     temperature=temperature,

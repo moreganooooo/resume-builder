@@ -334,7 +334,8 @@ def _call(
     usage = None
 
     try:
-        stream = client.chat.completions.create(
+        create_completion: Any = client.chat.completions.create
+        stream = create_completion(
             model=model,
             messages=messages,
             stream=True,
@@ -418,6 +419,12 @@ def _append_json_instruction(
     else:
         copied.append({"role": "user", "content": instruction})
     return copied
+
+
+def _prompt_only_messages(
+    messages: list[dict[str, Any]], schema: dict[str, Any]
+) -> list[dict[str, Any]]:
+    return _append_json_instruction(messages, schema)
 
 
 def _structured_call(

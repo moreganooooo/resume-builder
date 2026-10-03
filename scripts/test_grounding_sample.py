@@ -49,7 +49,7 @@ PROBE_MODELS = [
     ("gemini-2.5-flash", "Gemini 2.5 Flash"),
 ]
 
-SEARCH_TOOL = [{"google_search": {}}]
+SEARCH_TOOL: list[dict[str, dict[str, object]]] = [{"google_search": {}}]
 
 
 def probe_model(model: str, label: str) -> None:

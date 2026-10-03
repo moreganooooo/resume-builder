@@ -88,7 +88,7 @@ def _fixed_structured_call(
     **kwargs: Any,
 ) -> dict[str, Any]:
     """v2 structured output with merged extra_body arguments."""
-    routes = [
+    routes: list[tuple[str, dict[str, Any], list[dict[str, Any]]]] = [
         (
             "response_format.json_schema",
             {
@@ -105,7 +105,7 @@ def _fixed_structured_call(
     if model not in nim.STRUCTURED_OUTPUT_MODELS:
         routes = routes[-1:]
 
-    rejected = []
+    rejected: list[dict[str, str]] = []
     for mode, additions, route_messages in routes:
         call_kwargs = dict(kwargs)
         if additions.get("extra_body"):

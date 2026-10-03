@@ -1431,12 +1431,20 @@ def _term_is_allowed(part: str, allowed_terms: set[str]) -> bool:
     """
     if part in allowed_terms:
         return True
+
+    def contains_term(text: str, term: str) -> bool:
+        return re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text) is not None
+
     for allowed in allowed_terms:
-        if part in allowed or allowed in part:
+        if contains_term(allowed, part) or contains_term(part, allowed):
             return True
     words = [w.strip("(),./") for w in part.split() if len(w.strip("(),./")) > 2]
     return bool(words) and all(
-        w in allowed_terms or any(w in a or a in w for a in allowed_terms)
+        w in allowed_terms
+        or any(
+            contains_term(allowed, w) or contains_term(w, allowed)
+            for allowed in allowed_terms
+        )
         for w in words
     )
 
