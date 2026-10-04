@@ -1242,6 +1242,7 @@ def stage4_auto_rewrite(
 
             keeper_row = {
                 "Bullet Point": result["final_bullet"],
+                "original_bullet": original_bullet_text,
                 "Role / Company": row.get("Role / Company", ""),
                 "Tags": row.get("Tags", ""),
                 "source": "audit_rewrite",

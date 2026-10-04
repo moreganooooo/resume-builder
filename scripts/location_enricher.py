@@ -53,6 +53,7 @@ _STAFFING_AGENCIES = {
     "kelly services",
     "kforce",
     "randstad",
+    "remotehunter",
     "robert half",
     "russell tobin",
     "teksystems",

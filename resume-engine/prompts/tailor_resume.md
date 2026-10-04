@@ -132,10 +132,11 @@ Do NOT limit skills to only the literal keywords mentioned in the job descriptio
 
 1. TIER 1 — Exact JD Requirements:
    - Include every tool, platform, methodology, and competency named in the JD that exists in the candidate's verified knowledge base (`verified_tools.json` or `profile.yml`).
-2. TIER 2 — Thematic Companion Skills (Inferred Practitioner Depth):
-   - For every primary tool or function required by the JD, pull in the candidate's verified companion tools and frameworks that demonstrate practitioner depth.
-   - Example (CRM / RevOps): If the JD asks for a specific CRM or automation platform, do not just name the tool. Infer and include verified companion capabilities: Lifecycle Marketing, Lead Scoring, Pipeline Architecture, Workflow Automation, CRM Hygiene.
-   - Example (Content / Enablement): If the JD asks for Sales Enablement, pull in verified competencies: Playbook Development, Call Coaching, Competitor Battlecards, Rep Onboarding.
+2. TIER 2 — Companion Skills (Verified Only, Never Inferred):
+   - A companion skill may be added ONLY when its exact name (or a trivial wording variant) appears in `verified_tools.json`, `profile.yml`, or the knowledge base's Core Skills. Being a plausible neighbor of a JD tool is NOT enough: if you cannot point to the entry, leave it out.
+   - Never derive a capability from a tool's reputation. A JD naming a given CRM does not entitle you to add Lead Scoring, Lifecycle Marketing, or Workflow Automation unless those exact entries exist.
+   - Example (Content / Enablement): if the JD asks for Sales Enablement, add Playbook Development or Battlecards only if those entries exist verbatim.
+   - When no verified companion exists, move to Tier 3. A shorter row is correct; padding it with an unverified skill is a failure.
 3. TIER 3 — Role Archetype Foundations:
    - Round out categories with verified core competencies that anchor the candidate's senior profile (e.g., A/B Testing & Optimization, Cross-Functional Alignment, Data Storytelling).
 
@@ -147,6 +148,12 @@ Do NOT limit skills to only the literal keywords mentioned in the job descriptio
   3. Shorten or lengthen the category label itself (e.g., "CRM Strategy & Operations" → "CRM & Operations").
 - Every category must list at least 2 items (target 4 to 7 items for visual density). Never produce a 1-item stub category.
 - Never invent a tool or platform that isn't in `verified_tools.json` or `profile.yml`.
+
+#### Where Self-Taught Tools May Appear (Section Scope)
+Entries in `verified_tools.json` with employer "Self / Profile" are self-taught knowledge. They help ATS matching but are NOT work history.
+- SKILLS: allowed freely.
+- SUMMARY and WHY: allowed only as learning or capability framing that makes no experience claim (e.g. "self-taught in a named CRM", "building depth in a marketing platform", "with a goal to learn Gong"). Never "used", "managed", "owned", "ran", or "built in" such a tool, and never attach a metric or result to it.
+- WORK EXPERIENCE bullets: NEVER. A tool may appear in a bullet only when its employer in `verified_tools.json` matches that bullet's company (or the bullet source text already names it). If a JD tool is self-taught only, it goes in Skills, not in an experience bullet.
 
 #### Formatting & Ordering
 - Format: `**Category Name:** Skill One, Skill Two, Skill Three, Skill Four, Skill Five, Skill Six`

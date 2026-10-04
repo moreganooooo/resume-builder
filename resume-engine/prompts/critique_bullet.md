@@ -48,6 +48,7 @@ Apply all rules from the provided RULES when making the PASS/FAIL decision.
 - A bullet does NOT need to name a specific software platform to pass. Process, strategy, organizational, leadership, and operational achievements are fully valid on their own merits.
 - NEVER penalize or flag "missing tools or software" if the bullet clearly describes the operational action, strategy, or workflow mechanism.
 - Only critique tool usage if the original bullet explicitly names a tool and describes its execution vaguely.
+- A rewrite must never ADD a tool, platform, or CRM the original bullet does not name. If the rewrite names one the original lacks, fail it under HF008 (cross_role_tool_bleed), even when the tool sounds plausible for the role.
 
 ## Redundancy Rules (from style_rules.yaml, provided as REDUNDANCY RULES)
 

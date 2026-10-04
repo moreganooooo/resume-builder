@@ -53,7 +53,7 @@ def _emphasize(text: str, emphasis: Iterable[str]) -> str:
         marked = escape(phrase)
         if marked and marked in out:
             out = out.replace(marked, f"[bold]{marked}[/bold]")
-    return out
+    return str(out)
 
 
 def render_line(kind: str, text: str, emphasis: Sequence[str] = ()) -> str:

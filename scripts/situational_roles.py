@@ -116,6 +116,7 @@ def load_situational_roles(profile: str | None = None) -> dict:
     return {
         "situational_min_bullets": data.get("situational_min_bullets", 2),
         "roles": roles,
+        "clerical_swap": data.get("clerical_swap") or {},
     }
 
 
@@ -153,3 +154,63 @@ def bank_minimums_for(candidates: list, roles_data: dict | None = None) -> dict:
     roles = roles_data["roles"]
     min_bullets = roles_data["situational_min_bullets"]
     return {roles[name]["bank_tag"]: min_bullets for name in candidates}
+
+
+def detect_clerical_swap(job_title: str, roles_data: dict | None = None) -> dict | None:
+    """Returns {"replaces": [...], "adds": [...]} when job_title marks a
+    clerical/administrative posting, else None.
+
+    On such a posting the clerical situational roles (adds) take the place
+    of the marketing roles named in replaces; on every other posting the
+    clerical roles stay out entirely. Gated on the TITLE only -- body text
+    like "administrative support" or "data entry" appears in plenty of
+    marketing postings -- and a title that also matches an exclude keyword
+    ("Marketing Coordinator / Administrative Assistant") stays marketing.
+    Config lives under situational_roles.yaml's clerical_swap: key."""
+    if roles_data is None:
+        roles_data = load_situational_roles()
+    cfg = roles_data.get("clerical_swap") or {}
+    title_lower = (job_title or "").lower()
+    if not title_lower or not cfg.get("title_keywords"):
+        return None
+    if not _any_match(cfg["title_keywords"], title_lower):
+        return None
+    if _any_match(cfg.get("exclude_title_keywords", []), title_lower):
+        return None
+    return {
+        "replaces": list(cfg.get("replaces", [])),
+        "adds": list(cfg.get("adds", [])),
+    }
+
+
+def apply_clerical_swap(profile_data: dict, swap: dict | None) -> dict:
+    """profile_data with the swap's replaced roles dropped and its added
+    roles marked swap_active, so roster/floor/ceiling/prompt code treats
+    them as unconditional for this build. A no-op copy when swap is None."""
+    if not swap:
+        return profile_data
+    replaces, adds = set(swap["replaces"]), set(swap["adds"])
+    roles = []
+    for role in profile_data.get("roles") or []:
+        name = str(role.get("name", "")).strip()
+        if name in replaces:
+            continue
+        roles.append({**role, "swap_active": True} if name in adds else role)
+    return {**profile_data, "roles": roles}
+
+
+def strip_clerical_roles(profile_data: dict, roles_data: dict | None = None) -> dict:
+    """profile_data with the clerical swap's `adds` roles removed -- for
+    non-clerical builds, so the prompt's role rules/roster can't offer them."""
+    cfg = (roles_data if roles_data is not None else load_situational_roles()).get(
+        "clerical_swap"
+    ) or {}
+    adds = set(cfg.get("adds") or [])
+    if not adds:
+        return profile_data
+    roles = [
+        r
+        for r in profile_data.get("roles") or []
+        if str(r.get("name", "")).strip() not in adds
+    ]
+    return {**profile_data, "roles": roles}

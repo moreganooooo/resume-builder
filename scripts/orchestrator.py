@@ -840,7 +840,8 @@ def _required_role_roster(profile_data: dict) -> list[str]:
     return [
         name
         for role in (profile_data.get("roles") or [])
-        if (name := str(role.get("name", "")).strip()) and name not in situational
+        if (name := str(role.get("name", "")).strip())
+        and (name not in situational or role.get("swap_active"))
     ]
 
 
@@ -859,7 +860,7 @@ def _required_role_bullet_minimums(profile_data: dict) -> dict[str, int]:
         name: role["min_bullets"]
         for role in (profile_data.get("roles") or [])
         if (name := str(role.get("name", "")).strip())
-        and name not in situational
+        and (name not in situational or role.get("swap_active"))
         and role.get("min_bullets") is not None
     }
 
@@ -876,7 +877,7 @@ def _required_role_bullet_maximums(profile_data: dict) -> dict[str, int]:
         name: role["max_bullets"]
         for role in (profile_data.get("roles") or [])
         if (name := str(role.get("name", "")).strip())
-        and name not in situational
+        and (name not in situational or role.get("swap_active"))
         and role.get("max_bullets") is not None
     }
 
@@ -3130,7 +3131,10 @@ def _repair_skills_title_case(current_data: dict, violations) -> tuple:
                 if not core or not core[0].isalpha():
                     fixed_parts.append(part)
                     continue
-                is_minor = core.lower() in validate_resume._TITLE_CASE_MINOR_WORDS
+                is_minor = (
+                    core.lower() in validate_resume._TITLE_CASE_MINOR_WORDS
+                    and len(raw_parts) == 1
+                )
                 if is_minor and core[0].isupper() and word != line.split()[0]:
                     fixed = part[0].lower() + part[1:]
                     fixed_parts.append(fixed)
@@ -5515,6 +5519,14 @@ def _needs_why_backfill(
 _ABORT_BUILD = object()
 
 
+def _is_staffing_company(company: str) -> bool:
+    """Name-only staffing/recruiting check (no JD-text clues), for manually
+    added postings that never carried a staffing_agency board tag."""
+    import location_enricher
+
+    return location_enricher.is_staffing_agency(company)
+
+
 class ResumeEngine:
 
     def __init__(self, output_category: str | None = None):
@@ -7224,6 +7236,8 @@ class ResumeEngine:
         except Exception:
             situational_tags = set()
         excluded_companies = situational_tags - set(extra_company_minimums or {})
+        swap = getattr(self, "_clerical_swap", None) or {}
+        excluded_companies |= set(swap.get("replaces", []))
         # Same waste, wider net: once a profile has a roster, any bank company
         # on neither the roster nor this JD's situational candidates -- an
         # education institution, a retired job, a section label like
@@ -7241,7 +7255,9 @@ class ResumeEngine:
             for key in ("company", "name")
         } - {""}
         if roster_names and "Role / Company" in df.columns:
-            allowed = roster_names | set(extra_company_minimums or {})
+            allowed = (roster_names - set(swap.get("replaces", []))) | set(
+                extra_company_minimums or {}
+            )
             excluded_companies |= {
                 c
                 for c in set(df["Role / Company"].fillna(""))
@@ -7401,6 +7417,14 @@ class ResumeEngine:
         if "Role / Company" in df.columns:
             company_values = df["Role / Company"].values
             combined_minimums = self._mining_company_minimums(extra_company_minimums)
+            # A company excluded from this build (clerical roles on a marketing
+            # JD, replaced marketing roles on a clerical one) can't claim a
+            # guaranteed slot either.
+            combined_minimums = {
+                c: n
+                for c, n in combined_minimums.items()
+                if c not in excluded_companies
+            }
 
             def _scarcity(item):
                 # Scarcest role first: whoever has the least room to be picky
@@ -9089,7 +9113,11 @@ class ResumeEngine:
         # sample failed twice on 2026-09-14 with only such violations left
         # (Snowflake/Redshift/Docker, then Spark/Snowflake/Prototyping) --
         # the retry loop kept re-adding them and the build returned {}.
-        if violations and any("Hallucinated skill or tool" in v for v in violations):
+        if violations and any(
+            "Hallucinated skill or tool" in v
+            or v.startswith("Bullet ends with trailing punctuation")
+            for v in violations
+        ):
             resume_data, violations = repair_violations_surgically(
                 resume_data,
                 violations,
@@ -9153,7 +9181,16 @@ class ResumeEngine:
         # the same scrape + grounded-search tiers a second time.
 
         situational_block = ""
-        if situational_candidates:
+        swap = getattr(self, "_clerical_swap", None)
+        if swap:
+            situational_block = (
+                "\n\n=== CLERICAL POSTING ROLE SWAP ===\n"
+                "This is a clerical/administrative posting. The ROLE RULES roster "
+                f"already lists {', '.join(swap['adds'])} as required entries and omits "
+                f"{', '.join(swap['replaces'])}. Include every roster entry with its "
+                "bullets; do not add any omitted role back."
+            )
+        elif situational_candidates:
             situational_block = (
                 "\n\n=== SITUATIONAL ROLE CANDIDATES ===\n"
                 f"The JD's language matched a deterministic keyword gate for: "
@@ -9439,7 +9476,9 @@ class ResumeEngine:
                 research,
                 research_block,
                 resume_data,
-                why_backfill_attempt >= MAX_WHY_BACKFILL_ATTEMPTS,
+                # A Why dropped for space must not be backfilled again: the
+                # drop is one-shot, so a re-added Why would stick around.
+                why_backfill_attempt >= MAX_WHY_BACKFILL_ATTEMPTS or dropped_why,
             )
             is_final = (
                 page_count <= 2
@@ -9995,6 +10034,19 @@ class ResumeEngine:
         )
         logger.info(f"build_tailored_resume starting: {jd_path}")
 
+        # Every caller (menu, batch, single-file) reaches this method, so the
+        # staffing/recruiting check lives here rather than in one caller.
+        if not skip_company_research:
+            try:
+                _meta_company = jd_manager.extract_job_meta(jd_path)[1]
+            except Exception:
+                _meta_company = ""
+            if _is_staffing_company(_meta_company):
+                skip_company_research = True
+                cli_art.print_literal(
+                    "  Staffing/recruiting company detected -- skipping Why section."
+                )
+
         try:
             jd_text = jd_manager.read_jd_text(jd_path)
         except FileNotFoundError:
@@ -10007,7 +10059,26 @@ class ResumeEngine:
         situational_candidates = situational_roles.detect_situational_candidates(
             _situational_gate_text(jd_text)
         )
-        if situational_candidates:
+        try:
+            job_title = str((_parse_jd_data(jd_text) or {}).get("job_title") or "")
+        except Exception:
+            job_title = ""
+        self._clerical_swap = situational_roles.detect_clerical_swap(job_title)
+        if not self._clerical_swap:
+            clerical_only = set(
+                situational_roles.load_situational_roles()
+                .get("clerical_swap", {})
+                .get("adds", [])
+            )
+            situational_candidates = [
+                c for c in situational_candidates if c not in clerical_only
+            ]
+        if self._clerical_swap:
+            situational_candidates = list(self._clerical_swap["adds"])
+            cli_art.print_literal(
+                f"  Clerical/administrative posting: {cli_art._escape_markup(', '.join(self._clerical_swap['adds']))} replace {cli_art._escape_markup(', '.join(self._clerical_swap['replaces']))}"
+            )
+        elif situational_candidates:
             cli_art.print_literal(
                 f"  Situational role candidate(s) cleared the keyword gate: {cli_art._escape_markup(', '.join(situational_candidates))}"
             )
@@ -10473,6 +10544,12 @@ class ResumeEngine:
             _p_yaml = self.load_yaml(self.kb_dir, "profile.yml") or {}
         except Exception:
             _p_yaml = profile_paths.profile_yaml() or {}
+        if getattr(self, "_clerical_swap", None):
+            _p_yaml = situational_roles.apply_clerical_swap(
+                _p_yaml, self._clerical_swap
+            )
+        else:
+            _p_yaml = situational_roles.strip_clerical_roles(_p_yaml)
         # Loaded unconditionally (not just in the fresh-build branch below)
         # for the same reason build_prompt is: Step 7's trim loop re-validates
         # every trim attempt regardless of whether this run resumed resume_data
@@ -10919,7 +10996,9 @@ class ResumeEngine:
         try:
             with open(jd_path, "r") as f:
                 jd_data = json.load(f)
-                if jd_data.get("staffing_agency"):
+                if jd_data.get("staffing_agency") or _is_staffing_company(
+                    jd_data.get("company_name", "")
+                ):
                     skip_why_for_staffing = True
                     cli_art.print_literal(
                         "  Staffing agency posting detected -- skipping Why section."

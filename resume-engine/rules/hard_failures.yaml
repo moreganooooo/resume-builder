@@ -25,4 +25,4 @@ fail_conditions:
     description: White text or hidden font sizes used to trick ATS.
   - id: HF008
     name: cross_role_tool_bleed
-    description: Bullet attributes software, CRM, or technical platforms to a company or role where that tool was not originally used or attested.
+    description: Bullet attributes software, CRM, or technical platforms to a company or role where that tool was not originally used or attested. Includes introducing a self-taught-only tool (one the candidate learned on their own, never used at an employer) into a work-experience bullet; self-taught tools belong in Skills only.

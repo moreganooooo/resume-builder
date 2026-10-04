@@ -699,6 +699,12 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertFalse(any("title case" in v.lower() for v in violations))
 
+    def test_allows_single_letter_slash_compound_mid_phrase(self):
+        resume = _valid_resume()
+        resume["SKILLS"] = ["**Growth:** Email Marketing, A/B Testing"]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertFalse(any("title case" in v.lower() for v in violations))
+
     def test_flags_forbidden_phrase_in_skills_or_why_section(self):
         resume = _valid_resume()
         resume["SKILLS"] = ["**Marketing:** results-driven campaign management"]
@@ -1573,6 +1579,103 @@ class TestStrictSemanticSkillGuardrail(unittest.TestCase):
                 for v in violations
             )
         )
+
+
+class TestSelfTaughtToolsInExperience(unittest.TestCase):
+    def setUp(self):
+        import json
+        import tempfile
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = os.path.join(self.tmp.name, "verified_tools.json")
+        tools = [
+            {"name": "ActiveCampaign", "employer": "Self / Profile"},
+            {"name": "PersistIQ", "employer": "Self / Profile"},
+            {"name": "Outreach.io", "employer": "Self / Profile"},
+            {"name": "Outreach.io", "employer": "Treering Yearbooks"},
+            {"name": "CRM workflows", "employer": "Self / Profile"},
+        ]
+        with open(self.path, "w") as f:
+            json.dump({"tools": tools}, f)
+
+    def _check(self, company, bullet, bank=None):
+        resume = {"EXPERIENCE": [{"company": company, "achievements": [bullet]}]}
+        return validate_resume._check_self_taught_tools_in_experience(
+            resume, bank, self.path
+        )
+
+    def test_flags_self_taught_tool_in_bullet(self):
+        self.assertTrue(self._check("Mercor", "Built nurture flows in ActiveCampaign"))
+
+    def test_bank_vouched_tool_passes(self):
+        bank = [("Ran PersistIQ cadences", "Treering Yearbooks", "")]
+        self.assertEqual(
+            self._check("Treering Yearbooks", "Ran PersistIQ cadences", bank), []
+        )
+
+    def test_employer_attributed_and_generic_phrases_ignored(self):
+        self.assertEqual(self._check("Mercor", "Used Outreach.io"), [])
+        self.assertEqual(self._check("Mercor", "Documented CRM workflows"), [])
+
+
+class TestSelfTaughtClaimsInSummaryWhy(unittest.TestCase):
+    def setUp(self):
+        import json
+        import tempfile
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = os.path.join(self.tmp.name, "verified_tools.json")
+        with open(self.path, "w") as f:
+            json.dump({"tools": [{"name": "HubSpot", "employer": "Self / Profile"}]}, f)
+
+    def _check(self, **kw):
+        return validate_resume._check_self_taught_claims_in_summary_why(kw, self.path)
+
+    def test_flags_claimed_experience(self):
+        out = self._check(SUMMARY_TEXT="<p>I managed HubSpot workflows for a team.</p>")
+        self.assertEqual(len(out), 1)
+        self.assertIn("HubSpot", out[0])
+
+    def test_flags_metric_with_tool(self):
+        self.assertEqual(len(self._check(WHY_TEXT="HubSpot lifted replies 30%.")), 1)
+
+    def test_learning_framing_passes(self):
+        self.assertEqual(
+            self._check(
+                SUMMARY_TEXT="Self-taught and certified in HubSpot, building depth."
+            ),
+            [],
+        )
+
+    def test_plain_mention_passes(self):
+        self.assertEqual(self._check(WHY_TEXT="Excited to grow with HubSpot."), [])
+
+
+class TestTreeringOnlyTerms(unittest.TestCase):
+    def _resume(self, company, bullet):
+        return {"EXPERIENCE": [{"company": company, "achievements": [bullet]}]}
+
+    def test_flags_outreach_outside_treering(self):
+        resume = self._resume(
+            "Element 8 + Strategy, LLC",
+            "Launched Outreach.io sequences to re-engage stalled accounts",
+        )
+        self.assertTrue(validate_resume._check_treering_only_terms(resume))
+
+    def test_flags_hubspot_and_content_committee_outside_treering(self):
+        for bullet in (
+            "Scored campaigns against Hubspot and Salesforce criteria",
+            "Ran the Content Committee QA checklist",
+        ):
+            resume = self._resume("Mercor", bullet)
+            self.assertTrue(validate_resume._check_treering_only_terms(resume))
+
+    def test_allowed_at_treering_and_ist(self):
+        for company in ("Treering Yearbooks", "Inside Sales Team"):
+            resume = self._resume(company, "Built Outreach.io sequences")
+            self.assertEqual(validate_resume._check_treering_only_terms(resume), [])
 
 
 if __name__ == "__main__":

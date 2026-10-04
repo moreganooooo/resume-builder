@@ -39,7 +39,7 @@ def _color_enabled() -> bool:
 def _paint(text: str, rgb: tuple[int, int, int], bold: bool = False) -> str:
     if not _color_enabled():
         return text
-    return click.style(text, fg=rgb, bold=bold)
+    return str(click.style(text, fg=rgb, bold=bold))
 
 
 def _paint_flags(text: str) -> str:

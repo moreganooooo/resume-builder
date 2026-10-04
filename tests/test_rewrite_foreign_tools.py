@@ -6,7 +6,11 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from rewrite_bullets import build_tool_employer_index, foreign_tools  # noqa: E402
+from rewrite_bullets import (  # noqa: E402
+    build_tool_employer_index,
+    foreign_tools,
+    treering_only_terms,
+)
 
 BANK = [
     ("Cleaned 4,000 Salesforce records before a territory handoff", "Harbor Books"),
@@ -59,6 +63,23 @@ class TestForeignTools(unittest.TestCase):
             ),
             set(),
         )
+
+
+class TestTreeringOnlyTerms(unittest.TestCase):
+    def test_rejects_introduced_term_outside_treering(self):
+        self.assertEqual(
+            treering_only_terms("Ran Outreach.io sequences", "Ran sequences", "Mercor"),
+            {"outreach.io"},
+        )
+
+    def test_term_already_in_source_passes(self):
+        self.assertEqual(
+            treering_only_terms("Used HubSpot", "Used HubSpot daily", "Mercor"), set()
+        )
+
+    def test_treering_and_ist_are_exempt(self):
+        for company in ("Treering Yearbooks", "Inside Sales Team"):
+            self.assertEqual(treering_only_terms("Ran Outreach", "", company), set())
 
 
 if __name__ == "__main__":

@@ -1044,6 +1044,22 @@ def build_tool_employer_index(tool_names, bank_rows) -> dict:
     return index
 
 
+def treering_only_terms(rewritten: str, allowed_text: str, role_company: str) -> set:
+    """Treering/IST-only tools or bodies (Outreach, Salesforce, HubSpot, Content
+    Committee...) a rewrite introduced under any other employer. Unlike
+    foreign_tools(), this does not depend on the bank: a poisoned bank row
+    (Mercor's HubSpot, 2026-09-26) makes the bank-derived index vouch for the
+    leak. Terms already in the bullet/evidence it was rewritten from pass."""
+    from validate_resume import _TREERING_ONLY_COMPANY_RE, _TREERING_ONLY_TERM_RE
+
+    if _TREERING_ONLY_COMPANY_RE.search(role_company or ""):
+        return set()
+    seen = lambda t: {
+        m.group(0).lower() for m in _TREERING_ONLY_TERM_RE.finditer(t or "")
+    }
+    return seen(rewritten) - seen(allowed_text)
+
+
 def foreign_tools(
     rewritten: str, allowed_text: str, role_company: str, tool_index: dict
 ) -> set:
@@ -2236,6 +2252,16 @@ def _rejection_reason(
             f"The previous rewrite introduced numbers ({', '.join(sorted(stray))}) "
             f"that are not in this bullet or in {role_company}'s own evidence. Use "
             "only numbers already present there; never borrow metrics from another role.",
+        )
+
+    treering_terms = treering_only_terms(rewritten, evidence, role_company)
+    if treering_terms:
+        return (
+            "Rejected: rewrite introduced Treering/IST-only term(s) "
+            f"({', '.join(sorted(treering_terms))}).",
+            f"The previous rewrite introduced {', '.join(sorted(treering_terms))}, "
+            f"which was only used at Treering/IST, not {role_company}. Use only "
+            f"tools already in this bullet or in {role_company}'s own evidence.",
         )
 
     borrowed = foreign_tools(

@@ -220,6 +220,7 @@ def validate_pdf_text(
         )
 
     why_text = resume_data.get("WHY_TEXT") or ""
+    why_text = re.sub(r"<[^>]+>", "", why_text).strip()  # WHY_TEXT is stored as HTML
     if why_text and _normalize(why_text) not in extracted:
         advisories.append(
             f"Why-section text not found intact in PDF text layer: {why_text[:80]}"

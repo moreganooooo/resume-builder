@@ -538,7 +538,9 @@ def _title_case_violations_in_phrase(phrase: str) -> list[str]:
             core = part.strip("(),.")
             if not core or not core[0].isalpha():
                 continue
-            is_minor = core.lower() in _TITLE_CASE_MINOR_WORDS
+            # Minor words only apply to standalone words; a part of "A/B" or
+            # "Sign-In" is a compound segment and stays capitalized.
+            is_minor = core.lower() in _TITLE_CASE_MINOR_WORDS and part == word
             if word_index > 0 and is_minor:
                 if core[0].isupper():
                     violations.append(word)
@@ -814,6 +816,160 @@ def _check_foreign_numbers(
                     f"Foreign number '{num}' in a {company} bullet has no "
                     f"source in {company}'s bullet bank: {bullet_text!r}"
                 )
+    return violations
+
+
+_TREERING_ONLY_COMPANY_RE = re.compile(
+    r"treering|inside sales|alleyoop|\bist\b", re.IGNORECASE
+)
+# Tools and artifacts Morgan only ever used at Treering / IST (confirmed
+# 2026-10-04). The numeric guards can't see these: a Treering-style
+# "14-category QA checklist ... sequence library" bullet filed under
+# Element 8 vouched for its own "14", and the Mercor "HubSpot and Salesforce
+# execution criteria" bullet had no numbers at all. HubSpot was never used in
+# any role (self-taught certification only), so it is flagged everywhere here.
+_TREERING_ONLY_TERM_RE = re.compile(
+    r"\b(?:outreach(?:\.io)?|salesloft|salesforce|hubspot|content committee)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_career_break(company: str) -> bool:
+    low = company.lower()
+    return "career break" in low or "professional development" in low
+
+
+def _check_treering_only_terms(resume_data: dict) -> list[str]:
+    """Flags EXPERIENCE bullets outside Treering/IST that claim Treering-only
+    tools or governance bodies (Outreach, SalesLoft, Salesforce, HubSpot,
+    Content Committee)."""
+    violations = []
+    for entry in resume_data.get("EXPERIENCE", []):
+        company = entry.get("company", "")
+        if _TREERING_ONLY_COMPANY_RE.search(company) or _is_career_break(company):
+            continue
+        for bullet in entry.get("achievements", []):
+            match = _TREERING_ONLY_TERM_RE.search(bullet)
+            if match:
+                violations.append(
+                    f"'{match.group(0)}' in {company} bullet was only used at "
+                    f"Treering/IST: {bullet!r}"
+                )
+    return violations
+
+
+_SELF_TAUGHT_EMPLOYER = "self / profile"
+# Named products only: internal capital or a domain suffix (HubSpot, Make.com).
+# Plain acronyms and generic skill phrases in the ledger are not tool claims.
+_NAMED_TOOL_RE = re.compile(r"^[A-Z][a-z0-9]*[A-Z]\w*$|^[A-Za-z0-9]+\.[a-z]{2,}$")
+# Channels and generic words, not software a bullet claims to have operated.
+_NOT_A_TOOL_CLAIM = {"linkedin", "macbook", "revops"}
+
+
+def _self_taught_only_tools(verified_tools_path: str) -> set[str]:
+    """Named tools verified_tools.json lists ONLY as self-taught ("Self /
+    Profile"): skills-section material, never work history."""
+    import json
+    import os
+
+    if not os.path.exists(verified_tools_path):
+        return set()
+    try:
+        with open(verified_tools_path, "r", encoding="utf-8") as f:
+            tools = json.load(f).get("tools", [])
+    except Exception:
+        return set()
+    self_taught, attributed = set(), set()
+    for tool in tools:
+        name = str(tool.get("name", "")).strip()
+        if str(tool.get("employer", "")).strip().lower() == _SELF_TAUGHT_EMPLOYER:
+            if (
+                _NAMED_TOOL_RE.match(name)
+                and not name.rstrip("s").isupper()
+                and name.lower() not in _NOT_A_TOOL_CLAIM
+            ):
+                self_taught.add(name)
+        else:
+            attributed.add(name.lower())
+    return {name for name in self_taught if name.lower() not in attributed}
+
+
+def _check_self_taught_tools_in_experience(
+    resume_data: dict,
+    bullet_tuples: list[tuple[str, str, str]] | None,
+    verified_tools_path: str,
+) -> list[str]:
+    """Flags EXPERIENCE bullets naming a self-taught-only tool. Such tools may
+    appear in Skills (or Summary/Why as learning framing), never as work
+    experience. A tool the company's own bank rows already name is let
+    through, so a genuinely used tool (e.g. PersistIQ at Treering) isn't
+    blocked by a ledger that merely tags it self-taught."""
+    tools = _self_taught_only_tools(verified_tools_path)
+    if not tools:
+        return []
+    bank_text: dict[str, str] = {}
+    for bullet, company, _tags in bullet_tuples or []:
+        key = _normalize_company(company)
+        bank_text[key] = bank_text.get(key, "") + " " + str(bullet).lower()
+    violations = []
+    for entry in resume_data.get("EXPERIENCE", []):
+        company = entry.get("company", "")
+        if _is_career_break(company):
+            continue  # certifications are learning framing, not claimed work
+        key = _normalize_company(company)
+        vouched = bank_text.get(key, "")
+        for bullet in entry.get("achievements", []):
+            for tool in tools:
+                if re.search(rf"(?<!\w){re.escape(tool)}(?!\w)", bullet, re.I):
+                    if tool.lower() in vouched:
+                        continue
+                    violations.append(
+                        f"Self-taught tool '{tool}' in a {company} bullet: self-taught "
+                        f"tools belong in Skills only, not work experience: {bullet!r}"
+                    )
+    return violations
+
+
+_CLAIMED_EXPERIENCE_RE = re.compile(
+    r"\b(used|using|managed|owned|ran|run|built|led|leading|administered|administer|"
+    r"implemented|configured|deployed|launched|drove|automated|expert|proficient|"
+    r"advanced|years? of|experience (?:with|in)|hands-on)\b",
+    re.I,
+)
+_LEARNING_FRAME_RE = re.compile(
+    r"\b(self-taught|learning|learn|studying|exploring|building depth|certified|"
+    r"certification|certificate|goal to|working toward|developing familiarity)\b",
+    re.I,
+)
+
+
+def _check_self_taught_claims_in_summary_why(
+    resume_data: dict, verified_tools_path: str
+) -> list[str]:
+    """Flags Summary/Why sentences that name a self-taught-only tool as lived
+    experience. Mentioning one is fine under learning framing ("self-taught",
+    "certified", "goal to learn"); claiming to have used/managed/built with it,
+    or attaching a metric, is not."""
+    tools = _self_taught_only_tools(verified_tools_path)
+    if not tools:
+        return []
+    violations = []
+    for label, key in (("Summary", "SUMMARY_TEXT"), ("Why section", "WHY_TEXT")):
+        text = _strip_html(resume_data.get(key) or "")
+        for sentence in re.split(r"(?<=[.!?])\s+", text):
+            for tool in tools:
+                if not re.search(rf"(?<!\w){re.escape(tool)}(?!\w)", sentence, re.I):
+                    continue
+                if _LEARNING_FRAME_RE.search(sentence):
+                    continue
+                if _CLAIMED_EXPERIENCE_RE.search(sentence) or re.search(
+                    r"\d", sentence
+                ):
+                    violations.append(
+                        f"Self-taught tool '{tool}' framed as experience in {label}: "
+                        f"use learning framing (self-taught, certified, goal to learn) "
+                        f"or drop it -- {sentence[:120]!r}"
+                    )
     return violations
 
 
@@ -2354,7 +2510,7 @@ def _check_demographic_and_age_bias(resume_data: dict) -> list[str]:
     prohibited_bias_patterns = [
         (r"\b(?:date of birth|dob|born in)\b", "Date of birth declaration detected"),
         (
-            r"\b(?:marital status|married|single|divorced)\b",
+            r"\b(?:marital status|married|divorced|(?:i am|i'm|currently|status:)\s+single|single (?:mom|dad|mother|father|parent))\b",
             "Marital status declaration detected",
         ),
         (r"\b(?:father of|mother of|children)\b", "Family status declaration detected"),
@@ -2675,6 +2831,24 @@ def validate(
     violations.extend(_check_metric_uniqueness(resume_data))
     violations.extend(_check_metric_provenance(resume_data, bullet_tuples))
     violations.extend(_check_foreign_numbers(resume_data, bullet_tuples))
+    violations.extend(_check_treering_only_terms(resume_data))
+    import os
+
+    import profile_paths
+
+    violations.extend(
+        _check_self_taught_tools_in_experience(
+            resume_data,
+            bullet_tuples,
+            os.path.join(profile_paths.kb_dir(), "verified_tools.json"),
+        )
+    )
+    violations.extend(
+        _check_self_taught_claims_in_summary_why(
+            resume_data,
+            os.path.join(profile_paths.kb_dir(), "verified_tools.json"),
+        )
+    )
     violations.extend(_check_near_duplicate_bullets(resume_data))
     violations.extend(_check_experience_completeness(resume_data))
     violations.extend(_check_role_roster(resume_data, role_roster or []))
