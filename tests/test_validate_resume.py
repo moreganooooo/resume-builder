@@ -447,6 +447,28 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("fragment item" in v.lower() for v in violations))
 
+    def test_flags_orphaned_shared_word_items_in_skills_line(self):
+        # 2026-10-05 RemoteHunter build: "Data Management/Integrity/Quality"
+        # lost their shared "Data" and shipped as bare "Management, Integrity,
+        # Quality".
+        resume = _valid_resume()
+        resume["SKILLS"] = [
+            "**Data & Office Administration:** Microsoft Office, Data Entry, Management, Integrity, Quality",
+        ]
+        violations = validate_resume.validate(resume, STYLE_RULES)
+        self.assertTrue(any("fragment item" in v.lower() for v in violations))
+
+    def test_flags_duplicate_and_unvouched_admin_skill_items(self):
+        import validate_resume as v
+
+        drops = v.skills_items_to_drop(
+            [
+                "**CRM:** Salesforce, CRM Admin, Administrative Support",
+                "**Productivity:** Microsoft Office Suite, Microsoft Office",
+            ]
+        )
+        self.assertEqual(drops, [["CRM Admin"], ["Microsoft Office"]])
+
     def test_allows_qualified_compound_items_in_skills_line(self):
         # The same word inside a qualified compound ("Brand Assets") or a
         # real skill is fine -- only a BARE generic noun is a fragment.

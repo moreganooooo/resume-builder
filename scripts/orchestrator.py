@@ -2687,21 +2687,17 @@ def _repair_drop_skills_fragments(current_data: dict, violations) -> tuple:
         v for v in violations if v.startswith("Skills line contains fragment item")
     ]
     if fragment_violations:
-        for idx, line in enumerate(current_data.get("SKILLS", [])):
-            fragments = validate_resume.skills_fragment_items(line)
-            if not fragments:
-                continue
+        lines = current_data.get("SKILLS", [])
+        for idx, (line, drops) in enumerate(
+            zip(lines, validate_resume.skills_items_to_drop(lines))
+        ):
             match = validate_resume._SKILLS_LINE_RE.match(line.strip())
-            if not match:
+            if not drops or not match:
                 continue
             items = [
                 p.strip() for p in re.split(r"[,;|]", match.group("items")) if p.strip()
             ]
-            kept = [
-                p
-                for p in items
-                if p.lower() not in validate_resume._SKILLS_FRAGMENT_WORDS
-            ]
+            kept = [p for p in items if p not in drops]
             if kept and kept != items:
                 current_data["SKILLS"][idx] = (
                     f"**{match.group('label')}:** " + ", ".join(kept)

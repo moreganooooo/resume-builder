@@ -102,36 +102,117 @@ _TRAILING_PUNCTUATION_RE = re.compile(r"[.;:!?]\s*$")
 # The hallucinated-tool check passes them whenever the verified ledger
 # contains any compound name bearing the word ("derivative content assets"),
 # so only a whole-item exact match here, never a substring.
+# Also the abstract nouns left behind when the builder splits "Data Management,
+# Data Integrity, Data Quality" under a "Data ..." label and drops the shared
+# word ("Data Entry, Management, Integrity, Quality" -- a real 2026-10-05
+# RemoteHunter build), and bare "Administration" (Testeract, same day).
 _SKILLS_FRAGMENT_WORDS = frozenset(
-    {"assets", "tools", "skills", "other", "misc", "software", "platforms", "etc"}
+    {
+        "assets",
+        "tools",
+        "skills",
+        "other",
+        "misc",
+        "software",
+        "platforms",
+        "etc",
+        "management",
+        "integrity",
+        "quality",
+        "administration",
+        "operations",
+        "compliance",
+        "maintenance",
+        "handling",
+        "preparation",
+        "voice",
+        "workflow",
+    }
 )
 _SKILLS_LINE_RE = re.compile(r"^\*\*(?P<label>.+?):\*\*\s*(?P<items>.*)$")
 
 
+_ADMIN_TITLE_RE = re.compile(r"\badmin(?:istrator|istration|istered)?\b", re.IGNORECASE)
+
+
+def _employer_vouched_admin_terms() -> set[str]:
+    """Lowercased ledger names with an admin word that a REAL employer vouches
+    for ("Outreach.io Admin"). Auto-added "Self / Profile" entries never count:
+    they are where "CRM Admin" / "Salesforce Administration" came from."""
+    import json
+    import os
+
+    import profile_paths
+
+    path = os.path.join(profile_paths.kb_dir(), "verified_tools.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            tools = json.load(f).get("tools", [])
+    except Exception:
+        return set()
+    return {
+        t["name"].lower()
+        for t in tools
+        if _ADMIN_TITLE_RE.search(t.get("name", ""))
+        and t.get("employer") not in (None, "", "Self / Profile")
+    }
+
+
+def _normalize_skill_item(item: str) -> str:
+    """Duplicate key: "Microsoft Office Suite" and "Microsoft Office" match."""
+    return re.sub(r"\s+suite$", "", item.strip().lower())
+
+
+def skills_items_to_drop(lines: list[str]) -> list[list[str]]:
+    """Per skills line, the items that should not ship: bare abstract nouns
+    (orphans of "Data Management/Integrity/Quality"), repeats of an item
+    already shown earlier in the section, and admin-title items no real
+    employer vouches for. Skill NAMES are never judged here -- how lenient
+    the ledger match is stays the hallucination check's call."""
+    vouched = None
+    seen: set[str] = set()
+    result = []
+    for line in lines:
+        match = _SKILLS_LINE_RE.match(line.strip())
+        drops = []
+        if match:
+            for item in re.split(r"[,;|]", match.group("items")):
+                item = item.strip()
+                if not item:
+                    continue
+                key = _normalize_skill_item(item)
+                if item.lower() in _SKILLS_FRAGMENT_WORDS or key in seen:
+                    drops.append(item)
+                    continue
+                if _ADMIN_TITLE_RE.search(item):
+                    vouched = (
+                        _employer_vouched_admin_terms() if vouched is None else vouched
+                    )
+                    if item.lower() not in vouched:
+                        drops.append(item)
+                        continue
+                seen.add(key)
+        result.append(drops)
+    return result
+
+
 def skills_fragment_items(line: str) -> list[str]:
-    """Returns the bare generic-noun items in one skills line ([] if none).
-    Shared by the validator check and the surgical repair so the two can
-    never disagree about what a fragment is."""
-    match = _SKILLS_LINE_RE.match(line.strip())
-    if not match:
-        return []
-    fragments = []
-    for item in re.split(r"[,;|]", match.group("items")):
-        item = item.strip()
-        if item.lower() in _SKILLS_FRAGMENT_WORDS:
-            fragments.append(item)
-    return fragments
+    """Returns the droppable items in one skills line ([] if none). Shared by
+    the validator check and the surgical repair so the two can never disagree
+    about what a fragment is. Duplicates are judged within the line only; the
+    section-wide view is `skills_items_to_drop`."""
+    return skills_items_to_drop([line])[0]
 
 
 def _check_skills_item_fragments(resume_data: dict) -> list[str]:
+    lines = resume_data.get("SKILLS", [])
     violations = []
-    for line in resume_data.get("SKILLS", []):
-        fragments = skills_fragment_items(line)
+    for line, fragments in zip(lines, skills_items_to_drop(lines)):
         if fragments:
             violations.append(
                 f"Skills line contains fragment item(s) {', '.join(fragments)!r} that "
-                f"are not real skills -- remove them or name the specific asset/tool "
-                f"they mean: {line!r}"
+                f"are not real skills, repeat an earlier item, or claim an admin "
+                f"role -- remove them: {line!r}"
             )
     return violations
 

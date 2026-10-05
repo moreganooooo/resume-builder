@@ -34,7 +34,7 @@ criteria:
       not soft skills) visible in the top third of page one, not buried in
       later bullets or the Skills section alone?
     examples:
-      good: "JD requires Salesforce; 'Salesforce Administration' appears in tagline or first 2 bullets"
+      good: "JD requires Salesforce; 'Salesforce' or 'Salesforce CRM' appears in tagline or first 2 bullets"
       bad: "Salesforce only appears once, in the 4th bullet of the 3rd role"
 
   title_progression_logic:

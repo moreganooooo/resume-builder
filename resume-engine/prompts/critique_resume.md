@@ -199,6 +199,11 @@ FLAT SECTIONS
   [List of section names reading generic]
 
 TOP 3 RECOMMENDATIONS
+  (Only recommend moving or adding a tool that `verified_tools.json` ties to
+  a real employer. Never recommend putting a self-taught tool (employer
+  "Self / Profile", e.g. HubSpot) into the summary or experience bullets --
+  it belongs only in Skills, or in Summary/Why with learning framing. Never
+  recommend an admin title such as "Salesforce Administrator".)
   1. [Most impactful fix]
   2. [Second most impactful fix]
   3. [Third most impactful fix]
