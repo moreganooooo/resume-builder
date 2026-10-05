@@ -1455,7 +1455,9 @@ def auto_fix_duplicate_opening_verbs(
                 continue
             v_lower = verb.lower()
             if v_lower in used_verbs:
-                candidates = graph.get(v_lower, [])
+                candidates = graph.get(v_lower, []) + list(
+                    (style_rules.get("duplicate_verb_fallbacks") or {}).get(v_lower, [])
+                )
                 chosen = next(
                     (cand for cand in candidates if cand.lower() not in used_verbs),
                     None,
@@ -3323,6 +3325,21 @@ def repair_violations_surgically(
     current_data, near_dup_modified = _repair_near_duplicate_bullets(
         current_data, violations, bullet_tuples
     )
+
+    # Re-run the two pure-text swaps last: the roster, bullet-count and
+    # near-duplicate repairs above can pull a bank bullet in (trailing period,
+    # repeated opener) after the first pass already ran. A 2026-10-05 rebuild
+    # failed on exactly that: a stripped period came back with the bullet.
+    late_verb_modified = late_punct_modified = False
+    if any(v.startswith("Opening verb") for v in violations):
+        current_data, late_verb_modified = auto_fix_duplicate_opening_verbs(
+            current_data, style_rules
+        )
+    current_data, late_punct_modified = _repair_strip_trailing_punctuation(
+        current_data, violations
+    )
+    verb_modified = verb_modified or late_verb_modified
+    punct_modified = punct_modified or late_punct_modified
 
     # Only re-evaluate if we actually modified something
     if (
