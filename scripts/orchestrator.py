@@ -2673,6 +2673,21 @@ def _repair_strip_trailing_punctuation(current_data: dict, violations) -> tuple:
     return current_data, punct_modified
 
 
+def _balance_why_paragraphs(html: str) -> str:
+    """Give every Why paragraph an opening and closing <p>. The model
+    sometimes closes a paragraph it never opened (a trailing "<em>..</em></p>"),
+    which renders unpredictably."""
+    parts = [p.strip() for p in re.split(r"(?<=</p>)", html or "") if p.strip()]
+    balanced = []
+    for part in parts:
+        if not part.startswith("<p"):
+            part = "<p>" + part
+        if not part.endswith("</p>"):
+            part += "</p>"
+        balanced.append(part)
+    return "".join(balanced)
+
+
 def _repair_drop_skills_fragments(current_data: dict, violations) -> tuple:
     """Surgical repair step; returns (resume_data, modified)."""
     # 1c. Surgical Skills Fragment Removal (0ms, zero tokens). "Assets"
@@ -9973,7 +9988,9 @@ class ResumeEngine:
             )
             candidate_resume_data = dict(resume_data)
             candidate_resume_data["SECTION_WHY"] = why_fields.get("SECTION_WHY", "")
-            candidate_resume_data["WHY_TEXT"] = why_fields.get("WHY_TEXT", "")
+            candidate_resume_data["WHY_TEXT"] = _balance_why_paragraphs(
+                why_fields.get("WHY_TEXT", "")
+            )
             all_violations = validate_resume.validate(
                 candidate_resume_data,
                 style_rules_for_validation,

@@ -1012,9 +1012,12 @@ def _check_self_taught_tools_in_experience(
 
 
 _CLAIMED_EXPERIENCE_RE = re.compile(
-    r"\b(used|using|managed|owned|ran|run|built|led|leading|administered|administer|"
-    r"implemented|configured|deployed|launched|drove|automated|expert|proficient|"
-    r"advanced|years? of|experience|building|designed|created|engineered|hands-on)\b",
+    r"\b(used|using|managed|managing|owned|owning|ran|run|running|built|led|leading|"
+    r"administered|administer|administering|implemented|implementing|configured|"
+    r"configuring|deployed|deploying|launched|launching|drove|driving|automated|"
+    r"automating|expert|proficient|proficiency|fluent|fluency|advanced|years? of|"
+    r"decade|experience|building|designed|designing|created|creating|engineered|"
+    r"maintained|maintaining|operated|operating|executed|executing|hands-on)\b",
     re.I,
 )
 _LEARNING_FRAME_RE = re.compile(
