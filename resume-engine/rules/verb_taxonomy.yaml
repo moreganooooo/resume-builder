@@ -109,7 +109,6 @@ account_management:
 
 crm:
 
-  - administered
   - configured
   - customized
   - optimized
@@ -517,7 +516,6 @@ strategy:
 operations:
 
   - managed
-  - administered
   - coordinated
   - optimized
   - streamlined
@@ -589,7 +587,6 @@ priority_tiers:
     - improved
     - analyzed
     - configured
-    - administered
     - standardized
 
   acceptable:

@@ -144,7 +144,7 @@ Do NOT limit skills to only the literal keywords mentioned in the job descriptio
 - Lines up to 108 characters fit on one printed line. A line past 108 characters risks wrapping awkwardly to a 2nd line.
 - If a line needs tightening or expanding to land between 90–108 characters:
   1. Add or remove an item within the category from verified tools/skills.
-  2. Use item-wording latitude where natural (e.g., "Salesforce Administration" → "Salesforce", "Microsoft Office Suite" → "Word, Excel, PowerPoint").
+  2. Use item-wording latitude where natural (e.g., "Microsoft Office Suite" → "Word, Excel, PowerPoint").
   3. Shorten or lengthen the category label itself (e.g., "CRM Strategy & Operations" → "CRM & Operations").
 - Every category must list at least 2 items (target 4 to 7 items for visual density). Never produce a 1-item stub category.
 - Never invent a tool or platform that isn't in `verified_tools.json` or `profile.yml`.
@@ -163,7 +163,7 @@ Entries in `verified_tools.json` with employer "Self / Profile" are self-taught 
 - Archetype category ordering:
   - Lifecycle roles: Lifecycle/Retention Marketing, CRM/Revenue Operations, Content/Enablement, Creative/Design
   - Copywriter/Comms roles: Content & Communications, Strategy & Writing, Editing, CRM/Analytics, Creative
-  - Category naming upgrades: "Salesforce Administration" not "Salesforce", "Revenue Operations" not "Marketing Operations" where appropriate.
+  - Category naming upgrades: "Revenue Operations" not "Marketing Operations" where appropriate.
 
 
 # Bullet Rules

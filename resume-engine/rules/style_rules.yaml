@@ -62,6 +62,7 @@ verb_rules:
   - Open every bullet with a strong specific past-tense action verb
   - Present tense only for actively held roles
   - Each opening verb must be UNIQUE across the entire CV; no verb may open more than one bullet
+  - The verb must fit its object. "Migrated" only for moving data between systems (never logs, spreadsheets, or files you merely organized — use "Organized" or "Consolidated"); "Executed" only for a plan, campaign, or process (never a team — use "Led" or "Managed"); "Launched" for a campaign or program, not a person or group
   - A strong verb is self-sufficient — it does not need an adverb or adjective to complete its meaning
   - If you find yourself writing "developed effectively" or "managed successfully", the verb is weak; replace it with one precise verb
   - Never flag a weak verb without also providing the replacement; the rewrite must fix it, not just note it
@@ -106,9 +107,9 @@ verb_upgrades:
       - weak: "developed [a process/system/workflow]"
         strong: [Engineered, Architected, Systematized, Standardized, Overhauled, Built]
       - weak: "managed [accounts/records/data]"
-        strong: [Administered, Audited, Migrated, Reconciled, Maintained, Governed]
+        strong: [Audited, Migrated (only between systems), Reconciled, Maintained, Governed]
       - weak: "worked on [Salesforce/CRM/reporting]"
-        strong: [Administered, Configured, Implemented, Owned, Deployed]
+        strong: [Configured, Implemented, Owned, Deployed]
       - weak: "created [reports/dashboards]"
         strong: [Built, Designed, Engineered, Produced, Automated]
       - weak: "handled [data/records/tickets]"
@@ -162,13 +163,25 @@ verb_upgrades:
       - weak: "developed [a tool/integration/system]"
         strong: [Engineered, Architected, Built, Implemented, Deployed, Configured]
       - weak: "utilized [Salesforce/Outreach/HubSpot/tools]"
-        strong: [Administered, Configured, Deployed, Implemented, Operated]
+        strong: [Configured, Deployed, Implemented, Operated]
       - weak: "leveraged [technology/tools/data]"
         strong: [(replace with the specific action: Queried, Automated, Configured, Extracted, Analyzed)]
       - weak: "created [automations/workflows/sequences]"
         strong: [Built, Engineered, Designed, Automated, Deployed]
       - weak: "worked on [implementation/integration/setup]"
         strong: [Implemented, Configured, Deployed, Integrated, Launched]
+
+# Last-resort opening-verb swaps for verbs with no sibling in verb_upgrades,
+# used by auto_fix_duplicate_opening_verbs when a duplicate has no other
+# deterministic option. Each swap must keep the bullet's meaning intact.
+duplicate_verb_fallbacks:
+  secured: [obtained, landed, safeguarded]
+  analyzed: [examined, reviewed, assessed]
+  developed: [created, produced, crafted]
+  collaborated: [partnered, teamed, coordinated]
+  digitized: [converted, scanned, transcribed]
+  organized: [arranged, structured, cataloged]
+  built: [created, assembled, constructed]
 
 forbidden_openers:
   - responsible for
@@ -337,7 +350,7 @@ skills_section:
     enablement: [Sales Enablement, Content Systems, CRM/Revenue Operations, Training/Facilitation]
     marketing_ops: [CRM/Revenue Operations, Marketing Automation, Reporting/Analytics, Content/Strategy]
   category_name_upgrades:
-    - Use "Salesforce Administration" not "Salesforce" to signal admin-level depth
+    - Never upgrade "Salesforce" to "Salesforce Administration" or any admin title -- Morgan holds no admin role or certification; use "Salesforce" or "Salesforce CRM"
     - Use "Revenue Operations" not "Marketing Operations" where appropriate
     - Use "Lifecycle Strategy" not "Lifecycle Campaign Design"
 

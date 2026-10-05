@@ -42,7 +42,6 @@ weak_verbs:
     preferred:
 
       - managed
-      - administered
       - directed
       - coordinated
       - owned
@@ -55,7 +54,6 @@ weak_verbs:
       - managed
       - resolved
       - executed
-      - administered
       - coordinated
 
   assisted:
@@ -81,7 +79,6 @@ weak_verbs:
 
     preferred:
 
-      - administered
       - configured
       - applied
       - implemented
@@ -119,7 +116,6 @@ elite_verbs:
   - streamlined
   - automated
   - configured
-  - administered
   - integrated
   - analyzed
   - audited
@@ -143,7 +139,6 @@ sales_operations_verbs:
   - automated
   - implemented
   - configured
-  - administered
   - streamlined
   - standardized
   - improved
@@ -157,7 +152,6 @@ sales_operations_verbs:
 
 crm_verbs:
 
-  - administered
   - configured
   - optimized
   - customized

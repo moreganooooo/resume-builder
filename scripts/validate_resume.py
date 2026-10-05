@@ -933,7 +933,7 @@ def _check_self_taught_tools_in_experience(
 _CLAIMED_EXPERIENCE_RE = re.compile(
     r"\b(used|using|managed|owned|ran|run|built|led|leading|administered|administer|"
     r"implemented|configured|deployed|launched|drove|automated|expert|proficient|"
-    r"advanced|years? of|experience (?:with|in)|hands-on)\b",
+    r"advanced|years? of|experience|building|designed|created|engineered|hands-on)\b",
     re.I,
 )
 _LEARNING_FRAME_RE = re.compile(
@@ -955,12 +955,18 @@ def _check_self_taught_claims_in_summary_why(
         return []
     violations = []
     for label, key in (("Summary", "SUMMARY_TEXT"), ("Why section", "WHY_TEXT")):
-        text = _strip_html(resume_data.get(key) or "")
+        # Tags become spaces so "</p><p>" can't fuse two paragraphs into one
+        # "sentence" and let a learning word in one excuse a claim in the next.
+        text = re.sub(r"<[^>]+>", " ", resume_data.get(key) or "")
         for sentence in re.split(r"(?<=[.!?])\s+", text):
             for tool in tools:
                 if not re.search(rf"(?<!\w){re.escape(tool)}(?!\w)", sentence, re.I):
                     continue
-                if _LEARNING_FRAME_RE.search(sentence):
+                # "HubSpot-certified environments" says she worked inside the
+                # tool, so "certified" doesn't excuse it the way a credential does.
+                if _LEARNING_FRAME_RE.search(sentence) and not re.search(
+                    r"certified\s+environments?", sentence, re.I
+                ):
                     continue
                 if _CLAIMED_EXPERIENCE_RE.search(sentence) or re.search(
                     r"\d", sentence
@@ -974,10 +980,13 @@ def _check_self_taught_claims_in_summary_why(
 
 
 _NEAR_DUPLICATE_THRESHOLD = 0.75
+_MIN_COMPARE_WORDS = 4  # too few words left after the verb to call a duplicate
 
 
 def _bullet_words(text: str) -> set[str]:
-    return set(re.sub(r"[^\w\s]", "", text.lower()).split())
+    # Drop the opening verb: the duplicate-verb repair swaps it ("Provided" ->
+    # "Fielded") without changing the content, which would otherwise hide the pair.
+    return set(re.sub(r"[^\w\s]", "", text.lower()).split()[1:])
 
 
 def _check_near_duplicate_bullets(resume_data: dict) -> list[str]:
@@ -996,11 +1005,11 @@ def _check_near_duplicate_bullets(resume_data: dict) -> list[str]:
                 bullets.append((b.strip().lstrip("- "), company))
     for i in range(len(bullets)):
         words_i = _bullet_words(bullets[i][0])
-        if not words_i:
+        if len(words_i) < _MIN_COMPARE_WORDS:
             continue
         for j in range(i + 1, len(bullets)):
             words_j = _bullet_words(bullets[j][0])
-            if not words_j:
+            if len(words_j) < _MIN_COMPARE_WORDS:
                 continue
             intersection = len(words_i & words_j)
             union = len(words_i | words_j)
@@ -1008,6 +1017,37 @@ def _check_near_duplicate_bullets(resume_data: dict) -> list[str]:
                 violations.append(
                     f"Near-duplicate bullets ({intersection}/{union} words shared): "
                     f"{bullets[i][0]!r} ({bullets[i][1]}) vs {bullets[j][0]!r} ({bullets[j][1]})"
+                )
+    return violations
+
+
+_MIGRATED_OBJECT_RE = re.compile(
+    r"^migrated\s+(?:and\s+\w+\s+)?(?:(?:the|a|an|\w+(?:'s)?)\s+){0,3}"
+    r"(?:data|records|database|databases|crm|systems?|accounts|contacts|content|workflows?)\b",
+    re.I,
+)
+_TEAM_OBJECT_RE = re.compile(
+    r"^executed\s+(?:a\s+|the\s+)?(?:team|group|reps?|people)\b", re.I
+)
+
+
+def _check_verb_fit(resume_data: dict) -> list[str]:
+    """'Migrated' fits only data/systems moving between platforms; 'Executed'
+    fits a plan or campaign, never a team."""
+    violations = []
+    for entry in resume_data.get("EXPERIENCE", []):
+        for b in entry.get("achievements", []):
+            text = b.strip().lstrip("- ")
+            if text.lower().startswith("migrated") and not _MIGRATED_OBJECT_RE.search(
+                text
+            ):
+                violations.append(
+                    f"'Migrated' must describe moving data between systems; use "
+                    f"'Corrected', 'Organized' or 'Consolidated' for documents/files: {text[:100]!r}"
+                )
+            if _TEAM_OBJECT_RE.search(text):
+                violations.append(
+                    f"'Executed' must take a plan or campaign, not a team; use 'Led' or 'Managed': {text[:100]!r}"
                 )
     return violations
 
@@ -2850,6 +2890,7 @@ def validate(
         )
     )
     violations.extend(_check_near_duplicate_bullets(resume_data))
+    violations.extend(_check_verb_fit(resume_data))
     violations.extend(_check_experience_completeness(resume_data))
     violations.extend(_check_role_roster(resume_data, role_roster or []))
     violations.extend(_check_role_order(resume_data, role_roster or []))
