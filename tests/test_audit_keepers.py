@@ -485,6 +485,45 @@ class TestStage4AutoRewriteStartsOnFlashLite(unittest.TestCase):
 
         self.assertEqual(audit_keepers._known_manual_attempt_cluster_ids(), set())
 
+    @patch("audit_keepers.append_keeper")
+    @patch("audit_keepers.process_bullet")
+    def test_keep_result_records_the_original_bullet(
+        self, mock_process_bullet, mock_append_keeper
+    ):
+        # The keeper row used to omit original_bullet, so every auto-rewritten
+        # row landed in the bank with the column empty and known_originals
+        # could never dedupe against it.
+        mock_process_bullet.return_value = {
+            "rewrite_status": "KEEP",
+            "final_bullet": "A great bullet.",
+            "rewrite_attempts": 1,
+        }
+        mock_append_keeper.side_effect = lambda df, row, path: df
+        df_queue = pd.DataFrame(
+            [
+                {
+                    "Bullet Point": "A weak bullet.",
+                    "Role / Company": "Acme",
+                    "source_cluster_id": 7,
+                    "composite_score": 220,
+                }
+            ]
+        )
+
+        audit_keepers.stage4_auto_rewrite(
+            df_queue=df_queue,
+            kb=object(),
+            rewrite_system="sys",
+            rewrite_system_gemma="sys-gemma",
+            score_system="score-sys",
+            df_keepers=pd.DataFrame(),
+            dry_run=False,
+        )
+
+        keeper_row = mock_append_keeper.call_args[0][1]
+        self.assertEqual(keeper_row["Bullet Point"], "A great bullet.")
+        self.assertEqual(keeper_row["original_bullet"], "A weak bullet.")
+
     @patch("audit_keepers.process_bullet")
     def test_successful_rewrite_removes_the_superseded_original_and_its_duplicates(
         self, mock_process_bullet
