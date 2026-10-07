@@ -225,3 +225,43 @@ func TestRenderedSidebarRowStaysAlignedWithMarker(t *testing.T) {
 		}
 	}
 }
+
+// The Jobs screen is the live worklist: expired, archived and
+// Skip-recommended roles are exported for the Pipeline's [d] toggle and
+// must not leak into it, at any filter stop. A star still outranks the gate.
+func TestJobsHidesTerminalRoles(t *testing.T) {
+	base := model.JobRow{
+		Company: "Acme", Title: "Designer", Status: "Pending",
+		Evaluation: model.Evaluation{CompositeScore: ActionableScore + 0.5},
+	}
+	m := NewJobsModel(shortlistTheme(), []model.JobRow{base}, 100, 30)
+
+	terminal := map[string]model.JobRow{}
+	for _, status := range []string{"Expired", "Archived"} {
+		r := base
+		r.Status = status
+		terminal[status] = r
+	}
+	skip := base
+	skip.SkipRecommended = true
+	terminal["Skip"] = skip
+
+	for _, filter := range []string{"all", "pending", "good_fit", "low", "recent"} {
+		m.filter = filter
+		for name, r := range terminal {
+			if m.matchesPrimaryFilter(r) {
+				t.Errorf("%s row leaked into Jobs at filter %q", name, filter)
+			}
+		}
+	}
+
+	m.filter = "all"
+	if !m.matchesPrimaryFilter(base) {
+		t.Fatal("a live pending row must still show")
+	}
+	starred := terminal["Expired"]
+	starred.Favorite = true
+	if !m.matchesPrimaryFilter(starred) {
+		t.Fatal("a starred expired role must still show")
+	}
+}

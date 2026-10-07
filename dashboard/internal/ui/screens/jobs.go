@@ -577,6 +577,14 @@ func (m *JobsModel) setFavoriteByKey(key string, favorited bool) {
 // means -- that denominator used to compare m.filter against a row's
 // STATUS, which silently reported 0 for every score-based filter.
 func (m JobsModel) matchesPrimaryFilter(r model.JobRow) bool {
+	// Expired, archived and Skip-recommended roles are exported so the
+	// Pipeline can reach them behind its [d] toggle, but this screen is the
+	// live worklist: they were never meant to be mixed in with pending
+	// roles here. A shortlisted role is exempt, as everywhere else.
+	if !r.Favorite && (data.IsTerminalStatus(r.Status) || r.SkipRecommended) {
+		return false
+	}
+
 	// The actionable bar applies to EVERY stop except "low". Previously it
 	// was a property of two score stops only, so cycling to "all",
 	// "pending", "completed" or "local" silently refilled the list with
