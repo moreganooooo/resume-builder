@@ -35,6 +35,8 @@ def polish_temp_dir():
         with (
             patch.object(polish, "OUTPUT_HTML_DIR", html_dir),
             patch.object(polish, "OUTPUT_PDF_DIR", pdf_dir),
+            patch.object(polish, "OUTPUT_DOCX_DIR", os.path.join(tmpdir, "docx")),
+            patch.object(polish, "OUTPUT_CL_DOCX_DIR", os.path.join(tmpdir, "cl_docx")),
         ):
             yield tmpdir
     finally:
@@ -131,6 +133,49 @@ class TestRenderExistingJson(unittest.TestCase):
             result = polish.render_existing_json(path, "resume")
             self.assertIsNone(result["pdf"])
             self.assertTrue(os.path.exists(result["html"]))
+
+    @patch("polish.render_resume_docx")
+    @patch("polish.render_html")
+    @patch("polish.subprocess.run")
+    def test_resume_also_writes_a_docx(self, mock_run, mock_html, mock_docx):
+        mock_run.return_value = MagicMock(returncode=0)
+        with polish_temp_dir() as tmpdir:
+            path = self._write_json(
+                tmpdir, "AlexRivera_Strategist_Acme_Resume.json", {"TAGLINE": "X"}
+            )
+            result = polish.render_existing_json(path, "resume")
+        self.assertTrue(
+            result["docx"].endswith("AlexRivera_Strategist_Acme_Resume.docx")
+        )
+        mock_docx.assert_called_once()
+
+    @patch("polish.render_coverletter_docx")
+    @patch("polish.render_coverletter")
+    @patch("polish.subprocess.run")
+    def test_coverletter_also_writes_a_docx(self, mock_run, mock_html, mock_docx):
+        mock_run.return_value = MagicMock(returncode=0)
+        with polish_temp_dir() as tmpdir:
+            path = self._write_json(
+                tmpdir,
+                "AlexRivera_Strategist_Acme_CoverLetter.json",
+                {"body_paragraphs": []},
+            )
+            result = polish.render_existing_json(path, "coverletter")
+        self.assertTrue(result["docx"].endswith("_CoverLetter.docx"))
+        mock_docx.assert_called_once()
+
+    @patch("polish.render_resume_docx", side_effect=RuntimeError("bad docx"))
+    @patch("polish.render_html")
+    @patch("polish.subprocess.run")
+    def test_docx_failure_never_costs_the_pdf(self, mock_run, mock_html, mock_docx):
+        mock_run.return_value = MagicMock(returncode=0)
+        with polish_temp_dir() as tmpdir:
+            path = self._write_json(
+                tmpdir, "AlexRivera_Strategist_Acme_Resume.json", {"TAGLINE": "X"}
+            )
+            result = polish.render_existing_json(path, "resume")
+        self.assertIsNone(result["docx"])
+        self.assertTrue(result["pdf"].endswith(".pdf"))
 
 
 class TestDiffDocuments(unittest.TestCase):
@@ -350,6 +395,15 @@ class TestSaveAndRender(unittest.TestCase):
         self._real_pdf_dir = polish.OUTPUT_PDF_DIR
         polish.OUTPUT_HTML_DIR = os.path.join(self.tmp_dir, "html")
         polish.OUTPUT_PDF_DIR = os.path.join(self.tmp_dir, "pdf")
+        # The DOCX twin must be isolated too, or these tests write fixture
+        # documents into the real profile's output/docx folders.
+        for attr, name in (
+            ("OUTPUT_DOCX_DIR", "docx"),
+            ("OUTPUT_CL_DOCX_DIR", "cl_docx"),
+        ):
+            patcher = patch.object(polish, attr, os.path.join(self.tmp_dir, name))
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def tearDown(self):
         polish.OUTPUT_HTML_DIR = self._real_html_dir
@@ -383,6 +437,9 @@ class TestSaveAndRender(unittest.TestCase):
                 "json": self.resume_json_path,
                 "html": expected_html,
                 "pdf": expected_pdf,
+                "docx": os.path.join(
+                    polish.OUTPUT_DOCX_DIR, "AlexRivera_Title_Company_Resume.docx"
+                ),
                 "backup": None,
             },
         )

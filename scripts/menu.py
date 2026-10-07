@@ -1965,12 +1965,14 @@ def _handle_rerender() -> bool:
         )
         _pause_and_return()
         return False
-    with cli_art.thinking_status("Re-rendering HTML + PDF (no AI calls)..."):
+    with cli_art.thinking_status("Re-rendering HTML + PDF + DOCX (no AI calls)..."):
         result = polish_module.render_existing_json(json_path, doc_type)
     if result.get("pdf"):
         cli_art.console.print(f"{cli_art.SUCCESS} Re-rendered:")
         cli_art.console.print(f"  HTML: {result['html']}")
         cli_art.console.print(f"  PDF:  {result['pdf']}")
+        if result.get("docx"):
+            cli_art.console.print(f"  DOCX: {result['docx']}")
         try:
             subprocess.run(
                 (

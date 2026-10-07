@@ -32,7 +32,9 @@ from orchestrator import (
 )
 from pydantic import BaseModel
 from render_coverletter import render_coverletter
+from render_coverletter_docx import render_coverletter_docx
 from render_html import render_html
+from render_resume_docx import render_resume_docx
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -42,6 +44,8 @@ OUTPUT_HTML_DIR = profile_paths.output_resume_dir("html")
 OUTPUT_CL_HTML_DIR = profile_paths.output_cl_dir("html")
 OUTPUT_PDF_DIR = profile_paths.output_resume_dir("pdf")
 OUTPUT_CL_PDF_DIR = profile_paths.output_cl_dir("pdf")
+OUTPUT_DOCX_DIR = profile_paths.output_resume_dir("docx")
+OUTPUT_CL_DOCX_DIR = profile_paths.output_cl_dir("docx")
 
 RESUME_SUFFIX = "_Resume.json"
 COVERLETTER_SUFFIX = "_CoverLetter.json"
@@ -298,11 +302,30 @@ def backup_path_for(json_path: str) -> str:
     return json_path + BACKUP_SUFFIX
 
 
+def _render_docx(doc: dict, doc_type: str, stem: str) -> str | None:
+    """Writes the editable DOCX twin of the PDF, same as the main build.
+    Returns its path, or None if the export failed -- a DOCX problem must
+    never cost the user the PDF, so it warns and carries on."""
+    suffix = "_Resume" if doc_type == "resume" else "_CoverLetter"
+    docx_dir = OUTPUT_DOCX_DIR if doc_type == "resume" else OUTPUT_CL_DOCX_DIR
+    docx_path = os.path.join(docx_dir, f"{stem}{suffix}.docx")
+    try:
+        os.makedirs(docx_dir, exist_ok=True)
+        if doc_type == "resume":
+            render_resume_docx(doc, docx_path)
+        else:
+            render_coverletter_docx(doc, docx_path)
+    except Exception as exc:
+        cli_art.console.print(f"{cli_art.WARNING} DOCX export failed: {exc}")
+        return None
+    return docx_path
+
+
 def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
     """Saves `doc` to json_path, re-renders its HTML, and regenerates its
     PDF via generate-pdf.mjs. Returns {"json": ..., "html": ..., "pdf":
     ..., "backup": ...} -- "pdf" is None if PDF generation failed
-    (JSON/HTML are still saved in that case; the caller decides what to
+    (JSON/HTML/DOCX are still saved in that case; the caller decides what to
     tell the user). "backup" is the path the PREVIOUS on-disk version was
     copied to before being overwritten, or None on a document's first
     save (nothing existed yet to back up). Only the JSON is backed up --
@@ -329,6 +352,7 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
         render_html(doc, html_path)
     else:
         render_coverletter(doc, html_path)
+    docx_path = _render_docx(doc, doc_type, stem)
 
     pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
     try:
@@ -355,6 +379,7 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
             "json": json_path,
             "html": html_path,
             "pdf": None,
+            "docx": docx_path,
             "backup": backup_path,
         }
     if result.returncode != 0:
@@ -369,6 +394,7 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
             "json": json_path,
             "html": html_path,
             "pdf": None,
+            "docx": docx_path,
             "backup": backup_path,
         }
 
@@ -376,6 +402,7 @@ def save_and_render(doc: dict, doc_type: str, json_path: str) -> dict:
         "json": json_path,
         "html": html_path,
         "pdf": pdf_path,
+        "docx": docx_path,
         "backup": backup_path,
     }
 
@@ -398,7 +425,7 @@ def reset_to_backup(json_path: str) -> dict | None:
 
 
 def render_existing_json(json_path: str, doc_type: str) -> dict:
-    """Re-renders an existing output/json document to HTML + PDF with ZERO
+    """Re-renders an existing output/json document to HTML + PDF + DOCX with ZERO
     Gemini calls -- the recovery path when a PDF was deleted (or a renderer
     change landed) and the JSON is the surviving artifact. Same render +
     generate-pdf.mjs shape as save_and_render, minus the save/backup: the
@@ -422,6 +449,7 @@ def render_existing_json(json_path: str, doc_type: str) -> dict:
         render_html(doc, html_path)
     else:
         render_coverletter(doc, html_path)
+    docx_path = _render_docx(doc, doc_type, stem)
 
     pdf_script = os.path.join(SCRIPT_DIR, "generate-pdf.mjs")
     args = ["node", pdf_script, html_path, pdf_path, "--format=letter"]
@@ -440,12 +468,12 @@ def render_existing_json(json_path: str, doc_type: str) -> dict:
             f"{cli_art.WARNING} PDF generation timed out after {PDF_GENERATION_TIMEOUT_SECONDS}s "
             "(the JSON was untouched -- re-run to try again)."
         )
-        return {"json": json_path, "html": html_path, "pdf": None}
+        return {"json": json_path, "html": html_path, "pdf": None, "docx": docx_path}
     if result.returncode != 0:
         cli_art.friendly_subprocess_error(result.stderr, "re-rendering the PDF")
-        return {"json": json_path, "html": html_path, "pdf": None}
+        return {"json": json_path, "html": html_path, "pdf": None, "docx": docx_path}
 
-    return {"json": json_path, "html": html_path, "pdf": pdf_path}
+    return {"json": json_path, "html": html_path, "pdf": pdf_path, "docx": docx_path}
 
 
 _POLISH_PAGE_SIZE = 50
@@ -594,6 +622,8 @@ def run_polish_session(json_path: str) -> None:
             cli_art.console.print(f"{cli_art.SUCCESS} Restored -> {paths['json']}")
             if paths["pdf"]:
                 cli_art.console.print(f"{cli_art.SUCCESS} PDF -> {paths['pdf']}")
+            if paths.get("docx"):
+                cli_art.console.print(f"{cli_art.SUCCESS} DOCX -> {paths['docx']}")
             return
         if decision != "continue":
             return
@@ -649,6 +679,8 @@ def run_polish_session(json_path: str) -> None:
         cli_art.console.print(f"{cli_art.SUCCESS} Saved -> {paths['json']}")
         if paths["pdf"]:
             cli_art.console.print(f"{cli_art.SUCCESS} PDF -> {paths['pdf']}")
+        if paths.get("docx"):
+            cli_art.console.print(f"{cli_art.SUCCESS} DOCX -> {paths['docx']}")
         # No confirm-before-save here on purpose (see save_and_render's own
         # comment) -- "accept" already IS the user's confirmation. This is
         # the actual safety net: the version that was just overwritten is
