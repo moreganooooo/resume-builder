@@ -1441,26 +1441,35 @@ def build_verb_synonym_graph(style_rules: dict) -> dict[str, list[str]]:
 def auto_fix_duplicate_opening_verbs(
     resume_data: dict, style_rules: dict
 ) -> tuple[dict, bool]:
-    """Deterministically swaps duplicate opening verbs using style_rules synonyms."""
+    """Deterministically swaps duplicate opening verbs using style_rules synonyms.
+
+    A verb is a duplicate only when it repeats inside one role or exceeds
+    validate_resume's CV-wide cap -- swapping every cross-role repeat forced
+    object-blind verbs onto bullets ("Governed strict confidentiality")."""
     graph = build_verb_synonym_graph(style_rules)
-    used_verbs: set[str] = set()
+    limit = validate_resume.max_opening_verb_uses(style_rules)
+    verb_counts: dict[str, int] = {}
     modified = False
 
     for job in resume_data.get("EXPERIENCE", []):
         new_achievements = []
+        role_verbs: set[str] = set()
+
+        def _free(v: str) -> bool:
+            return v not in role_verbs and verb_counts.get(v, 0) < limit
+
         for bullet in job.get("achievements", []):
             verb = validate_resume.opening_verb(bullet)
             if not verb:
                 new_achievements.append(bullet)
                 continue
             v_lower = verb.lower()
-            if v_lower in used_verbs:
+            if not _free(v_lower):
                 candidates = graph.get(v_lower, []) + list(
                     (style_rules.get("duplicate_verb_fallbacks") or {}).get(v_lower, [])
                 )
                 chosen = next(
-                    (cand for cand in candidates if cand.lower() not in used_verbs),
-                    None,
+                    (cand for cand in candidates if _free(cand.lower())), None
                 )
                 if chosen:
                     orig_first_word = bullet.split()[0]
@@ -1469,10 +1478,12 @@ def auto_fix_duplicate_opening_verbs(
                     )
                     new_bullet = replacement + bullet[len(orig_first_word) :]
                     new_achievements.append(new_bullet)
-                    used_verbs.add(chosen.lower())
+                    role_verbs.add(chosen.lower())
+                    verb_counts[chosen.lower()] = verb_counts.get(chosen.lower(), 0) + 1
                     modified = True
                     continue
-            used_verbs.add(v_lower)
+            role_verbs.add(v_lower)
+            verb_counts[v_lower] = verb_counts.get(v_lower, 0) + 1
             new_achievements.append(bullet)
         job["achievements"] = new_achievements
     return resume_data, modified
@@ -7543,7 +7554,18 @@ class ResumeEngine:
         # free (deterministic, pre-audit) and the bank is big enough to have
         # the slack -- 84 Element 8 keepers to fill 3 slots.
         claimed_signatures: set = set()
-        claimed_verbs: set = set()
+        # verb -> companies already opening a bullet with it; mirrors
+        # validate_resume._check_unique_opening_verbs (once per role, capped CV-wide)
+        claimed_verbs: dict = {}
+        verb_cap = validate_resume.MAX_OPENING_VERB_USES
+        row_companies = (
+            df["Role / Company"].fillna("").values
+            if "Role / Company" in df.columns
+            else None
+        )
+
+        def _company_of(idx: int) -> str:
+            return str(row_companies[idx]) if row_companies is not None else ""
 
         def _is_near_duplicate(idx: int) -> bool:
             if not selected_idx:
@@ -7555,9 +7577,12 @@ class ResumeEngine:
 
         def _collides(idx: int) -> bool:
             sigs, verb = validate_resume.uniqueness_keys(str(bullet_values[idx]))
-            return bool(sigs & claimed_signatures) or (
-                verb is not None and verb in claimed_verbs
-            )
+            if sigs & claimed_signatures:
+                return True
+            if verb is None:
+                return False
+            companies = claimed_verbs.get(verb, [])
+            return _company_of(idx) in companies or len(companies) >= verb_cap
 
         def _take(idx: int) -> None:
             sigs, verb = validate_resume.uniqueness_keys(str(bullet_values[idx]))
@@ -7565,7 +7590,7 @@ class ResumeEngine:
             selected_set.add(idx)
             claimed_signatures.update(sigs)
             if verb is not None:
-                claimed_verbs.add(verb)
+                claimed_verbs.setdefault(verb, []).append(_company_of(idx))
 
         # A situational role (situational_roles.yaml) belongs on the resume
         # only when the JD cleared its keyword gate -- the caller passes those
@@ -9492,9 +9517,9 @@ class ResumeEngine:
             fix_contents += (
                 f"=== ALL OPENING VERBS CURRENTLY USED ACROSS THE CV ===\n"
                 f"{', '.join(current_verbs)}\n"
-                f"When fixing a duplicate-opening-verb issue, the replacement verb must not "
-                f"appear anywhere in this full list -- not just avoid the two bullets named "
-                f"in the issue below.\n\n"
+                f"When fixing a duplicate-opening-verb issue, pick a replacement verb that "
+                f"fits the bullet's object and is not already used in that same role or "
+                f"already used twice in this full list.\n\n"
             )
         if any(v.startswith("Role roster") for v in violations):
             # An absent employer is the one violation the model can't
@@ -10273,6 +10298,7 @@ class ResumeEngine:
             interactive=interactive,
             jd_text=jd_text,
             job_key=job_key,
+            jd_path=jd_path,
         )
         if jd_keywords is _ABORT_BUILD:
             return None
@@ -10571,11 +10597,22 @@ class ResumeEngine:
 
         return cast(dict, resume_data)
 
-    def _extract_jd_keywords_step(self, checkpoint, interactive, jd_text, job_key):
+    def _extract_jd_keywords_step(
+        self, checkpoint, interactive, jd_text, job_key, jd_path=None
+    ):
         """Extracted step of build_tailored_resume."""
         jd_keywords = checkpoint.get("jd_keywords")
+        # Reuse the JD's persisted extraction across builds: even at
+        # temperature 0, re-extracting drifts (measured 6-9 hard skills on one
+        # JD), so coverage scores weren't comparable between rebuilds.
+        cached = jd_manager.read_extracted_keywords(jd_path) if jd_path else None
         if jd_keywords is not None:
             cli_art.print_literal("  Resuming: using JD keywords from checkpoint.")
+        elif cached:
+            cli_art.print_literal("  Using this JD's saved keyword extraction.")
+            jd_keywords = cached
+            checkpoint["jd_keywords"] = jd_keywords
+            jd_manager.save_checkpoint(job_key, checkpoint)
         else:
             extract_prompt = self.load_prompt("extract_keywords.md")
             with cli_art.thinking_status("Extracting keywords with Gemini..."):
@@ -10614,6 +10651,8 @@ class ResumeEngine:
                 )
             checkpoint["jd_keywords"] = jd_keywords
             jd_manager.save_checkpoint(job_key, checkpoint)
+            if jd_keywords and jd_path:
+                jd_manager.save_extracted_keywords(jd_path, jd_keywords)
         jd_keywords = _drop_target_role_titles(
             jd_keywords, profile_paths.profile_yaml() or {}
         )

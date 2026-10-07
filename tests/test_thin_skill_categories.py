@@ -6,13 +6,17 @@ eleven skills under Productivity -- the page was thin where the evidence
 was not.
 """
 
+import json
 import os
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 import orchestrator  # noqa: E402
+import profile_paths  # noqa: E402
 import validate_resume  # noqa: E402
 
 CV = """
@@ -72,6 +76,40 @@ class TestThinCategoryCheck(unittest.TestCase):
 
 
 class TestFillThinCategories(unittest.TestCase):
+
+    def setUp(self):
+        # The hallucinated-tool guard reads the active profile's
+        # verified_tools.json, which is gitignored: a fresh clone (CI) has
+        # none, so every addition here was rejected there. Point the guard
+        # at a ledger vouching for this file's fixture skills instead.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        with open(os.path.join(tmp.name, "verified_tools.json"), "w") as f:
+            json.dump(
+                {
+                    "tools": [
+                        {"name": n}
+                        for n in [
+                            "Slack",
+                            "Zoom",
+                            "Trello",
+                            "Microsoft Office",
+                            "Microsoft Office Suite",
+                            "Google Workspace",
+                            "Notion",
+                            "Figma",
+                            "Photoshop",
+                            "Illustrator",
+                            "Canva",
+                        ]
+                    ]
+                },
+                f,
+            )
+        patcher = mock.patch.object(profile_paths, "kb_dir", return_value=tmp.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_fills_from_the_rows_own_cv_group(self):
         result, added = fill(["**Productivity:** Microsoft Office"])
         self.assertEqual(len(added), 1)

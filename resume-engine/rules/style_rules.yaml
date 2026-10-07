@@ -58,10 +58,13 @@ bullet_structure:
   widow_rule: "Never wrap to a second line with fewer than 5 words"
   widow_min_words: 5
 
+# Cap on how many bullets one opening verb may start CV-wide (never twice in one role).
+max_opening_verb_uses: 2
+
 verb_rules:
   - Open every bullet with a strong specific past-tense action verb
   - Present tense only for actively held roles
-  - Each opening verb must be UNIQUE across the entire CV; no verb may open more than one bullet
+  - Each opening verb must be unique within a role and may open at most max_opening_verb_uses bullets across the CV; a natural verb that fits its object beats a forced synonym
   - The verb must fit its object. "Migrated" only for moving data between systems (never logs, spreadsheets, or files you merely organized — use "Organized" or "Consolidated"); "Executed" only for a plan, campaign, or process (never a team — use "Led" or "Managed"); "Launched" for a campaign or program, not a person or group
   - A strong verb is self-sufficient — it does not need an adverb or adjective to complete its meaning
   - If you find yourself writing "developed effectively" or "managed successfully", the verb is weak; replace it with one precise verb

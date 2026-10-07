@@ -1,9 +1,13 @@
+import json
 import os
 import sys
+import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import orchestrator  # noqa: E402
+import profile_paths  # noqa: E402
 import validate_resume  # noqa: E402
 
 RULES = {"skills_section": {"line_max_chars": 110, "widow_min_chars": 25}}
@@ -14,6 +18,35 @@ def _data(*lines):
 
 
 class JdPhraseAliasTests(unittest.TestCase):
+
+    def setUp(self):
+        # The hallucinated-tool guard reads the active profile's
+        # verified_tools.json, which is gitignored: a fresh clone (CI) has
+        # none, so every addition here was rejected there. Point the guard
+        # at a ledger vouching for this file's fixture skills instead.
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        with open(os.path.join(tmp.name, "verified_tools.json"), "w") as f:
+            json.dump(
+                {
+                    "tools": [
+                        {"name": n}
+                        for n in [
+                            "Excel",
+                            "Microsoft Excel",
+                            "Data Entry",
+                            "Data Input",
+                            "Filing",
+                            "Salesforce",
+                        ]
+                    ]
+                },
+                f,
+            )
+        patcher = mock.patch.object(profile_paths, "kb_dir", return_value=tmp.name)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_adds_microsoft_excel_beside_excel(self):
         data = _data("**Data & Systems:** Excel, Data Entry")
         out, added = orchestrator._add_jd_phrase_aliases(

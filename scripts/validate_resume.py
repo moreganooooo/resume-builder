@@ -427,20 +427,48 @@ def uniqueness_keys(bullet: str) -> tuple[set[str], str | None]:
     return {sig for _n, sig in _extract_metric_signatures(bullet)}, opening_verb(bullet)
 
 
-def _check_unique_opening_verbs(resume_data: dict) -> list[str]:
+# A 30-bullet clerical CV drawn from a ~37-row bank can't open every bullet
+# with a different verb without forcing swaps like "Governed strict
+# confidentiality" -- so a verb may repeat across roles, just never inside
+# one role and never more than this many times CV-wide.
+MAX_OPENING_VERB_USES = 2
+
+
+def max_opening_verb_uses(style_rules: dict | None) -> int:
+    return int((style_rules or {}).get("max_opening_verb_uses", MAX_OPENING_VERB_USES))
+
+
+def _check_unique_opening_verbs(
+    resume_data: dict, style_rules: dict | None = None
+) -> list[str]:
     violations = []
-    seen: dict[str, str] = {}
-    for bullet in _all_bullets(resume_data):
-        first_word = opening_verb(bullet)
-        if first_word is None:
-            continue
-        if first_word in seen:
-            violations.append(
-                f"Opening verb '{first_word}' is not unique across the CV "
-                f"(used in both {seen[first_word]!r} and {bullet!r})"
-            )
-        else:
-            seen[first_word] = bullet
+    limit = max_opening_verb_uses(style_rules)
+    seen: dict[str, list[str]] = {}
+    for job in resume_data.get("EXPERIENCE", []):
+        in_role: dict[str, str] = {}
+        for bullet in job.get("achievements", []):
+            first_word = opening_verb(bullet)
+            if first_word is None:
+                continue
+            if first_word in in_role:
+                violations.append(
+                    f"Opening verb '{first_word}' is not unique within "
+                    f"{job.get('company', 'one role')!r} (used in both "
+                    f"{in_role[first_word]!r} and {bullet!r})"
+                )
+            elif len(seen.get(first_word, [])) >= limit:
+                violations.append(
+                    f"Opening verb '{first_word}' is not unique across the CV "
+                    f"(used more than {limit} times, including "
+                    f"{seen[first_word][0]!r} and {bullet!r})"
+                )
+            in_role.setdefault(first_word, bullet)
+            seen.setdefault(first_word, []).append(bullet)
+    for entry in resume_data.get("EDUCATION", []):
+        for bullet in entry.get("bullets", []):
+            first_word = opening_verb(bullet)
+            if first_word is not None:
+                seen.setdefault(first_word, []).append(bullet)
     return violations
 
 
@@ -1162,6 +1190,7 @@ def _check_admin_claims_in_prose(resume_data: dict) -> list[str]:
 _RESULT_CLAUSE_RE = re.compile(
     r"\d|\b(?:resulting|result(?:ed)?|reduc\w+|improv\w+|increas\w+|ensur\w+|"
     r"enabl\w+|achiev\w+|earn\w+|award\w+|promot\w+|recruit\w+|nominat\w+|"
+    r"offer\w*|hired|streamlin\w+|establish\w*|prevent\w*|before|"
     r"so that|which|to (?:maintain|improve|ensure|support|facilitate|boost|"
     r"prevent|keep|meet|reduce|speed|protect)|maintain\w*|audit-ready|compliance)\b",
     re.IGNORECASE,
@@ -3054,7 +3083,7 @@ def validate(
     violations: list[str] = []
     violations.extend(_check_forbidden_phrases(resume_data, style_rules))
     violations.extend(_check_forbidden_openers(resume_data, style_rules))
-    violations.extend(_check_unique_opening_verbs(resume_data))
+    violations.extend(_check_unique_opening_verbs(resume_data, style_rules))
     violations.extend(_check_tagline_length(resume_data, style_rules))
     violations.extend(_check_bullet_lengths(resume_data, style_rules))
     violations.extend(_check_bullet_widows(resume_data, style_rules))
