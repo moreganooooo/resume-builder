@@ -178,8 +178,9 @@ Entries in `verified_tools.json` with employer "Self / Profile" are self-taught 
 - Every metric or figure in a bullet must belong to that bullet's own real source text, for that same company — never merge a number from one bullet or company into a different bullet's text, even when both are true facts about the candidate. A bullet with no metric in its own source stays that way; it does not "borrow" one to look more impressive
 - No dashes in prose; en-dashes in date ranges only
 - No bold text inside bullet content
-- Target length: ~100 chars for one-liners, hard ceiling 108 chars (empirically measured against real rendering — a bullet past 108 chars risks wrapping to a short widow 2nd line); up to 220 chars for intentional two-liners
-- ~70% one-liners, ~30% two-liners; no bullet exceeds two printed lines
+- Length: a bullet that is already within 220 chars stays WHOLE. Never shorten it to reach one line, and never cut its result/outcome clause to save space; the outcome is the part that makes it worth including. The ~100 char target applies only to bullets that are naturally that short
+- Compress only a source bullet longer than 220 chars, or one that would wrap to a 2nd line of fewer than ~5 words (hard one-line ceiling 108 chars, empirically measured against real rendering). When you must compress, cut task detail first and keep the outcome
+- The ~70% one-liner / ~30% two-liner mix is a description of typical bank content, not a quota to hit; no bullet exceeds two printed lines
 - Avoid wrapping to a second line with fewer than ~5 words
 - Every metric appears at most ONCE across the entire CV (if it's in Summary, don't repeat it in bullets)
 - Tool mentions: one per bullet ideal, two acceptable; three or more reads as a list

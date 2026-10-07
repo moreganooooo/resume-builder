@@ -53,7 +53,7 @@ bullet_structure:
   one_liner_target_chars: 100
   one_liner_max_chars: 108
   two_liner_max_chars: 220
-  mix: "~70% one-liners, ~30% two-liners"
+  mix: "~70% one-liners, ~30% two-liners (descriptive of typical bank content, not a quota; never shorten a bullet within two_liner_max_chars to hit it)"
   max_printed_lines: 2
   widow_rule: "Never wrap to a second line with fewer than 5 words"
   widow_min_words: 5
