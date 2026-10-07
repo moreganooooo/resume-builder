@@ -163,6 +163,16 @@ def _normalize_skill_item(item: str) -> str:
     return re.sub(r"\s+suite$", "", item.strip().lower())
 
 
+# Bare words left over when the builder splits compound phrases ("Lead
+# Research, Lead Routing, Workflow Automation, Data Hygiene" -> "Research,
+# Routing, Automation, Hygiene", Testeract 2026-10-05). Any ONE of these can
+# be a legitimate standalone skill, so they only drop when two or more
+# turn up on the same line -- the split signature.
+_SPLIT_COMPOUND_WORDS = frozenset(
+    {"research", "routing", "automation", "hygiene", "scoring", "enrichment"}
+)
+
+
 def skills_items_to_drop(lines: list[str]) -> list[list[str]]:
     """Per skills line, the items that should not ship: bare abstract nouns
     (orphans of "Data Management/Integrity/Quality"), repeats of an item
@@ -176,12 +186,17 @@ def skills_items_to_drop(lines: list[str]) -> list[list[str]]:
         match = _SKILLS_LINE_RE.match(line.strip())
         drops = []
         if match:
-            for item in re.split(r"[,;|]", match.group("items")):
-                item = item.strip()
-                if not item:
-                    continue
+            items = [
+                i.strip() for i in re.split(r"[,;|]", match.group("items")) if i.strip()
+            ]
+            split_words = sum(i.lower() in _SPLIT_COMPOUND_WORDS for i in items) >= 2
+            for item in items:
                 key = _normalize_skill_item(item)
-                if item.lower() in _SKILLS_FRAGMENT_WORDS or key in seen:
+                if (
+                    item.lower() in _SKILLS_FRAGMENT_WORDS
+                    or (split_words and item.lower() in _SPLIT_COMPOUND_WORDS)
+                    or key in seen
+                ):
                     drops.append(item)
                     continue
                 if _ADMIN_TITLE_RE.search(item):
@@ -920,6 +935,35 @@ def _is_career_break(company: str) -> bool:
     return "career break" in low or "professional development" in low
 
 
+_MERCOR_COMPANY_RE = re.compile(r"mercor", re.IGNORECASE)
+# Mercor was an Aug 2025 AI-training contract; none of this vocabulary
+# describes any other role. A Mercor fact in a Treering bullet (RemoteHunter,
+# 2026-10-05) is the mirror of the Treering-only guard below.
+_MERCOR_ONLY_TERM_RE = re.compile(
+    r"system prompts?|training datasets?|annotat\w+|ai[- ]generated|"
+    r"\bllms?\b|model outputs?|ai training|rlhf|subject matter experts?",
+    re.IGNORECASE,
+)
+
+
+def _check_mercor_only_terms(resume_data: dict) -> list[str]:
+    """Flags EXPERIENCE bullets outside Mercor that claim Mercor-only
+    AI-training work."""
+    violations = []
+    for entry in resume_data.get("EXPERIENCE", []):
+        company = entry.get("company", "")
+        if _MERCOR_COMPANY_RE.search(company) or _is_career_break(company):
+            continue
+        for bullet in entry.get("achievements", []):
+            match = _MERCOR_ONLY_TERM_RE.search(bullet)
+            if match:
+                violations.append(
+                    f"'{match.group(0)}' in {company} bullet is Mercor-only "
+                    f"AI-training work, not {company}'s: {bullet!r}"
+                )
+    return violations
+
+
 def _check_treering_only_terms(resume_data: dict) -> list[str]:
     """Flags EXPERIENCE bullets outside Treering/IST that claim Treering-only
     tools or governance bodies (Outreach, SalesLoft, Salesforce, HubSpot,
@@ -975,6 +1019,28 @@ def _self_taught_only_tools(verified_tools_path: str) -> set[str]:
     return {name for name in self_taught if name.lower() not in attributed}
 
 
+_EXPERIENCE_PLACEMENT_RE = re.compile(
+    r"hands[- ]on|experience|bullets?|summary|proficien|expert", re.I
+)
+
+
+def recommendations_claiming_self_taught(
+    recs: list, verified_tools_path: str
+) -> list[str]:
+    """Critique recommendations that would put a self-taught tool (HubSpot,
+    WordPress) into experience/summary wording. A rec that only mentions the
+    Skills section is fine. Deterministic backstop for critique_resume.md,
+    which the model ignored on the 2026-10-05 Testeract build."""
+    tools = [t.lower() for t in _self_taught_only_tools(verified_tools_path)]
+    flagged = []
+    for rec in recs:
+        text = str(rec)
+        names_tool = any(re.search(rf"\b{re.escape(t)}\b", text.lower()) for t in tools)
+        if names_tool and _EXPERIENCE_PLACEMENT_RE.search(text):
+            flagged.append(rec)
+    return flagged
+
+
 def _check_self_taught_tools_in_experience(
     resume_data: dict,
     bullet_tuples: list[tuple[str, str, str]] | None,
@@ -1017,7 +1083,8 @@ _CLAIMED_EXPERIENCE_RE = re.compile(
     r"configuring|deployed|deploying|launched|launching|drove|driving|automated|"
     r"automating|expert|proficient|proficiency|fluent|fluency|advanced|years? of|"
     r"decade|experience|building|designed|designing|created|creating|engineered|"
-    r"maintained|maintaining|operated|operating|executed|executing|hands-on)\b",
+    r"maintained|maintaining|operated|operating|executed|executing|hands-on|"
+    r"execution|campaigns?|background in|expertise)\b",
     re.I,
 )
 _LEARNING_FRAME_RE = re.compile(
@@ -1061,6 +1128,59 @@ def _check_self_taught_claims_in_summary_why(
                         f"or drop it -- {sentence[:120]!r}"
                     )
     return violations
+
+
+def _check_admin_claims_in_prose(resume_data: dict) -> list[str]:
+    """Summary, Why and bullets must not claim an admin role no employer
+    vouches for ("Salesforce administration", "managing CRM administration").
+    The Skills-line check alone left these shipping in a 2026-10-05 Testeract
+    build. "Administrative" is a real job family and never matches."""
+    vouched = _employer_vouched_admin_terms()
+    fields = [
+        ("Summary", resume_data.get("SUMMARY_TEXT") or ""),
+        ("Why section", resume_data.get("WHY_TEXT") or ""),
+    ]
+    for role in resume_data.get("EXPERIENCE") or []:
+        for bullet in role.get("achievements") or []:
+            fields.append(("a bullet", bullet))
+    violations = []
+    for label, raw in fields:
+        text = re.sub(r"<[^>]+>", " ", raw)
+        for sentence in re.split(r"(?<=[.!?])\s+", text):
+            if not _ADMIN_TITLE_RE.search(sentence):
+                continue
+            if any(term in sentence.lower() for term in vouched):
+                continue
+            violations.append(
+                f"Admin claim with no employer-vouched admin role in {label}: "
+                f"rephrase without 'administration/administrator/Admin' -- "
+                f"{sentence[:120]!r}"
+            )
+    return violations
+
+
+_RESULT_CLAUSE_RE = re.compile(
+    r"\d|\b(?:resulting|result(?:ed)?|reduc\w+|improv\w+|increas\w+|ensur\w+|"
+    r"enabl\w+|achiev\w+|earn\w+|award\w+|promot\w+|recruit\w+|nominat\w+|"
+    r"so that|which|to (?:maintain|improve|ensure|support|facilitate|boost|"
+    r"prevent|keep|meet|reduce|speed|protect)|maintain\w*|audit-ready|compliance)\b",
+    re.IGNORECASE,
+)
+
+
+def task_only_bullets(resume_data: dict) -> list[tuple[str, str]]:
+    """(role, bullet) for bullets that only state a task: no figure and no
+    result clause. Advisory, not a violation -- a true bullet with no known
+    outcome must stay as it is rather than be rewritten into an invented one.
+    The fix is to add the real outcome to the bullet bank
+    (scripts/enrich_clerical_bullets.py), which the build then draws on."""
+    flagged = []
+    for role in resume_data.get("EXPERIENCE") or []:
+        name = role.get("company") or role.get("title") or ""
+        for bullet in role.get("achievements") or []:
+            if not _RESULT_CLAUSE_RE.search(re.sub(r"<[^>]+>", " ", bullet)):
+                flagged.append((name, bullet))
+    return flagged
 
 
 _NEAR_DUPLICATE_THRESHOLD = 0.75
@@ -1111,7 +1231,9 @@ _MIGRATED_OBJECT_RE = re.compile(
     re.I,
 )
 _TEAM_OBJECT_RE = re.compile(
-    r"^executed\s+(?:a\s+|the\s+)?(?:team|group|reps?|people)\b", re.I
+    r"^executed\s+(?:a\s+|the\s+)?(?:[\w-]+\s+){0,2}?"
+    r"(?:team|group|pod|reps?|people|staff|managers?)\b",
+    re.I,
 )
 
 
@@ -2956,6 +3078,7 @@ def validate(
     violations.extend(_check_metric_provenance(resume_data, bullet_tuples))
     violations.extend(_check_foreign_numbers(resume_data, bullet_tuples))
     violations.extend(_check_treering_only_terms(resume_data))
+    violations.extend(_check_mercor_only_terms(resume_data))
     import os
 
     import profile_paths
@@ -2973,6 +3096,7 @@ def validate(
             os.path.join(profile_paths.kb_dir(), "verified_tools.json"),
         )
     )
+    violations.extend(_check_admin_claims_in_prose(resume_data))
     violations.extend(_check_near_duplicate_bullets(resume_data))
     violations.extend(_check_verb_fit(resume_data))
     violations.extend(_check_experience_completeness(resume_data))

@@ -2230,6 +2230,89 @@ def _top_up_verified_skills(
     return result, added
 
 
+# Phrases a posting uses interchangeably for the same skill. A JD keyword is
+# only ever added when ANOTHER member of its group is already on the page,
+# so the alias is evidenced by something the resume already claims.
+_SKILL_ALIAS_GROUPS = (
+    ("excel", "microsoft excel"),
+    ("data entry", "data input", "data input and maintenance"),
+    ("data verification", "information verification"),
+    ("document organization", "file organization", "document filing"),
+    ("administrative support", "operational support"),
+)
+
+
+def _add_jd_phrase_aliases(
+    resume_data: dict, jd_keywords: dict, style_rules: dict
+) -> tuple:
+    """Adds the JD's exact wording for a skill the SKILLS section already
+    lists under a synonym ("Microsoft Excel" beside "Excel"). Returns
+    (new_resume_data, added_phrases); never mutates its input.
+
+    Additive only: nothing is removed or reworded, so coverage cannot fall.
+    ATS keyword matchers and recruiters scan for the posting's own phrase,
+    and the top-up pass above never supplies it -- it only acts on keywords
+    the coverage check reports missing, and a synonym already credits them."""
+    skills = resume_data.get("SKILLS")
+    if not skills or not isinstance(jd_keywords, dict):
+        return resume_data, []
+    skills_section = (style_rules or {}).get("skills_section", {})
+    max_chars = skills_section.get("line_max_chars", 110)
+    wrap_min = max_chars + skills_section.get("widow_min_chars", 25)
+
+    lines = list(skills)
+    on_page = {
+        validate_resume._normalize_skill_item(i)
+        for line in lines
+        for i in _skill_line_items(line)[1]
+    }
+    wanted = []
+    for key in ("tools", "hard_skills", "core_functions"):
+        for k in jd_keywords.get(key) or []:
+            if isinstance(k, str) and k.strip() and k not in wanted:
+                wanted.append(k)
+
+    added = []
+    for phrase in wanted:
+        norm = validate_resume._normalize_skill_item(phrase)
+        if norm in on_page:
+            continue
+        group = next((g for g in _SKILL_ALIAS_GROUPS if norm in g), None)
+        if not group:
+            continue
+        home = next(
+            (
+                i
+                for i, line in enumerate(lines)
+                if any(
+                    validate_resume._normalize_skill_item(item) in group
+                    for item in _skill_line_items(line)[1]
+                )
+            ),
+            None,
+        )
+        if home is None:
+            continue
+        candidate = (
+            f"{lines[home].rstrip().rstrip(',')}, {_title_case_skill(phrase.strip())}"
+        )
+        if not _skills_line_legal(candidate, max_chars, wrap_min):
+            continue
+        trial = list(lines)
+        trial[home] = candidate
+        if _skills_add_hallucinated_tool(lines, trial):
+            continue
+        lines = trial
+        on_page.add(norm)
+        added.append(phrase.strip())
+
+    if not added:
+        return resume_data, []
+    result = dict(resume_data)
+    result["SKILLS"] = lines
+    return result, added
+
+
 MIN_SKILLS_PER_CATEGORY = 2
 
 
@@ -2313,7 +2396,11 @@ def _fill_thin_skill_categories(
         for key in ("tools", "hard_skills", "core_functions")
         for k in (jd_keywords or {}).get(key, [])
     ).casefold()
-    on_page = {item.casefold() for line in lines for item in _skill_line_items(line)[1]}
+    on_page = {
+        validate_resume._normalize_skill_item(item)
+        for line in lines
+        for item in _skill_line_items(line)[1]
+    }
 
     added = []
     for index, line in enumerate(lines):
@@ -2325,7 +2412,7 @@ def _fill_thin_skill_categories(
             for position, name in enumerate(
                 _cv_candidates_for_row(members, groups, label, items)
             )
-            if name.casefold() not in on_page
+            if validate_resume._normalize_skill_item(name) not in on_page
         ]
         # JD-matched first, then cv.md's own order -- the same
         # coverage-before-convenience priority rank_tools_for_prompt applies
@@ -2342,7 +2429,7 @@ def _fill_thin_skill_categories(
                 continue
             lines = trial
             items = items + [name]
-            on_page.add(name.casefold())
+            on_page.add(validate_resume._normalize_skill_item(name))
             added.append(name)
 
     if not added:
@@ -5115,6 +5202,38 @@ def _build_output_stem(jd_path: str) -> str:
     return "_".join(parts)
 
 
+_SPELLED_PLUS_RE = re.compile(r"\bplus\b", re.IGNORECASE)
+
+
+def rewrite_drops_metrics(original: str, candidate: str) -> list:
+    """The original's metrics (75%, 200+, $3M) that the rewrite no longer
+    carries, [] when it kept them all. A result figure is the part of a bullet
+    that separates an outcome from a task, and the scorer can't see the loss: a
+    metric-free rewrite reads as cleaner and can outscore the original."""
+
+    def _core(number: str) -> str:
+        return number.rstrip("+.,").lower()
+
+    kept = {
+        _core(n) for n, _ in validate_resume._extract_metric_signatures(candidate or "")
+    }
+    return [
+        n
+        for n, _ in validate_resume._extract_metric_signatures(original or "")
+        if _core(n) not in kept
+    ]
+
+
+def rewrite_spells_out_symbols(original: str, candidate: str) -> bool:
+    """True when a rewrite turned the original's "+" or apostrophe into the
+    word "plus" ("2,933+ accounts" -> "2,933 plus accounts", "Hill's" ->
+    "Hill plus s"). Observed live 2026-10-05 in the Opensesame audit pass;
+    no code path does this, so it is model output and must be rejected."""
+    if _SPELLED_PLUS_RE.search(original or ""):
+        return False
+    return bool(_SPELLED_PLUS_RE.search(candidate or ""))
+
+
 def _sort_audited_bullets(bullets: list, critiques: list) -> tuple[list, list]:
     """Stable-sorts audited bullets by their critique (None sorts last) and
     returns (sorted_bullets, order), where order[k] is the ORIGINAL index of
@@ -6766,7 +6885,19 @@ class ResumeEngine:
         original_anchors = date_anchors(bullet)
         rewrite_anchors = date_anchors(candidate_bullet)
 
-        if rewrite_anchors:
+        if rewrite_spells_out_symbols(bullet, candidate_bullet):
+            rewritten_bullet = bullet
+            critique_to_record = critique_data
+            cli_art.detail(
+                f"   {theme.colorize_icon('hint')} KEPT original (rewrite spelled a '+' or apostrophe out as 'plus')"
+            )
+        elif rewrite_drops_metrics(bullet, candidate_bullet):
+            rewritten_bullet = bullet
+            critique_to_record = critique_data
+            cli_art.detail(
+                f"   {theme.colorize_icon('hint')} KEPT original (rewrite dropped metric: {', '.join(rewrite_drops_metrics(bullet, candidate_bullet))})"
+            )
+        elif rewrite_anchors:
             rewritten_bullet = bullet
             critique_to_record = critique_data
             cli_art.detail(
@@ -10662,6 +10793,17 @@ class ResumeEngine:
         # Deterministic, and it saves an API round-trip per question.
         question_recs = [r for r in recs if str(r).strip().endswith("?")]
         recs = [r for r in recs if not str(r).strip().endswith("?")]
+        self_taught_recs = validate_resume.recommendations_claiming_self_taught(
+            recs, os.path.join(profile_paths.kb_dir(), "verified_tools.json")
+        )
+        if self_taught_recs:
+            recs = [r for r in recs if r not in self_taught_recs]
+            cli_art.console.print(
+                f"\n  {theme.colorize_icon('hint')} Dropped {len(self_taught_recs)} "
+                "recommendation(s) that would put a self-taught tool into "
+                "experience wording (Skills-only tools).",
+                soft_wrap=True,
+            )
         if question_recs:
             cli_art.console.print(
                 f"\n  {theme.colorize_icon('hint')} {len(question_recs)} recommendation(s) "
@@ -10755,6 +10897,15 @@ class ResumeEngine:
                     + cli_art._escape_markup(", ".join(_topped_up))
                 )
 
+        resume_data, _aliased = _add_jd_phrase_aliases(
+            resume_data, jd_keywords, style_rules_for_validation
+        )
+        if _aliased:
+            cli_art.print_literal(
+                "  Added the JD's exact wording for skill(s) already listed: "
+                + cli_art._escape_markup(", ".join(_aliased))
+            )
+
         # After the top-up, never before: a JD-driven addition may well be
         # what lifts a thin category on its own, and filling first would
         # spend the row's remaining width on a skill the posting never asked
@@ -10769,6 +10920,12 @@ class ResumeEngine:
                     "  Filled out thin skill categor(ies) from cv.md: "
                     + cli_art._escape_markup(", ".join(_filled))
                 )
+
+        for _role, _bullet in validate_resume.task_only_bullets(resume_data):
+            cli_art.print_literal(
+                "  Task-only bullet (no result stated), "
+                + cli_art._escape_markup(f"{_role}: {_bullet[:90]}")
+            )
 
         return resume_data
 

@@ -121,7 +121,9 @@ skip = "*.json,*.csv,*.db,*.pyc,*.pycache,*.rtf,*.html,node_modules,scripts/cont
 #     own failure message, quoted verbatim in CLAUDE.md)
 #   regex STEMS, deliberately truncated so they match inflections:
 #     countr (eligible countr\w+), significan (statistically significan\w*),
-#     ment (a suffix-stripping stemmer's literal), categor ("categor(ies)")
+#     ment (a suffix-stripping stemmer's literal), categor ("categor(ies)"),
+#     increas / achiev (validate_resume._RESULT_CLAUSE_RE's increas\w+ and
+#     achiev\w+, which match increase/increased/achieve/achieved alike)
 #   domain vocabulary: hsa/fsa (US Health Savings / Flexible Spending
 #     Account, in compensation.py's benefit words that must NOT read as
 #     salary), ehr (Electronic Health Records), coo (Chief Operating
@@ -134,4 +136,4 @@ skip = "*.json,*.csv,*.db,*.pyc,*.pycache,*.rtf,*.html,node_modules,scripts/cont
 #   third-party level labels quoted verbatim: erro (charmbracelet/log's
 #     own four-character ERROR tag, which logstyle.py reproduces so the
 #     Python and Go halves write one log format rather than two)
-ignore-words-list = "unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations,ment,hsa,fsa,significan,categor,datas,nd,sav,erro"
+ignore-words-list = "unparseable,ist,coo,ehr,cant,wit,bu,hims,countr,alllocations,ment,hsa,fsa,significan,categor,datas,nd,sav,erro,increas,achiev"

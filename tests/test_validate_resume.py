@@ -458,6 +458,19 @@ class TestValidateResume(unittest.TestCase):
         violations = validate_resume.validate(resume, STYLE_RULES)
         self.assertTrue(any("fragment item" in v.lower() for v in violations))
 
+    def test_flags_admin_claims_in_summary_and_why_but_not_administrative(self):
+        data = {
+            "SUMMARY_TEXT": "Seasoned marketer managing CRM administration daily.",
+            "WHY_TEXT": "<p>My background in Salesforce administration helps.</p>",
+            "EXPERIENCE": [
+                {"achievements": ["Provided administrative support to 20 staff"]}
+            ],
+        }
+        found = validate_resume._check_admin_claims_in_prose(data)
+        self.assertEqual(len(found), 2)
+        self.assertTrue(any("Summary" in v for v in found))
+        self.assertTrue(any("Why" in v for v in found))
+
     def test_flags_ing_form_self_taught_claim_in_why(self):
         import json
         import tempfile
@@ -470,6 +483,17 @@ class TestValidateResume(unittest.TestCase):
             "WHY_TEXT": "<p>I have translated specs into collateral, managing "
             "digital resources across WordPress and HubSpot.</p>"
         }
+        self.assertTrue(v._check_self_taught_claims_in_summary_why(data, f.name))
+
+    def test_flags_campaign_execution_self_taught_claim_in_why(self):
+        import json
+        import tempfile
+
+        import validate_resume as v
+
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"tools": [{"name": "HubSpot", "employer": "Self / Profile"}]}, f)
+        data = {"WHY_TEXT": "<p>My background in HubSpot campaign execution fits.</p>"}
         self.assertTrue(v._check_self_taught_claims_in_summary_why(data, f.name))
 
     def test_flags_duplicate_and_unvouched_admin_skill_items(self):

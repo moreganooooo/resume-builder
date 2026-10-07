@@ -134,6 +134,16 @@ class TestFillThinCategories(unittest.TestCase):
         self.assertEqual(added, [])
         self.assertEqual(result["SKILLS"], [f"**Productivity:** {long_item}"])
 
+    def test_does_not_refill_a_suite_variant_already_on_page(self):
+        """cv.md's "Microsoft Office" is the page's "Microsoft Office Suite";
+        a 2026-10-05 Testeract build shipped both on one line."""
+        result, added = fill(["**Productivity:** Microsoft Office Suite"])
+        self.assertNotIn("Microsoft Office", added)
+        self.assertEqual(
+            validate_resume.skills_items_to_drop(result["SKILLS"]),
+            [[] for _ in result["SKILLS"]],
+        )
+
     def test_does_not_mutate_its_input(self):
         original = {"SKILLS": ["**Productivity:** Microsoft Office"]}
         snapshot = list(original["SKILLS"])
