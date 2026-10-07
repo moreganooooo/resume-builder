@@ -455,9 +455,6 @@ func matchesJobSearch(job model.JobRow, query string) bool {
 // alone, ignoring any search query -- the denominator for renderSearchBar's
 // "N/M matching" display, mirroring pipeline.go's countForFilter/tabFiltered.
 func (m JobsModel) countForStatusFilter() int {
-	if m.filter == "all" {
-		return len(m.rows)
-	}
 	count := 0
 	for _, r := range m.rows {
 		if m.matchesPrimaryFilter(r) {
@@ -580,8 +577,10 @@ func (m JobsModel) matchesPrimaryFilter(r model.JobRow) bool {
 	// Expired, archived and Skip-recommended roles are exported so the
 	// Pipeline can reach them behind its [d] toggle, but this screen is the
 	// live worklist: they were never meant to be mixed in with pending
-	// roles here. A shortlisted role is exempt, as everywhere else.
-	if !r.Favorite && (data.IsTerminalStatus(r.Status) || r.SkipRecommended) {
+	// roles here. A star overrides the evaluator's Skip verdict, but not an
+	// expired or archived posting -- there is nothing left to apply to, so
+	// a starred one lives in the Pipeline only.
+	if data.IsTerminalStatus(r.Status) || (r.SkipRecommended && !r.Favorite) {
 		return false
 	}
 

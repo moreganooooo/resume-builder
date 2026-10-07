@@ -228,7 +228,8 @@ func TestRenderedSidebarRowStaysAlignedWithMarker(t *testing.T) {
 
 // The Jobs screen is the live worklist: expired, archived and
 // Skip-recommended roles are exported for the Pipeline's [d] toggle and
-// must not leak into it, at any filter stop. A star still outranks the gate.
+// must not leak into it, at any filter stop. A star outranks a Skip
+// verdict but not an expired or archived posting.
 func TestJobsHidesTerminalRoles(t *testing.T) {
 	base := model.JobRow{
 		Company: "Acme", Title: "Designer", Status: "Pending",
@@ -261,7 +262,12 @@ func TestJobsHidesTerminalRoles(t *testing.T) {
 	}
 	starred := terminal["Expired"]
 	starred.Favorite = true
-	if !m.matchesPrimaryFilter(starred) {
-		t.Fatal("a starred expired role must still show")
+	if m.matchesPrimaryFilter(starred) {
+		t.Fatal("a starred expired role belongs in the Pipeline only")
+	}
+	starredSkip := terminal["Skip"]
+	starredSkip.Favorite = true
+	if !m.matchesPrimaryFilter(starredSkip) {
+		t.Fatal("a star must still outrank a Skip verdict")
 	}
 }
