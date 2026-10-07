@@ -6053,8 +6053,13 @@ class ResumeEngine:
     # tools cap guessed against an imagined segment is exactly how this
     # broke the first time (the segment is ~15k chars, not the ~2k a first
     # pass assumed).
-    GEMMA_SYSTEM_PROMPT_RESERVE_CHARS = 16_000  # Gemma rewrite system prompt
-    GEMMA_SEGMENT_RESERVE_CHARS = 16_000  # worst per-bullet segment bundle
+    # Re-measured 2026-10-07: the system prompt had grown to 16,681 chars and
+    # the worst segment (Treering [ops][content]) to 16,092, both past the
+    # old 16,000 reserves, which silently ate into the margin below that is
+    # meant for the per-bullet tail (persona, weaknesses, critique, avoid
+    # lists). Reserves now sit a little above today's measurements.
+    GEMMA_SYSTEM_PROMPT_RESERVE_CHARS = 17_000  # Gemma rewrite system prompt
+    GEMMA_SEGMENT_RESERVE_CHARS = 16_500  # worst per-bullet segment bundle
     GEMMA_PREFIX_OTHER_RESERVE_CHARS = 2_000  # verified facts + voice anchors
 
     # Slack held back from the budget. The reserves above are measurements
@@ -7023,6 +7028,14 @@ class ResumeEngine:
             f"{theme.colorize_icon('hint')}  Gemma rewrite system prompt (slim): {len(rewrite_system_gemma):,} chars",
             level=cli_art.NORMAL,
         )
+        if len(rewrite_system_gemma) > ResumeEngine.GEMMA_SYSTEM_PROMPT_RESERVE_CHARS:
+            cli_art.console.print(
+                f"  {theme.colorize_icon('warning')} Gemma system prompt is "
+                f"{len(rewrite_system_gemma):,} chars, past its "
+                f"{ResumeEngine.GEMMA_SYSTEM_PROMPT_RESERVE_CHARS:,}-char budget "
+                "reserve -- raise GEMMA_SYSTEM_PROMPT_RESERVE_CHARS or trim the slim rules.",
+                soft_wrap=True,
+            )
         cli_art.detail("", level=cli_art.NORMAL)
         cli_art.detail(
             f"{theme.colorize_icon('hint')} Score system prompt:   {len(critique_system):,} chars",
