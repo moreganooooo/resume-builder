@@ -243,6 +243,39 @@ def lookup_website_via_search(company: str) -> Optional[str]:
     return _find_website_via_search_engine(company)
 
 
+def _collect_addresses(
+    text: str,
+    zip_re: "re.Pattern[str]",
+    state_code: str,
+    seen_zips: set,
+    results: List[Dict[str, Any]],
+) -> None:
+    """Appends every geocodable street address, then every state-anchored
+    ZIP, found in a page's visible text."""
+    found = [
+        (m.group(0).strip(), m.group(1)) for m in _GENERIC_STREET_RE.finditer(text)
+    ]
+    found += [
+        (f"{state_code.upper()} {m.group(1)}", m.group(1))
+        for m in zip_re.finditer(text)
+    ]
+    for address, zip_code in found:
+        if zip_code in seen_zips:
+            continue
+        point = geo_distance.get_zip_centroid(zip_code)
+        if point:
+            seen_zips.add(zip_code)
+            results.append(
+                {
+                    "address": address,
+                    "zip": zip_code,
+                    "lat": point[0],
+                    "lon": point[1],
+                    "source": "website_contact",
+                }
+            )
+
+
 def scrape_company_locations(
     company_website: str, state_code: str = "NY"
 ) -> List[Dict[str, Any]]:
@@ -270,61 +303,41 @@ def scrape_company_locations(
         "/about",
         "/about-us",
     ]
-    results = []
-    seen_zips = set()
+    results: List[Dict[str, Any]] = []
+    seen_zips: set[str] = set()
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
     }
 
     zip_re = _build_contextual_zip_regex(state_code)
+    urls = [f"{base}{path}" for path in candidate_paths]
 
-    for path in candidate_paths:
-        target_url = f"{base}{path}"
+    for target_url in urls:
         try:
             resp = requests.get(target_url, headers=headers, timeout=5)
             if resp.status_code != 200 or not resp.text:
                 continue
             soup = BeautifulSoup(resp.text, "html.parser")
             text = soup.get_text(separator=" ")
-
-            # Look for full street addresses
-            for match in _GENERIC_STREET_RE.finditer(text):
-                zip_code = match.group(1)
-                if zip_code not in seen_zips:
-                    point = geo_distance.get_zip_centroid(zip_code)
-                    if point:
-                        seen_zips.add(zip_code)
-                        results.append(
-                            {
-                                "address": match.group(0).strip(),
-                                "zip": zip_code,
-                                "lat": point[0],
-                                "lon": point[1],
-                                "source": "website_contact",
-                            }
-                        )
-
-            # Look for state-anchored ZIP codes
-            for match in zip_re.finditer(text):
-                zip_code = match.group(1)
-                if zip_code not in seen_zips:
-                    point = geo_distance.get_zip_centroid(zip_code)
-                    if point:
-                        seen_zips.add(zip_code)
-                        results.append(
-                            {
-                                "address": f"{state_code.upper()} {zip_code}",
-                                "zip": zip_code,
-                                "lat": point[0],
-                                "lon": point[1],
-                                "source": "website_contact",
-                            }
-                        )
-
+            _collect_addresses(text, zip_re, state_code, seen_zips, results)
             if results:
                 break
         except Exception:
             continue
+
+    # JavaScript-built sites serve an empty shell to a plain fetch, so the
+    # address only exists after rendering. One sequential browser session
+    # covers every candidate path.
+    if not results:
+        from company_research import fetch_rendered_text
+
+        rendered = fetch_rendered_text(urls)
+        for target_url in urls:
+            _collect_addresses(
+                rendered.get(target_url, ""), zip_re, state_code, seen_zips, results
+            )
+            if results:
+                break
 
     return results
 

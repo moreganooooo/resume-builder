@@ -5,7 +5,12 @@
  * shell until a browser runs their scripts. Usage:
  *   node render-page-text.mjs <url> [<url> ...]
  * Prints one JSON object, {url: text}, to stdout. A page that fails to
- * load maps to "". Pages are visited one at a time on a single page --
+ * load maps to "".
+ *
+ * With --links, each url instead maps to {finalUrl, links}: where the page
+ * ended up after redirects, plus every anchor href and iframe src on it --
+ * what discover_local_employers.py reads to spot an embedded ATS board. A
+ * page that fails to load maps to null. Pages are visited one at a time on a single page --
  * project rule: never run Playwright in parallel.
  */
 
@@ -18,7 +23,9 @@ const USER_AGENT =
   '(KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 
 async function main() {
-  const urls = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const wantLinks = args.includes('--links');
+  const urls = args.filter((a) => a !== '--links');
   const out = {};
   if (urls.length === 0) {
     process.stdout.write('{}');
@@ -33,12 +40,21 @@ async function main() {
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
         // Same poll-until-painted read liveness uses: a client-rendered
         // page's body is often empty at DOMContentLoaded.
-        out[url] = await pollForStableContent(
+        const text = await pollForStableContent(
           () => page.evaluate(() => document.body?.innerText ?? ''),
           (ms) => page.waitForTimeout(ms),
         );
+        out[url] = wantLinks
+          ? {
+              finalUrl: page.url(),
+              links: await page.evaluate(() => [
+                ...[...document.querySelectorAll('a[href]')].map((a) => a.href),
+                ...[...document.querySelectorAll('iframe[src]')].map((f) => f.src),
+              ]),
+            }
+          : text;
       } catch {
-        out[url] = '';
+        out[url] = wantLinks ? null : '';
       }
     }
   } finally {

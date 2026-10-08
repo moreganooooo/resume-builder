@@ -486,6 +486,81 @@ def save_liveness(jd_path: str, result: str, reason: str = "") -> None:
     _sync_jd_to_db(jd_path, data)
 
 
+# Mirrors scan_boards.MIN_DESCRIPTION_CHARS (not imported: scan_boards pulls
+# in the whole board-scanner stack). Below this a description is a snippet.
+THIN_DESCRIPTION_CHARS = 600
+# Rendered text must beat the stored snippet by this factor to replace it,
+# so a page that rendered little more than the snippet changes nothing.
+_BACKFILL_MIN_GAIN = 1.5
+_BACKFILL_MAX_CHARS = 20_000
+
+
+def _is_thin_description(data: dict) -> bool:
+    chars = len((data.get("description") or "").strip())
+    return (
+        chars < THIN_DESCRIPTION_CHARS
+        or bool(data.get("description_is_teaser"))
+        or bool((data.get("_scan") or {}).get("thin_description"))
+    )
+
+
+def _text_names_title(text: str, title: str) -> bool:
+    """Whether rendered page text is plausibly THIS posting: at least half
+    the title's words appear in it. Guards against a redirect to a board's
+    search page or a generic careers landing page replacing a snippet with
+    text about nothing in particular. No title means no evidence either
+    way, so it passes."""
+    words = [w for w in re.findall(r"[a-z0-9]+", (title or "").lower()) if len(w) >= 3]
+    if not words:
+        return True
+    haystack = text.lower()
+    return sum(1 for w in words if w in haystack) * 2 >= len(words)
+
+
+def backfill_description(jd_path: str, posting_text: str) -> bool:
+    """Replaces a thin or teaser description with the live posting's
+    rendered text (captured by the liveness check, which already loads the
+    page in a real browser). Returns True if the file changed.
+
+    The original snippet is kept as description_snippet, the thin/teaser
+    flags are cleared, and _extracted_keywords is dropped so the next build
+    extracts from the full text instead of reusing keywords cut from the
+    snippet. A description that is already full-length is never touched."""
+    text = (posting_text or "").strip()
+    if not text:
+        return False
+    try:
+        with open(jd_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return False
+    if not isinstance(data, dict) or not _is_thin_description(data):
+        return False
+    old = (data.get("description") or "").strip()
+    if len(text) < max(THIN_DESCRIPTION_CHARS, len(old) * _BACKFILL_MIN_GAIN):
+        return False
+    if not _text_names_title(text, data.get("job_title") or data.get("title") or ""):
+        return False
+
+    if old:
+        data.setdefault("description_snippet", old)
+    data["description"] = text[:_BACKFILL_MAX_CHARS]
+    data.pop("description_html", None)
+    data.pop("description_is_teaser", None)
+    data.pop("_extracted_keywords", None)
+    if isinstance(data.get("_scan"), dict):
+        data["_scan"].pop("thin_description", None)
+        data["_scan"]["description_chars"] = len(data["description"])
+    data["_description_source"] = {
+        "source": "liveness_render",
+        "fetched_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    with atomic_write(jd_path, encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    _sync_jd_to_db(jd_path, data)
+    return True
+
+
 def move_jd_to(jd_path: str, dest_dir: str) -> str:
     """Moves a JD into dest_dir WITHOUT ever clobbering a file already
     there, returning the destination path actually used.

@@ -230,6 +230,34 @@ def fetch_rendered_text(urls: list) -> dict:
     return {k: v for k, v in data.items() if isinstance(v, str)}
 
 
+def fetch_rendered_links(urls: list) -> dict:
+    """{url: {"finalUrl": str, "links": [str]}} for each URL that loaded --
+    the post-redirect URL plus every anchor href and iframe src, rendered
+    the same way (and under the same test guard) as fetch_rendered_text().
+    Returns {} on any failure and never raises."""
+    if not urls:
+        return {}
+    if "unittest" in sys.modules and not os.environ.get(_TEST_NETWORK_ENV):
+        return {}
+    try:
+        result = subprocess.run(
+            ["node", _RENDER_SCRIPT, "--links", *urls],
+            capture_output=True,
+            text=True,
+            timeout=RENDER_TIMEOUT_SECONDS * 2,
+        )
+        data = json.loads(result.stdout) if result.returncode == 0 else {}
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        k: v
+        for k, v in data.items()
+        if isinstance(v, dict) and isinstance(v.get("links"), list)
+    }
+
+
 def fetch_company_pages(company_website: str) -> str:
     """
     Tries each candidate path in order, collecting visible text until

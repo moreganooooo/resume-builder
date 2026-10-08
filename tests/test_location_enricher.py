@@ -743,5 +743,43 @@ class TestLocationEnricher(unittest.TestCase):
                 self.assertEqual(persisted["source"], "jd_text")
 
 
+class TestRenderedAddressFallback(unittest.TestCase):
+    """A JavaScript-built site's plain HTML has no address in it; the
+    rendered page does."""
+
+    @patch.dict(os.environ, {"RESUME_ALLOW_TEST_NETWORK": "1"})
+    def test_rendered_text_is_searched_when_plain_fetch_finds_nothing(self):
+        shell = MagicMock(status_code=200, text="<div id='root'></div>")
+        rendered = {
+            "https://example.com/contact": "Visit us at 100 State Street, Albany, NY 12207"
+        }
+        with (
+            patch("requests.get", return_value=shell),
+            patch(
+                "company_research.fetch_rendered_text", return_value=rendered
+            ) as render,
+            patch.object(
+                geo_distance, "get_zip_centroid", return_value=(42.65, -73.75)
+            ),
+        ):
+            found = location_enricher.scrape_company_locations("example.com", "NY")
+        render.assert_called_once()
+        self.assertEqual([b["zip"] for b in found], ["12207"])
+
+    @patch.dict(os.environ, {"RESUME_ALLOW_TEST_NETWORK": "1"})
+    def test_browser_is_not_started_when_plain_fetch_succeeds(self):
+        page = MagicMock(status_code=200, text="<p>1 Main Street, Albany, NY 12207</p>")
+        with (
+            patch("requests.get", return_value=page),
+            patch("company_research.fetch_rendered_text") as render,
+            patch.object(
+                geo_distance, "get_zip_centroid", return_value=(42.65, -73.75)
+            ),
+        ):
+            found = location_enricher.scrape_company_locations("example.com", "NY")
+        render.assert_not_called()
+        self.assertEqual(len(found), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

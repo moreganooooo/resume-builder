@@ -60,3 +60,17 @@ test('a page that never clears the bar returns whatever it has after the budget'
   const result = await pollForStableContent(readText, noWait);
   assert.equal(result, 'still too short');
 });
+
+test('pickPostingText prefers the posting container over the whole page', async () => {
+  const { pickPostingText } = await import('./liveness-browser.mjs');
+  const posting = long('Job description body');
+  const body = `Nav Menu\n${posting}\nFooter cookie banner`;
+  assert.equal(pickPostingText(['', posting], body), posting.trim());
+});
+
+test('pickPostingText ignores a container that is a small sliver of the page', async () => {
+  const { pickPostingText } = await import('./liveness-browser.mjs');
+  const sliver = long('Related jobs widget');
+  const body = sliver + 'x'.repeat(sliver.length * 5);
+  assert.equal(pickPostingText([sliver], body), body.trim());
+});

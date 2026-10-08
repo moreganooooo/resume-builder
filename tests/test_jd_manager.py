@@ -1451,3 +1451,80 @@ class TestProfileScopedPaths(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBackfillDescription(unittest.TestCase):
+    """The liveness check hands over a live posting's rendered text; only a
+    snippet-length description should ever be replaced by it."""
+
+    def setUp(self):
+        self.tmp_dir = os.path.join(os.path.dirname(__file__), "_tmp_backfill")
+        os.makedirs(self.tmp_dir, exist_ok=True)
+
+    def tearDown(self):
+        for name in os.listdir(self.tmp_dir):
+            os.remove(os.path.join(self.tmp_dir, name))
+        os.rmdir(self.tmp_dir)
+
+    def _write(self, data):
+        path = os.path.join(self.tmp_dir, "jd.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        return path
+
+    def _read(self, path):
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+
+    FULL = "Lifecycle Marketing Manager. " + "Own the email program end to end. " * 60
+
+    def test_snippet_is_replaced_and_stale_keywords_dropped(self):
+        path = self._write(
+            {
+                "job_title": "Lifecycle Marketing Manager",
+                "description": "Short search snippet.",
+                "_extracted_keywords": {"tools": ["X"]},
+                "_scan": {"thin_description": True, "description_chars": 21},
+            }
+        )
+        self.assertTrue(jd_manager.backfill_description(path, self.FULL))
+        data = self._read(path)
+        self.assertEqual(data["description"], self.FULL.strip())
+        self.assertEqual(data["description_snippet"], "Short search snippet.")
+        self.assertNotIn("_extracted_keywords", data)
+        self.assertNotIn("thin_description", data["_scan"])
+        self.assertEqual(data["_description_source"]["source"], "liveness_render")
+
+    def test_teaser_flag_counts_as_thin_even_when_long(self):
+        teaser = "Lifecycle marketing teaser " * 30
+        path = self._write(
+            {
+                "job_title": "Lifecycle Marketing Manager",
+                "description": teaser,
+                "description_is_teaser": True,
+            }
+        )
+        self.assertTrue(jd_manager.backfill_description(path, self.FULL * 2))
+        self.assertNotIn("description_is_teaser", self._read(path))
+
+    def test_full_description_is_never_touched(self):
+        full = "Real description. " * 50
+        path = self._write(
+            {"job_title": "Lifecycle Marketing Manager", "description": full}
+        )
+        self.assertFalse(jd_manager.backfill_description(path, self.FULL * 3))
+        self.assertEqual(self._read(path)["description"], full)
+
+    def test_text_barely_longer_than_snippet_is_ignored(self):
+        path = self._write({"job_title": "Analyst", "description": "Analyst " * 60})
+        self.assertFalse(jd_manager.backfill_description(path, "Analyst " * 80))
+
+    def test_page_about_a_different_role_is_rejected(self):
+        # A redirect to a generic careers page renders plenty of text that
+        # is not this posting.
+        path = self._write(
+            {"job_title": "Lifecycle Marketing Manager", "description": "snippet"}
+        )
+        careers = "Join our team! Explore openings in engineering and sales. " * 30
+        self.assertFalse(jd_manager.backfill_description(path, careers))
+        self.assertEqual(self._read(path)["description"], "snippet")

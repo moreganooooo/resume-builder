@@ -354,8 +354,7 @@ def _handle_discover_employers() -> bool:
     )
     for hit in hits:
         cli_art.console.print(
-            f"    {hit['name']}  [dim]{hit['provider']} · "
-            f"{hit['postings']} open role(s)[/dim]",
+            f"    {hit['name']}  [dim]{discover_local_employers.describe_hit(hit)}[/dim]",
             soft_wrap=True,
         )
 

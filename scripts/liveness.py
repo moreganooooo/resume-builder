@@ -251,13 +251,17 @@ def _liveness_is_recent(liveness: dict | None) -> bool:
     )
 
 
-def _save_liveness_to_db(job_id: str, outcome: str, reason: str) -> None:
+def _save_liveness_to_db(
+    job_id: str, outcome: str, reason: str, posting_text: str = ""
+) -> None:
     """Persists a liveness result onto a job row that has no JD file."""
     import jd_source
 
     try:
         with jd_source.resolved_jd(job_id) as (path, _is_db):
             jd_manager.save_liveness(path, outcome, reason)
+            if posting_text:
+                jd_manager.backfill_description(path, posting_text)
     except (LookupError, OSError):
         pass
 
@@ -608,11 +612,17 @@ def _persist_results(results: list) -> tuple[dict, dict]:
         outcome = r.get("result", "uncertain")
         if source_file and os.path.exists(source_file):
             jd_manager.save_liveness(source_file, outcome, r.get("reason", ""))
+            if r.get("postingText"):
+                # The browser already rendered the live page to judge it;
+                # a snippet-only description gets the real text for free.
+                jd_manager.backfill_description(source_file, r["postingText"])
         elif source_file:
             # A database-only role: source_file is its job id, not a path.
             # Round-trip through jd_source so the same save_liveness() call
             # applies, then the result is synced back into the row.
-            _save_liveness_to_db(source_file, outcome, r.get("reason", ""))
+            _save_liveness_to_db(
+                source_file, outcome, r.get("reason", ""), r.get("postingText", "")
+            )
     return counts, results_by_status
 
 

@@ -11,7 +11,8 @@
  *   node check-liveness.mjs --file urls.txt
  *   node check-liveness.mjs --json-file candidates.json
  *     candidates.json: [{"job_key": "...", "source_file": "...", "url": "..."}, ...]
- *     Writes a JSON array of {job_key, source_file, url, result, code, reason}
+ *     Writes a JSON array of {job_key, source_file, url, result, code, reason, postingText?}
+ *     (postingText only on an active or likely_active verdict)
  *     to stdout; human-readable progress goes to stderr instead, keeping
  *     stdout parseable for the Python caller (scripts/liveness.py).
  *
@@ -60,11 +61,11 @@ async function runJsonMode(candidatesPath) {
     // Sequential — project rule: never Playwright in parallel
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i];
-      const { result, code, reason } = await checkUrlLiveness(page, candidate.url);
+      const { result, code, reason, postingText } = await checkUrlLiveness(page, candidate.url);
 
       console.error(JSON.stringify(buildProgressEvent(i, candidates.length, candidate, result, code, reason)));
 
-      results.push({ ...candidate, result, code, reason });
+      results.push({ ...candidate, result, code, reason, ...(postingText ? { postingText } : {}) });
     }
   } finally {
     // Both effects matter: closing the browser even on a throw (it

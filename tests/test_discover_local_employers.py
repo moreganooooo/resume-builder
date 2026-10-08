@@ -244,5 +244,116 @@ tracked_companies:
             self.assertEqual(handle.read(), before)
 
 
+class TestBoardFromLinks(unittest.TestCase):
+    def test_workday_link_reduces_to_board_root(self):
+        board = dle.board_from_links(
+            [
+                "https://acme.com/about",
+                "https://acme.wd5.myworkdayjobs.com/en-US/External/job/Denver/X_123",
+            ]
+        )
+        self.assertEqual(
+            board,
+            {
+                "provider": "workday",
+                "careers_url": "https://acme.wd5.myworkdayjobs.com/External",
+            },
+        )
+
+    def test_greenhouse_embed_resolves_slug(self):
+        board = dle.board_from_links(
+            ["https://boards.greenhouse.io/embed/job_board?for=acme"]
+        )
+        self.assertEqual(board["careers_url"], "https://boards.greenhouse.io/acme")
+
+    def test_icims_and_dayforce(self):
+        self.assertEqual(
+            dle.board_from_links(["https://careers-acme.icims.com/jobs/123/job"])[
+                "careers_url"
+            ],
+            "https://careers-acme.icims.com/",
+        )
+        self.assertEqual(
+            dle.board_from_links(
+                ["https://jobs.dayforcehcm.com/en-US/acme/CANDIDATEPORTAL"]
+            )["careers_url"],
+            "https://jobs.dayforcehcm.com/en-US/acme",
+        )
+
+    def test_supported_board_wins_over_earlier_unsupported(self):
+        board = dle.board_from_links(
+            ["https://acme.bamboohr.com/careers", "https://jobs.lever.co/acme/abc"]
+        )
+        self.assertEqual(board["provider"], "lever")
+        self.assertNotIn("unsupported", board)
+
+    def test_unsupported_board_is_reported(self):
+        board = dle.board_from_links(
+            ["https://acme.taleo.net/careersection/2/jobsearch.ftl"]
+        )
+        self.assertTrue(board["unsupported"])
+        self.assertEqual(board["provider"], "taleo")
+
+    def test_no_board(self):
+        self.assertIsNone(
+            dle.board_from_links(["https://acme.com/careers", None, "mailto:x@y"])
+        )
+
+
+class TestFindBoardsByRender(unittest.TestCase):
+    def test_follows_careers_link_in_second_session(self):
+        import company_research
+        import location_enricher
+
+        first = {
+            "https://acme.com": {
+                "finalUrl": "https://acme.com/",
+                "links": [
+                    "https://acme.com/about-us/join-our-team",
+                    "https://acme.com/blog",
+                ],
+            }
+        }
+        second = {
+            "https://acme.com/about-us/join-our-team": {
+                "finalUrl": "https://acme.com/about-us/join-our-team",
+                "links": ["https://acme.wd1.myworkdayjobs.com/Acme_Careers"],
+            }
+        }
+        with (
+            patch.object(
+                location_enricher,
+                "lookup_website_via_search",
+                return_value="https://acme.com/",
+            ),
+            patch.object(
+                company_research, "fetch_rendered_links", side_effect=[first, second]
+            ) as render,
+        ):
+            hits = dle.find_boards_by_render(["Acme"])
+        self.assertEqual(render.call_count, 2)
+        self.assertEqual(
+            hits[0]["careers_url"], "https://acme.wd1.myworkdayjobs.com/Acme_Careers"
+        )
+        self.assertIsNone(hits[0]["postings"])
+        self.assertEqual(
+            dle.describe_hit(hits[0]), "workday · board linked from their site"
+        )
+
+    def test_rendered_hit_writes_no_api_line(self):
+        out = dle.render_entries(
+            [
+                {
+                    "name": "Acme",
+                    "provider": "workday",
+                    "postings": None,
+                    "careers_url": "https://acme.wd1.myworkdayjobs.com/Acme_Careers",
+                }
+            ]
+        )
+        self.assertNotIn("api:", out)
+        self.assertIn("careers_url", out)
+
+
 if __name__ == "__main__":
     unittest.main()

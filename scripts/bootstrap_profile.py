@@ -603,8 +603,7 @@ def report_job_board_readiness(dry_run: bool = False) -> None:
                 )
                 for hit in hits:
                     cli_art.cli_info(
-                        f"    {hit['name']}  ({hit['provider']} -- "
-                        f"{hit['postings']} open role(s))"
+                        f"    {hit['name']}  ({discover_local_employers.describe_hit(hit)})"
                     )
                 if cli_art.confirm(
                     f"Track these {len(hits)} employer(s)?", default=True

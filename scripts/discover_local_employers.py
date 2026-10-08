@@ -63,6 +63,77 @@ ATS_CAREERS_URL = {
     "smartrecruiters": "https://careers.smartrecruiters.com/{slug}",
 }
 
+# A board embedded in, linked from, or redirected to by the employer's own
+# careers page -- the providers scan_ats.py can scrape, each mapped from any
+# link into it to the careers_url its provider module parses. Most local
+# employers are on Workday, iCIMS or Dayforce, which have no slug API to
+# probe, so this is how they are found at all.
+_EMBEDDED_BOARD_PATTERNS = [
+    (
+        "workday",
+        re.compile(
+            r"^(https://[\w.-]+\.myworkdayjobs\.com)/(?:[a-z]{2}-[A-Z]{2}/)?(?!wday/)([\w-]+)"
+        ),
+        "{0}/{1}",
+    ),
+    (
+        "greenhouse",
+        re.compile(
+            r"greenhouse\.io/(?:embed/job_board(?:/js)?\?for=)?(?!embed\b)([\w-]+)"
+        ),
+        "https://boards.greenhouse.io/{0}",
+    ),
+    ("lever", re.compile(r"jobs\.lever\.co/([\w.-]+)"), "https://jobs.lever.co/{0}"),
+    (
+        "ashby",
+        re.compile(r"jobs\.ashbyhq\.com/([\w.-]+)"),
+        "https://jobs.ashbyhq.com/{0}",
+    ),
+    (
+        "recruitee",
+        re.compile(r"//([\w-]+)\.recruitee\.com"),
+        "https://{0}.recruitee.com/",
+    ),
+    (
+        "smartrecruiters",
+        re.compile(r"(?:careers|jobs)\.smartrecruiters\.com/([\w-]+)"),
+        "https://careers.smartrecruiters.com/{0}",
+    ),
+    (
+        "workable",
+        re.compile(r"apply\.workable\.com/([\w-]+)"),
+        "https://apply.workable.com/{0}/",
+    ),
+    ("icims", re.compile(r"^(https://[\w-]+\.icims\.com)"), "{0}/"),
+    (
+        "dayforce",
+        re.compile(r"jobs\.dayforcehcm\.com/(?:[a-z]{2}-[A-Z]{2}/)?([\w-]+)"),
+        "https://jobs.dayforcehcm.com/en-US/{0}",
+    ),
+]
+
+# Boards recognized but not scrapable yet -- reported, so it is visible
+# which provider would unlock the most local employers next.
+_UNSUPPORTED_BOARD_HOSTS = {
+    "taleo.net": "taleo",
+    "bamboohr.com": "bamboohr",
+    "jobvite.com": "jobvite",
+    "ats.rippling.com": "rippling",
+    "paycomonline.net": "paycom",
+    "ultipro.com": "ukg",
+    "ukg.net": "ukg",
+    "workforcenow.adp.com": "adp",
+    "recruiting.adp.com": "adp",
+    "paylocity.com": "paylocity",
+    "applytojob.com": "jazzhr",
+    "successfactors.com": "successfactors",
+    "oraclecloud.com": "oracle",
+}
+
+# Followed from an employer's homepage when the page itself carries no board.
+_CAREERS_LINK_RE = re.compile(r"career|jobs?\b|join|opportunit|employment", re.I)
+_MAX_CAREERS_LINKS = 2
+
 REQUEST_TIMEOUT_SECONDS = 12
 PROBE_WORKERS = 8
 _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; resume-builder/1.0)"}
@@ -277,6 +348,113 @@ def find_ats_board(name: str) -> dict | None:
     return None
 
 
+def board_from_links(links: list) -> dict | None:
+    """The first ATS board among a page's links: {provider, careers_url},
+    plus unsupported=True when scan_ats.py has no provider for it. A
+    scrapable board wins over an unsupported one anywhere on the page."""
+    unsupported = None
+    for link in links:
+        if not isinstance(link, str) or not link.startswith("http"):
+            continue
+        for provider_id, pattern, template in _EMBEDDED_BOARD_PATTERNS:
+            match = pattern.search(link)
+            if match:
+                return {
+                    "provider": provider_id,
+                    "careers_url": template.format(*match.groups()),
+                }
+        if unsupported is None:
+            host = link.split("/")[2].lower()
+            for fragment, provider_id in _UNSUPPORTED_BOARD_HOSTS.items():
+                if host == fragment or host.endswith("." + fragment):
+                    unsupported = {
+                        "provider": provider_id,
+                        "careers_url": link,
+                        "unsupported": True,
+                    }
+    return unsupported
+
+
+def _same_site_careers_links(site: str, links: list) -> list:
+    """Careers-looking links that stay on the employer's own domain."""
+    host = site.split("/")[2].lower().removeprefix("www.")
+    picked = []
+    for link in links:
+        if not isinstance(link, str) or not link.startswith("http"):
+            continue
+        link_host = link.split("/")[2].lower().removeprefix("www.")
+        path = link.split(link_host, 1)[-1]
+        if link_host.endswith(host) and _CAREERS_LINK_RE.search(path):
+            clean = link.split("#")[0]
+            if clean not in picked:
+                picked.append(clean)
+        if len(picked) >= _MAX_CAREERS_LINKS:
+            break
+    return picked
+
+
+def find_boards_by_render(names: list) -> list:
+    """Finds boards the slug probe cannot: renders each employer's own site
+    and reads the ATS out of its links, iframes and redirects.
+
+    Rendering is batched into at most two sequential browser sessions
+    (project rule: Playwright never runs in parallel) -- homepage plus
+    /careers and /jobs first, then any careers links found on those
+    pages. Returns one hit per employer, unsupported boards included."""
+    import company_research
+    import location_enricher
+
+    # Sequential: DuckDuckGo answers concurrent queries with "No results"
+    # (measured: State Farm missed at 8 workers, found alone).
+    sites: dict[str, str] = {}
+    for name in names:
+        site = location_enricher.lookup_website_via_search(name)
+        if site:
+            sites[name] = site.rstrip("/")
+    if not sites:
+        return []
+
+    first = {
+        name: [site, f"{site}/careers", f"{site}/jobs"] for name, site in sites.items()
+    }
+    rendered = company_research.fetch_rendered_links(
+        [url for urls in first.values() for url in urls]
+    )
+
+    hits, follow = {}, {}
+    for name, urls in first.items():
+        pages = [rendered[u] for u in urls if u in rendered]
+        links = [p["finalUrl"] for p in pages] + [l for p in pages for l in p["links"]]
+        board = board_from_links(links)
+        if board and not board.get("unsupported"):
+            hits[name] = board
+            continue
+        if board:
+            hits[name] = board
+        follow[name] = [
+            u for u in _same_site_careers_links(sites[name], links) if u not in urls
+        ]
+
+    second = company_research.fetch_rendered_links(
+        [url for urls in follow.values() for url in urls]
+    )
+    for name, urls in follow.items():
+        pages = [second[u] for u in urls if u in second]
+        links = [p["finalUrl"] for p in pages] + [l for p in pages for l in p["links"]]
+        board = board_from_links(links)
+        if board and (name not in hits or not board.get("unsupported")):
+            hits[name] = board
+
+    return [dict(board, name=name, postings=None) for name, board in hits.items()]
+
+
+def describe_hit(hit: dict) -> str:
+    """The dim detail shown after an employer's name in every preview."""
+    if hit.get("postings") is None:
+        return f"{hit['provider']} · board linked from their site"
+    return f"{hit['provider']} · {hit['postings']} open role(s)"
+
+
 def tracked_companies_path(profile: str | None = None) -> str:
     return os.path.join(
         profile_paths.board_scanner_dir(profile or profile_paths.active_profile()),
@@ -377,7 +555,27 @@ def discover(
                 hit = None
             if hit:
                 found.append(hit)
-    found.sort(key=lambda h: -h["postings"])
+
+    matched = {h["name"] for h in found}
+    rest = [n for n in candidates if n not in matched]
+    if rest:
+        cli_art.console.print(
+            f"  Checking {len(rest)} employer website(s) for an embedded board...",
+            soft_wrap=True,
+        )
+        rendered = find_boards_by_render(rest)
+        found += [h for h in rendered if not h.get("unsupported")]
+        unsupported = [h for h in rendered if h.get("unsupported")]
+        if unsupported:
+            cli_art.console.print(
+                f"  {len(unsupported)} more use a board this app can't scan yet:",
+                soft_wrap=True,
+            )
+            for hit in sorted(unsupported, key=lambda h: (h["provider"], h["name"])):
+                cli_art.console.print(
+                    f"    [dim]{hit['name']} · {hit['provider']}[/dim]", soft_wrap=True
+                )
+    found.sort(key=lambda h: -(h["postings"] or 0))
     return found
 
 
@@ -392,7 +590,10 @@ def render_entries(hits: list) -> str:
     for hit in hits:
         lines.append(f"- name: {json.dumps(hit['name'], ensure_ascii=False)}")
         lines.append(f"  careers_url: {json.dumps(hit['careers_url'])}")
-        lines.append(f"  api: {json.dumps(hit['api'])}")
+        # A board found on the employer's own site has no probed API URL;
+        # scan_ats.py resolves the provider from careers_url instead.
+        if hit.get("api"):
+            lines.append(f"  api: {json.dumps(hit['api'])}")
         lines.append("  enabled: true")
     return "\n".join(lines) + "\n"
 
@@ -495,8 +696,7 @@ def main() -> None:
     )
     for hit in hits:
         cli_art.console.print(
-            f"    {hit['name']}  [dim]{hit['provider']} · "
-            f"{hit['postings']} open role(s)[/dim]",
+            f"    {hit['name']}  [dim]{describe_hit(hit)}[/dim]",
             soft_wrap=True,
         )
 

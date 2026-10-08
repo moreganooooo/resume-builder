@@ -88,6 +88,40 @@ export async function pollForStableContent(readText, wait) {
   return bodyText;
 }
 
+// Selectors for the posting itself, most specific first. The liveness
+// verdict reads the whole body, but the text kept as a job description
+// should leave the site's nav, footer and cookie banner behind.
+export const POSTING_SELECTORS = [
+  '[data-automation-id="jobPostingDescription"]',
+  '#job-description', '.job-description', '#content .job', '.posting',
+  '[class*="jobDescription"]', '[class*="job-description"]',
+  'article', 'main', '[role="main"]',
+];
+
+// A matched container must hold at least this share of the body, or it is
+// a sidebar widget that happened to match, and the whole body is used.
+const MIN_POSTING_SHARE = 0.25;
+
+/**
+ * The posting's own text: the first selector whose element carries a real
+ * share of the page, else the whole body. Pure so it is unit-testable.
+ */
+export function pickPostingText(candidateTexts, bodyText) {
+  const bodyLen = bodyText.trim().length;
+  for (const text of candidateTexts) {
+    const len = (text ?? '').trim().length;
+    if (len >= MIN_CONTENT_CHARS && len >= bodyLen * MIN_POSTING_SHARE) {
+      return text.trim();
+    }
+  }
+  return bodyText.trim();
+}
+
+const readCandidateTexts = (page) =>
+  page.evaluate((selectors) =>
+    selectors.map((sel) => document.querySelector(sel)?.innerText ?? ''),
+  POSTING_SELECTORS);
+
 const readRenderedBodyText = (page) =>
   pollForStableContent(() => readBodyText(page), (ms) => page.waitForTimeout(ms));
 
@@ -96,7 +130,7 @@ const readRenderedBodyText = (page) =>
  *
  * @param {import('playwright').Page} page - A shared Playwright Page instance
  * @param {string} url - The job posting URL to check
- * @returns {Promise<{ result: 'active'|'likely_active'|'expired'|'blocked'|'uncertain', reason: string }>}
+ * @returns {Promise<{ result: 'active'|'likely_active'|'expired'|'blocked'|'uncertain', reason: string, postingText?: string }>}
  */
 export async function checkUrlLiveness(page, url) {
   let status = 0;
@@ -123,7 +157,15 @@ export async function checkUrlLiveness(page, url) {
       ).map((el) => el.innerText?.trim() ?? el.value ?? '')
     );
 
-    return classifyLiveness({ status, finalUrl, bodyText, applyControls });
+    const verdict = classifyLiveness({ status, finalUrl, bodyText, applyControls });
+    // A live posting's rendered text is kept so liveness.py can replace a
+    // search-snippet description with the real one -- the page was already
+    // rendered to judge it, and a plain HTTP fetch of a JavaScript page
+    // gets nothing.
+    if (verdict.result === 'active' || verdict.result === 'likely_active') {
+      verdict.postingText = pickPostingText(await readCandidateTexts(page), bodyText);
+    }
+    return verdict;
   } catch (err) {
     // code matches classifyLiveness()'s vocabulary (liveness-core.mjs) so
     // a navigation failure is distinguishable from a genuine
