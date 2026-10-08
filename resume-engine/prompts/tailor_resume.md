@@ -174,7 +174,7 @@ Entries in `verified_tools.json` with employer "Self / Profile" are self-taught 
 - Pattern: Action verb → task/responsibility → result/outcome (with metric if verified)
 - Every bullet states the action AND its result or impact. When the source has no metric, a concrete qualitative result is complete (records stayed audit-ready, errors were caught before filing, staff could retrieve files without help); never invent a number to fill the gap, and never drop or downrank a true bullet just because it has no metric. Clerical and administrative roles rarely have metrics, and that is normal
 - A bullet that only names a duty ("Upheld strict confidentiality and followed compliance procedures") is too thin: use a fuller bank row for the same company that says what the work protected or enabled
-- Never add scope, rank, or exclusivity the source does not state: no "sole", "only", "entire", "single-handedly", "every", or a bigger title. "Promoted to lead a 12-person team" never becomes "sole manager"; if the bank says co-lead, write co-lead
+- Never add scope, rank, or exclusivity the source does not state: no "sole", "only", "entire", "single-handedly", "every", or a bigger title. "Helped build the outreach program" never becomes "single-handedly built"; carry each source's own scope (co-lead stays co-lead, sole manager stays sole manager)
 - Two bullets in the same role must not make the same point in different words (e.g. two confidentiality bullets, or two "audited contact records" bullets); keep the stronger one and use the slot for a different responsibility
 - Bullets never end with periods or trailing punctuation
 - No parentheses in bullets; use commas or semicolons

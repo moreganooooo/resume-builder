@@ -141,6 +141,58 @@ class TestValidationResilience(unittest.TestCase):
         # Ensure capitalization was preserved
         self.assertTrue(fixed_data["EXPERIENCE"][0]["achievements"][1][0].isupper())
 
+    def test_auto_fix_skips_candidates_that_do_not_fit_the_object(self):
+        # "Launched" is a sibling of "Authored", but front-desk operations
+        # aren't something you launch -- the swap must not land on it.
+        rules = {
+            "verb_upgrades": {
+                "c": {"upgrades": [{"strong": ["Managed", "Launched", "Ran"]}]}
+            }
+        }
+        data = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme",
+                    "achievements": [
+                        "Managed scheduling for 4 attorneys.",
+                        "Managed front-desk operations for a busy office.",
+                    ],
+                }
+            ]
+        }
+        fixed, modified = orchestrator.auto_fix_duplicate_opening_verbs(data, rules)
+        self.assertTrue(modified)
+        self.assertEqual(
+            fixed["EXPERIENCE"][0]["achievements"][1],
+            "Ran front-desk operations for a busy office.",
+        )
+
+    def test_auto_fix_leaves_repeat_when_no_candidate_fits(self):
+        rules = {
+            "verb_upgrades": {"c": {"upgrades": [{"strong": ["Managed", "Launched"]}]}}
+        }
+        data = {
+            "EXPERIENCE": [
+                {
+                    "company": "Acme",
+                    "achievements": [
+                        "Managed scheduling for 4 attorneys.",
+                        "Managed front-desk operations for a busy office.",
+                    ],
+                }
+            ]
+        }
+        _, modified = orchestrator.auto_fix_duplicate_opening_verbs(data, rules)
+        self.assertFalse(modified)
+
+    def test_verb_fit_rejects_launched_operations_and_executed_tasks(self):
+        fit = validate_resume.verb_fit_problem
+        self.assertTrue(fit("Launched reception and front-desk operations"))
+        self.assertTrue(fit("Executed administrative support and data entry tasks"))
+        self.assertIsNone(fit("Launched 6 multi-touch Outreach.io sequences"))
+        self.assertIsNone(fit("Launched a cross-functional Content Committee"))
+        self.assertIsNone(fit("Executed Salesforce Data Loader bulk operations"))
+
     def test_auto_fix_duplicate_opening_verbs_preserves_unique_verbs(self):
         data = {
             "EXPERIENCE": [

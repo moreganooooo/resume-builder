@@ -1418,22 +1418,11 @@ def build_verb_synonym_graph(style_rules: dict) -> dict[str, list[str]]:
                     if sibling != verb:
                         graph.setdefault(verb, []).append(sibling)
 
-    recommended = [
-        v.lower()
-        for v in style_rules.get("recommended_verbs", [])
-        if isinstance(v, str)
-    ]
+    # Siblings only: appending every recommended verb to every verb's list
+    # offered "Launched" for a front-desk bullet. Fit is still checked per
+    # bullet in auto_fix_duplicate_opening_verbs.
     for verb, siblings in graph.items():
-        seen = set(siblings)
-        for rec in recommended:
-            if rec != verb and rec not in seen:
-                siblings.append(rec)
-                seen.add(rec)
         graph[verb] = list(dict.fromkeys(siblings))
-
-    for rec in recommended:
-        if rec not in graph:
-            graph[rec] = [v for v in recommended if v != rec]
 
     return graph
 
@@ -1445,7 +1434,9 @@ def auto_fix_duplicate_opening_verbs(
 
     A verb is a duplicate only when it repeats inside one role or exceeds
     validate_resume's CV-wide cap -- swapping every cross-role repeat forced
-    object-blind verbs onto bullets ("Governed strict confidentiality")."""
+    object-blind verbs onto bullets ("Governed strict confidentiality").
+    A candidate must also fit the bullet's object; with none that fits, the
+    repeat is left for the LLM repair rather than forced."""
     graph = build_verb_synonym_graph(style_rules)
     limit = validate_resume.max_opening_verb_uses(style_rules)
     verb_counts: dict[str, int] = {}
@@ -1468,15 +1459,24 @@ def auto_fix_duplicate_opening_verbs(
                 candidates = graph.get(v_lower, []) + list(
                     (style_rules.get("duplicate_verb_fallbacks") or {}).get(v_lower, [])
                 )
+                orig_first_word = bullet.split()[0]
+                rest = bullet[len(orig_first_word) :]
                 chosen = next(
-                    (cand for cand in candidates if _free(cand.lower())), None
+                    (
+                        cand
+                        for cand in candidates
+                        if _free(cand.lower())
+                        and not validate_resume.verb_fit_problem(
+                            cand.capitalize() + rest
+                        )
+                    ),
+                    None,
                 )
                 if chosen:
-                    orig_first_word = bullet.split()[0]
                     replacement = (
                         chosen.capitalize() if orig_first_word[0].isupper() else chosen
                     )
-                    new_bullet = replacement + bullet[len(orig_first_word) :]
+                    new_bullet = replacement + rest
                     new_achievements.append(new_bullet)
                     role_verbs.add(chosen.lower())
                     verb_counts[chosen.lower()] = verb_counts.get(chosen.lower(), 0) + 1

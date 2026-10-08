@@ -73,7 +73,7 @@ class PromptRuleTests(unittest.TestCase):
     def test_tailor_prompt_bans_scope_inflation_and_allows_metricless(self):
         with open("resume-engine/prompts/tailor_resume.md", encoding="utf-8") as f:
             prompt = f.read()
-        self.assertIn('never becomes "sole manager"', prompt)
+        self.assertIn('never becomes "single-handedly built"', prompt)
         self.assertIn(
             "never drop or downrank a true bullet just because it has no metric", prompt
         )

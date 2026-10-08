@@ -1266,24 +1266,56 @@ _TEAM_OBJECT_RE = re.compile(
 )
 
 
+# "Launched" and "Executed" need an object that can be launched or carried
+# out. The duplicate-verb fixer swaps from object-blind synonym groups, so it
+# checks candidates against this too ("Launched front-office operations").
+_LAUNCHED_OBJECT_RE = re.compile(
+    r"^launched\s+(?:\S+\s+){0,6}?"
+    r"(?:campaigns?|programs?|initiatives?|products?|pilots?|series|newsletters?|"
+    r"sequences?|cadences?|websites?|sites?|pages?|features?|events?|webinars?|"
+    r"podcasts?|channels?|launch(?:es)?|brands?|services?|tools?|platforms?|apps?|"
+    r"pipelines?|playbooks?|courses?|workshops?|offers?|promotions?|tests?|experiments?|"
+    r"functions?|committees?|models?|teams?|rebrands?|projects?|strateg(?:y|ies))\b",
+    re.I,
+)
+_EXECUTED_TASKS_RE = re.compile(
+    r"^executed\s+(?:\S+\s+){0,4}?(?:tasks?|duties|support)\b",
+    re.I,
+)
+
+
+def verb_fit_problem(bullet: str) -> str | None:
+    """Returns why the bullet's opening verb doesn't fit its object, or None."""
+    text = bullet.strip().lstrip("- ")
+    lower = text.lower()
+    if lower.startswith("migrated") and not _MIGRATED_OBJECT_RE.search(text):
+        return (
+            "'Migrated' must describe moving data between systems; use "
+            "'Corrected', 'Organized' or 'Consolidated' for documents/files"
+        )
+    if _TEAM_OBJECT_RE.search(text):
+        return "'Executed' must take a plan or campaign, not a team; use 'Led' or 'Managed'"
+    if _EXECUTED_TASKS_RE.search(text):
+        return (
+            "'Executed' must take a plan, campaign or process, not routine tasks; "
+            "use 'Processed', 'Handled' or 'Completed'"
+        )
+    if lower.startswith("launched ") and not _LAUNCHED_OBJECT_RE.search(text):
+        return (
+            "'Launched' must take a campaign, program or product, not ongoing "
+            "operations or a person; use 'Ran', 'Managed' or 'Established'"
+        )
+    return None
+
+
 def _check_verb_fit(resume_data: dict) -> list[str]:
-    """'Migrated' fits only data/systems moving between platforms; 'Executed'
-    fits a plan or campaign, never a team."""
     violations = []
     for entry in resume_data.get("EXPERIENCE", []):
         for b in entry.get("achievements", []):
-            text = b.strip().lstrip("- ")
-            if text.lower().startswith("migrated") and not _MIGRATED_OBJECT_RE.search(
-                text
-            ):
-                violations.append(
-                    f"'Migrated' must describe moving data between systems; use "
-                    f"'Corrected', 'Organized' or 'Consolidated' for documents/files: {text[:100]!r}"
-                )
-            if _TEAM_OBJECT_RE.search(text):
-                violations.append(
-                    f"'Executed' must take a plan or campaign, not a team; use 'Led' or 'Managed': {text[:100]!r}"
-                )
+            problem = verb_fit_problem(b)
+            if problem:
+                text = b.strip().lstrip("- ")
+                violations.append(f"{problem}: {text[:100]!r}")
     return violations
 
 
