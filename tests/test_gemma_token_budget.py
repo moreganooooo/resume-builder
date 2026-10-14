@@ -337,3 +337,55 @@ class TestGemmaGlobalToolTier(unittest.TestCase):
         self.assertIs(first, engine.subset(self._tools(), "Salesforce"))
         # A different posting must re-select, not reuse the cache.
         self.assertIsNot(first, engine.subset(self._tools(), "Photoshop"))
+
+
+class TestFilterCvSectionByTags(unittest.TestCase):
+    """cv.md role sections grow as achievements get added; Gemma only ever
+    sees the tag-relevant slice, capped, so that growth can't push the
+    per-bullet segment past GEMMA_SEGMENT_RESERVE_CHARS (2026-10-13: an
+    unfiltered Treering section put the worst bundle at 20,822 chars)."""
+
+    def _section(self, bullets_per=8):
+        def block(name, word):
+            return f"**{name}**\n" + "\n".join(
+                f"- {word} bullet {i} " + "x" * 200 for i in range(bullets_per)
+            )
+
+        return "\n\n".join(
+            [
+                "### Lead\n**Acme** · Remote · 2016 – 2024\n\n*Intro line.*",
+                block("Sales Enablement & Content", "enable"),
+                block("Leadership & Operations", "lead"),
+                block("Data & Systems", "data"),
+            ]
+        )
+
+    def test_short_section_passes_through_untouched(self):
+        s = "### Lead\n**Acme**\n\n**Data & Systems**\n- one"
+        self.assertEqual(rb.filter_cv_section_by_tags(s, "[ops]"), s)
+
+    def test_output_never_exceeds_the_cap(self):
+        out = rb.filter_cv_section_by_tags(self._section(), "[ops][enablement]")
+        self.assertLessEqual(len(out), rb.GEMMA_CV_EXCERPT_MAX_CHARS)
+
+    def test_header_always_survives(self):
+        out = rb.filter_cv_section_by_tags(self._section(), "[mgmt]")
+        self.assertTrue(out.startswith("### Lead\n**Acme**"))
+
+    def test_only_tagged_subsections_are_included(self):
+        out = rb.filter_cv_section_by_tags(self._section(), "[mgmt]")
+        self.assertIn("lead bullet 0", out)
+        self.assertNotIn("enable bullet", out)
+        self.assertNotIn("data bullet", out)
+
+    def test_two_tags_both_get_context(self):
+        """Round-robin, so the first tag can't eat the whole budget."""
+        out = rb.filter_cv_section_by_tags(self._section(), "[mgmt][enablement]")
+        self.assertIn("lead bullet 0", out)
+        self.assertIn("enable bullet 0", out)
+
+    def test_unmatched_tag_falls_back_to_every_subsection(self):
+        out = rb.filter_cv_section_by_tags(self._section(), "[generalist]")
+        for word in ("enable", "lead", "data"):
+            self.assertIn(f"{word} bullet 0", out)
+        self.assertLessEqual(len(out), rb.GEMMA_CV_EXCERPT_MAX_CHARS)

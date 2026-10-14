@@ -342,6 +342,21 @@ class RewriteMinimalSchema(BaseModel):
     )
 
 
+class CritiqueRecommendation(BaseModel):
+    section: str = Field(
+        description="Resume section the edit changes, e.g. 'Summary', 'Treering bullets', 'Skills'"
+    )
+    target_text: str = Field(
+        description="Exact text already in the resume this edit changes, quoted verbatim; empty only for an 'Add' edit"
+    )
+    action: str = Field(
+        description="The edit, starting with a verb (Rewrite/Remove/Move/Add/Shorten), or a question for the candidate ending in '?'"
+    )
+    evidence: str = Field(
+        description="The knowledge-base fact that supports any claim the edit adds; empty when the edit adds no claim"
+    )
+
+
 class ResumeCritiqueSchema(BaseModel):
     summary_alignment_score: int = Field(
         description="0-100: does the Summary match the JD role and tone?"
@@ -352,7 +367,9 @@ class ResumeCritiqueSchema(BaseModel):
         description="0-100: does the top third of page one alone communicate fit within a 15-30 second first read (first-impression / above-the-fold test)?"
     )
     flags: List[str] = Field(description="Specific issues found")
-    recommendations: List[str] = Field(description="Actionable fixes, one per flag")
+    recommendations: List[CritiqueRecommendation] = Field(
+        description="Concrete edits to this resume's own text, one per flag"
+    )
     distinctive_moments: List[str] = Field(
         description=(
             "2-3 EXACT sentences or achievement bullets already present in the "

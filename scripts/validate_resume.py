@@ -1212,6 +1212,59 @@ def task_only_bullets(resume_data: dict) -> list[tuple[str, str]]:
     return flagged
 
 
+_CLIENT_LIST_SHARE = 0.5  # fraction of a role's client names a bullet can repeat
+
+
+def client_list_bullets(resume_data: dict) -> list[tuple[str, str]]:
+    """(role, bullet) for bullets that mostly re-list the role's own
+    `clients` line. Advisory: the Clients: line already names them, so such
+    a bullet spends a slot saying it again instead of what the work was."""
+    flagged = []
+    for role in resume_data.get("EXPERIENCE") or []:
+        clients = [
+            c.strip().lower()
+            for c in (role.get("clients") or "").split(",")
+            if c.strip()
+        ]
+        if len(clients) < 2:
+            continue
+        name = role.get("company") or role.get("title") or ""
+        for bullet in role.get("achievements") or []:
+            text = _strip_html(bullet).lower()
+            hits = sum(1 for c in clients if c in text)
+            if hits >= 2 and hits / len(clients) >= _CLIENT_LIST_SHARE:
+                flagged.append((name, bullet))
+    return flagged
+
+
+_SUMMARY_PHRASE_RE = re.compile(r"\b(resonates? deeply|self[- ]taught)\b", re.I)
+_EMPLOYER_SENTENCE_RE = re.compile(
+    r"^(?:[A-Z][\w&.'-]*\s+){0,4}(?:is|are)\s+(?:a|an|the)\s+(?:leading|leader|pioneer|"
+    r"innovative|premier|fast-growing|mission-driven|company|platform|organization)\b"
+    r"|^(?:your|the company's|its) (?:mission|vision|platform|commitment)\b",
+    re.I,
+)
+
+
+def check_summary_phrasing(resume_data: dict) -> list[str]:
+    """Summary-only advisories (tailor_resume.md's Summary Rules): no
+    "resonates deeply", no "self-taught" (learning framing uses other
+    words there), and no sentence spent describing the employer. Warnings,
+    not violations -- the same non-blocking treatment as
+    check_summary_specificity()."""
+    raw = _strip_html(resume_data.get("SUMMARY_TEXT", "") or "")
+    notes = [
+        f"Summary uses {m.group(0)!r} -- reword it"
+        for m in _SUMMARY_PHRASE_RE.finditer(raw)
+    ]
+    for sentence in re.split(r"(?<=[.!?])\s+", raw):
+        if _EMPLOYER_SENTENCE_RE.search(sentence.strip()):
+            notes.append(
+                f"Summary sentence describes the employer instead of the candidate: {sentence.strip()!r}"
+            )
+    return notes
+
+
 _NEAR_DUPLICATE_THRESHOLD = 0.75
 _MIN_COMPARE_WORDS = 4  # too few words left after the verb to call a duplicate
 
@@ -3157,6 +3210,10 @@ def validate(
             os.path.join(profile_paths.kb_dir(), "verified_tools.json"),
         )
     )
+    import claims_ledger
+
+    violations.extend(claims_ledger.check_resume(resume_data))
+    violations.extend(claims_ledger.check_anchor(resume_data))
     violations.extend(_check_admin_claims_in_prose(resume_data))
     violations.extend(_check_near_duplicate_bullets(resume_data))
     violations.extend(_check_verb_fit(resume_data))

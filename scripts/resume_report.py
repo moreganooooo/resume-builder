@@ -23,6 +23,7 @@ import os
 import re
 
 import cli_art
+import critique_recs
 import profile_paths
 import theme
 
@@ -268,9 +269,12 @@ def recommendation_outcomes(resume_data: dict) -> list:
         return OUTCOME_UNATTEMPTED
 
     rows = [
-        (classify(str(rec).strip()), str(rec).strip())
+        (
+            classify(critique_recs.to_text(rec).strip()),
+            critique_recs.to_text(rec).strip(),
+        )
         for rec in (critique.get("recommendations") or [])
-        if str(rec).strip()
+        if critique_recs.to_text(rec).strip()
     ]
     # An action recorded against a recommendation the critique no longer
     # lists (a re-score replaced the list) would otherwise vanish silently.

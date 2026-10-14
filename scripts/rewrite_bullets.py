@@ -1152,6 +1152,90 @@ def extract_cv_section(cv_text: str, role_company: str) -> str:
     return cv_text
 
 
+# Which bold subsection headings ("**Leadership & Operations**") inside a
+# cv.md role section each bullet tag pulls in. Matched as lowercase
+# substrings of the heading, so it works for any profile whose cv.md groups
+# a long role into bold-headed subsections, not just one hand-named set.
+CV_SUBSECTION_TAG_KEYWORDS = {
+    "[mgmt]": ("leadership", "management", "team"),
+    "[ops]": ("operations", "systems", "data"),
+    "[enablement]": ("enablement", "training"),
+    "[content]": ("content",),
+    "[writing]": ("content", "writing"),
+    "[brand]": ("content", "brand"),
+    "[email]": ("campaign", "email", "performance"),
+    "[sales]": ("sales", "leadership", "performance"),
+    "[design]": ("design", "creative", "content"),
+}
+# Gemma-only cap on the cv excerpt. Re-measured 2026-10-13: Treering's cv.md
+# section grew to 7,067 chars and pushed the worst Gemma segment bundle to
+# 20,822 chars against the orchestrator's 16,500 GEMMA_SEGMENT_RESERVE_CHARS;
+# everything else in that bundle is ~13,750, so the excerpt gets what's left.
+GEMMA_CV_EXCERPT_MAX_CHARS = 2_500
+
+_CV_SUBSECTION_RE = re.compile(r"^\*\*[^*]+\*\*\s*$")
+
+
+def filter_cv_section_by_tags(
+    cv_section: str, tags: str, max_chars: int = GEMMA_CV_EXCERPT_MAX_CHARS
+) -> str:
+    """Trims one role's cv.md section to the subsections this bullet's tags
+    point at, for Gemma's 16k TPM budget. The full section still goes to
+    the non-Gemma tier and the builder -- this only decides what Gemma sees.
+
+    Keeps the role's header (title, company, intro), then takes bullets
+    round-robin across the matching subsections -- so a two-tag bullet
+    gets context for both tags instead of the first tag eating the whole
+    budget -- until max_chars. No subsections, or no tag match (e.g.
+    [generalist]), falls back to every subsection, still capped."""
+    if not cv_section or len(cv_section) <= max_chars:
+        return cv_section
+
+    header_lines: list[str] = []
+    subsections: list[tuple[str, list[str]]] = []
+    for line in cv_section.split("\n"):
+        if _CV_SUBSECTION_RE.match(line.strip()):
+            subsections.append((line.strip(), []))
+        elif subsections:
+            if line.strip().startswith("- "):
+                subsections[-1][1].append(line.rstrip())
+        else:
+            header_lines.append(line.rstrip())
+    header = "\n".join(header_lines).strip()
+    if not subsections:
+        return cv_section[:max_chars]
+
+    picked: list[int] = []
+    for tag in re.findall(r"\[[^\]]+\]", (tags or "").lower()):
+        for kw in CV_SUBSECTION_TAG_KEYWORDS.get(tag, ()):
+            for i, (heading, _) in enumerate(subsections):
+                if kw in heading.lower() and i not in picked:
+                    picked.append(i)
+    if not picked:
+        picked = list(range(len(subsections)))
+
+    kept: dict[int, list[str]] = {i: [] for i in picked}
+    used = len(header) + sum(len(subsections[i][0]) + 2 for i in picked)
+    depth = 0
+    while True:
+        added = False
+        for i in picked:
+            bullets = subsections[i][1]
+            if depth < len(bullets) and used + len(bullets[depth]) + 1 <= max_chars:
+                kept[i].append(bullets[depth])
+                used += len(bullets[depth]) + 1
+                added = True
+        if not added:
+            break
+        depth += 1
+
+    parts = [header] if header else []
+    for i in sorted(picked):
+        if kept[i]:
+            parts.append(subsections[i][0] + "\n" + "\n".join(kept[i]))
+    return "\n\n".join(parts)
+
+
 def filter_claims_by_tags(
     df_claims: "pd.DataFrame", tags: str, max_rows: int = MAX_CLAIMS_ROWS
 ) -> "pd.DataFrame":
@@ -1449,6 +1533,7 @@ class KnowledgeBase:
         # No section means no CV context, never someone else's.
         cv_section = extract_cv_section(self.cv_full, role_company)
         if cv_section and cv_section != self.cv_full:
+            cv_section = filter_cv_section_by_tags(cv_section, tags)
             sections.append(f"=== ROLE CONTEXT (cv.md excerpt) ===\n{cv_section}")
         bg_summary = build_background_summary(tags)
         if bg_summary:

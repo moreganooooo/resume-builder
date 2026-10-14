@@ -57,7 +57,9 @@ load_dotenv(profile_paths.env_path(), override=True)
 
 import bullet_feedback
 import charm_prompt
+import claims_ledger
 import cli_art
+import critique_recs
 import jd_manager
 import kb_snapshot
 import liveness
@@ -85,7 +87,12 @@ from render_resume_docx import render_resume_docx
 # company against each heading, so it works with no manual setup. No
 # circular-import risk: rewrite_bullets imports only profile_paths, and
 # bullet_feedback above already pulls it into this chain.
-from rewrite_bullets import compact_tools_text, date_anchors, extract_cv_section
+from rewrite_bullets import (
+    compact_tools_text,
+    date_anchors,
+    extract_cv_section,
+    filter_cv_section_by_tags,
+)
 
 # --- MODEL STRATEGY ---
 # CRITIQUE_MODEL: handles bullet critique (high-frequency) and the post-build
@@ -1541,6 +1548,41 @@ def auto_fix_forbidden_openers(
     return resume_data, modified
 
 
+def auto_fix_banned_claims(resume_data: dict, banned_claims: list) -> tuple[dict, bool]:
+    """Deterministically rewrites claims profile.yml's banned_claims: retires
+    (a figure the candidate can't back, or a wrong label for a real one) in
+    the Summary, Why, and EXPERIENCE bullets. Each entry is a regex
+    `pattern` and a `replace` string (empty strips the clause). Fix in
+    place rather than fail the build: the right wording is already known."""
+    rules = []
+    for entry in banned_claims or []:
+        try:
+            rules.append((re.compile(entry["pattern"], re.I), entry.get("replace", "")))
+        except (KeyError, TypeError, re.error):
+            continue
+    if not rules:
+        return resume_data, False
+
+    def _fix(text: str) -> str:
+        for rx, repl in rules:
+            text = rx.sub(repl, text)
+        return re.sub(r"\s+([,.;])", r"\1", re.sub(r"  +", " ", text)).strip()
+
+    modified = False
+    for key in ("SUMMARY_TEXT", "WHY_TEXT"):
+        if resume_data.get(key):
+            fixed = _fix(resume_data[key])
+            if fixed != resume_data[key]:
+                resume_data[key], modified = fixed, True
+    for job in resume_data.get("EXPERIENCE", []):
+        achievements = job.get("achievements", [])
+        for idx, bullet in enumerate(achievements):
+            fixed = _fix(bullet)
+            if fixed != bullet:
+                achievements[idx], modified = fixed, True
+    return resume_data, modified
+
+
 def _micro_refactor_single_bullet(bullet: str, style_rules: dict) -> str:
     """Uses a lightweight LLM call to rewrite a single bullet to satisfy length/widow bounds."""
     limits = style_rules.get("bullet_structure", {})
@@ -2728,6 +2770,11 @@ def partition_violations(violations: list[str]) -> tuple[list[str], list[str]]:
             or v.startswith("Prose rhythm")
             or v.startswith("Date anchor")
             or v.startswith("Advisory word")
+            # Soft so a ledger regex that over-matches can't fail a build;
+            # the fix loop still gets a pass at it and auto_fix_banned_claims
+            # remains the final cleanup.
+            or v.startswith("Claims ledger:")
+            or v.startswith("Summary anchor:")
             # A thin category is a layout flaw with a deterministic repair
             # downstream (_fill_thin_skill_categories); it gets a fix attempt,
             # it never fails a build.
@@ -5412,6 +5459,14 @@ def _role_target_lines(roles) -> list:
             pg = role.get("page", 1)
             lines.append(f"| {name} | {min_b} | {tgt_b} | {max_display} | {pg} |")
 
+        for role in roles:
+            if role.get("stretch_bullets") and role.get("stretch_for"):
+                lines.append(
+                    f"\n{role.get('name') or role.get('company', '')} may go up to "
+                    f"{role['stretch_bullets']} bullets only when the JD is a "
+                    f"{role['stretch_for']} role; otherwise hold it at its Target."
+                )
+
         must_fit_page_1 = [
             (r.get("name") or r.get("company", ""))
             for r in roles
@@ -6056,6 +6111,12 @@ class ResumeEngine:
                     "=== EVIDENCE GUIDE (thematic career-proof clusters) ===\n"
                 )
 
+        # Critique, recommendation-apply, and audit all read this prefix,
+        # so the ledger here is what stops them recommending a banned claim.
+        ledger_block = claims_ledger.prompt_block(claims_ledger.load())
+        if ledger_block:
+            sections.append(ledger_block)
+
         return "\n\n".join(sections)
 
     # Everything else a Gemma rewrite call carries, measured 2026-09-29 on
@@ -6460,6 +6521,8 @@ class ResumeEngine:
                 if cv_section != cv_full
                 else "CAREER OVERVIEW (cv.md)"
             )
+            if cv_section != cv_full:
+                cv_section = filter_cv_section_by_tags(cv_section, tags)
             sections.append(f"=== {label} ===\n{cv_section}")
 
         bg_summary = build_background_summary(tags)
@@ -8965,6 +9028,21 @@ class ResumeEngine:
         if critique_text:
             critique_data = GeminiClient.parse_json(critique_text)
 
+            # Code, not the apply model, decides which recommendations are
+            # real edits -- see critique_recs' docstring.
+            sorted_recs = critique_recs.sort_recommendations(
+                critique_data.get("recommendations", []) or [],
+                resume_data,
+                unsupported_asks=resume_data.get("_unsupported_asks"),
+            )
+            critique_data["recommendations"] = sorted_recs["recommendations"]
+            critique_data["interview_notes"] = sorted_recs["interview_notes"]
+            critique_data["gaps"] = sorted_recs["gaps"]
+            critique_data["dropped_recommendations"] = sorted_recs["dropped"]
+            critique_data["distinctive_moments"], _ = claims_ledger.filter_texts(
+                critique_data.get("distinctive_moments", []) or []
+            )
+
             # B51 (phase-9-backlog.md): fold any rubric hard-failure/
             # threshold trip into recommendations so it re-enters the
             # pipeline through the same apply-and-validate loop Step 5.5
@@ -9117,6 +9195,13 @@ class ResumeEngine:
             return None
 
         resume_data = GeminiClient.parse_json(resume_text)
+        if resume_data:
+            # Underscore key: persists with the checkpoint so every later
+            # validate() pass checks the same anchor.
+            resume_data["_summary_anchor"] = self._summary_anchor()
+            resume_data["_unsupported_asks"] = [
+                name for name, _ in getattr(self, "_unsupported_asks", [])
+            ]
         if not resume_data:
             cli_art.console.print(
                 f"  {cli_art.ERROR} Could not parse builder JSON.", soft_wrap=True
@@ -9326,6 +9411,14 @@ class ResumeEngine:
                 role_metadata=role_metadata,
             )
 
+        # Retries reword the anchor fact with its numbers stripped, so
+        # code inserts it instead of asking again.
+        if any(v.startswith("Summary anchor:") for v in violations):
+            if claims_ledger.insert_anchor(resume_data):
+                violations = [
+                    v for v in violations if not v.startswith("Summary anchor:")
+                ]
+
         if violations:
             fatal_violations, soft_warnings = partition_violations(violations)
             if fatal_violations:
@@ -9357,6 +9450,11 @@ class ResumeEngine:
 
         return resume_data
 
+    def _summary_anchor(self) -> str:
+        return claims_ledger.anchor_for(
+            claims_ledger.load(), bool(getattr(self, "_clerical_swap", None))
+        )
+
     def _assemble_builder_prompt(
         self,
         _p_yaml,
@@ -9377,6 +9475,9 @@ class ResumeEngine:
         # research_company() here when it came back empty just paid for
         # the same scrape + grounded-search tiers a second time.
 
+        self._unsupported_asks = claims_ledger.unsupported_asks(
+            jd_text, claims_ledger.load()
+        )
         situational_block = ""
         swap = getattr(self, "_clerical_swap", None)
         if swap:
@@ -9385,7 +9486,10 @@ class ResumeEngine:
                 "This is a clerical/administrative posting. The ROLE RULES roster "
                 f"already lists {', '.join(swap['adds'])} as required entries and omits "
                 f"{', '.join(swap['replaces'])}. Include every roster entry with its "
-                "bullets; do not add any omitted role back."
+                "bullets; do not add any omitted role back.\n"
+                "Summary: after the opening title line, lead with verified record-volume "
+                "and accuracy evidence (account or record counts, bulk imports, "
+                "deduplication, data cleanup) before anything sales- or marketing-flavored."
             )
         elif situational_candidates:
             situational_block = (
@@ -9447,6 +9551,9 @@ class ResumeEngine:
         builder_system = (
             f"{build_prompt}\n\n{kb_context}{research_block}{situational_block}"
             f"{no_why_block}{role_rules_block}{banned_language_block}\n\n"
+            f"{claims_ledger.prompt_block(claims_ledger.load())}\n\n"
+            f"{claims_ledger.anchor_block(self._summary_anchor())}\n\n"
+            f"{claims_ledger.asks_block(self._unsupported_asks)}\n\n"
             "=== ATS KEYWORD DENSITY INSTRUCTION ===\n"
             "When crafting SUMMARY_TEXT and selecting verified SKILLS, prioritize verbatim phrases "
             "from JD KEYWORDS (e.g. use exact domain titles like 'Cybersecurity' or verbatim tool names) "
@@ -9508,6 +9615,14 @@ class ResumeEngine:
         violations,
     ):
         """Extracted step of build_tailored_resume."""
+        if any(v.startswith("Claims ledger:") for v in violations):
+            # Restate the ledger next to the hit: the violation names the
+            # text, the block says why it can't stay and what to use instead.
+            fix_contents += (
+                f"{claims_ledger.prompt_block(claims_ledger.load())}\n"
+                "Rewrite each flagged clause with the substitute shown, or drop "
+                "the clause. Do not invent a different unsupported claim.\n\n"
+            )
         if any(v.startswith("Opening verb") for v in violations):
             # Naming only the 2 colliding bullets per violation risks
             # whack-a-mole: a replacement verb picked to fix one pair
@@ -10856,14 +10971,28 @@ class ResumeEngine:
                 "experience wording (Skills-only tools).",
                 soft_wrap=True,
             )
+        # The critique sees the ledger in its prompt but can still ignore
+        # it; a recommendation that would add a banned claim never reaches
+        # the apply call.
+        ledger = claims_ledger.load()
+        recs, ledger_recs = claims_ledger.filter_texts(recs, ledger)
+        if ledger_recs:
+            cli_art.console.print(
+                f"\n  {theme.colorize_icon('hint')} Dropped {len(ledger_recs)} "
+                "recommendation(s) that would add a claim from the claims ledger.",
+                soft_wrap=True,
+            )
         if question_recs:
             cli_art.console.print(
                 f"\n  {theme.colorize_icon('hint')} {len(question_recs)} recommendation(s) "
                 "are questions for you, not edits -- saved for `resume polish`, not applied.",
                 soft_wrap=True,
             )
-        distinctive_moments = (resume_data.get("_critique") or {}).get(
-            "distinctive_moments", []
+        # A "protected" sentence holding a banned claim would otherwise be
+        # preserved verbatim through every apply call.
+        distinctive_moments, _ = claims_ledger.filter_texts(
+            (resume_data.get("_critique") or {}).get("distinctive_moments", []),
+            ledger,
         )
         protected_block = (
             (
@@ -10912,6 +11041,16 @@ class ResumeEngine:
         resume_data = company_research.apply_vocabulary_substitutions_to_resume(
             resume_data, checkpoint.get("vocabulary_substitutions", [])
         )
+
+        try:
+            _banned_claims = (profile_paths.profile_yaml() or {}).get("banned_claims")
+        except Exception:
+            _banned_claims = None
+        resume_data, _claims_fixed = auto_fix_banned_claims(resume_data, _banned_claims)
+        if _claims_fixed:
+            cli_art.print_literal(
+                "  Rewrote retired claim(s) per profile.yml banned_claims"
+            )
 
         # A JD keyword the candidate is ALREADY verified for, that the
         # finished resume simply doesn't happen to say, is lost credit
@@ -10976,6 +11115,12 @@ class ResumeEngine:
         for _role, _bullet in validate_resume.task_only_bullets(resume_data):
             cli_art.print_literal(
                 "  Task-only bullet (no result stated), "
+                + cli_art._escape_markup(f"{_role}: {_bullet[:90]}")
+            )
+
+        for _role, _bullet in validate_resume.client_list_bullets(resume_data):
+            cli_art.print_literal(
+                "  Bullet repeats the Clients: line, "
                 + cli_art._escape_markup(f"{_role}: {_bullet[:90]}")
             )
 
@@ -11099,7 +11244,9 @@ class ResumeEngine:
         # treatment as the coverage check above, and for the same class of
         # reason -- see validate_resume.check_summary_specificity()'s
         # docstring for the real build failure that made this non-blocking.
-        specificity_notes = validate_resume.check_summary_specificity(resume_data)
+        specificity_notes = validate_resume.check_summary_specificity(
+            resume_data
+        ) + validate_resume.check_summary_phrasing(resume_data)
         for note in specificity_notes:
             cli_art.console.print(
                 f"  {theme.colorize_icon('warning')} {note}", soft_wrap=True

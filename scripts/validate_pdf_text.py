@@ -23,6 +23,7 @@ advisory:
 import logging
 import re
 
+import render_html
 from pdfminer.high_level import extract_text
 
 # pdfminer emits an unattributed "FontBBox" warning on every run against these
@@ -68,8 +69,10 @@ def _normalize(text: str) -> str:
     substitutions PDF rendering introduces, so none of those look like dropped
     content."""
     text = text or ""
-    for pattern in _MARKUP_PATTERNS:
-        text = pattern.sub("", text)
+    # Tags become a space: "</p><p>" between Why paragraphs must not fuse
+    # "journey.Whether" (the whitespace collapse below absorbs the extras).
+    text = _MARKUP_PATTERNS[0].sub(" ", text)
+    text = _MARKUP_PATTERNS[1].sub("", text)
     for original, replacement in _TYPOGRAPHIC_SUBSTITUTIONS.items():
         text = text.replace(original, replacement)
     for ligature, expansion in _LIGATURE_EXPANSIONS.items():
@@ -213,14 +216,16 @@ def validate_pdf_text(
     if tagline and _normalize(tagline) not in extracted:
         advisories.append(f"Tagline not found intact in PDF text layer: {tagline[:80]}")
 
-    summary_text = resume_data.get("SUMMARY_TEXT") or ""
+    # Compare against what render_html actually prints: it rewrites a few
+    # vague phrases in Summary/Why at render time, by design.
+    summary_text = render_html._sanitize_copy(resume_data.get("SUMMARY_TEXT") or "")
     if summary_text and _normalize(summary_text) not in extracted:
         advisories.append(
             f"Summary not found intact in PDF text layer: {summary_text[:80]}"
         )
 
-    why_text = resume_data.get("WHY_TEXT") or ""
-    why_text = re.sub(r"<[^>]+>", "", why_text).strip()  # WHY_TEXT is stored as HTML
+    why_text = render_html._sanitize_copy(resume_data.get("WHY_TEXT") or "")
+    why_text = re.sub(r"<[^>]+>", " ", why_text).strip()  # WHY_TEXT is stored as HTML
     if why_text and _normalize(why_text) not in extracted:
         advisories.append(
             f"Why-section text not found intact in PDF text layer: {why_text[:80]}"

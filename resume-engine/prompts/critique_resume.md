@@ -207,6 +207,16 @@ TOP 3 RECOMMENDATIONS
   1. [Most impactful fix]
   2. [Second most impactful fix]
   3. [Third most impactful fix]
+
+  Each recommendation is an object: `section`, `target_text` (the exact
+  resume text it changes, quoted verbatim), `action` (starts with a verb),
+  and `evidence` (the knowledge-base fact behind any claim it adds).
+  Code discards a recommendation whose target_text isn't in the resume,
+  that adds a claim with no evidence, or that hits the CLAIMS LEDGER.
+  Recommend only edits to the resume itself -- interview prep, cover
+  letters, and "continue to ..." advice are not resume edits. When the JD
+  asks for something the candidate has no evidence for, say so in `flags`;
+  don't recommend adding it.
 ```
 
 ---

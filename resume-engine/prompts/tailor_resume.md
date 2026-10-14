@@ -108,6 +108,10 @@ contain the JD's actual title, the tagline has failed regardless of how good it 
 - BANNED words and phrases: avoid every term in the attached `=== STYLE RULES ===` block's `forbidden_phrases` list (the tested single source of truth — `tests/test_banned_phrase_consistency.py` enforces every other list in the repo against it) and every term in the attached `=== AI RISK SCORING RUBRIC ===` block's `buzzwords`/`adjective_padding`/`banned_openers`/`banned_phrases`. This applies everywhere in the resume, not just the Summary. Don't hardcode a duplicate list here — it drifts out of sync with the real ones
 - No pronouns in EXPERIENCE bullets, Education, or Skills. The Summary follows the ROLE RULES block's "Summary Voice" line: first person (I, my, me) is allowed ONLY for a profile that opts in (it is that candidate's documented register, see their `voice-favorites.md`); the default is pronoun-free. Third-person pronouns (she, her, hers, he, him, his) are banned everywhere except the Why section, and the candidate is never referred to by name outside the header. Pronouns of any kind remain allowed in the Why section and auto-filled career notes (see "# Career Note" below)
 - No parentheses; replace with commas or semicolons
+- Every Summary sentence is about the candidate. Never spend a sentence describing the employer, its mission, or its product ("Acme is a leading platform...")
+- Never write "resonates deeply" or "self-taught" in the Summary
+- Frame the candidate as an individual contributor. Team leadership appears as training, enablement, or mentoring, never "managed a team" or a manager title, unless the JD itself asks for people management
+- Team-level figures (a stat the whole team produced) are labeled as the team's, never claimed as the candidate's own
 
 ### Summary Structural Archetypes
 
@@ -152,7 +156,7 @@ Do NOT limit skills to only the literal keywords mentioned in the job descriptio
 #### Where Self-Taught Tools May Appear (Section Scope)
 Entries in `verified_tools.json` with employer "Self / Profile" are self-taught knowledge. They help ATS matching but are NOT work history.
 - SKILLS: allowed freely.
-- SUMMARY and WHY: allowed only as learning or capability framing that makes no experience claim (e.g. "self-taught in a named CRM", "building depth in a marketing platform", "with a goal to learn Gong"). Never "used", "managed", "owned", "ran", or "built in" such a tool, and never attach a metric or result to it.
+- SUMMARY and WHY: allowed only as learning or capability framing that makes no experience claim (e.g. "studying a named CRM independently", "building depth in a marketing platform", "with a goal to learn Gong"). Never "used", "managed", "owned", "ran", or "built in" such a tool, and never attach a metric or result to it.
 - WORK EXPERIENCE bullets: NEVER. A tool may appear in a bullet only when its employer in `verified_tools.json` matches that bullet's company (or the bullet source text already names it). If a JD tool is self-taught only, it goes in Skills, not in an experience bullet.
 
 #### Formatting & Ordering
@@ -173,6 +177,7 @@ Entries in `verified_tools.json` with employer "Self / Profile" are self-taught 
 - Banned openers: responsible for, helped with, worked on, assisted with, participated in
 - Pattern: Action verb → task/responsibility → result/outcome (with metric if verified)
 - Every bullet states the action AND its result or impact. When the source has no metric, a concrete qualitative result is complete (records stayed audit-ready, errors were caught before filing, staff could retrieve files without help); never invent a number to fill the gap, and never drop or downrank a true bullet just because it has no metric. Clerical and administrative roles rarely have metrics, and that is normal
+- A role that renders a `Clients:` line already names its clients there. Never spend a bullet listing or repeating those client names; use the slot for what the work was
 - A bullet that only names a duty ("Upheld strict confidentiality and followed compliance procedures") is too thin: use a fuller bank row for the same company that says what the work protected or enabled
 - Never add scope, rank, or exclusivity the source does not state: no "sole", "only", "entire", "single-handedly", "every", or a bigger title. "Helped build the outreach program" never becomes "single-handedly built"; carry each source's own scope (co-lead stays co-lead, sole manager stays sole manager)
 - Two bullets in the same role must not make the same point in different words (e.g. two confidentiality bullets, or two "audited contact records" bullets); keep the stronger one and use the slot for a different responsibility

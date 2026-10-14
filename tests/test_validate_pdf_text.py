@@ -406,6 +406,20 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class TestRenderedTextMatching(unittest.TestCase):
+    def test_paragraph_tags_do_not_fuse_sentences(self):
+        self.assertEqual(
+            validate_pdf_text._normalize("<p>their journey.</p><p>Whether</p>"),
+            validate_pdf_text._normalize("their journey. Whether"),
+        )
+
+    def test_summary_compared_after_render_rewrite(self):
+        import render_html
+
+        rendered = render_html._sanitize_copy("Campaigns that drive engagement.")
+        self.assertNotIn("drive engagement", rendered)
+
+
 class TestHyphenLineBreak(unittest.TestCase):
     def test_a_line_break_after_a_hyphen_is_not_a_dropped_bullet(self):
         import validate_pdf_text
