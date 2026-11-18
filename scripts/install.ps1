@@ -18,7 +18,7 @@
 
         Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
-    Python 3.10-3.12 must be installed before running this script.
+    Python 3.11 or 3.12 must be installed before running this script.
     Python 3.13+ is NOT supported (numpy wheel constraint -- see comment below).
 #>
 
@@ -80,7 +80,7 @@ foreach ($candidate in @('python3', 'python', 'py')) {
 }
 
 if (-not $pyCmd) {
-    Write-Host "[ ${BOLD}${ERR}FAIL${RESET} ] ${BOLD}Python not found.${RESET} Install Python 3.10-3.12 from https://python.org"
+    Write-Host "[ ${BOLD}${ERR}FAIL${RESET} ] ${BOLD}Python not found.${RESET} Install Python 3.11 or 3.12 from https://python.org"
     Write-Host "         then re-run this script."
     exit 1
 }
@@ -89,11 +89,11 @@ $pyMajor = [int](& $pyCmd -c "import sys; print(sys.version_info[0])")
 $pyMinor = [int](& $pyCmd -c "import sys; print(sys.version_info[1])")
 $pyVer   = & $pyCmd -c "import sys; print('.'.join(map(str, sys.version_info[:2])))"
 
-if ($pyMajor -lt 3 -or ($pyMajor -eq 3 -and $pyMinor -lt 10)) {
-    Write-Host "[ ${BOLD}${ERR}FAIL${RESET} ] Python $pyVer detected. ${BOLD}Requires 3.10-3.12.${RESET}"
+if ($pyMajor -lt 3 -or ($pyMajor -eq 3 -and $pyMinor -lt 11)) {
+    Write-Host "[ ${BOLD}${ERR}FAIL${RESET} ] Python $pyVer detected. ${BOLD}Requires 3.11 or 3.12.${RESET}"
     exit 1
 } elseif ($pyMajor -eq 3 -and $pyMinor -gt 12) {
-    Write-Host "[ ${BOLD}${ERR}FAIL${RESET} ] Python $pyVer detected. ${BOLD}Requires 3.10-3.12.${RESET}"
+    Write-Host "[ ${BOLD}${ERR}FAIL${RESET} ] Python $pyVer detected. ${BOLD}Requires 3.11 or 3.12.${RESET}"
     Write-Host "         A dependency (python-jobspy) pins numpy==1.26.3, which has no"
     Write-Host "         wheel for Python 3.13+ and cannot be built against it."
     Write-Host "         Install Python 3.12 from https://python.org, then re-run, e.g.:"
@@ -141,6 +141,17 @@ if (-not (Test-Path '.venv')) {
 Write-Host "[ ${BOLD}${SUCCESS}PASS${RESET} ] Virtual environment provisioned successfully."
 
 # ── 4. Dependencies ───────────────────────────────────────────────────────────
+# An existing venv still uses the interpreter that created it.
+$venvPython = Join-Path $PROJECT_ROOT '.venv\Scripts\python.exe'
+if (-not (Test-Path $venvPython)) {
+    Write-Host "         .venv\ is missing its Python interpreter. Re-run and choose to rebuild it."
+    exit 1
+}
+& $venvPython -c "import sys; raise SystemExit(not ((3, 11) <= sys.version_info[:2] <= (3, 12)))"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "         .venv\ needs Python 3.11 or 3.12. Re-run and choose to rebuild it."
+    exit 1
+}
 $venvPip = Join-Path $PROJECT_ROOT '.venv\Scripts\pip.exe'
 
 Write-Host ""

@@ -19,7 +19,7 @@ import sys
 import profile_paths
 
 PROJECT_ROOT = profile_paths.PROJECT_ROOT
-MIN_PYTHON = (3, 10)
+MIN_PYTHON = (3, 11)
 
 # pip package name -> the name actually used in `import ...`, wherever
 # they differ, so this can check every line in requirements.txt for real
@@ -76,7 +76,7 @@ def check_python_version() -> dict:
         "Python version",
         ok,
         f"{sys.version.split()[0]} (need >= {'.'.join(map(str, MIN_PYTHON))})",
-        "Install Python 3.10+ and rebuild .venv/ (see CLAUDE.md Setup).",
+        "Install Python 3.11 or 3.12 and rebuild .venv/ (see CLAUDE.md Setup).",
     )
 
 
