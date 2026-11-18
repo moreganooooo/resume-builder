@@ -25,6 +25,12 @@ Say a job asks you to **own contract renewals**. You’ve run **email retention 
 
 You can record distinctions like this in your profile’s **claims ledger**. The drafting and review steps use those rules, and the review step can drop suggestions that would bring an unsupported claim back. You still make the final call on what goes into your resume. [See the checks behind this example](tests/test_claims_ledger.py#L47-L78).
 
+Want to try it? Run the [fictional example](scripts/demo_claims_ledger.py) from the repository folder. It needs Python 3.10+ and PyYAML. No API key or personal profile is needed.
+
+```bash
+python3 scripts/demo_claims_ledger.py
+```
+
 ![Bullet Bank dashboard showing audit, revision, and review queue status](docs/DesignSystem/uploads/tui_cli_bullet_bank.png)
 
 *The Bullet Bank gives your accomplishments a home and shows which bullets are ready to reuse or still need a look.*
