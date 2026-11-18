@@ -26,6 +26,10 @@ The claims ledger gives the drafter this rule, the resume validator flags matche
 
 [See how the ledger checks and filters this example](tests/test_claims_ledger.py#L47-L78).
 
+![Bullet Bank dashboard showing audit, revision, and review queue status](docs/DesignSystem/uploads/tui_cli_bullet_bank.png)
+
+*The Bullet Bank keeps source accomplishments in one place and lets applicants review flagged bullets before reusing them in tailored resumes.*
+
 ## Application answer chat
 
 From Browse & Manage Jobs or Pipeline, select a role and press `a` to open
