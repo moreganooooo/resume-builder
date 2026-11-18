@@ -38,7 +38,7 @@ fi
 # 2. Python Version Check
 printf "[ ${BOLD}${BRAND}WAIT${RESET} ] Verifying Python installation...\n"
 if ! command -v python3 >/dev/null 2>&1; then
-    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] ${BOLD}python3 is not installed.${RESET} Please install Python 3.10+ and try again.\n"
+    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] ${BOLD}python3 is not installed.${RESET} Please install Python 3.11 or 3.12 and try again.\n"
     exit 1
 fi
 
@@ -46,8 +46,8 @@ PY_VERSION=$(python3 -c "import sys; print('.'.join(map(str, sys.version_info[:2
 PY_MAJOR=$(python3 -c "import sys; print(sys.version_info[0])")
 PY_MINOR=$(python3 -c "import sys; print(sys.version_info[1])")
 
-if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
-    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] Python version ${PY_VERSION} detected. ${BOLD}Requires >= 3.10.${RESET}\n"
+if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 11 ]; }; then
+    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] Python version ${PY_VERSION} detected. ${BOLD}Requires 3.11 or 3.12.${RESET}\n"
     exit 1
 # Upper bound is real, not caution: python-jobspy hard-pins numpy==1.26.3,
 # whose earliest CPython 3.13 wheel on PyPI is numpy 2.1.0. On 3.13+ pip
@@ -56,7 +56,7 @@ if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }
 # rather than here. Checking only the lower bound let 3.13 pass this gate
 # and fail later with a message nobody can act on.
 elif [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -gt 12 ]; then
-    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] Python ${PY_VERSION} detected. ${BOLD}Requires 3.10-3.12.${RESET}\n"
+    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] Python ${PY_VERSION} detected. ${BOLD}Requires 3.11 or 3.12.${RESET}\n"
     printf "         A dependency (python-jobspy) pins numpy==1.26.3, which has no\n"
     printf "         wheel for Python 3.13+ and cannot be built against it.\n"
     printf "         Install Python 3.12, then re-run this script with it, e.g.:\n"
@@ -120,6 +120,11 @@ else
 fi
 
 # 5. Dependency Provisioning
+# An existing venv still uses the interpreter that created it.
+if ! .venv/bin/python -c "import sys; raise SystemExit(not ((3, 11) <= sys.version_info[:2] <= (3, 12)))"; then
+    printf "[ ${BOLD}${ERROR}FAIL${RESET} ] .venv/ needs Python 3.11 or 3.12. Re-run and choose to rebuild it.\n"
+    exit 1
+fi
 source .venv/bin/activate
 printf "\n[ ${BOLD}${BRAND}WAIT${RESET} ] Installing dependencies in .venv/...\n"
 
