@@ -10,7 +10,7 @@ Tailors a resume per job description using Gemini/Gemma, then renders it to PDF.
   `semantic_search` tool no longer exists on this machine.)
 
 ## Setup
-- Requires Python 3.11 or 3.12 for the full installation. A venv already
+- Requires Python 3.11.5 through 3.12.x for the full installation. A venv already
   exists at `.venv/` — `source .venv/bin/activate` (or `resume activate`
   from any shell, see Shortcuts below). If it's ever missing/broken, rebuild
   with `python3 -m venv .venv && source .venv/bin/activate

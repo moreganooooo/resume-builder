@@ -36,7 +36,11 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 1
 fi
 
-PY_VER=$(python3 -c "import sys; print('.'.join(map(str, sys.version_info[:2])))")
+PY_VER=$(python3 -c "import sys; print('.'.join(map(str, sys.version_info[:3])))")
+if ! python3 -c 'import sys; raise SystemExit(sys.version_info[:3] < (3, 11, 5))'; then
+    echo -e "[ ${BOLD}${ERROR}FAIL${RESET} ] Python ${PY_VER} detected. Install Python 3.11.5 or later."
+    exit 1
+fi
 echo -e "[ ${BOLD}${SUCCESS}PASS${RESET} ] Python ${PY_VER} verified."
 
 # 3. Create Lite Virtual Environment
@@ -46,6 +50,10 @@ if [ ! -d ".venv" ]; then
     python3 -m venv .venv
 fi
 
+if ! .venv/bin/python -c 'import sys; raise SystemExit(sys.version_info[:3] < (3, 11, 5))'; then
+    echo -e "[ ${BOLD}${ERROR}FAIL${RESET} ] .venv/ needs Python 3.11.5 or later. Move .venv/ aside and re-run setup."
+    exit 1
+fi
 source .venv/bin/activate
 
 echo -e "[ ${BOLD}${INFO}INFO${RESET} ] Upgrading pip and wheel..."

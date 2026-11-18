@@ -15,16 +15,22 @@ import doctor  # noqa: E402
 class TestCheckPythonVersion(unittest.TestCase):
 
     def test_passes_on_this_interpreter(self):
-        # This suite itself only runs on Python 3.11+ (per CLAUDE.md), so
+        # This suite itself only runs on Python 3.11.5+ (per CLAUDE.md), so
         # the real sys.version_info here is always a real, current pass.
         result = doctor.check_python_version()
         self.assertTrue(result["passed"])
         self.assertEqual(result["fix"], "")
 
     @patch("doctor.sys")
+    def test_passes_at_minimum(self, mock_sys):
+        mock_sys.version_info = (3, 11, 5)
+        mock_sys.version = "3.11.5"
+        self.assertTrue(doctor.check_python_version()["passed"])
+
+    @patch("doctor.sys")
     def test_fails_below_minimum(self, mock_sys):
-        mock_sys.version_info = (3, 10, 0)
-        mock_sys.version = "3.10.0"
+        mock_sys.version_info = (3, 11, 4)
+        mock_sys.version = "3.11.4"
         result = doctor.check_python_version()
         self.assertFalse(result["passed"])
         self.assertNotEqual(result["fix"], "")
