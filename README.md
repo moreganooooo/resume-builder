@@ -1,18 +1,30 @@
 # 💎 RESUME-BUILDER
 ### The job-search pipeline that actually reads the room. ✨
 
-[![CI Multi-Version Matrix](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml/badge.svg)](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml)
-[![Tests](https://img.shields.io/badge/tests-2%2C418%20passing-success.svg)](file:///Users/morganescott/resume-builder/tests)
+[![Code Quality & Tests](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml/badge.svg?branch=main)](https://github.com/moreganooooo/resume-builder/actions/workflows/pylint.yml?query=branch%3Amain)
 [![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Go 1.25](https://img.shields.io/badge/go-1.25-00ADD8.svg)](https://golang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![WCAG 2.1 AA & PDF/UA](https://img.shields.io/badge/accessibility-WCAG%202.1%20AA%20%7C%20PDF%2FUA-green.svg)](https://www.w3.org/WAI/standards-guidelines/wcag/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 
 Not a "type in your job title, get a generic ChatGPT resume" toy. This is an ultra-premium, full-stack career operations pipeline built because I was tired of every AI resume tool doing exactly one of those steps badly and calling it a product.
 
-This system **scans** real postings, **verifies** they're still active, **scores** your actual fit and ATS odds against a 10-dimensional rubric, **tailors** a resume and cover letter in your own distinct writing voice, **renders** a punishingly ATS-clean vector PDF, and **tracks** your applications.
+This system **scans** job postings, **checks** whether they’re still active, **scores** fit and ATS match, **tailors** resumes and cover letters using your verified experience and writing preferences, **exports** PDF and DOCX files, and **tracks** your applications.
 
 Designed to be gorgeous, sparkling, and modular, it runs as a high-fidelity Terminal User Interface (TUI) on both your **Desktop computer** and **Android Linux Mobile (Google Pixel 10)**.
+
+## What happens when a job asks for experience you don’t have?
+
+Suppose a lifecycle marketing job asks you to **own contract renewals**, and your verified experience is **running email retention campaigns**.
+
+| Step | Example |
+| --- | --- |
+| Draft claim | “Owned contract renewals.” |
+| What the checker flags | “Renewals” matches a claim marked unsupported in this applicant’s profile. The ledger points to retention campaigns as the supported alternative. |
+| Evidence-backed wording | “Ran email retention campaigns.” The renewal ownership requirement remains a gap. |
+
+The claims ledger gives the drafter this rule, the resume validator flags matches, and the review step drops suggestions that would reintroduce the unsupported claim. The checks use rules from the applicant’s profile and work alongside the applicant’s own review.
+
+[See how the ledger checks and filters this example](tests/test_claims_ledger.py#L47-L78).
 
 ## Application answer chat
 
@@ -64,7 +76,7 @@ printf '%s' '{"job":"<path-or-id>","question":"Why do you want this role?"}' \
 * **Batch Skill-Gap Radar Matrix:** Aggregates missing skills across all pending postings to pinpoint the highest-leverage technologies to learn.
 
 ### 3. 🛡️ Audited Compounding Truth Engine
-* **Zero-Hallucination Receipt Grounding:** Every bullet and metric originates from an audited keeper repository (`bullet-bank-keepers-audited.csv`). The AI can select and rephrase—**it cannot invent**.
+* **Evidence checks:** Tailoring draws from an audited bullet bank. The [claims ledger](scripts/claims_ledger.py) flags configured unsupported claims, and the [resume validator](scripts/validate_resume.py) checks whether metrics appear in the source bullets for the employer named in the draft.
 * **STAR / Google XYZ Syntactic Quality Grader:** Enforces active past-tense verbs, quantifiable results, and causal connectors.
 * **RFC 6902 JSON Patch Surgical Bullet Repair:** Precise JSON Patch engine (`scripts/patch_engine.py`) fixing failing bullets without regenerating entire documents.
 * **Anti-Cliché Linter:** Eliminates banned AI idioms (*delve into, seamlessly, testament to, spearhead*) and preserves human authenticity.
@@ -76,8 +88,8 @@ printf '%s' '{"job":"<path-or-id>","question":"Why do you want this role?"}' \
 
 ### 5. 📄 Multi-Format Vector & Typesetting Pipeline
 * **Sub-Second Native Typst Vector Engine:** Blazing fast vector PDF generation across Standard, Executive, Compact 1-Page, and Modern Tech templates.
-* **Playwright Headless Chromium Engine:** HTML/CSS to PDF with WCAG 2.1 AA & PDF/UA accessibility tagging and document outline trees.
-* **Single-Column ATS DOCX Auto-Router:** Automatically emits single-column Microsoft Word `.docx` documents for 97%+ Workday/Taleo parseability.
+* **Tagged PDF:** The Playwright/Chromium export converts HTML and CSS to PDF with document tags and an outline.
+* **Single-column DOCX:** The Word export uses a single-column layout with standard section headings.
 * **Plain ASCII & JSONResume Exporters:** Clean text-box formatters and standard JSON Resume schema exports.
 
 ### 6. 💾 Career Operations CRM & Telemetry
