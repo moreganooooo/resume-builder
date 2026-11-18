@@ -47,6 +47,19 @@ printf '%s' '{"job":"<path-or-id>","question":"Why do you want this role?"}' \
   | .venv/bin/python scripts/application_answers.py turn
 ```
 
+<details>
+<summary>See the main menu and application answer chat</summary>
+
+![Resume Builder main menu with options to find jobs, build documents, and track applications](docs/DesignSystem/uploads/tui_cli_menu.png)
+
+*Main menu — Start a search, tailor documents, or check your application pipeline.*
+
+![Application Answers screen showing a draft response for a selected job](docs/DesignSystem/uploads/tui_answers.png)
+
+*Application Answers — Draft a response for the selected role and review it in the terminal.*
+
+</details>
+
 ---
 
 ```
