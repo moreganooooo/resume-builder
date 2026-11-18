@@ -33,7 +33,8 @@ google-genai
 # at its very first step.
 python-docx
 pdfminer.six
-pypdf>=6.16.1
+pypdf>=6.21.4
+pyasn1>=0.6.5  # Security floor for Google auth's dependency.
 
 # Deliberately NOT here, and why:
 #   pandas, numpy         -- only python-jobspy/Indeed scanning needs them

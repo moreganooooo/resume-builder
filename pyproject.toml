@@ -26,7 +26,8 @@ dependencies = [
     "python-pptx",
     "Pillow>=13.0.0",
     "pdfminer.six",
-    "pypdf>=6.16.1",
+    "pypdf>=6.21.4",
+    "pyasn1>=0.6.5",  # Security floor for Google auth's dependency.
     "odfpy",
     "python-jobspy",
     "ddgs",
