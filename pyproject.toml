@@ -16,6 +16,7 @@ dependencies = [
     "idna==3.20",
     "python-dotenv",
     "google-generativeai",
+    "google-genai",
     "click",
     "rich",
     "linkedin-jobs-scraper",
