@@ -9,12 +9,12 @@ Setting up your job-search pipeline should feel like magic. We have built an aut
 For standard laptops and desktops, this installs the full Python backend and compiles the headless browser engine used to render pixel-perfect vector PDFs.
 
 ### Prerequisites:
-* Python `3.11` or `3.12` installed on your system. Pillow 13 requires Python 3.11 or newer. **Not 3.13+**: a dependency (`python-jobspy`) pins `numpy==1.26.3`, which publishes no wheel for Python 3.13 and cannot be built against it, so `pip install` fails partway through. `install.sh` checks this for you and tells you what to do.
+* Python `3.11.5` through `3.12.x` installed on your system. Soup Sieve 4 requires Python 3.11.5 or newer. **Not 3.13+**: a dependency (`python-jobspy`) pins `numpy==1.26.3`, which publishes no wheel for Python 3.13 and cannot be built against it, so `pip install` fails partway through. `install.sh` checks this for you and tells you what to do.
 * Go `1.21+` (Go `1.25` recommended) for compiling native Charm TUI binaries (`dashboard/bin/dashboard` and `dashboard/bin/prompt`).
 * Node.js & `npm` (for HTML/CSS PDF rendering via Playwright) or Typst CLI (for instant native vector PDF rendering).
 
 ### Automated Setup:
-If your existing `.venv` uses Python 3.10, run the installer with Python 3.11 or 3.12 and choose to rebuild the virtual environment when prompted.
+If your existing `.venv` uses Python earlier than 3.11.5, switch to a current Python 3.11 or 3.12 release and choose to rebuild the virtual environment when prompted.
 
 Simply navigate to your repository and execute our installation wizard:
 ```bash
@@ -85,7 +85,7 @@ Run your career operations directly from your pocket! To avoid mobile storage bl
 
 ### Prerequisites:
 1. Download **Termux** on your phone (F-Droid release recommended).
-2. Upgrade packages and install requirements:
+2. Upgrade packages and install requirements. The dedicated Termux Lite installer requires Python 3.11.5 or newer:
    ```bash
    pkg update && pkg upgrade -y
    pkg install python nodejs git termux-api -y

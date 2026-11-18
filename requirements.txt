@@ -12,6 +12,7 @@ rich
 linkedin-jobs-scraper
 selenium
 beautifulsoup4
+soupsieve>=4.0
 questionary
 python-docx
 python-pptx

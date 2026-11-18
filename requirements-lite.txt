@@ -22,6 +22,7 @@ click
 rich
 questionary
 beautifulsoup4
+soupsieve>=4.0
 
 # --- Gemini ---
 google-generativeai

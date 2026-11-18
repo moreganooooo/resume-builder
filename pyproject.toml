@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "resume-builder"
 version = "0.1.0"
 description = "Tailors a resume per job description using Gemini/Gemma, then renders it to PDF."
-requires-python = ">=3.11"
+requires-python = ">=3.11.5"
 dependencies = [
     "pandas",
     "numpy",
@@ -22,6 +22,7 @@ dependencies = [
     "linkedin-jobs-scraper",
     "selenium",
     "beautifulsoup4",
+    "soupsieve>=4.0",
     "questionary",
     "python-docx",
     "python-pptx",
