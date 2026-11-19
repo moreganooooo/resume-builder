@@ -49,8 +49,7 @@ def _read_version() -> str:
     project is never actually `pip install`-ed (just a plain venv +
     requirements.txt per CLAUDE.md's Setup section), so package metadata
     is never registered and that lookup would always raise
-    PackageNotFoundError. Also avoids tomllib, which isn't available on
-    the 3.10 floor this project still supports."""
+    PackageNotFoundError."""
     import re
 
     pyproject_path = os.path.join(

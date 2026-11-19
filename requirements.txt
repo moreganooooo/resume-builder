@@ -12,12 +12,14 @@ rich
 linkedin-jobs-scraper
 selenium
 beautifulsoup4
+soupsieve>=4.0
 questionary
 python-docx
 python-pptx
-Pillow>=12.3.0
+Pillow>=13.0.0
 pdfminer.six
-pypdf>=6.16.1
+pypdf>=6.21.4
+pyasn1>=0.6.5  # Security floor for Google auth's dependency.
 odfpy
 openpyxl
 python-jobspy
