@@ -9,7 +9,7 @@ web
 ## Stack
 
 - TUI / Dashboard: Go (Bubble Tea framework)
-- Core Engine & Orchestrator: Python 3.10+
+- Core Engine & Orchestrator: Python 3.11.5+
 - AI Models: Gemini / Gemma LLMs
 - PDF Rendering: Node.js + Playwright 1.61.1 (pinned for macOS 12 compatibility)
 - Resume Templates: HTML / Vanilla CSS rendered via Playwright Chromium headless
